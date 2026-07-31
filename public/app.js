@@ -1,4 +1,4 @@
-// Tapboard v3.8.1 Client Engine
+// Tapboard v3.8.2 Client Engine
 import { renderTapGraphic, srmToHex } from './graphics.js';
 
 let appState = {
@@ -13,6 +13,30 @@ let appState = {
 
 let editingTapId = null;
 let authToken = sessionStorage.getItem('tapboard_token') || null;
+
+// Intelligent Beer Style Parser Fallback
+function deriveBeerStyle(beerName, rawStyle) {
+  if (rawStyle && rawStyle !== 'Craft Beer' && rawStyle.trim() !== '') {
+    return rawStyle;
+  }
+  if (!beerName) return 'Craft Beer';
+
+  const lower = beerName.toLowerCase();
+  if (lower.includes('porter')) return 'Porter';
+  if (lower.includes('stout')) return 'Stout';
+  if (lower.includes('wit') || lower.includes('wheat')) return 'Witbier';
+  if (lower.includes('oktoberfest') || lower.includes('märzen') || lower.includes('marzen')) return 'Oktoberfest';
+  if (lower.includes('helles')) return 'Munich Helles';
+  if (lower.includes('amber lager') || lower.includes('amber')) return 'Amber Lager';
+  if (lower.includes('lager')) return 'Lager';
+  if (lower.includes('hazy') || lower.includes('ipa')) return 'Hazy IPA';
+  if (lower.includes('pilsner') || lower.includes('pils')) return 'Pilsner';
+  if (lower.includes('pale ale')) return 'Pale Ale';
+  if (lower.includes('cider')) return 'Hard Cider';
+  if (lower.includes('topo chico') || lower.includes('water') || lower.includes('seltzer')) return 'Sparkling Water';
+
+  return 'Craft Beer';
+}
 
 // Connect to Server-Sent Events (SSE) Stream
 function initSSE() {
@@ -235,7 +259,8 @@ function createTapCard(tap) {
   const pintsRemaining = parseFloat(pintsState) || (currentOz / 16.0);
 
   const bfName = batchAttr.recipe_name || batchAttr.name || (cachedBatch ? cachedBatch.recipe_name : null) || `Tap ${tapId}`;
-  const bfStyle = batchAttr.style || (cachedBatch ? cachedBatch.style : null) || 'Craft Beer';
+  const rawStyle = batchAttr.style || (cachedBatch ? cachedBatch.style : null) || 'Craft Beer';
+  const bfStyle = deriveBeerStyle(bfName, rawStyle);
   const bfAbv = batchAttr.abv || (cachedBatch ? cachedBatch.abv : null) || '--';
   const bfIbu = batchAttr.ibu || (cachedBatch ? cachedBatch.ibu : null) || '--';
   const bfOg = batchAttr.og || (cachedBatch ? cachedBatch.og : null) || '--';
@@ -350,7 +375,8 @@ function updateTapCard(card, tap) {
   const pintsRemaining = parseFloat(pintsState) || (currentOz / 16.0);
 
   const bfName = batchAttr.recipe_name || batchAttr.name || (cachedBatch ? cachedBatch.recipe_name : null) || `Tap ${tapId}`;
-  const bfStyle = batchAttr.style || (cachedBatch ? cachedBatch.style : null) || 'Craft Beer';
+  const rawStyle = batchAttr.style || (cachedBatch ? cachedBatch.style : null) || 'Craft Beer';
+  const bfStyle = deriveBeerStyle(bfName, rawStyle);
   const bfAbv = batchAttr.abv || (cachedBatch ? cachedBatch.abv : null) || '--';
   const bfIbu = batchAttr.ibu || (cachedBatch ? cachedBatch.ibu : null) || '--';
   const bfOg = batchAttr.og || (cachedBatch ? cachedBatch.og : null) || '--';
