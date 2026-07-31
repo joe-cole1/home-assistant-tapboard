@@ -154,8 +154,11 @@ function setTapPouringAnimation(tapId, isPouring) {
   const headerBadges = card.querySelector('.tap-card-header > div:last-child');
   const streamGroup = card.querySelector('.pour-stream-group');
   const liquidRects = card.querySelectorAll('.beer-liquid-rect, .beer-liquid-shadow');
-  const liquidClip = card.querySelector('.beer-liquid-clip rect');
   const foamGroup = card.querySelector('.beer-cloud-foam');
+
+  // Determine initial rendered liquidY from existing rect
+  const firstRect = card.querySelector('.beer-liquid-rect');
+  const initialLiquidY = firstRect ? parseFloat(firstRect.getAttribute('y')) || 100 : 100;
 
   if (isPouring) {
     card.classList.remove('is-settling');
@@ -163,7 +166,7 @@ function setTapPouringAnimation(tapId, isPouring) {
 
     if (streamGroup) streamGroup.classList.add('is-active');
 
-    // 1. Snap to empty (0% fill) without transition
+    // 1. Snap to empty (0% fill at bottomY 220) without transition
     card.classList.add('no-anim');
     const bottomY = 220;
     const topRimY = 55; // Glass full height rim
@@ -173,12 +176,8 @@ function setTapPouringAnimation(tapId, isPouring) {
       r.setAttribute('y', bottomY);
       r.setAttribute('height', 0);
     });
-    if (liquidClip) {
-      liquidClip.setAttribute('y', bottomY);
-      liquidClip.setAttribute('height', 0);
-    }
     if (foamGroup) {
-      foamGroup.style.transform = `translateY(150px)`;
+      foamGroup.style.transform = `translateY(${bottomY - initialLiquidY}px)`;
     }
 
     // 2. Force DOM reflow
@@ -191,12 +190,8 @@ function setTapPouringAnimation(tapId, isPouring) {
         r.setAttribute('y', topRimY);
         r.setAttribute('height', fullHeight);
       });
-      if (liquidClip) {
-        liquidClip.setAttribute('y', topRimY);
-        liquidClip.setAttribute('height', fullHeight);
-      }
       if (foamGroup) {
-        foamGroup.style.transform = `translateY(${topRimY - 220 + 150}px)`;
+        foamGroup.style.transform = `translateY(${topRimY - initialLiquidY}px)`;
       }
     });
 
@@ -223,12 +218,8 @@ function setTapPouringAnimation(tapId, isPouring) {
       r.setAttribute('y', targetY);
       r.setAttribute('height', targetHeight);
     });
-    if (liquidClip) {
-      liquidClip.setAttribute('y', targetY);
-      liquidClip.setAttribute('height', targetHeight);
-    }
     if (foamGroup) {
-      foamGroup.style.transform = `translateY(0px)`;
+      foamGroup.style.transform = `translateY(${targetY - initialLiquidY}px)`;
     }
 
     // After 2.0s settle animation completes, return card to standard state
