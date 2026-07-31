@@ -142,22 +142,65 @@ function showToast(message) {
   }, 4000);
 }
 
-// Toggle Active Pour Visual Effect on Tap Card
+// Toggle CodePen 8-Second Filling & Active Pour Visual Effect on Tap Card
 function setTapPouringAnimation(tapId, isPouring) {
   const card = document.querySelector(`.tap-card[data-tap-id="${tapId}"]`);
   if (!card) return;
 
   const colorHex = card.getAttribute('data-color-hex') || '#FBC02D';
   const srmColor = colorHex === 'WATER' ? '#E0F7FA' : colorHex;
-
   card.style.setProperty('--beer-srm-color', srmColor);
 
   const headerBadges = card.querySelector('.tap-card-header > div:last-child');
+  const streamGroup = card.querySelector('.pour-stream-group');
+  const liquidRects = card.querySelectorAll('.beer-liquid-rect, .beer-liquid-shadow');
+  const liquidClip = card.querySelector('.beer-liquid-clip rect');
+  const foamGroup = card.querySelector('.beer-cloud-foam');
 
   if (isPouring) {
+    card.classList.remove('is-settling');
     card.classList.add('is-pouring');
 
-    // Add dynamic "NOW POURING" header badge if not already present
+    if (streamGroup) streamGroup.classList.add('is-active');
+
+    // 1. Snap to empty (0% fill) without transition
+    card.classList.add('no-anim');
+    const bottomY = 220;
+    const topRimY = 55; // Glass full height rim
+    const fullHeight = 165;
+
+    liquidRects.forEach(r => {
+      r.setAttribute('y', bottomY);
+      r.setAttribute('height', 0);
+    });
+    if (liquidClip) {
+      liquidClip.setAttribute('y', bottomY);
+      liquidClip.setAttribute('height', 0);
+    }
+    if (foamGroup) {
+      foamGroup.style.transform = `translateY(150px)`;
+    }
+
+    // 2. Force DOM reflow
+    void card.offsetHeight;
+
+    // 3. Re-enable 8s transition and fill to 100% full
+    card.classList.remove('no-anim');
+    requestAnimationFrame(() => {
+      liquidRects.forEach(r => {
+        r.setAttribute('y', topRimY);
+        r.setAttribute('height', fullHeight);
+      });
+      if (liquidClip) {
+        liquidClip.setAttribute('y', topRimY);
+        liquidClip.setAttribute('height', fullHeight);
+      }
+      if (foamGroup) {
+        foamGroup.style.transform = `translateY(${topRimY - 220 + 150}px)`;
+      }
+    });
+
+    // Add dynamic "NOW POURING" header badge if not present
     if (headerBadges && !headerBadges.querySelector('.badge-pouring')) {
       const badge = document.createElement('span');
       badge.className = 'badge-pouring';
@@ -165,15 +208,39 @@ function setTapPouringAnimation(tapId, isPouring) {
       headerBadges.insertBefore(badge, headerBadges.firstChild);
     }
   } else {
-    // Smooth 1.5s settling phase
+    // Pour Complete: Stream stops & calm 2s settle back to actual remaining keg volume
+    if (streamGroup) streamGroup.classList.remove('is-active');
+
+    card.classList.add('is-settling');
+
+    // Calculate target Y & height for real remaining keg percentage
+    const fillState = appState.haStates[`sensor.tap_${tapId}_fill`]?.state || '100';
+    const fillPct = Math.min(100, Math.max(0, parseFloat(fillState) || 75));
+    const targetY = 220 - (fillPct / 100) * 150;
+    const targetHeight = 220 - targetY;
+
+    liquidRects.forEach(r => {
+      r.setAttribute('y', targetY);
+      r.setAttribute('height', targetHeight);
+    });
+    if (liquidClip) {
+      liquidClip.setAttribute('y', targetY);
+      liquidClip.setAttribute('height', targetHeight);
+    }
+    if (foamGroup) {
+      foamGroup.style.transform = `translateY(0px)`;
+    }
+
+    // After 2.0s settle animation completes, return card to standard state
     setTimeout(() => {
       card.classList.remove('is-pouring');
+      card.classList.remove('is-settling');
 
       if (headerBadges) {
         const badge = headerBadges.querySelector('.badge-pouring');
         if (badge) badge.remove();
       }
-    }, 1500);
+    }, 2000);
   }
 }
 

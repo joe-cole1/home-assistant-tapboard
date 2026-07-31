@@ -276,6 +276,45 @@ body {
   100% { transform: scale(1.08); opacity: 0.85; }
 }
 
+/* ---------------------------------------------------------------------
+ * 8-SECOND BEER FILL & PUFFY FOAM RISE ANIMATIONS
+ * --------------------------------------------------------------------- */
+
+.tap-card .beer-liquid-rect,
+.tap-card .beer-liquid-shadow,
+.tap-card .beer-liquid-clip rect,
+.tap-card .beer-cloud-foam {
+  transition: y 8.0s cubic-bezier(0.25, 0.1, 0.25, 1.0),
+              height 8.0s cubic-bezier(0.25, 0.1, 0.25, 1.0),
+              transform 8.0s cubic-bezier(0.25, 0.1, 0.25, 1.0);
+}
+
+.tap-card.is-settling .beer-liquid-rect,
+.tap-card.is-settling .beer-liquid-shadow,
+.tap-card.is-settling .beer-liquid-clip rect,
+.tap-card.is-settling .beer-cloud-foam {
+  transition: y 2.0s ease-out,
+              height 2.0s ease-out,
+              transform 2.0s ease-out !important;
+}
+
+.tap-card.no-anim .beer-liquid-rect,
+.tap-card.no-anim .beer-liquid-shadow,
+.tap-card.no-anim .beer-liquid-clip rect,
+.tap-card.no-anim .beer-cloud-foam {
+  transition: none !important;
+}
+
+.pour-stream-group {
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+}
+
+.pour-stream-group.is-active {
+  opacity: 1;
+}
+
 /* Simulate Pour Button */
 .btn-simulate-pour {
   background: rgba(251, 192, 45, 0.1);
