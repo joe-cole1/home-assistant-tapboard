@@ -185,6 +185,11 @@ function renderCornyKeg(pct, color, isPouring, id) {
 
       <!-- Liquid Fill with Two-Tone SRM Split & Clipped Foam Head -->
       <g clip-path="url(#kegLiquidClip_${id})">
+        <!-- Pour Stream Group (Flows to Glass Base, Clipped by Glass Contour) -->
+        <g class="pour-stream-group ${isPouring ? 'is-active' : ''}">
+          <rect x="76" y="0" width="8" height="230" fill="${isWater ? 'rgba(224, 247, 250, 0.85)' : color}" rx="4" class="liquid-pour-stream-bar" />
+          <rect x="80" y="0" width="4" height="230" fill="rgba(0,0,0,0.22)" rx="2" />
+        </g>
         <rect x="30" y="${liquidY}" width="100" height="${220 - liquidY}" ${fillStyle} class="beer-liquid-rect" />
         <!-- Two-Tone Darker SRM Right-Half Overlay -->
         <rect x="80" y="${liquidY}" width="50" height="${220 - liquidY}" fill="rgba(0, 0, 0, 0.22)" class="beer-liquid-shadow" />
@@ -200,12 +205,6 @@ function renderCornyKeg(pct, color, isPouring, id) {
             <circle cx="74" cy="${liquidY - 9}" r="10" fill="#FFFFFF" opacity="0.5" />
           </g>
         ` : ''}
-      </g>
-
-      <!-- Pour Stream Group -->
-      <g class="pour-stream-group ${isPouring ? 'is-active' : ''}">
-        <rect x="76" y="0" width="8" height="${liquidY + 10}" fill="${isWater ? 'rgba(224, 247, 250, 0.85)' : color}" rx="4" class="liquid-pour-stream-bar" />
-        <rect x="80" y="0" width="4" height="${liquidY + 10}" fill="rgba(0,0,0,0.22)" rx="2" />
       </g>
 
       <!-- Glass Highlight -->
@@ -241,6 +240,11 @@ function renderPintGlass(pct, color, isPouring, id) {
 
       <!-- Liquid Fill with Two-Tone SRM Split & Clipped Foam Head -->
       <g clip-path="url(#pintGlassClip_${id})">
+        <!-- Pour Stream Group (Flows to Glass Base, Clipped by Glass Contour) -->
+        <g class="pour-stream-group ${isPouring ? 'is-active' : ''}">
+          <rect x="76" y="0" width="8" height="230" fill="${isWater ? 'rgba(224, 247, 250, 0.85)' : color}" rx="4" class="liquid-pour-stream-bar" />
+          <rect x="80" y="0" width="4" height="230" fill="rgba(0,0,0,0.22)" rx="2" />
+        </g>
         <rect x="30" y="${liquidY}" width="100" height="${230 - liquidY}" ${fillStyle} class="beer-liquid-rect" />
         <!-- Two-Tone Darker SRM Right-Half Overlay -->
         <rect x="80" y="${liquidY}" width="50" height="${230 - liquidY}" fill="rgba(0, 0, 0, 0.22)" class="beer-liquid-shadow" />
@@ -302,6 +306,11 @@ function renderWheatGlass(pct, color, isPouring, id) {
 
       <!-- Liquid Fill with Two-Tone SRM Split & Clipped Foam Head -->
       <g clip-path="url(#wheatGlassClip_${id})">
+        <!-- Pour Stream Group (Flows to Glass Base, Clipped by Glass Contour) -->
+        <g class="pour-stream-group ${isPouring ? 'is-active' : ''}">
+          <rect x="76" y="0" width="8" height="230" fill="${isWater ? 'rgba(224, 247, 250, 0.85)' : color}" rx="4" class="liquid-pour-stream-bar" />
+          <rect x="80" y="0" width="4" height="230" fill="rgba(0,0,0,0.22)" rx="2" />
+        </g>
         <rect x="25" y="${liquidY}" width="110" height="${240 - liquidY}" ${fillStyle} class="beer-liquid-rect" />
         <rect x="80" y="${liquidY}" width="55" height="${240 - liquidY}" fill="rgba(0, 0, 0, 0.22)" class="beer-liquid-shadow" />
         ${renderCarbonationBubbles(45, 115, 215, liquidY, 6)}
@@ -315,11 +324,6 @@ function renderWheatGlass(pct, color, isPouring, id) {
             <circle cx="72" cy="${liquidY - 9}" r="9" fill="#FFFFFF" opacity="0.5" />
           </g>
         ` : ''}
-      </g>
-
-      <g class="pour-stream-group ${isPouring ? 'is-active' : ''}">
-        <rect x="76" y="0" width="8" height="${liquidY + 10}" fill="${isWater ? 'rgba(224, 247, 250, 0.85)' : color}" rx="4" class="liquid-pour-stream-bar" />
-        <rect x="80" y="0" width="4" height="${liquidY + 10}" fill="rgba(0,0,0,0.22)" rx="2" />
       </g>
 
       <path d="M 55 35 Q 40 100, 64 165" stroke="#FFFFFF" stroke-width="2.5" fill="none" opacity="0.4" stroke-linecap="round" />
@@ -355,6 +359,11 @@ function renderTulipGlass(pct, color, isPouring, id) {
 
       <!-- Liquid Fill with Two-Tone SRM Split & Clipped Foam Head -->
       <g clip-path="url(#tulipGlassClip_${id})">
+        <!-- Pour Stream Group (Flows to Glass Base, Clipped by Glass Contour) -->
+        <g class="pour-stream-group ${isPouring ? 'is-active' : ''}">
+          <rect x="76" y="0" width="8" height="230" fill="${isWater ? 'rgba(224, 247, 250, 0.85)' : color}" rx="4" class="liquid-pour-stream-bar" />
+          <rect x="80" y="0" width="4" height="230" fill="rgba(0,0,0,0.22)" rx="2" />
+        </g>
         <rect x="25" y="${liquidY}" width="110" height="${220 - liquidY}" ${fillStyle} class="beer-liquid-rect" />
         <rect x="80" y="${liquidY}" width="55" height="${220 - liquidY}" fill="rgba(0, 0, 0, 0.22)" class="beer-liquid-shadow" />
         ${renderCarbonationBubbles(45, 115, 165, liquidY, 6)}
@@ -368,11 +377,6 @@ function renderTulipGlass(pct, color, isPouring, id) {
             <circle cx="72" cy="${liquidY - 9}" r="9" fill="#FFFFFF" opacity="0.5" />
           </g>
         ` : ''}
-      </g>
-
-      <g class="pour-stream-group ${isPouring ? 'is-active' : ''}">
-        <rect x="76" y="0" width="8" height="${liquidY + 10}" fill="${isWater ? 'rgba(224, 247, 250, 0.85)' : color}" rx="4" class="liquid-pour-stream-bar" />
-        <rect x="80" y="0" width="4" height="${liquidY + 10}" fill="rgba(0,0,0,0.22)" rx="2" />
       </g>
 
       <path d="M 56 45 C 46 90, 42 135, 75 162" stroke="#FFFFFF" stroke-width="2.5" fill="none" opacity="0.4" />
@@ -410,6 +414,11 @@ function renderMug(pct, color, isPouring, id) {
 
       <!-- Liquid Fill with Two-Tone SRM Split & Clipped Foam Head -->
       <g clip-path="url(#mugGlassClip_${id})">
+        <!-- Pour Stream Group (Flows to Glass Base, Clipped by Glass Contour) -->
+        <g class="pour-stream-group ${isPouring ? 'is-active' : ''}">
+          <rect x="76" y="0" width="8" height="230" fill="${isWater ? 'rgba(224, 247, 250, 0.85)' : color}" rx="4" class="liquid-pour-stream-bar" />
+          <rect x="80" y="0" width="4" height="230" fill="rgba(0,0,0,0.22)" rx="2" />
+        </g>
         <rect x="35" y="${liquidY}" width="90" height="${220 - liquidY}" ${fillStyle} class="beer-liquid-rect" />
         <rect x="80" y="${liquidY}" width="45" height="${220 - liquidY}" fill="rgba(0, 0, 0, 0.22)" class="beer-liquid-shadow" />
         ${renderCarbonationBubbles(45, 115, 210, liquidY, 6)}
@@ -423,11 +432,6 @@ function renderMug(pct, color, isPouring, id) {
             <circle cx="72" cy="${liquidY - 9}" r="8" fill="#FFFFFF" opacity="0.5" />
           </g>
         ` : ''}
-      </g>
-
-      <g class="pour-stream-group ${isPouring ? 'is-active' : ''}">
-        <rect x="76" y="0" width="8" height="${liquidY + 10}" fill="${isWater ? 'rgba(224, 247, 250, 0.85)' : color}" rx="4" class="liquid-pour-stream-bar" />
-        <rect x="80" y="0" width="4" height="${liquidY + 10}" fill="rgba(0,0,0,0.22)" rx="2" />
       </g>
 
       <rect x="44" y="55" width="6" height="160" rx="3" fill="#FFFFFF" opacity="0.2" />
@@ -461,6 +465,11 @@ function renderStoutGlass(pct, color, isPouring, id) {
 
       <!-- Liquid Fill with Two-Tone SRM Split & Clipped Foam Head -->
       <g clip-path="url(#stoutGlassClip_${id})">
+        <!-- Pour Stream Group (Flows to Glass Base, Clipped by Glass Contour) -->
+        <g class="pour-stream-group ${isPouring ? 'is-active' : ''}">
+          <rect x="76" y="0" width="8" height="230" fill="${isWater ? 'rgba(224, 247, 250, 0.85)' : color}" rx="4" class="liquid-pour-stream-bar" />
+          <rect x="80" y="0" width="4" height="230" fill="rgba(0,0,0,0.22)" rx="2" />
+        </g>
         <rect x="25" y="${liquidY}" width="110" height="${230 - liquidY}" ${fillStyle} class="beer-liquid-rect" />
         <rect x="80" y="${liquidY}" width="55" height="${230 - liquidY}" fill="rgba(0, 0, 0, 0.22)" class="beer-liquid-shadow" />
         ${renderCarbonationBubbles(48, 112, 215, liquidY, 6)}
@@ -474,11 +483,6 @@ function renderStoutGlass(pct, color, isPouring, id) {
             <circle cx="72" cy="${liquidY - 9}" r="9" fill="#FFFFFF" opacity="0.5" />
           </g>
         ` : ''}
-      </g>
-
-      <g class="pour-stream-group ${isPouring ? 'is-active' : ''}">
-        <rect x="76" y="0" width="8" height="${liquidY + 10}" fill="${isWater ? 'rgba(224, 247, 250, 0.85)' : color}" rx="4" class="liquid-pour-stream-bar" />
-        <rect x="80" y="0" width="4" height="${liquidY + 10}" fill="rgba(0,0,0,0.22)" rx="2" />
       </g>
 
       <path d="M 55 50 C 48 85, 46 120, 60 170" stroke="#FFFFFF" stroke-width="2.5" fill="none" opacity="0.35" />
@@ -514,6 +518,11 @@ function renderSnifter(pct, color, isPouring, id) {
 
       <!-- Liquid Fill with Two-Tone SRM Split & Clipped Foam Head -->
       <g clip-path="url(#snifterGlassClip_${id})">
+        <!-- Pour Stream Group (Flows to Glass Base, Clipped by Glass Contour) -->
+        <g class="pour-stream-group ${isPouring ? 'is-active' : ''}">
+          <rect x="76" y="0" width="8" height="230" fill="${isWater ? 'rgba(224, 247, 250, 0.85)' : color}" rx="4" class="liquid-pour-stream-bar" />
+          <rect x="80" y="0" width="4" height="230" fill="rgba(0,0,0,0.22)" rx="2" />
+        </g>
         <rect x="20" y="${liquidY}" width="120" height="${210 - liquidY}" ${fillStyle} class="beer-liquid-rect" />
         <rect x="80" y="${liquidY}" width="60" height="${210 - liquidY}" fill="rgba(0, 0, 0, 0.22)" class="beer-liquid-shadow" />
         ${renderCarbonationBubbles(42, 118, 170, liquidY, 6)}
@@ -528,13 +537,3 @@ function renderSnifter(pct, color, isPouring, id) {
           </g>
         ` : ''}
       </g>
-
-      <g class="pour-stream-group ${isPouring ? 'is-active' : ''}">
-        <rect x="76" y="0" width="8" height="${liquidY + 10}" fill="${isWater ? 'rgba(224, 247, 250, 0.85)' : color}" rx="4" class="liquid-pour-stream-bar" />
-        <rect x="80" y="0" width="4" height="${liquidY + 10}" fill="rgba(0,0,0,0.22)" rx="2" />
-      </g>
-
-      <path d="M 60 60 C 40 105, 42 150, 72 168" stroke="#FFFFFF" stroke-width="2.5" fill="none" opacity="0.4" />
-    </svg>
-  `;
-}
