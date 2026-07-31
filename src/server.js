@@ -52,7 +52,7 @@ function parseJsonBody(req) {
   });
 }
 
-// Helper: Calculate 14-Day Rolling Keg Kick Forecast (Avg Daily Oz over 14 Days vs Remaining Oz)
+// Helper: Calculate 14-Day Rolling Keg Kick Forecast
 function calculateKegKickForecast(tapId) {
   const fourteenDaysAgo = new Date(Date.now() - 14 * 86400 * 1000).toISOString();
   
@@ -66,8 +66,6 @@ function calculateKegKickForecast(tapId) {
 
   const totalOz = stats?.total_oz || 0;
   const activeDays = Math.max(1, stats?.active_days || 0);
-
-  // Divide by 14 days to capture full 2-week weekend cycles
   const avgDailyOz = totalOz / 14;
 
   const haState = haClient.statesMap.get(`sensor.tap_${tapId}_fl_oz`) || haClient.statesMap.get(`sensor.tap_${tapId}_fill`);
@@ -89,7 +87,7 @@ function calculateKegKickForecast(tapId) {
   };
 }
 
-// Broadcast SSE Event to all connected browser clients
+// Broadcast SSE Event
 function broadcastSSE(event, data) {
   const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
   for (const res of sseClients) {
@@ -97,7 +95,7 @@ function broadcastSSE(event, data) {
   }
 }
 
-// 15s Heartbeat Ping to prevent proxy timeouts
+// 15s Heartbeat Ping
 setInterval(() => {
   for (const res of sseClients) {
     res.write(': ping\n\n');
@@ -238,7 +236,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // 4. Update Global Settings (/api/settings)
+  // 4. Update Global Settings & Tap Visibilities (/api/settings)
   if (url.pathname === '/api/settings' && req.method === 'POST') {
     if (!isAuthorized(req)) {
       res.writeHead(401, { 'Content-Type': 'application/json' });
@@ -248,7 +246,7 @@ const server = http.createServer(async (req, res) => {
 
     try {
       const body = await parseJsonBody(req);
-      const { theme, volume_format, title, font_title, font_body, show_ondeck, new_pin } = body;
+      const { theme, volume_format, title, font_title, font_body, show_ondeck, tap_visibilities, new_pin } = body;
 
       db.prepare(`
         UPDATE settings SET
@@ -260,6 +258,15 @@ const server = http.createServer(async (req, res) => {
           show_ondeck = COALESCE(?, show_ondeck)
         WHERE id = 1
       `).run(theme, volume_format, title, font_title, font_body, show_ondeck !== undefined ? (show_ondeck ? 1 : 0) : null);
+
+      if (tap_visibilities && typeof tap_visibilities === 'object') {
+        const updateTapEnabled = db.prepare('UPDATE taps SET enabled = ? WHERE tap_id = ?');
+        for (let i = 1; i <= 6; i++) {
+          if (tap_visibilities[i] !== undefined) {
+            updateTapEnabled.run(tap_visibilities[i] ? 1 : 0, i);
+          }
+        }
+      }
 
       if (new_pin && String(new_pin).trim().length === 4) {
         const pinHash = bcrypt.hashSync(String(new_pin).trim(), 10);
@@ -295,7 +302,6 @@ const server = http.createServer(async (req, res) => {
     try {
       const body = await parseJsonBody(req);
       
-      // Update SQLite Tap Record
       db.prepare(`
         UPDATE taps SET
           enabled = COALESCE(?, enabled),
@@ -329,7 +335,6 @@ const server = http.createServer(async (req, res) => {
         tapId
       );
 
-      // If batch selection was updated, trigger HA select call
       if (body.batch_option !== undefined) {
         await haClient.callHAService('select', 'select_option', {
           entity_id: `select.tap_${tapId}_batch_select`,
@@ -358,11 +363,9 @@ const server = http.createServer(async (req, res) => {
 
     const tapId = parseInt(url.pathname.split('/')[3], 10);
     try {
-      // 1. Call HA Service script.end_tap_batch to mark Brewfather batch as Completed
       await haClient.callHAService('script', 'end_tap_batch', { tap_number: tapId })
         .catch(err => console.warn(`[HA Call Warning] script.end_tap_batch failed:`, err.message));
 
-      // 2. Clear Overrides in SQLite
       db.prepare(`
         UPDATE taps SET
           override_enabled = 0,
@@ -397,7 +400,6 @@ const server = http.createServer(async (req, res) => {
 
     const tapId = parseInt(url.pathname.split('/')[3], 10);
     try {
-      // Unassign tap locally in SQLite without marking Brewfather completed
       db.prepare(`
         UPDATE taps SET
           override_enabled = 0,
@@ -412,7 +414,6 @@ const server = http.createServer(async (req, res) => {
         WHERE tap_id = ?
       `).run(tapId);
 
-      // Issue HA call to set batch select to empty
       await haClient.callHAService('select', 'select_option', {
         entity_id: `select.tap_${tapId}_batch_select`,
         option: ''

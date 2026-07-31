@@ -1,4 +1,4 @@
-// Tapboard v3.4 Client Engine
+// Tapboard v3.5 Client Engine
 import { renderTapGraphic, srmToHex } from './graphics.js';
 
 let appState = {
@@ -154,7 +154,7 @@ function renderApp() {
   renderOnDeckTicker();
 }
 
-// Create Tap Card Element
+// Create Tap Card Element (Matched to Reference Screenshot)
 function createTapCard(tap) {
   const tapId = tap.tap_id;
   const haStates = appState.haStates;
@@ -169,23 +169,23 @@ function createTapCard(tap) {
 
   // Base Brewfather values
   const bfName = batchAttr.recipe_name || batchAttr.name || `Tap ${tapId}`;
-  const bfStyle = batchAttr.style || 'Custom Craft';
-  const bfAbv = batchAttr.abv || 0;
-  const bfIbu = batchAttr.ibu || 0;
-  const bfOg = batchAttr.og || 'N/A';
-  const bfFg = batchAttr.fg || 'N/A';
+  const bfStyle = batchAttr.style || 'Craft Beer';
+  const bfAbv = batchAttr.abv || '--';
+  const bfIbu = batchAttr.ibu || '--';
+  const bfOg = batchAttr.og || '--';
+  const bfFg = batchAttr.fg || '--';
   const bfSrm = batchAttr.srm || batchAttr.color || 3;
   const bfDesc = batchAttr.tasting_notes || batchAttr.notes || '';
 
-  // Field-Level Overrides: Use override if checked AND field is non-empty; else fallback to Brewfather!
+  // Field-Level Overrides: Use override if checked AND non-empty; else fallback to Brewfather!
   const hasOverride = tap.override_enabled === 1;
   const beerName = (hasOverride && tap.override_name && tap.override_name.trim() !== '') ? tap.override_name : bfName;
   const style = (hasOverride && tap.override_style && tap.override_style.trim() !== '') ? tap.override_style : bfStyle;
-  const abv = (hasOverride && tap.override_abv !== null && tap.override_abv !== undefined) ? tap.override_abv : bfAbv;
-  const ibu = (hasOverride && tap.override_ibu !== null && tap.override_ibu !== undefined) ? tap.override_ibu : bfIbu;
-  const og = (hasOverride && tap.override_og !== null && tap.override_og !== undefined) ? tap.override_og : bfOg;
-  const fg = (hasOverride && tap.override_fg !== null && tap.override_fg !== undefined) ? tap.override_fg : bfFg;
-  const srm = (hasOverride && tap.override_srm !== null && tap.override_srm !== undefined) ? tap.override_srm : bfSrm;
+  const abv = (hasOverride && tap.override_abv !== null && tap.override_abv !== undefined && tap.override_abv !== '') ? `${tap.override_abv}%` : (bfAbv !== '--' ? `${bfAbv}%` : '--');
+  const ibu = (hasOverride && tap.override_ibu !== null && tap.override_ibu !== undefined && tap.override_ibu !== '') ? tap.override_ibu : bfIbu;
+  const og = (hasOverride && tap.override_og !== null && tap.override_og !== undefined && tap.override_og !== '') ? tap.override_og : bfOg;
+  const fg = (hasOverride && tap.override_fg !== null && tap.override_fg !== undefined && tap.override_fg !== '') ? tap.override_fg : bfFg;
+  const srm = (hasOverride && tap.override_srm !== null && tap.override_srm !== undefined && tap.override_srm !== '') ? tap.override_srm : bfSrm;
   const description = (hasOverride && tap.override_description && tap.override_description.trim() !== '') ? tap.override_description : bfDesc;
 
   // Convert SRM to Hex Color
@@ -206,32 +206,32 @@ function createTapCard(tap) {
   card.className = 'tap-card';
   card.setAttribute('data-tap-id', tapId);
 
-  // Card Content
+  // Card Content (Dashed borders, gold circle badge, dashed metric rows)
   card.innerHTML = `
-    <div class="tap-card-header" style="display:flex; justify-content:space-between; align-items:center;">
+    <div class="tap-card-header">
+      <div class="tap-number-badge">${tapId}</div>
       <div style="display:flex; align-items:center; gap:0.5rem;">
-        <span class="tap-number-badge">${tapId}</span>
-        ${fillPercent <= (tap.badge_low_keg || 20) ? `<span class="badge badge-low">LOW KEG</span>` : ''}
+        ${fillPercent <= (tap.badge_low_keg || 20) ? `<span class="badge badge-low">LOW KEG!</span>` : ''}
         ${tap.badge_fresh === 1 ? `<span class="badge badge-fresh">FRESH!</span>` : ''}
+        <button class="btn-icon tap-cog-btn" title="Tap ${tapId} Settings">⚙️</button>
       </div>
-      <button class="btn-icon tap-cog-btn" title="Tap ${tapId} Settings" style="cursor:pointer; font-size:1.2rem; background:none; border:none;">⚙️</button>
     </div>
 
-    <h2 class="beer-title" style="margin-top:0.5rem;">${beerName}</h2>
+    <h2 class="beer-title">${beerName}</h2>
     <div class="beer-style">${style}</div>
-    ${description ? `<p class="beer-description" style="margin-top:0.35rem; color:var(--text-muted); font-size:0.9rem; line-height:1.35;">${description}</p>` : ''}
+    ${description ? `<p class="beer-description" style="margin-bottom:0.75rem;">${description}</p>` : ''}
 
-    <div class="metrics-row" style="margin-top:0.85rem; display:flex; justify-content:space-around; background:rgba(0,0,0,0.2); padding:0.5rem; border-radius:0.5rem;">
-      <div class="metric-item"><span class="metric-label" style="font-size:0.75rem; color:var(--text-muted);">ABV</span><br/><strong>${abv}%</strong></div>
-      <div class="metric-item"><span class="metric-label" style="font-size:0.75rem; color:var(--text-muted);">IBU</span><br/><strong>${ibu}</strong></div>
-      <div class="metric-item"><span class="metric-label" style="font-size:0.75rem; color:var(--text-muted);">OG</span><br/><strong>${og}</strong></div>
-      <div class="metric-item"><span class="metric-label" style="font-size:0.75rem; color:var(--text-muted);">FG</span><br/><strong>${fg}</strong></div>
+    <div class="metrics-row">
+      <div class="metric-item"><span class="metric-label">ABV</span><span class="metric-value">${abv}</span></div>
+      <div class="metric-item"><span class="metric-label">IBU</span><span class="metric-value">${ibu}</span></div>
+      <div class="metric-item"><span class="metric-label">OG</span><span class="metric-value">${og}</span></div>
+      <div class="metric-item"><span class="metric-label">FG</span><span class="metric-value">${fg}</span></div>
     </div>
 
-    <div class="graphic-container" style="margin-top:1rem; text-align:center;">
+    <div class="graphic-container">
       <div class="tap-graphic-wrapper" id="graphic-tap-${tapId}"></div>
-      <div class="volume-readout" style="margin-top:0.5rem; font-weight:700; font-size:1rem;">
-        ${fillPercent.toFixed(1)}% Full • ${pintsState} Pints (${parseFloat(ozState).toFixed(0)} oz)
+      <div class="volume-readout">
+        ${fillPercent.toFixed(1)}% Full
       </div>
     </div>
 
@@ -280,7 +280,7 @@ function openRecipeModal(tapId, beerName, style, abv, ibu, og, fg, srm, descript
   body.innerHTML = `
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; background:var(--bg-card); padding:1rem; border-radius:0.75rem;">
       <div><strong>Style:</strong> ${style}</div>
-      <div><strong>ABV:</strong> ${abv}%</div>
+      <div><strong>ABV:</strong> ${abv}</div>
       <div><strong>IBU:</strong> ${ibu}</div>
       <div><strong>SRM Color:</strong> ${srm}</div>
       <div><strong>Original Gravity:</strong> ${og}</div>
@@ -298,6 +298,27 @@ function openRecipeModal(tapId, beerName, style, abv, ibu, og, fg, srm, descript
   `;
 
   modal.style.display = 'flex';
+}
+
+// Open Global Settings Modal (Populate Theme, Fonts, Title, and Taps 1-6 Checkboxes)
+function openGlobalSettingsModal() {
+  const { settings, taps } = appState;
+  
+  if (settings.theme) document.getElementById('themeSelect').value = settings.theme;
+  if (settings.title) document.getElementById('headerTitleInput').value = settings.title;
+  if (settings.font_title) document.getElementById('titleFontSelect').value = settings.font_title;
+  if (settings.font_body) document.getElementById('bodyFontSelect').value = settings.font_body;
+
+  // Populate Taps 1-6 Checkboxes
+  for (let i = 1; i <= 6; i++) {
+    const check = document.getElementById(`globalTapCheck_${i}`);
+    if (check) {
+      const tapRow = taps.find(t => t.tap_id === i);
+      check.checked = tapRow ? tapRow.enabled === 1 : (i <= 3);
+    }
+  }
+
+  document.getElementById('globalSettingsModal').style.display = 'flex';
 }
 
 // Open Per-Tap Settings Modal
@@ -392,7 +413,7 @@ function initModalListeners() {
   if (settingsBtn) {
     settingsBtn.addEventListener('click', () => {
       if (authToken) {
-        document.getElementById('globalSettingsModal').style.display = 'flex';
+        openGlobalSettingsModal();
       } else {
         editingTapId = null;
         document.getElementById('pinModal').style.display = 'flex';
@@ -420,7 +441,7 @@ function initModalListeners() {
           if (editingTapId) {
             openTapSettings(editingTapId);
           } else {
-            document.getElementById('globalSettingsModal').style.display = 'flex';
+            openGlobalSettingsModal();
           }
         } else {
           alert(data.error || 'Invalid PIN');
@@ -447,13 +468,21 @@ function initModalListeners() {
     document.getElementById('tapSettingsModal').style.display = 'none';
   });
 
-  // Save Global Settings
+  // Save Global Settings (Theme, Title, Fonts, and Taps 1-6 Visibilities)
   document.getElementById('saveGlobalSettingsBtn')?.addEventListener('click', async () => {
     const theme = document.getElementById('themeSelect').value;
     const title = document.getElementById('headerTitleInput').value;
     const font_title = document.getElementById('titleFontSelect').value;
     const font_body = document.getElementById('bodyFontSelect').value;
     const new_pin = document.getElementById('pinInputSetting').value;
+
+    const tap_visibilities = {};
+    for (let i = 1; i <= 6; i++) {
+      const check = document.getElementById(`globalTapCheck_${i}`);
+      if (check) {
+        tap_visibilities[i] = check.checked;
+      }
+    }
 
     try {
       const res = await fetch('/api/settings', {
@@ -462,11 +491,11 @@ function initModalListeners() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${authToken}`
         },
-        body: JSON.stringify({ theme, title, font_title, font_body, new_pin: new_pin || undefined })
+        body: JSON.stringify({ theme, title, font_title, font_body, tap_visibilities, new_pin: new_pin || undefined })
       });
       if (res.ok) {
         document.getElementById('globalSettingsModal').style.display = 'none';
-        showToast('✨ Studio settings saved!');
+        showToast('✨ Global studio settings saved!');
       } else {
         alert('Failed to save settings');
       }
