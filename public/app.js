@@ -157,7 +157,12 @@ function setTapPouringAnimation(tapId, isPouring) {
   const foamGroup = card.querySelector('.beer-cloud-foam');
 
   // Read untransformed SVG base Y coordinate for foam head
-  const baseY = foamGroup ? (parseFloat(foamGroup.getAttribute('data-base-y')) || 100) : 100;
+  const svgEl = card.querySelector('.tap-graphic-svg');
+  const bottomY = svgEl ? (parseFloat(svgEl.getAttribute('data-bottom-y')) || 220) : 220;
+  const topRimY = svgEl ? (parseFloat(svgEl.getAttribute('data-top-rim-y')) || 55) : 55;
+  const fullHeight = bottomY - topRimY;
+
+  const baseY = foamGroup ? (parseFloat(foamGroup.getAttribute('data-base-y')) || bottomY) : bottomY;
 
   if (isPouring) {
     card.classList.remove('is-settling');
@@ -165,11 +170,8 @@ function setTapPouringAnimation(tapId, isPouring) {
 
     if (streamGroup) streamGroup.classList.add('is-active');
 
-    // 1. Snap to empty (0% fill at bottomY 220) without transition
+    // 1. Snap to empty (0% fill at bottomY) without transition
     card.classList.add('no-anim');
-    const bottomY = 220;
-    const topRimY = 55; // Glass full height rim
-    const fullHeight = 165;
 
     liquidRects.forEach(r => {
       r.setAttribute('y', bottomY);
@@ -211,8 +213,8 @@ function setTapPouringAnimation(tapId, isPouring) {
     const fillState = appState.haStates[`sensor.tap_${tapId}_fill`]?.state;
     const parsedFill = parseFloat(fillState);
     const fillPct = Math.min(100, Math.max(0, isNaN(parsedFill) ? 0 : parsedFill));
-    const targetY = 220 - (fillPct / 100) * 150;
-    const targetHeight = 220 - targetY;
+    const targetY = bottomY - (fillPct / 100) * fullHeight;
+    const targetHeight = bottomY - targetY;
 
     liquidRects.forEach(r => {
       r.setAttribute('y', targetY);

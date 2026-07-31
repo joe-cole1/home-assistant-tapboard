@@ -150,7 +150,7 @@ function renderCornyKeg(pct, color, isPouring, id) {
     : `fill="url(#liquidGrad_${id})"`;
 
   return `
-    <svg viewBox="0 0 160 260" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 160 260" data-bottom-y="220" data-top-rim-y="65" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <linearGradient id="kegBodyGrad_${id}" x1="0%" y1="0%" x2="100%" y2="0%">
           <stop offset="0%" stop-color="#4A5568" />
@@ -218,7 +218,7 @@ function renderCornyKeg(pct, color, isPouring, id) {
  * PINT GLASS SVG RENDERER
  */
 function renderPintGlass(pct, color, isPouring, id) {
-  const liquidY = 220 - (pct / 100) * 165;
+  const liquidY = 225 - (pct / 100) * 180;
   const isWater = color === 'WATER';
   const isDark = color === '#080100' || color === '#130100' || color === '#200100' || color === '#280200' || color === '#000000';
   const foamColor = isDark ? '#F5EBE6' : '#FFFDF5';
@@ -227,7 +227,7 @@ function renderPintGlass(pct, color, isPouring, id) {
     : `fill="${color}" opacity="0.9"`;
 
   return `
-    <svg viewBox="0 0 160 260" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 160 260" data-bottom-y="225" data-top-rim-y="45" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <clipPath id="pintGlassClip_${id}">
           <polygon points="30,0 130,0 114,45 104,225 56,225 46,45" />
@@ -277,7 +277,7 @@ function renderPintGlass(pct, color, isPouring, id) {
  * WHEAT GLASS SVG RENDERER
  */
 function renderWheatGlass(pct, color, isPouring, id) {
-  const liquidY = 220 - (pct / 100) * 170;
+  const liquidY = 220 - (pct / 100) * 190;
   const isWater = color === 'WATER';
   const isDark = color === '#080100' || color === '#130100' || color === '#200100' || color === '#280200' || color === '#000000';
   const foamColor = isDark ? '#F5EBE6' : '#FFFDF5';
@@ -286,7 +286,7 @@ function renderWheatGlass(pct, color, isPouring, id) {
     : `fill="url(#wheatLiquid_${id})"`;
 
   return `
-    <svg viewBox="0 0 160 260" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 160 260" data-bottom-y="220" data-top-rim-y="30" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         ${!isWater ? `
           <linearGradient id="wheatLiquid_${id}" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -335,7 +335,7 @@ function renderWheatGlass(pct, color, isPouring, id) {
  * TULIP GLASS SVG RENDERER
  */
 function renderTulipGlass(pct, color, isPouring, id) {
-  const liquidY = 210 - (pct / 100) * 140;
+  const liquidY = 170 - (pct / 100) * 130;
   const isWater = color === 'WATER';
   const isDark = color === '#080100' || color === '#130100' || color === '#200100' || color === '#280200' || color === '#000000';
   const foamColor = isDark ? '#F5EBE6' : '#FFFDF5';
@@ -344,7 +344,7 @@ function renderTulipGlass(pct, color, isPouring, id) {
     : `fill="${color}" opacity="0.9"`;
 
   return `
-    <svg viewBox="0 0 160 260" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 160 260" data-bottom-y="170" data-top-rim-y="40" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <clipPath id="tulipGlassClip_${id}">
           <path d="M 30 0 L 130 0 L 108 40 C 120 90, 130 150, 80 170 C 30 150, 40 90, 52 40 Z" />
@@ -388,7 +388,7 @@ function renderTulipGlass(pct, color, isPouring, id) {
  * OKTOBERFEST MUG SVG RENDERER
  */
 function renderMug(pct, color, isPouring, id) {
-  const liquidY = 215 - (pct / 100) * 145;
+  const liquidY = 215 - (pct / 100) * 160;
   const isWater = color === 'WATER';
   const isDark = color === '#080100' || color === '#130100' || color === '#200100' || color === '#280200' || color === '#000000';
   const foamColor = isDark ? '#F5EBE6' : '#FFFDF5';
@@ -397,7 +397,7 @@ function renderMug(pct, color, isPouring, id) {
     : `fill="${color}" opacity="0.9"`;
 
   return `
-    <svg viewBox="0 0 160 260" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 160 260" data-bottom-y="215" data-top-rim-y="55" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <clipPath id="mugGlassClip_${id}">
           <path d="M 30 0 L 130 0 L 118 55 L 118 215 C 118 220, 42 220, 42 215 L 42 55 Z" />
@@ -443,7 +443,7 @@ function renderMug(pct, color, isPouring, id) {
  * STOUT GLASS SVG RENDERER
  */
 function renderStoutGlass(pct, color, isPouring, id) {
-  const liquidY = 215 - (pct / 100) * 155;
+  const liquidY = 220 - (pct / 100) * 175;
   const isWater = color === 'WATER';
   const isDark = color === '#080100' || color === '#130100' || color === '#200100' || color === '#280200' || color === '#000000';
   const foamColor = isDark ? '#F5EBE6' : '#FFFDF5';
@@ -452,7 +452,7 @@ function renderStoutGlass(pct, color, isPouring, id) {
     : `fill="${color}" opacity="0.9"`;
 
   return `
-    <svg viewBox="0 0 160 260" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 160 260" data-bottom-y="220" data-top-rim-y="45" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <clipPath id="stoutGlassClip_${id}">
           <path d="M 30 0 L 130 0 L 108 45 C 116 80, 120 120, 102 175 L 104 220 Q 80 225, 56 220 L 58 175 C 40 120, 44 80, 52 45 Z" />
@@ -494,7 +494,7 @@ function renderStoutGlass(pct, color, isPouring, id) {
  * SNIFTER GLASS SVG RENDERER
  */
 function renderSnifter(pct, color, isPouring, id) {
-  const liquidY = 205 - (pct / 100) * 125;
+  const liquidY = 175 - (pct / 100) * 120;
   const isWater = color === 'WATER';
   const isDark = color === '#080100' || color === '#130100' || color === '#200100' || color === '#280200' || color === '#000000';
   const foamColor = isDark ? '#F5EBE6' : '#FFFDF5';
@@ -503,7 +503,7 @@ function renderSnifter(pct, color, isPouring, id) {
     : `fill="${color}" opacity="0.9"`;
 
   return `
-    <svg viewBox="0 0 160 260" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 160 260" data-bottom-y="175" data-top-rim-y="55" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <clipPath id="snifterGlassClip_${id}">
           <path d="M 30 0 L 130 0 L 102 55 C 128 105, 128 155, 80 175 C 32 155, 32 105, 58 55 Z" />
