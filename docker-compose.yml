@@ -8,12 +8,12 @@ services:
     container_name: tapboard
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "3005:3000"
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - HA_URL=${HA_URL:-http://homeassistant.local:8123}
-      - HA_TOKEN=${HA_TOKEN:-your_long_lived_access_token_here}
+      - HA_URL=${HA_URL:-http://192.168.0.35:8123}
+      - HA_TOKEN=${HA_TOKEN}
     volumes:
       - ./data:/app/data
     healthcheck:

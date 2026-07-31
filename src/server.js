@@ -52,25 +52,41 @@ function parseJsonBody(req) {
   });
 }
 
-// Helper: Calculate Keg Kick Forecast (Avg Daily Oz vs Remaining Oz)
+// Helper: Calculate 14-Day Rolling Keg Kick Forecast (Avg Daily Oz over 14 Days vs Remaining Oz)
 function calculateKegKickForecast(tapId) {
-  const sevenDaysAgo = new Date(Date.now() - 7 * 86400 * 1000).toISOString();
-  const totalOzRow = db.prepare(`
-    SELECT SUM(volume_poured_oz) as total_oz
+  const fourteenDaysAgo = new Date(Date.now() - 14 * 86400 * 1000).toISOString();
+  
+  const stats = db.prepare(`
+    SELECT 
+      SUM(volume_poured_oz) as total_oz,
+      COUNT(DISTINCT DATE(timestamp)) as active_days
     FROM pour_logs
     WHERE tap_id = ? AND timestamp >= ?
-  `).get(tapId, sevenDaysAgo);
+  `).get(tapId, fourteenDaysAgo);
 
-  const avgDailyOz = (totalOzRow?.total_oz || 0) / 7;
+  const totalOz = stats?.total_oz || 0;
+  const activeDays = Math.max(1, stats?.active_days || 0);
+
+  // Divide by 14 days to capture full 2-week weekend cycles
+  const avgDailyOz = totalOz / 14;
+
   const haState = haClient.statesMap.get(`sensor.tap_${tapId}_fl_oz`) || haClient.statesMap.get(`sensor.tap_${tapId}_fill`);
   const currentOz = parseFloat(haState?.state || '0');
 
   if (isNaN(currentOz) || currentOz <= 0 || avgDailyOz <= 0) {
-    return { avgDailyOz: Math.round(avgDailyOz * 10) / 10, estimatedDaysRemaining: null };
+    return { 
+      avgDailyOz: Math.round(avgDailyOz * 10) / 10,
+      activeDays,
+      estimatedDaysRemaining: null 
+    };
   }
 
   const daysRemaining = Math.round((currentOz / avgDailyOz) * 10) / 10;
-  return { avgDailyOz: Math.round(avgDailyOz * 10) / 10, estimatedDaysRemaining: daysRemaining };
+  return { 
+    avgDailyOz: Math.round(avgDailyOz * 10) / 10,
+    activeDays,
+    estimatedDaysRemaining: daysRemaining 
+  };
 }
 
 // Broadcast SSE Event to all connected browser clients
@@ -171,7 +187,6 @@ const server = http.createServer(async (req, res) => {
   // 2. Admin Auth Endpoint (/api/auth)
   if (url.pathname === '/api/auth' && req.method === 'POST') {
     try {
-      // Check Rate Limit (5 attempts / 15 mins)
       const now = Date.now();
       const attempt = authAttempts.get(clientIp) || { count: 0, lockUntil: 0 };
 
@@ -197,10 +212,8 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      // Reset rate limit counter on success
       authAttempts.delete(clientIp);
 
-      // Create session token (valid for 24h)
       const token = crypto.randomBytes(32).toString('hex');
       const expiresAt = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
 
@@ -225,7 +238,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // 4. Update Settings (/api/settings)
+  // 4. Update Global Settings (/api/settings)
   if (url.pathname === '/api/settings' && req.method === 'POST') {
     if (!isAuthorized(req)) {
       res.writeHead(401, { 'Content-Type': 'application/json' });
@@ -264,8 +277,8 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // 5. Update Tap Configuration (/api/taps/:id)
-  if (url.pathname.startsWith('/api/taps/') && req.method === 'POST') {
+  // 5. Update Tap Configuration & Overrides (/api/taps/:id)
+  if (url.pathname.match(/^\/api\/taps\/\d+$/) && req.method === 'POST') {
     if (!isAuthorized(req)) {
       res.writeHead(401, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Unauthorized' }));
@@ -281,6 +294,8 @@ const server = http.createServer(async (req, res) => {
 
     try {
       const body = await parseJsonBody(req);
+      
+      // Update SQLite Tap Record
       db.prepare(`
         UPDATE taps SET
           enabled = COALESCE(?, enabled),
@@ -301,18 +316,26 @@ const server = http.createServer(async (req, res) => {
         body.enabled !== undefined ? (body.enabled ? 1 : 0) : null,
         body.graphic,
         body.override_enabled !== undefined ? (body.override_enabled ? 1 : 0) : null,
-        body.override_name,
-        body.override_style,
-        body.override_abv,
-        body.override_ibu,
-        body.override_og,
-        body.override_fg,
-        body.override_srm,
-        body.override_description,
-        body.badge_low_keg,
+        body.override_name !== undefined ? body.override_name : null,
+        body.override_style !== undefined ? body.override_style : null,
+        body.override_abv !== undefined ? (body.override_abv !== '' ? parseFloat(body.override_abv) : null) : null,
+        body.override_ibu !== undefined ? (body.override_ibu !== '' ? parseInt(body.override_ibu) : null) : null,
+        body.override_og !== undefined ? (body.override_og !== '' ? parseFloat(body.override_og) : null) : null,
+        body.override_fg !== undefined ? (body.override_fg !== '' ? parseFloat(body.override_fg) : null) : null,
+        body.override_srm !== undefined ? (body.override_srm !== '' ? parseInt(body.override_srm) : null) : null,
+        body.override_description !== undefined ? body.override_description : null,
+        body.badge_low_keg !== undefined ? parseFloat(body.badge_low_keg) : null,
         body.badge_fresh !== undefined ? (body.badge_fresh ? 1 : 0) : null,
         tapId
       );
+
+      // If batch selection was updated, trigger HA select call
+      if (body.batch_option !== undefined) {
+        await haClient.callHAService('select', 'select_option', {
+          entity_id: `select.tap_${tapId}_batch_select`,
+          option: body.batch_option
+        }).catch(err => console.warn(`[HA Call Warning] Select option failed:`, err.message));
+      }
 
       broadcastSSE('settings_updated', getFullStateSnapshot());
       res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -325,7 +348,87 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // 6. Manage Catalog & On-Deck (/api/catalog)
+  // 6. Action Endpoint: End Batch (/api/taps/:id/end-batch)
+  if (url.pathname.match(/^\/api\/taps\/\d+\/end-batch$/) && req.method === 'POST') {
+    if (!isAuthorized(req)) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Unauthorized' }));
+      return;
+    }
+
+    const tapId = parseInt(url.pathname.split('/')[3], 10);
+    try {
+      // 1. Call HA Service script.end_tap_batch to mark Brewfather batch as Completed
+      await haClient.callHAService('script', 'end_tap_batch', { tap_number: tapId })
+        .catch(err => console.warn(`[HA Call Warning] script.end_tap_batch failed:`, err.message));
+
+      // 2. Clear Overrides in SQLite
+      db.prepare(`
+        UPDATE taps SET
+          override_enabled = 0,
+          override_name = NULL,
+          override_style = NULL,
+          override_abv = NULL,
+          override_ibu = NULL,
+          override_og = NULL,
+          override_fg = NULL,
+          override_srm = NULL,
+          override_description = NULL
+        WHERE tap_id = ?
+      `).run(tapId);
+
+      broadcastSSE('settings_updated', getFullStateSnapshot());
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, message: `Batch completed and tap ${tapId} cleared.` }));
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  // 7. Action Endpoint: End Keg (/api/taps/:id/end-keg)
+  if (url.pathname.match(/^\/api\/taps\/\d+\/end-keg$/) && req.method === 'POST') {
+    if (!isAuthorized(req)) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Unauthorized' }));
+      return;
+    }
+
+    const tapId = parseInt(url.pathname.split('/')[3], 10);
+    try {
+      // Unassign tap locally in SQLite without marking Brewfather completed
+      db.prepare(`
+        UPDATE taps SET
+          override_enabled = 0,
+          override_name = NULL,
+          override_style = NULL,
+          override_abv = NULL,
+          override_ibu = NULL,
+          override_og = NULL,
+          override_fg = NULL,
+          override_srm = NULL,
+          override_description = NULL
+        WHERE tap_id = ?
+      `).run(tapId);
+
+      // Issue HA call to set batch select to empty
+      await haClient.callHAService('select', 'select_option', {
+        entity_id: `select.tap_${tapId}_batch_select`,
+        option: ''
+      }).catch(err => console.warn(`[HA Call Warning] Clear tap batch select failed:`, err.message));
+
+      broadcastSSE('settings_updated', getFullStateSnapshot());
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, message: `Tap ${tapId} unassigned / off-tap.` }));
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  // 8. Manage Catalog & On-Deck (/api/catalog)
   if (url.pathname === '/api/catalog' && req.method === 'POST') {
     if (!isAuthorized(req)) {
       res.writeHead(401, { 'Content-Type': 'application/json' });
@@ -360,7 +463,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // 7. Static Asset Serving
+  // 9. Static Asset Serving
   let filePath = path.join(PUBLIC_DIR, url.pathname === '/' ? 'index.html' : url.pathname);
   if (!filePath.startsWith(PUBLIC_DIR)) {
     res.writeHead(403);
