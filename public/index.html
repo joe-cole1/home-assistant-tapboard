@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Hazardous Brews - Tapboard v3.5</title>
+  <title>Hazardous Brews - Tapboard v3.6</title>
 
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -179,6 +179,24 @@
           <option value="stout_glass">Stout Glass</option>
           <option value="snifter">Snifter Glass</option>
         </select>
+      </div>
+
+      <!-- Volume Readout Display Unit Options -->
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
+        <div class="form-group">
+          <label class="form-label">Volume Display Readout</label>
+          <select class="form-control" id="tapSettingsDisplayUnitSelect">
+            <option value="percent">% Remaining</option>
+            <option value="pints">Pints Remaining</option>
+            <option value="oz">Ounces (oz) Remaining</option>
+            <option value="pours_12">Standard 12oz Pours</option>
+            <option value="pours_custom">Custom Pour Size</option>
+          </select>
+        </div>
+        <div class="form-group" id="customPourSizeGroup" style="display:none;">
+          <label class="form-label">Custom Pour Size (oz)</label>
+          <input type="number" step="0.5" class="form-control" id="tapSettingsCustomPourInput" value="12" placeholder="e.g. 5 for stouts" />
+        </div>
       </div>
 
       <div class="form-group" style="display:flex; align-items:center; gap:0.75rem;">

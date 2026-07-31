@@ -35,7 +35,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS taps (
     tap_id INTEGER PRIMARY KEY CHECK (tap_id BETWEEN 1 AND 6),
     enabled INTEGER DEFAULT 1,
-    graphic TEXT DEFAULT 'default',
+    graphic TEXT DEFAULT 'corny_keg',
     override_enabled INTEGER DEFAULT 0,
     override_name TEXT,
     override_style TEXT,
@@ -46,9 +46,15 @@ db.exec(`
     override_srm INTEGER,
     override_description TEXT,
     badge_low_keg REAL DEFAULT 20.0,
-    badge_fresh INTEGER DEFAULT 1
+    badge_fresh INTEGER DEFAULT 1,
+    display_unit TEXT DEFAULT 'percent',
+    custom_pour_size REAL DEFAULT 12.0
   )
 `);
+
+// Safely alter existing database tables if columns don't exist
+try { db.exec(`ALTER TABLE taps ADD COLUMN display_unit TEXT DEFAULT 'percent';`); } catch (e) {}
+try { db.exec(`ALTER TABLE taps ADD COLUMN custom_pour_size REAL DEFAULT 12.0;`); } catch (e) {}
 
 // 3. Batches Table (Brewfather & Recipe Details)
 db.exec(`
@@ -61,23 +67,25 @@ db.exec(`
     fg REAL,
     abv REAL,
     ibu INTEGER,
-    srm_color INTEGER,
-    tasting_notes TEXT,
-    last_synced_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    srm INTEGER,
+    status TEXT,
+    last_synced_at TEXT
   )
 `);
 
-// 4. Pour Logs Table (Historical Analytics)
+// 4. Pour Logs Table
 db.exec(`
   CREATE TABLE IF NOT EXISTS pour_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     tap_id INTEGER NOT NULL,
+    batch_id TEXT,
     volume_poured_oz REAL NOT NULL,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(tap_id) REFERENCES taps(tap_id)
   )
 `);
 
-// 5. Beverage Catalog Table (Digital Catalog & On-Deck)
+// 5. Beverage Catalog / On-Deck Pipeline
 db.exec(`
   CREATE TABLE IF NOT EXISTS beverage_catalog (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -96,28 +104,35 @@ db.exec(`
 db.exec(`
   CREATE TABLE IF NOT EXISTS admin_sessions (
     token TEXT PRIMARY KEY,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    expires_at DATETIME NOT NULL
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    expires_at TEXT NOT NULL
   )
 `);
 
-// Seed Default Settings Row if missing (Default PIN: 0000)
+// Seed Default Settings Row if not present (Default PIN: 0000)
+const defaultPinHash = bcrypt.hashSync('0000', 10);
 const existingSettings = db.prepare('SELECT id FROM settings WHERE id = 1').get();
+
 if (!existingSettings) {
-  const defaultPinHash = bcrypt.hashSync('0000', 10);
   db.prepare(`
     INSERT INTO settings (id, theme, volume_format, title, font_title, font_body, show_ondeck, admin_pin_hash)
     VALUES (1, 'modern_dark', 'oz', 'Hazardous Brews', 'Outfit', 'Inter', 1, ?)
   `).run(defaultPinHash);
 }
 
-// Seed Default Taps 1-6 Rows if missing
-const insertTap = db.prepare(`
-  INSERT OR IGNORE INTO taps (tap_id, enabled, graphic, badge_low_keg, badge_fresh)
-  VALUES (?, 1, 'default', 20.0, 1)
-`);
-for (let i = 1; i <= 6; i++) {
-  insertTap.run(i);
+// Seed Default Taps 1-6 if not present
+const tapCount = db.prepare('SELECT COUNT(*) as count FROM taps').get().count;
+if (tapCount === 0) {
+  const insertTap = db.prepare(`
+    INSERT INTO taps (tap_id, enabled, graphic, override_enabled, badge_low_keg, badge_fresh, display_unit, custom_pour_size)
+    VALUES (?, ?, ?, 0, 20.0, 1, 'percent', 12.0)
+  `);
+
+  // Default: Taps 1-3 enabled, 4-6 hidden
+  for (let i = 1; i <= 6; i++) {
+    const graphicStyle = i % 2 === 1 ? 'pint_glass' : 'mug';
+    insertTap.run(i, i <= 3 ? 1 : 0, graphicStyle);
+  }
 }
 
 export default db;

@@ -1,4 +1,4 @@
-// Tapboard v3.5.5 Client Engine
+// Tapboard v3.6 Client Engine
 import { renderTapGraphic, srmToHex } from './graphics.js';
 
 let appState = {
@@ -119,11 +119,47 @@ function setTapPouringAnimation(tapId, isPouring) {
   }
 }
 
+// Helper: Format Volume Readout based on Per-Tap Display Setting
+function formatVolumeReadout(tap, fillPercent, currentOz, pintsRemaining) {
+  const unit = tap.display_unit || 'percent';
+  const customSize = Math.max(0.5, parseFloat(tap.custom_pour_size) || 12.0);
+
+  switch (unit) {
+    case 'pints':
+      return `${(currentOz / 16.0).toFixed(1)} Pints Remaining`;
+    case 'oz':
+      return `${currentOz.toFixed(0)} oz Remaining`;
+    case 'pours_12':
+      return `${(currentOz / 12.0).toFixed(1)} Pours (12oz)`;
+    case 'pours_custom':
+      return `${(currentOz / customSize).toFixed(1)} Pours (${customSize}oz)`;
+    case 'percent':
+    default:
+      return `${fillPercent.toFixed(1)}% Remaining`;
+  }
+}
+
+// Helper: Clean Format Forecast Readout (No ~, no (baseline estimate), no (< 1 day))
+function formatForecastText(forecast) {
+  if (forecast.estimatedDaysRemaining === null || forecast.estimatedDaysRemaining === undefined) {
+    return `⌛ Forecast calculating...`;
+  }
+
+  if (forecast.estimatedDaysRemaining < 1.0) {
+    return `🔴 Kicking soon`;
+  }
+
+  if (forecast.isEstimatedBaseline) {
+    return `⌛ ${forecast.estimatedDaysRemaining} days remaining`;
+  }
+
+  return `⌛ ${forecast.estimatedDaysRemaining} days remaining (${forecast.avgDailyOz} oz/day avg)`;
+}
+
 // Main Render Function with In-Place Targeted DOM Preservation
 function renderApp() {
   const { settings, taps } = appState;
 
-  // Apply Theme & Fonts
   if (settings.theme) {
     document.body.setAttribute('data-theme', settings.theme);
   }
@@ -137,7 +173,6 @@ function renderApp() {
     document.documentElement.style.setProperty('--font-body', `'${settings.font_body}', sans-serif`);
   }
 
-  // Render or Update Tap Grid in-place to preserve SVG carbonation animations
   const tapGrid = document.getElementById('tapGrid');
   if (!tapGrid) return;
 
@@ -179,6 +214,8 @@ function createTapCard(tap) {
   const batchAttr = haStates[`sensor.tap_${tapId}_batch_info`]?.attributes || {};
 
   const fillPercent = Math.min(100, Math.max(0, parseFloat(fillState) || 0));
+  const currentOz = parseFloat(ozState) > 0 ? parseFloat(ozState) : (fillPercent / 100.0) * 640.0;
+  const pintsRemaining = parseFloat(pintsState) || (currentOz / 16.0);
 
   const bfName = batchAttr.recipe_name || batchAttr.name || `Tap ${tapId}`;
   const bfStyle = batchAttr.style || 'Craft Beer';
@@ -210,16 +247,8 @@ function createTapCard(tap) {
   const beerColorHex = isWaterOrTopo ? 'WATER' : srmToHex(srm);
 
   const forecast = appState.kegKickForecasts[tapId] || {};
-  let forecastText = `⌛ Forecast calculating...`;
-  if (forecast.estimatedDaysRemaining !== null && forecast.estimatedDaysRemaining !== undefined) {
-    if (forecast.estimatedDaysRemaining < 1.0) {
-      forecastText = `🔴 Kicking soon (< 1 day remaining)`;
-    } else if (forecast.isEstimatedBaseline) {
-      forecastText = `⌛ ~${forecast.estimatedDaysRemaining} days remaining (baseline estimate)`;
-    } else {
-      forecastText = `⌛ ~${forecast.estimatedDaysRemaining} days remaining (${forecast.avgDailyOz} oz/day avg)`;
-    }
-  }
+  const forecastText = formatForecastText(forecast);
+  const volumeReadoutText = formatVolumeReadout(tap, fillPercent, currentOz, pintsRemaining);
 
   const card = document.createElement('div');
   card.className = 'tap-card';
@@ -250,7 +279,7 @@ function createTapCard(tap) {
 
     <div class="graphic-container">
       <div class="tap-graphic-wrapper" id="graphic-tap-${tapId}"></div>
-      <div class="volume-readout">${fillPercent.toFixed(1)}% Full</div>
+      <div class="volume-readout">${volumeReadoutText}</div>
     </div>
 
     <div class="forecast-readout" style="font-size:0.8rem; color:var(--accent-color); margin-top:0.6rem; font-weight:600; text-align:center;">
@@ -292,8 +321,13 @@ function updateTapCard(card, tap) {
   const haStates = appState.haStates;
 
   const fillState = haStates[`sensor.tap_${tapId}_fill`]?.state || '0';
+  const ozState = haStates[`sensor.tap_${tapId}_fl_oz`]?.state || '0';
+  const pintsState = haStates[`sensor.tap_${tapId}_pints_remaining`]?.state || '0';
   const batchAttr = haStates[`sensor.tap_${tapId}_batch_info`]?.attributes || {};
+
   const fillPercent = Math.min(100, Math.max(0, parseFloat(fillState) || 0));
+  const currentOz = parseFloat(ozState) > 0 ? parseFloat(ozState) : (fillPercent / 100.0) * 640.0;
+  const pintsRemaining = parseFloat(pintsState) || (currentOz / 16.0);
 
   const bfName = batchAttr.recipe_name || batchAttr.name || `Tap ${tapId}`;
   const bfStyle = batchAttr.style || 'Craft Beer';
@@ -302,7 +336,6 @@ function updateTapCard(card, tap) {
   const bfOg = batchAttr.og || '--';
   const bfFg = batchAttr.fg || '--';
   const bfSrm = batchAttr.srm || batchAttr.color || 3;
-  const bfDesc = batchAttr.tasting_notes || batchAttr.notes || '';
 
   const hasOverride = tap.override_enabled === 1;
   const beerName = (hasOverride && tap.override_name && tap.override_name.trim() !== '') ? tap.override_name : bfName;
@@ -323,16 +356,8 @@ function updateTapCard(card, tap) {
   const beerColorHex = isWaterOrTopo ? 'WATER' : srmToHex(srm);
 
   const forecast = appState.kegKickForecasts[tapId] || {};
-  let forecastText = `⌛ Forecast calculating...`;
-  if (forecast.estimatedDaysRemaining !== null && forecast.estimatedDaysRemaining !== undefined) {
-    if (forecast.estimatedDaysRemaining < 1.0) {
-      forecastText = `🔴 Kicking soon (< 1 day remaining)`;
-    } else if (forecast.isEstimatedBaseline) {
-      forecastText = `⌛ ~${forecast.estimatedDaysRemaining} days remaining (baseline estimate)`;
-    } else {
-      forecastText = `⌛ ~${forecast.estimatedDaysRemaining} days remaining (${forecast.avgDailyOz} oz/day avg)`;
-    }
-  }
+  const forecastText = formatForecastText(forecast);
+  const newVolText = formatVolumeReadout(tap, fillPercent, currentOz, pintsRemaining);
 
   // Update text content in-place without touching SVG DOM tree
   const titleEl = card.querySelector('.beer-title');
@@ -350,9 +375,8 @@ function updateTapCard(card, tap) {
   }
 
   const volReadout = card.querySelector('.volume-readout');
-  if (volReadout) {
-    const newVolText = `${fillPercent.toFixed(1)}% Full`;
-    if (volReadout.textContent !== newVolText) volReadout.textContent = newVolText;
+  if (volReadout && volReadout.textContent !== newVolText) {
+    volReadout.textContent = newVolText;
   }
 
   const forecastEl = card.querySelector('.forecast-readout');
@@ -413,7 +437,6 @@ function openGlobalSettingsModal() {
   if (settings.font_title) document.getElementById('titleFontSelect').value = settings.font_title;
   if (settings.font_body) document.getElementById('bodyFontSelect').value = settings.font_body;
 
-  // Populate Taps 1-6 Checkboxes
   for (let i = 1; i <= 6; i++) {
     const check = document.getElementById(`globalTapCheck_${i}`);
     if (check) {
@@ -425,7 +448,7 @@ function openGlobalSettingsModal() {
   document.getElementById('globalSettingsModal').style.display = 'flex';
 }
 
-// Open Per-Tap Settings Modal with Conditioning Filtering & Topo Chico at Bottom
+// Open Per-Tap Settings Modal with Conditioning Filtering & Volume Format Selector
 function openTapSettings(tapId) {
   editingTapId = tapId;
   const tap = appState.taps.find(t => t.tap_id === tapId) || {};
@@ -439,13 +462,11 @@ function openTapSettings(tapId) {
   const batchSelect = document.getElementById('tapSettingsBatchSelect');
   batchSelect.innerHTML = '';
 
-  // 1. First Option: Off-Tap
   const offTapOpt = document.createElement('option');
   offTapOpt.value = '';
   offTapOpt.textContent = '-- Empty / Off Tap --';
   batchSelect.appendChild(offTapOpt);
 
-  // 2. Filter Brewfather options for (Conditioning) status
   const conditioningBatches = [];
   let topoChicoOption = null;
 
@@ -459,7 +480,6 @@ function openTapSettings(tapId) {
     }
   });
 
-  // Append Conditioning Batches
   conditioningBatches.forEach(optStr => {
     const opt = document.createElement('option');
     opt.value = optStr;
@@ -473,7 +493,6 @@ function openTapSettings(tapId) {
     batchSelect.appendChild(opt);
   });
 
-  // 3. Last Option: ALWAYS Topo Chico 0%
   const topoOpt = document.createElement('option');
   const topoVal = topoChicoOption || 'custom:topo_chico | Topo Chico 0%';
   topoOpt.value = topoVal;
@@ -486,6 +505,15 @@ function openTapSettings(tapId) {
   // Set Graphic & Enabled
   document.getElementById('tapSettingsGraphicSelect').value = tap.graphic || 'corny_keg';
   document.getElementById('tapSettingsEnabledCheckbox').checked = tap.enabled === 1;
+
+  // Set Display Unit & Custom Pour Input
+  const unitSelect = document.getElementById('tapSettingsDisplayUnitSelect');
+  unitSelect.value = tap.display_unit || 'percent';
+  
+  const customInput = document.getElementById('tapSettingsCustomPourInput');
+  customInput.value = tap.custom_pour_size || 12.0;
+
+  toggleCustomPourSizeUI(unitSelect.value);
 
   // Set Overrides
   const hasOverride = tap.override_enabled === 1;
@@ -507,6 +535,16 @@ function openTapSettings(tapId) {
   document.getElementById('badgeFreshToggle').checked = tap.badge_fresh === 1;
 
   document.getElementById('tapSettingsModal').style.display = 'flex';
+}
+
+function toggleCustomPourSizeUI(unitValue) {
+  const container = document.getElementById('customPourSizeGroup');
+  if (!container) return;
+  if (unitValue === 'pours_custom') {
+    container.style.display = 'flex';
+  } else {
+    container.style.display = 'none';
+  }
 }
 
 function toggleOverrideFieldsUI(enabled) {
@@ -593,6 +631,11 @@ function initModalListeners() {
     });
   }
 
+  // Display Unit Selector Change Listener
+  document.getElementById('tapSettingsDisplayUnitSelect')?.addEventListener('change', (e) => {
+    toggleCustomPourSizeUI(e.target.value);
+  });
+
   // Override Toggle Listener
   const overrideToggle = document.getElementById('tapSettingsOverrideToggle');
   if (overrideToggle) {
@@ -609,7 +652,7 @@ function initModalListeners() {
     document.getElementById('tapSettingsModal').style.display = 'none';
   });
 
-  // Save Global Settings (Theme, Title, Fonts, and Taps 1-6 Visibilities)
+  // Save Global Settings
   document.getElementById('saveGlobalSettingsBtn')?.addEventListener('click', async () => {
     const theme = document.getElementById('themeSelect').value;
     const title = document.getElementById('headerTitleInput').value;
@@ -645,14 +688,16 @@ function initModalListeners() {
     }
   });
 
-  // Save Per-Tap Settings
+  // Save Per-Tap Settings (including Display Unit & Custom Pour Size)
   document.getElementById('saveTapSettingsBtn')?.addEventListener('click', async () => {
     if (!editingTapId) return;
 
     const graphic = document.getElementById('tapSettingsGraphicSelect').value;
     const enabled = document.getElementById('tapSettingsEnabledCheckbox').checked;
-    const override_enabled = document.getElementById('tapSettingsOverrideToggle').checked;
+    const display_unit = document.getElementById('tapSettingsDisplayUnitSelect').value;
+    const custom_pour_size = document.getElementById('tapSettingsCustomPourInput').value;
 
+    const override_enabled = document.getElementById('tapSettingsOverrideToggle').checked;
     const override_name = document.getElementById('overrideName').value;
     const override_style = document.getElementById('overrideStyle').value;
     const override_abv = document.getElementById('overrideAbv').value;
@@ -676,6 +721,8 @@ function initModalListeners() {
         body: JSON.stringify({
           graphic,
           enabled,
+          display_unit,
+          custom_pour_size,
           override_enabled,
           override_name,
           override_style,

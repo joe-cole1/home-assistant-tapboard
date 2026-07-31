@@ -52,7 +52,7 @@ function parseJsonBody(req) {
   });
 }
 
-// Helper: Calculate 14-Day Rolling Keg Kick Forecast with Multi-Sensor Lookup & Baseline Fallback
+// Helper: Calculate 14-Day Rolling Keg Kick Forecast with Multi-Sensor Lookup
 function calculateKegKickForecast(tapId) {
   const fourteenDaysAgo = new Date(Date.now() - 14 * 86400 * 1000).toISOString();
   
@@ -78,7 +78,7 @@ function calculateKegKickForecast(tapId) {
   } else if (pintsState && !isNaN(parseFloat(pintsState)) && parseFloat(pintsState) > 0) {
     currentOz = parseFloat(pintsState) * 16.0;
   } else if (fillState && !isNaN(parseFloat(fillState)) && parseFloat(fillState) > 0) {
-    currentOz = (parseFloat(fillState) / 100.0) * 640.0; // 5 gal corny keg baseline
+    currentOz = (parseFloat(fillState) / 100.0) * 640.0;
   }
 
   let avgDailyOz = 0;
@@ -88,7 +88,6 @@ function calculateKegKickForecast(tapId) {
     const daysSpan = Math.max(1, (Date.now() - new Date(stats.first_pour_time).getTime()) / (86400 * 1000));
     avgDailyOz = totalOz / Math.min(14, daysSpan);
   } else {
-    // Standard taproom estimate: 16 oz (1 pint) / day for active kegs awaiting first logged pour session
     avgDailyOz = 16.0;
     isEstimatedBaseline = true;
   }
@@ -190,7 +189,7 @@ const server = http.createServer(async (req, res) => {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache, no-transform',
       'Connection': 'keep-alive',
-      'X-Accel-Buffering': 'no' // Pangolin/Traefik proxy bypass header
+      'X-Accel-Buffering': 'no'
     });
 
     res.write(': connected\n\n');
@@ -339,7 +338,9 @@ const server = http.createServer(async (req, res) => {
           override_srm = COALESCE(?, override_srm),
           override_description = COALESCE(?, override_description),
           badge_low_keg = COALESCE(?, badge_low_keg),
-          badge_fresh = COALESCE(?, badge_fresh)
+          badge_fresh = COALESCE(?, badge_fresh),
+          display_unit = COALESCE(?, display_unit),
+          custom_pour_size = COALESCE(?, custom_pour_size)
         WHERE tap_id = ?
       `).run(
         body.enabled !== undefined ? (body.enabled ? 1 : 0) : null,
@@ -355,6 +356,8 @@ const server = http.createServer(async (req, res) => {
         body.override_description !== undefined ? body.override_description : null,
         body.badge_low_keg !== undefined ? parseFloat(body.badge_low_keg) : null,
         body.badge_fresh !== undefined ? (body.badge_fresh ? 1 : 0) : null,
+        body.display_unit !== undefined ? body.display_unit : null,
+        body.custom_pour_size !== undefined ? (body.custom_pour_size !== '' ? parseFloat(body.custom_pour_size) : null) : null,
         tapId
       );
 
