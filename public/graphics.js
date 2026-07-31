@@ -537,3 +537,8 @@ function renderSnifter(pct, color, isPouring, id) {
           </g>
         ` : ''}
       </g>
+
+      <path d="M 60 60 C 40 105, 42 150, 72 168" stroke="#FFFFFF" stroke-width="2.5" fill="none" opacity="0.4" />
+    </svg>
+  `;
+}
