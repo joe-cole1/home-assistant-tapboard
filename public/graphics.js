@@ -191,7 +191,7 @@ function renderCornyKeg(pct, color, isPouring, id) {
         ${renderCarbonationBubbles(38, 122, 218, liquidY, 6)}
         ${!isWater ? `
           <!-- Puffy Cloud Foam Head (Clipped to Keg Walls) -->
-          <g class="beer-cloud-foam">
+          <g class="beer-cloud-foam" data-base-y="${liquidY}">
             <rect x="30" y="${liquidY - 8}" width="100" height="16" fill="${foamColor}" opacity="0.9" />
             <circle cx="48" cy="${liquidY - 5}" r="12" fill="${foamColor}" />
             <circle cx="68" cy="${liquidY - 8}" r="15" fill="${foamColor}" />
@@ -247,7 +247,7 @@ function renderPintGlass(pct, color, isPouring, id) {
         ${renderCarbonationBubbles(50, 110, 220, liquidY, 6)}
         ${!isWater ? `
           <!-- Puffy Cloud Foam Head (Clipped to Pint Glass Walls) -->
-          <g class="beer-cloud-foam">
+          <g class="beer-cloud-foam" data-base-y="${liquidY}">
             <rect x="30" y="${liquidY - 8}" width="100" height="16" fill="${foamColor}" opacity="0.9" />
             <circle cx="50" cy="${liquidY - 5}" r="11" fill="${foamColor}" />
             <circle cx="68" cy="${liquidY - 8}" r="14" fill="${foamColor}" />
@@ -306,7 +306,7 @@ function renderWheatGlass(pct, color, isPouring, id) {
         <rect x="80" y="${liquidY}" width="55" height="${240 - liquidY}" fill="rgba(0, 0, 0, 0.22)" class="beer-liquid-shadow" />
         ${renderCarbonationBubbles(45, 115, 215, liquidY, 6)}
         ${!isWater ? `
-          <g class="beer-cloud-foam">
+          <g class="beer-cloud-foam" data-base-y="${liquidY}">
             <rect x="25" y="${liquidY - 8}" width="110" height="16" fill="${foamColor}" opacity="0.9" />
             <circle cx="48" cy="${liquidY - 5}" r="11" fill="${foamColor}" />
             <circle cx="68" cy="${liquidY - 8}" r="14" fill="${foamColor}" />
@@ -359,7 +359,7 @@ function renderTulipGlass(pct, color, isPouring, id) {
         <rect x="80" y="${liquidY}" width="55" height="${220 - liquidY}" fill="rgba(0, 0, 0, 0.22)" class="beer-liquid-shadow" />
         ${renderCarbonationBubbles(45, 115, 165, liquidY, 6)}
         ${!isWater ? `
-          <g class="beer-cloud-foam">
+          <g class="beer-cloud-foam" data-base-y="${liquidY}">
             <rect x="25" y="${liquidY - 8}" width="110" height="16" fill="${foamColor}" opacity="0.9" />
             <circle cx="48" cy="${liquidY - 5}" r="11" fill="${foamColor}" />
             <circle cx="68" cy="${liquidY - 8}" r="14" fill="${foamColor}" />
@@ -414,7 +414,7 @@ function renderMug(pct, color, isPouring, id) {
         <rect x="80" y="${liquidY}" width="45" height="${220 - liquidY}" fill="rgba(0, 0, 0, 0.22)" class="beer-liquid-shadow" />
         ${renderCarbonationBubbles(45, 115, 210, liquidY, 6)}
         ${!isWater ? `
-          <g class="beer-cloud-foam">
+          <g class="beer-cloud-foam" data-base-y="${liquidY}">
             <rect x="40" y="${liquidY - 8}" width="80" height="16" fill="${foamColor}" opacity="0.9" />
             <circle cx="52" cy="${liquidY - 5}" r="10" fill="${foamColor}" />
             <circle cx="68" cy="${liquidY - 8}" r="13" fill="${foamColor}" />
@@ -465,7 +465,7 @@ function renderStoutGlass(pct, color, isPouring, id) {
         <rect x="80" y="${liquidY}" width="55" height="${230 - liquidY}" fill="rgba(0, 0, 0, 0.22)" class="beer-liquid-shadow" />
         ${renderCarbonationBubbles(48, 112, 215, liquidY, 6)}
         ${!isWater ? `
-          <g class="beer-cloud-foam">
+          <g class="beer-cloud-foam" data-base-y="${liquidY}">
             <rect x="25" y="${liquidY - 8}" width="110" height="16" fill="${foamColor}" opacity="0.9" />
             <circle cx="48" cy="${liquidY - 5}" r="11" fill="${foamColor}" />
             <circle cx="68" cy="${liquidY - 8}" r="14" fill="${foamColor}" />
@@ -518,7 +518,7 @@ function renderSnifter(pct, color, isPouring, id) {
         <rect x="80" y="${liquidY}" width="60" height="${210 - liquidY}" fill="rgba(0, 0, 0, 0.22)" class="beer-liquid-shadow" />
         ${renderCarbonationBubbles(42, 118, 170, liquidY, 6)}
         ${!isWater ? `
-          <g class="beer-cloud-foam">
+          <g class="beer-cloud-foam" data-base-y="${liquidY}">
             <rect x="20" y="${liquidY - 8}" width="120" height="16" fill="${foamColor}" opacity="0.9" />
             <circle cx="48" cy="${liquidY - 5}" r="11" fill="${foamColor}" />
             <circle cx="68" cy="${liquidY - 8}" r="14" fill="${foamColor}" />

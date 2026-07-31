@@ -156,9 +156,8 @@ function setTapPouringAnimation(tapId, isPouring) {
   const liquidRects = card.querySelectorAll('.beer-liquid-rect, .beer-liquid-shadow');
   const foamGroup = card.querySelector('.beer-cloud-foam');
 
-  // Determine initial rendered liquidY from existing rect
-  const firstRect = card.querySelector('.beer-liquid-rect');
-  const initialLiquidY = firstRect ? parseFloat(firstRect.getAttribute('y')) || 100 : 100;
+  // Read untransformed SVG base Y coordinate for foam head
+  const baseY = foamGroup ? (parseFloat(foamGroup.getAttribute('data-base-y')) || 100) : 100;
 
   if (isPouring) {
     card.classList.remove('is-settling');
@@ -177,7 +176,7 @@ function setTapPouringAnimation(tapId, isPouring) {
       r.setAttribute('height', 0);
     });
     if (foamGroup) {
-      foamGroup.style.transform = `translateY(${bottomY - initialLiquidY}px)`;
+      foamGroup.style.transform = `translateY(${bottomY - baseY}px)`;
     }
 
     // 2. Force DOM reflow
@@ -191,7 +190,7 @@ function setTapPouringAnimation(tapId, isPouring) {
         r.setAttribute('height', fullHeight);
       });
       if (foamGroup) {
-        foamGroup.style.transform = `translateY(${topRimY - initialLiquidY}px)`;
+        foamGroup.style.transform = `translateY(${topRimY - baseY}px)`;
       }
     });
 
@@ -219,7 +218,7 @@ function setTapPouringAnimation(tapId, isPouring) {
       r.setAttribute('height', targetHeight);
     });
     if (foamGroup) {
-      foamGroup.style.transform = `translateY(${targetY - initialLiquidY}px)`;
+      foamGroup.style.transform = `translateY(${targetY - baseY}px)`;
     }
 
     // After 2.0s settle animation completes, return card to standard state
