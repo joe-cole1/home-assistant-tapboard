@@ -1,4 +1,4 @@
-// Tapboard v3.5.3 Client Engine
+// Tapboard v3.5.4 Client Engine
 import { renderTapGraphic, srmToHex } from './graphics.js';
 
 let appState = {
@@ -119,7 +119,7 @@ function setTapPouringAnimation(tapId, isPouring) {
   }
 }
 
-// Main Render Function
+// Main Render Function with In-Place Targeted DOM Preservation
 function renderApp() {
   const { settings, taps } = appState;
 
@@ -137,29 +137,42 @@ function renderApp() {
     document.documentElement.style.setProperty('--font-body', `'${settings.font_body}', sans-serif`);
   }
 
-  // Render Tap Grid
+  // Render or Update Tap Grid in-place to preserve SVG carbonation animations
   const tapGrid = document.getElementById('tapGrid');
   if (!tapGrid) return;
 
   const activeTaps = taps.filter(t => t.enabled === 1);
+  const activeTapIds = new Set(activeTaps.map(t => t.tap_id));
   tapGrid.setAttribute('data-count', activeTaps.length);
-  tapGrid.innerHTML = '';
 
+  // 1. Remove cards for disabled/hidden taps
+  Array.from(tapGrid.querySelectorAll('.tap-card')).forEach(card => {
+    const tapId = parseInt(card.getAttribute('data-tap-id'), 10);
+    if (!activeTapIds.has(tapId)) {
+      card.remove();
+    }
+  });
+
+  // 2. Add or update active tap cards in-place
   activeTaps.forEach(tap => {
-    const card = createTapCard(tap);
-    tapGrid.appendChild(card);
+    const existingCard = tapGrid.querySelector(`.tap-card[data-tap-id="${tap.tap_id}"]`);
+    if (existingCard) {
+      updateTapCard(existingCard, tap);
+    } else {
+      const card = createTapCard(tap);
+      tapGrid.appendChild(card);
+    }
   });
 
   // Render On-Deck Ticker
   renderOnDeckTicker();
 }
 
-// Create Tap Card Element (Matched to Reference Screenshot)
+// Create Tap Card Element (Initial creation)
 function createTapCard(tap) {
   const tapId = tap.tap_id;
   const haStates = appState.haStates;
 
-  // Resolve HA Sensor Data
   const fillState = haStates[`sensor.tap_${tapId}_fill`]?.state || '0';
   const ozState = haStates[`sensor.tap_${tapId}_fl_oz`]?.state || '0';
   const pintsState = haStates[`sensor.tap_${tapId}_pints_remaining`]?.state || '0';
@@ -167,7 +180,6 @@ function createTapCard(tap) {
 
   const fillPercent = Math.min(100, Math.max(0, parseFloat(fillState) || 0));
 
-  // Base Brewfather values
   const bfName = batchAttr.recipe_name || batchAttr.name || `Tap ${tapId}`;
   const bfStyle = batchAttr.style || 'Craft Beer';
   const bfAbv = batchAttr.abv || '--';
@@ -177,12 +189,10 @@ function createTapCard(tap) {
   const bfSrm = batchAttr.srm || batchAttr.color || 3;
   const bfDesc = batchAttr.tasting_notes || batchAttr.notes || '';
 
-  // Field-Level Overrides: Use override if checked AND non-empty; else fallback to Brewfather!
   const hasOverride = tap.override_enabled === 1;
   const beerName = (hasOverride && tap.override_name && tap.override_name.trim() !== '') ? tap.override_name : bfName;
   const style = (hasOverride && tap.override_style && tap.override_style.trim() !== '') ? tap.override_style : bfStyle;
 
-  // Check if beverage is Water / Topo Chico / Sparkling Water / Seltzer
   const isWaterOrTopo = beerName.toLowerCase().includes('topo chico') ||
                         beerName.toLowerCase().includes('water') ||
                         style.toLowerCase().includes('water') ||
@@ -197,10 +207,8 @@ function createTapCard(tap) {
   const srm = isWaterOrTopo ? 0 : ((hasOverride && tap.override_srm !== null && tap.override_srm !== undefined && tap.override_srm !== '') ? tap.override_srm : bfSrm);
   const description = (hasOverride && tap.override_description && tap.override_description.trim() !== '') ? tap.override_description : bfDesc;
 
-  // Convert SRM to Hex Color (or WATER)
   const beerColorHex = isWaterOrTopo ? 'WATER' : srmToHex(srm);
 
-  // 14-Day Rolling Keg Kick Forecast
   const forecast = appState.kegKickForecasts[tapId] || {};
   let forecastText = `⌛ Forecast calculating...`;
   if (forecast.estimatedDaysRemaining !== null && forecast.estimatedDaysRemaining !== undefined) {
@@ -216,8 +224,9 @@ function createTapCard(tap) {
   const card = document.createElement('div');
   card.className = 'tap-card';
   card.setAttribute('data-tap-id', tapId);
+  card.setAttribute('data-graphic-style', tap.graphic || 'corny_keg');
+  card.setAttribute('data-color-hex', beerColorHex);
 
-  // Card Content (Dashed borders, gold circle badge, dashed metric rows)
   card.innerHTML = `
     <div class="tap-card-header">
       <div class="tap-number-badge">${tapId}</div>
@@ -241,17 +250,15 @@ function createTapCard(tap) {
 
     <div class="graphic-container">
       <div class="tap-graphic-wrapper" id="graphic-tap-${tapId}"></div>
-      <div class="volume-readout">
-        ${fillPercent.toFixed(1)}% Full
-      </div>
+      <div class="volume-readout">${fillPercent.toFixed(1)}% Full</div>
     </div>
 
-    <div style="font-size:0.8rem; color:var(--accent-color); margin-top:0.6rem; font-weight:600; text-align:center;">
+    <div class="forecast-readout" style="font-size:0.8rem; color:var(--accent-color); margin-top:0.6rem; font-weight:600; text-align:center;">
       ${forecastText}
     </div>
   `;
 
-  // Render SVG Vector Glassware Graphic
+  // Render SVG Graphic initially
   const graphicContainer = card.querySelector(`#graphic-tap-${tapId}`);
   if (graphicContainer && typeof renderTapGraphic === 'function') {
     graphicContainer.innerHTML = renderTapGraphic(tap.graphic || 'corny_keg', fillPercent, beerColorHex, false, `tap_${tapId}`);
@@ -277,6 +284,92 @@ function createTapCard(tap) {
   });
 
   return card;
+}
+
+// In-Place Update for existing Tap Card element
+function updateTapCard(card, tap) {
+  const tapId = tap.tap_id;
+  const haStates = appState.haStates;
+
+  const fillState = haStates[`sensor.tap_${tapId}_fill`]?.state || '0';
+  const batchAttr = haStates[`sensor.tap_${tapId}_batch_info`]?.attributes || {};
+  const fillPercent = Math.min(100, Math.max(0, parseFloat(fillState) || 0));
+
+  const bfName = batchAttr.recipe_name || batchAttr.name || `Tap ${tapId}`;
+  const bfStyle = batchAttr.style || 'Craft Beer';
+  const bfAbv = batchAttr.abv || '--';
+  const bfIbu = batchAttr.ibu || '--';
+  const bfOg = batchAttr.og || '--';
+  const bfFg = batchAttr.fg || '--';
+  const bfSrm = batchAttr.srm || batchAttr.color || 3;
+  const bfDesc = batchAttr.tasting_notes || batchAttr.notes || '';
+
+  const hasOverride = tap.override_enabled === 1;
+  const beerName = (hasOverride && tap.override_name && tap.override_name.trim() !== '') ? tap.override_name : bfName;
+  const style = (hasOverride && tap.override_style && tap.override_style.trim() !== '') ? tap.override_style : bfStyle;
+
+  const isWaterOrTopo = beerName.toLowerCase().includes('topo chico') ||
+                        beerName.toLowerCase().includes('water') ||
+                        style.toLowerCase().includes('water') ||
+                        style.toLowerCase().includes('seltzer') ||
+                        bfSrm === 0 ||
+                        (hasOverride && tap.override_srm === 0);
+
+  const abv = isWaterOrTopo ? '0.0%' : ((hasOverride && tap.override_abv !== null && tap.override_abv !== undefined && tap.override_abv !== '') ? `${tap.override_abv}%` : (bfAbv !== '--' ? `${bfAbv}%` : '--'));
+  const ibu = isWaterOrTopo ? '-' : ((hasOverride && tap.override_ibu !== null && tap.override_ibu !== undefined && tap.override_ibu !== '') ? tap.override_ibu : bfIbu);
+  const og = isWaterOrTopo ? '-' : ((hasOverride && tap.override_og !== null && tap.override_og !== undefined && tap.override_og !== '') ? tap.override_og : bfOg);
+  const fg = isWaterOrTopo ? '-' : ((hasOverride && tap.override_fg !== null && tap.override_fg !== undefined && tap.override_fg !== '') ? tap.override_fg : bfFg);
+  const srm = isWaterOrTopo ? 0 : ((hasOverride && tap.override_srm !== null && tap.override_srm !== undefined && tap.override_srm !== '') ? tap.override_srm : bfSrm);
+  const beerColorHex = isWaterOrTopo ? 'WATER' : srmToHex(srm);
+
+  const forecast = appState.kegKickForecasts[tapId] || {};
+  let forecastText = `⌛ Forecast calculating...`;
+  if (forecast.estimatedDaysRemaining !== null && forecast.estimatedDaysRemaining !== undefined) {
+    if (forecast.estimatedDaysRemaining < 1.0) {
+      forecastText = `🔴 Kicking soon (< 1 day remaining)`;
+    } else if (forecast.isEstimatedBaseline) {
+      forecastText = `⌛ ~${forecast.estimatedDaysRemaining} days remaining (baseline estimate)`;
+    } else {
+      forecastText = `⌛ ~${forecast.estimatedDaysRemaining} days remaining (${forecast.avgDailyOz} oz/day avg)`;
+    }
+  }
+
+  // Update text content in-place without touching SVG DOM tree
+  const titleEl = card.querySelector('.beer-title');
+  if (titleEl && titleEl.textContent !== beerName) titleEl.textContent = beerName;
+
+  const styleEl = card.querySelector('.beer-style');
+  if (styleEl && styleEl.textContent !== style) styleEl.textContent = style;
+
+  const metrics = card.querySelectorAll('.metric-value');
+  if (metrics.length >= 4) {
+    if (metrics[0].textContent !== abv) metrics[0].textContent = abv;
+    if (metrics[1].textContent !== String(ibu)) metrics[1].textContent = ibu;
+    if (metrics[2].textContent !== String(og)) metrics[2].textContent = og;
+    if (metrics[3].textContent !== String(fg)) metrics[3].textContent = fg;
+  }
+
+  const volReadout = card.querySelector('.volume-readout');
+  if (volReadout) {
+    const newVolText = `${fillPercent.toFixed(1)}% Full`;
+    if (volReadout.textContent !== newVolText) volReadout.textContent = newVolText;
+  }
+
+  const forecastEl = card.querySelector('.forecast-readout');
+  if (forecastEl && forecastEl.textContent !== forecastText) {
+    forecastEl.textContent = forecastText;
+  }
+
+  // Re-render SVG only if graphic style or beer color changed
+  const graphicContainer = card.querySelector(`#graphic-tap-${tapId}`);
+  const currentGraphicStyle = card.getAttribute('data-graphic-style');
+  const currentColorHex = card.getAttribute('data-color-hex');
+
+  if (!graphicContainer.innerHTML || currentGraphicStyle !== (tap.graphic || 'corny_keg') || currentColorHex !== beerColorHex) {
+    card.setAttribute('data-graphic-style', tap.graphic || 'corny_keg');
+    card.setAttribute('data-color-hex', beerColorHex);
+    graphicContainer.innerHTML = renderTapGraphic(tap.graphic || 'corny_keg', fillPercent, beerColorHex, false, `tap_${tapId}`);
+  }
 }
 
 // Open Recipe Detail Modal
@@ -311,7 +404,7 @@ function openRecipeModal(tapId, beerName, style, abv, ibu, og, fg, srm, descript
   modal.style.display = 'flex';
 }
 
-// Open Global Settings Modal (Populate Theme, Fonts, Title, and Taps 1-6 Checkboxes)
+// Open Global Settings Modal
 function openGlobalSettingsModal() {
   const { settings, taps } = appState;
   

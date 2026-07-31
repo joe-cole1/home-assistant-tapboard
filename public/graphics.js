@@ -1,10 +1,10 @@
 /**
- * TAP BOARD GRAPHICS ENGINE (graphics.js) - v3.5.3
+ * TAP BOARD GRAPHICS ENGINE (graphics.js) - v3.5.4
  * Dynamic SVG vector renderer for Corny Kegs & 6 Beer Glassware styles.
  * Features:
  * - Transparent liquid rendering for Water / Topo Chico / Seltzer
- * - Randomized effervescent carbonation bubble generator for every glass style
- * - SRM hex color lookups & dynamic foam head caps
+ * - Half-speed, low-count effervescent carbonation bubble generator
+ * - Smooth in-place DOM updates for uninterrupted animations
  */
 
 // SRM to Hex Color conversion lookup table
@@ -55,25 +55,27 @@ export function srmToHex(srmVal, fallbackHex = null) {
 let generatedGraphicId = 0;
 
 /**
- * Generate randomized SVG animated carbonation bubbles
+ * Generate randomized SVG animated carbonation bubbles (Half-speed, ~6 bubbles)
  */
-function renderCarbonationBubbles(leftX, rightX, bottomY, topY, count = 12) {
+function renderCarbonationBubbles(leftX, rightX, bottomY, topY, count = 6) {
   let bubblesSvg = '';
   const width = rightX - leftX;
-  const height = bottomY - topY;
 
   for (let i = 0; i < count; i++) {
-    // Randomize initial seed positions
-    const cx = (leftX + 4 + Math.random() * (width - 8)).toFixed(1);
-    const startY = (bottomY - Math.random() * (height * 0.8)).toFixed(1);
-    const r = (1.0 + Math.random() * 1.8).toFixed(1);
-    const duration = (1.8 + Math.random() * 2.2).toFixed(2); // 1.8s - 4.0s
-    const delay = (Math.random() * 2.5).toFixed(2); // 0s - 2.5s
-    const opacity = (0.4 + Math.random() * 0.5).toFixed(2);
+    // Randomize initial seed positions near the lower portion of the glass
+    const cx = (leftX + 5 + Math.random() * (width - 10)).toFixed(1);
+    const startY = (bottomY - Math.random() * 30).toFixed(1);
+    const r = (1.0 + Math.random() * 1.5).toFixed(1);
+    const duration = (4.0 + Math.random() * 4.5).toFixed(2); // 4.0s - 8.5s (Half speed)
+    const delay = (Math.random() * 4.0).toFixed(2); // 0s - 4.0s staggered start
+    const opacity = (0.35 + Math.random() * 0.45).toFixed(2);
+    
+    // Calculate total rise distance to surface level topY
+    const riseDist = (startY - topY + 5).toFixed(1);
 
     bubblesSvg += `
       <circle cx="${cx}" cy="${startY}" r="${r}" fill="#FFFFFF" opacity="${opacity}" 
-              style="animation: riseBubble ${duration}s infinite ease-in ${delay}s; transform-box: fill-box; transform-origin: center;" />
+              style="--rise-dist: -${riseDist}px; animation: riseBubble ${duration}s infinite linear ${delay}s; transform-box: fill-box; transform-origin: center;" />
     `;
   }
   return bubblesSvg;
@@ -162,7 +164,7 @@ function renderCornyKeg(pct, color, isPouring, id) {
         <g clip-path="url(#kegLiquidClip_${id})">
           <rect x="30" y="60" width="100" height="165" ${fillStyle} />
           <!-- Animated Carbonation Bubbles -->
-          ${renderCarbonationBubbles(38, 122, 218, liquidY, 14)}
+          ${renderCarbonationBubbles(38, 122, 218, liquidY, 6)}
         </g>
         <!-- Foam Cap -->
         ${!isWater ? `
@@ -198,27 +200,20 @@ function renderPintGlass(pct, color, isPouring, id) {
         </clipPath>
       </defs>
 
-      <!-- Glass Base -->
       <ellipse cx="80" cy="228" rx="25" ry="6" fill="#E2E8F0" opacity="0.4" stroke="#CBD5E0" stroke-width="1.5" />
-
-      <!-- Glass Outline -->
       <polygon points="45,40 115,40 105,225 55,225" 
                fill="#1A202C" opacity="0.6" stroke="#CBD5E0" stroke-width="2" />
 
-      <!-- Liquid Fill -->
       ${pct > 0 ? `
         <g clip-path="url(#pintGlassClip_${id})">
           <rect x="30" y="${liquidY}" width="100" height="${230 - liquidY}" ${fillStyle} />
-          <!-- Animated Carbonation Bubbles -->
-          ${renderCarbonationBubbles(50, 110, 220, liquidY, 14)}
-          <!-- Foam Cap -->
+          ${renderCarbonationBubbles(50, 110, 220, liquidY, 6)}
           ${!isWater ? `
             <ellipse cx="80" cy="${liquidY}" rx="${28 + (pct/100)*7}" ry="7" fill="${foamColor}" opacity="0.95" />
           ` : ''}
         </g>
       ` : ''}
 
-      <!-- Glass Highlight Rim -->
       <polygon points="48,45 54,45 59,220 54,220" fill="#FFFFFF" opacity="0.25" />
     </svg>
   `;
@@ -258,7 +253,7 @@ function renderWheatGlass(pct, color, isPouring, id) {
       ${pct > 0 ? `
         <g clip-path="url(#wheatGlassClip_${id})">
           <rect x="25" y="${liquidY}" width="110" height="${240 - liquidY}" ${fillStyle} />
-          ${renderCarbonationBubbles(45, 115, 215, liquidY, 14)}
+          ${renderCarbonationBubbles(45, 115, 215, liquidY, 6)}
           ${!isWater ? `
             <ellipse cx="80" cy="${liquidY}" rx="${28 + (pct/100)*12}" ry="8" fill="${foamColor}" opacity="0.95" />
           ` : ''}
@@ -299,7 +294,7 @@ function renderTulipGlass(pct, color, isPouring, id) {
       ${pct > 0 ? `
         <g clip-path="url(#tulipGlassClip_${id})">
           <rect x="25" y="${liquidY}" width="110" height="${220 - liquidY}" ${fillStyle} />
-          ${renderCarbonationBubbles(45, 115, 165, liquidY, 12)}
+          ${renderCarbonationBubbles(45, 115, 165, liquidY, 6)}
           ${!isWater ? `
             <ellipse cx="80" cy="${liquidY}" rx="${25 + (pct/100)*15}" ry="7" fill="${foamColor}" opacity="0.95" />
           ` : ''}
@@ -342,7 +337,7 @@ function renderMug(pct, color, isPouring, id) {
       ${pct > 0 ? `
         <g clip-path="url(#mugGlassClip_${id})">
           <rect x="35" y="${liquidY}" width="90" height="${220 - liquidY}" ${fillStyle} />
-          ${renderCarbonationBubbles(45, 115, 210, liquidY, 14)}
+          ${renderCarbonationBubbles(45, 115, 210, liquidY, 6)}
           ${!isWater ? `
             <rect x="40" y="${Math.max(50, liquidY - 12)}" width="80" height="14" rx="4" fill="${foamColor}" opacity="0.95" />
           ` : ''}
@@ -381,7 +376,7 @@ function renderStoutGlass(pct, color, isPouring, id) {
       ${pct > 0 ? `
         <g clip-path="url(#stoutGlassClip_${id})">
           <rect x="25" y="${liquidY}" width="110" height="${230 - liquidY}" ${fillStyle} />
-          ${renderCarbonationBubbles(48, 112, 215, liquidY, 14)}
+          ${renderCarbonationBubbles(48, 112, 215, liquidY, 6)}
           ${!isWater ? `
             <ellipse cx="80" cy="${liquidY}" rx="${26 + (pct/100)*10}" ry="7" fill="${foamColor}" opacity="0.95" />
           ` : ''}
@@ -422,7 +417,7 @@ function renderSnifter(pct, color, isPouring, id) {
       ${pct > 0 ? `
         <g clip-path="url(#snifterGlassClip_${id})">
           <rect x="20" y="${liquidY}" width="120" height="${210 - liquidY}" ${fillStyle} />
-          ${renderCarbonationBubbles(42, 118, 170, liquidY, 12)}
+          ${renderCarbonationBubbles(42, 118, 170, liquidY, 6)}
           ${!isWater ? `
             <ellipse cx="80" cy="${liquidY}" rx="${22 + (pct/100)*18}" ry="7" fill="${foamColor}" opacity="0.95" />
           ` : ''}

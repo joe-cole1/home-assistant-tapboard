@@ -1,5 +1,5 @@
 /* =====================================================================
- * TAP BOARD STYLESHEET (styles.css) - v3.5.3
+ * TAP BOARD STYLESHEET (styles.css) - v3.5.4
  * Reference-matched design system supporting customizable themes, Google Fonts,
  * responsive tap grid, SVG carbonation animations, and per-tap settings studio.
  * ===================================================================== */
@@ -189,12 +189,10 @@ body {
   box-shadow: var(--card-shadow);
   position: relative;
   overflow: hidden;
-  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+  transition: border-color 0.25s ease;
 }
 
 .tap-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 15px 35px -5px rgba(0, 0, 0, 0.6);
   border-color: var(--accent-color);
 }
 
@@ -324,21 +322,20 @@ body {
   100% { transform: scale(1); }
 }
 
-/* Animated Effervescent Carbonation Bubbles */
+/* Animated Effervescent Carbonation Bubbles (Consumes --rise-dist) */
 @keyframes riseBubble {
   0% {
     transform: translateY(0) translateX(0) scale(0.6);
-    opacity: 0.2;
+    opacity: 0.1;
   }
-  30% {
-    opacity: 0.85;
+  20% {
+    opacity: 0.8;
   }
-  70% {
-    transform: translateY(-40px) translateX(3px) scale(1);
-    opacity: 0.9;
+  80% {
+    opacity: 0.8;
   }
   100% {
-    transform: translateY(-90px) translateX(-3px) scale(1.2);
+    transform: translateY(var(--rise-dist, -140px)) translateX(4px) scale(1.1);
     opacity: 0;
   }
 }
