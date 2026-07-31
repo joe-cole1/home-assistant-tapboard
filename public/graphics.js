@@ -82,7 +82,7 @@ export function srmToHex(srmVal, fallbackHex = null) {
 let generatedGraphicId = 0;
 
 /**
- * Generate randomized SVG animated carbonation bubbles (Half-speed, ~6 bubbles)
+ * Generate randomized SVG animated carbonation bubbles (Standard half-speed, ~6 bubbles)
  */
 function renderCarbonationBubbles(leftX, rightX, bottomY, topY, count = 6) {
   let bubblesSvg = '';

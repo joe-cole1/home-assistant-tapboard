@@ -492,6 +492,42 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // 7b. Action Endpoint: Simulate Pour (/api/taps/:id/simulate-pour)
+  if (url.pathname.match(/^\/api\/taps\/\d+\/simulate-pour$/) && req.method === 'POST') {
+    const tapId = parseInt(url.pathname.split('/')[3], 10);
+    try {
+      const tapInfo = db.prepare('SELECT override_name FROM taps WHERE tap_id = ?').get(tapId);
+      const beerName = tapInfo?.override_name || `Tap ${tapId}`;
+
+      console.log(`[Simulate Pour] Starting test pour on Tap ${tapId}...`);
+      broadcastSSE('pour_start', { tapId, startVolume: 50 });
+
+      setTimeout(() => {
+        const simulatedPouredOz = parseFloat((Math.random() * 6 + 6).toFixed(1)); // 6.0 - 12.0 oz
+        db.prepare(`
+          INSERT INTO pour_logs (tap_id, volume_poured_oz) VALUES (?, ?)
+        `).run(tapId, simulatedPouredOz);
+
+        console.log(`[Simulate Pour] Finalized test pour on Tap ${tapId}: ${simulatedPouredOz} oz`);
+        broadcastSSE('pour_complete', {
+          tapId,
+          volumePouredOz: simulatedPouredOz,
+          beerName,
+          timestamp: new Date().toISOString()
+        });
+
+        broadcastSSE('settings_updated', getFullStateSnapshot());
+      }, 4000);
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, message: `Simulated pour started on Tap ${tapId}` }));
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
   // 8. Manage Catalog & On-Deck (/api/catalog)
   if (url.pathname === '/api/catalog' && req.method === 'POST') {
     if (!isAuthorized(req)) {

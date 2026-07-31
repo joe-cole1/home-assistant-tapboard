@@ -142,18 +142,38 @@ function showToast(message) {
   }, 4000);
 }
 
-// Toggle Pouring Visual Effect on Tap Card
+// Toggle Active Pour Visual Effect on Tap Card
 function setTapPouringAnimation(tapId, isPouring) {
   const card = document.querySelector(`.tap-card[data-tap-id="${tapId}"]`);
   if (!card) return;
 
-  const wrapper = card.querySelector('.tap-graphic-wrapper');
-  if (wrapper) {
-    if (isPouring) {
-      wrapper.classList.add('is-pouring');
-    } else {
-      wrapper.classList.remove('is-pouring');
+  const colorHex = card.getAttribute('data-color-hex') || '#FBC02D';
+  const srmColor = colorHex === 'WATER' ? '#E0F7FA' : colorHex;
+
+  card.style.setProperty('--beer-srm-color', srmColor);
+
+  const headerBadges = card.querySelector('.tap-card-header > div:last-child');
+
+  if (isPouring) {
+    card.classList.add('is-pouring');
+
+    // Add dynamic "NOW POURING" header badge if not already present
+    if (headerBadges && !headerBadges.querySelector('.badge-pouring')) {
+      const badge = document.createElement('span');
+      badge.className = 'badge-pouring';
+      badge.innerHTML = '🍺 NOW POURING';
+      headerBadges.insertBefore(badge, headerBadges.firstChild);
     }
+  } else {
+    // Smooth 1.5s settling phase
+    setTimeout(() => {
+      card.classList.remove('is-pouring');
+
+      if (headerBadges) {
+        const badge = headerBadges.querySelector('.badge-pouring');
+        if (badge) badge.remove();
+      }
+    }, 1500);
   }
 }
 
@@ -327,12 +347,28 @@ function createTapCard(tap) {
     <div class="forecast-readout" style="font-size:0.8rem; color:var(--accent-color); margin-top:0.6rem; font-weight:600; text-align:center;">
       ${forecastText}
     </div>
+
+    <button class="btn-simulate-pour" title="Simulate Pour on Tap ${tapId}">🍺 Simulate Pour</button>
   `;
 
   // Render SVG Graphic initially
   const graphicContainer = card.querySelector(`#graphic-tap-${tapId}`);
   if (graphicContainer && typeof renderTapGraphic === 'function') {
     graphicContainer.innerHTML = renderTapGraphic(tap.graphic || 'corny_keg', fillPercent, beerColorHex, false, `tap_${tapId}`);
+  }
+
+  // Simulate Pour Button Click
+  const simBtn = card.querySelector('.btn-simulate-pour');
+  if (simBtn) {
+    simBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      fetch(`/api/taps/${tapId}/simulate-pour`, { method: 'POST' })
+        .then(res => res.json())
+        .then(data => {
+          showToast(`⚡ Triggering test pour on Tap ${tapId}...`);
+        })
+        .catch(err => console.error('[Simulate Pour Error]', err));
+    });
   }
 
   // Cog Button Click: Open Per-Tap Settings
