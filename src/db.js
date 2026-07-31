@@ -73,6 +73,14 @@ db.exec(`
   )
 `);
 
+try { db.exec(`ALTER TABLE batches ADD COLUMN srm INTEGER;`); } catch (e) {}
+try { db.exec(`ALTER TABLE batches ADD COLUMN og REAL;`); } catch (e) {}
+try { db.exec(`ALTER TABLE batches ADD COLUMN fg REAL;`); } catch (e) {}
+try { db.exec(`ALTER TABLE batches ADD COLUMN abv REAL;`); } catch (e) {}
+try { db.exec(`ALTER TABLE batches ADD COLUMN ibu INTEGER;`); } catch (e) {}
+try { db.exec(`ALTER TABLE batches ADD COLUMN status TEXT;`); } catch (e) {}
+try { db.exec(`ALTER TABLE batches ADD COLUMN last_synced_at TEXT;`); } catch (e) {}
+
 // 4. Pour Logs Table
 db.exec(`
   CREATE TABLE IF NOT EXISTS pour_logs (
@@ -128,7 +136,6 @@ if (tapCount === 0) {
     VALUES (?, ?, ?, 0, 20.0, 1, 'percent', 12.0)
   `);
 
-  // Default: Taps 1-3 enabled, 4-6 hidden
   for (let i = 1; i <= 6; i++) {
     const graphicStyle = i % 2 === 1 ? 'pint_glass' : 'mug';
     insertTap.run(i, i <= 3 ? 1 : 0, graphicStyle);

@@ -3,24 +3,21 @@ import EventEmitter from 'events';
 import db from './db.js';
 
 export class HAClient extends EventEmitter {
-  constructor(haUrl, haToken) {
+  constructor() {
     super();
-    this.haUrl = haUrl || process.env.HA_URL || 'http://localhost:8123';
-    this.haToken = haToken || process.env.HA_TOKEN || '';
-    
+    this.haUrl = process.env.HA_URL || 'http://192.168.0.35:8123';
+    this.haToken = process.env.HA_TOKEN || '';
+    this.wsUrl = this.haUrl.replace(/^http/i, 'ws').replace(/\/$/, '') + '/api/websocket';
     this.ws = null;
     this.messageId = 1;
     this.pendingRequests = new Map();
-    this.subscribedEventId = null;
-
-    // Internal In-Memory State & Race-Condition Queue
     this.statesMap = new Map();
     this.eventQueue = [];
     this.isHydrated = false;
     this.reconnectTimeout = null;
     this.reconnectDelay = 1000;
 
-    // 4-Stage Pour Tracking per tap (tapId 1..6)
+    // Per-tap pour session tracker
     this.pourTracker = new Map();
     for (let i = 1; i <= 6; i++) {
       this.pourTracker.set(i, {
@@ -35,48 +32,25 @@ export class HAClient extends EventEmitter {
     }
   }
 
-  getWebSocketUrl() {
-    let url = this.haUrl.trim();
-    if (url.startsWith('https://')) {
-      url = url.replace('https://', 'wss://');
-    } else if (url.startsWith('http://')) {
-      url = url.replace('http://', 'ws://');
-    } else if (!url.startsWith('wss://') && !url.startsWith('ws://')) {
-      url = `wss://${url}`;
-    }
-    if (!url.endsWith('/api/websocket')) {
-      url = `${url.replace(/\/+$/, '')}/api/websocket`;
-    }
-    return url;
-  }
-
   connect() {
     if (!this.haToken) {
-      console.warn('[HAClient] Warning: HA_TOKEN is not configured. Real-time HA sync disabled.');
+      console.warn('[HAClient] No HA_TOKEN provided in .env. Real-time HA WebSocket sync disabled.');
       return;
     }
 
-    const wsUrl = this.getWebSocketUrl();
-    console.log(`[HAClient] Connecting to Home Assistant WebSocket at ${wsUrl}...`);
-
-    try {
-      this.ws = new WebSocket(wsUrl);
-    } catch (err) {
-      console.error('[HAClient] Connection error:', err.message);
-      this.scheduleReconnect();
-      return;
-    }
+    console.log(`[HAClient] Connecting to Home Assistant WebSocket at ${this.wsUrl}...`);
+    this.ws = new WebSocket(this.wsUrl);
 
     this.ws.on('open', () => {
       console.log('[HAClient] WebSocket connection opened. Awaiting auth_required...');
     });
 
-    this.ws.on('message', (raw) => {
+    this.ws.on('message', (data) => {
       try {
-        const msg = JSON.parse(raw.toString());
+        const msg = JSON.parse(data.toString());
         this.handleMessage(msg);
       } catch (err) {
-        console.error('[HAClient] Failed to parse WS message:', err.message);
+        console.error('[HAClient] Error parsing WebSocket frame:', err.message);
       }
     });
 
@@ -133,7 +107,6 @@ export class HAClient extends EventEmitter {
       return;
     }
 
-    // Handle command responses
     if (msg.id && this.pendingRequests.has(msg.id)) {
       const { resolve, reject } = this.pendingRequests.get(msg.id);
       this.pendingRequests.delete(msg.id);
@@ -145,19 +118,16 @@ export class HAClient extends EventEmitter {
       return;
     }
 
-    // Handle event subscriptions
     if (msg.type === 'event' && msg.event && msg.event.event_type === 'state_changed') {
       this.handleStateChangedEvent(msg.event.data);
     }
   }
 
-  // Phase 3 Event Queue Replay Fix: Subscribe BEFORE get_states
   async initiateSync() {
     try {
       this.isHydrated = false;
       this.eventQueue = [];
 
-      // Step 1: Subscribe to state_changed event bus first
       console.log('[HAClient] Step 1: Subscribing to state_changed event stream...');
       const subRes = await this.send({
         type: 'subscribe_events',
@@ -165,19 +135,27 @@ export class HAClient extends EventEmitter {
       });
       this.subscribedEventId = subRes;
 
-      // Step 2: Request full get_states snapshot
       console.log('[HAClient] Step 2: Requesting initial get_states snapshot...');
       const states = await this.send({ type: 'get_states' });
 
-      // Step 3: Populate in-memory map
       for (const entity of states) {
         this.statesMap.set(entity.entity_id, entity);
         this.syncBrewfatherBatchData(entity);
       }
 
+      // Initialize pour trackers from snapshot states to prevent initial volume deltas
+      for (let tapId = 1; tapId <= 6; tapId++) {
+        const ozState = this.statesMap.get(`sensor.tap_${tapId}_fl_oz`)?.state;
+        const parsedOz = parseFloat(ozState);
+        if (!isNaN(parsedOz) && parsedOz > 0) {
+          const tracker = this.pourTracker.get(tapId);
+          tracker.lastVolume = parsedOz;
+          tracker.currentVolume = parsedOz;
+        }
+      }
+
       console.log(`[HAClient] Hydrated ${this.statesMap.size} entities from snapshot.`);
 
-      // Step 4: Replay buffered queue deltas
       console.log(`[HAClient] Step 3: Replaying ${this.eventQueue.length} buffered queue events...`);
       for (const eventData of this.eventQueue) {
         this.processStateUpdate(eventData);
@@ -195,7 +173,6 @@ export class HAClient extends EventEmitter {
 
   handleStateChangedEvent(data) {
     if (!this.isHydrated) {
-      // Buffer in queue during snapshot execution
       this.eventQueue.push(data);
     } else {
       this.processStateUpdate(data);
@@ -209,9 +186,9 @@ export class HAClient extends EventEmitter {
     this.statesMap.set(entity_id, new_state);
     this.syncBrewfatherBatchData(new_state);
 
-    // Apply 4-Stage Load-Cell Noise Filtering for Tap Volume Sensors
+    // Apply 4-Stage Noise Filtering strictly to sensor.tap_N_fl_oz (DO NOT pass fill percentage)
     for (let tapId = 1; tapId <= 6; tapId++) {
-      if (entity_id === `sensor.tap_${tapId}_fl_oz` || entity_id === `sensor.tap_${tapId}_fill`) {
+      if (entity_id === `sensor.tap_${tapId}_fl_oz`) {
         this.apply4StageNoiseFilter(tapId, new_state);
       }
     }
@@ -226,7 +203,7 @@ export class HAClient extends EventEmitter {
 
     // Stage 1: Outlier & Glitch Suppression
     if (isNaN(rawValue) || stateObj.state === 'unavailable' || stateObj.state === 'unknown') {
-      return; // Discard offline / reboot glitches
+      return;
     }
 
     if (tracker.lastVolume === 0) {
@@ -283,7 +260,6 @@ export class HAClient extends EventEmitter {
 
     console.log(`[Tap ${tapId}] Pour finalized: ${finalPouredOz} oz poured.`);
 
-    // Write to pour_logs ONLY if total volume >= 1.0 oz
     if (finalPouredOz >= 1.0) {
       db.prepare(`
         INSERT INTO pour_logs (tap_id, volume_poured_oz) VALUES (?, ?)
@@ -299,7 +275,6 @@ export class HAClient extends EventEmitter {
         timestamp: new Date().toISOString()
       });
 
-      // Check low keg alert threshold
       this.checkLowKegAlert(tapId);
     }
   }
@@ -316,57 +291,61 @@ export class HAClient extends EventEmitter {
     }
   }
 
-  // Auto-sync Brewfather batch info into SQLite batches table
   syncBrewfatherBatchData(entity) {
-    if (!entity || !entity.attributes) return;
+    if (!entity.entity_id.startsWith('sensor.tap_') || !entity.entity_id.endsWith('_batch_info')) return;
+    const attr = entity.attributes;
+    if (!attr || (!attr.batch_id && !attr.id)) return;
 
-    if (entity.entity_id.startsWith('sensor.tap_') && entity.entity_id.endsWith('_batch_info')) {
-      const attrs = entity.attributes;
-      if (attrs.batch_id || attrs.recipe_name) {
-        db.prepare(`
-          INSERT INTO batches (batch_id, recipe_name, style, brew_date, og, fg, abv, ibu, srm_color, tasting_notes)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          ON CONFLICT(batch_id) DO UPDATE SET
-            recipe_name = excluded.recipe_name,
-            style = excluded.style,
-            brew_date = excluded.brew_date,
-            og = excluded.og,
-            fg = excluded.fg,
-            abv = excluded.abv,
-            ibu = excluded.ibu,
-            srm_color = excluded.srm_color,
-            tasting_notes = excluded.tasting_notes,
-            last_synced_at = CURRENT_TIMESTAMP
-        `).run(
-          attrs.batch_id || entity.entity_id,
-          attrs.recipe_name || attrs.recipe || 'Unknown Brew',
-          attrs.style || attrs.recipe_style || '',
-          attrs.brew_date || '',
-          parseFloat(attrs.og) || 0,
-          parseFloat(attrs.fg) || 0,
-          parseFloat(attrs.abv) || 0,
-          parseInt(attrs.ibu) || 0,
-          parseInt(attrs.srm) || parseInt(attrs.color) || 0,
-          attrs.tasting_notes || attrs.notes || ''
-        );
-      }
+    const batchId = attr.batch_id || attr.id;
+    const recipeName = attr.recipe_name || attr.name || 'Unknown Brew';
+    const style = attr.style || 'Craft Beer';
+    const brewDate = attr.brew_date || null;
+    const og = parseFloat(attr.og) || null;
+    const fg = parseFloat(attr.fg) || null;
+    const abv = parseFloat(attr.abv) || null;
+    const ibu = parseInt(attr.ibu, 10) || null;
+    const srm = parseInt(attr.srm || attr.color, 10) || null;
+    const status = attr.status || 'Active';
+
+    try {
+      db.prepare(`
+        INSERT INTO batches (batch_id, recipe_name, style, brew_date, og, fg, abv, ibu, srm, status, last_synced_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        ON CONFLICT(batch_id) DO UPDATE SET
+          recipe_name = excluded.recipe_name,
+          style = excluded.style,
+          brew_date = excluded.brew_date,
+          og = excluded.og,
+          fg = excluded.fg,
+          abv = excluded.abv,
+          ibu = excluded.ibu,
+          srm = excluded.srm,
+          status = excluded.status,
+          last_synced_at = datetime('now')
+      `).run(batchId, recipeName, style, brewDate, og, fg, abv, ibu, srm, status);
+    } catch (e) {
+      // Safe fallback if optional fields are missing
     }
   }
 
+  getFormattedState() {
+    const formatted = {};
+    for (const [entityId, entityObj] of this.statesMap.entries()) {
+      formatted[entityId] = {
+        state: entityObj.state,
+        attributes: entityObj.attributes
+      };
+    }
+    return formatted;
+  }
+
   async callHAService(domain, service, serviceData = {}) {
-    return this.send({
+    console.log(`[HAClient] Calling service ${domain}.${service} with:`, serviceData);
+    return await this.send({
       type: 'call_service',
       domain,
       service,
       service_data: serviceData
     });
-  }
-
-  getFormattedState() {
-    const formatted = {};
-    for (const [entityId, stateObj] of this.statesMap.entries()) {
-      formatted[entityId] = stateObj;
-    }
-    return formatted;
   }
 }
