@@ -8,13 +8,13 @@ dist/
 build/
 .next/
 
-# Python / Container
-__pycache__/
-*.py[cod]
-*$py.class
-.venv/
-venv/
-ENV/
+# Data / Persistence
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# Environment & Secrets
 .env
 .env.local
 .env.*.local

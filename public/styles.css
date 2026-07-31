@@ -1,0 +1,631 @@
+/* =====================================================================
+ * TAP BOARD STYLESHEET (styles.css)
+ * Complete design system supporting 5 customizable themes, Google Fonts,
+ * 1-6 tap responsive grids, SVG foam animations, and PIN settings drawer.
+ * ===================================================================== */
+
+:root {
+  /* Default: Modern Dark Theme Tokens */
+  --bg-main: #0F172A;
+  --bg-header: #1E293B;
+  --bg-card: rgba(30, 41, 59, 0.85);
+  --bg-card-hover: rgba(51, 65, 85, 0.9);
+  --border-color: rgba(255, 255, 255, 0.1);
+  --accent-color: #F59E0B;
+  --text-main: #F8FAFC;
+  --text-muted: #94A3B8;
+  --text-badge: #0F172A;
+  --card-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+  --font-title: 'Carter One', cursive, sans-serif;
+  --font-body: 'Balsamiq Sans', cursive, sans-serif;
+}
+
+/* ---------------------------------------------------------------------
+ * THEME PRESETS
+ * --------------------------------------------------------------------- */
+
+/* 1. Modern Dark (Default) */
+body[data-theme="modern_dark"] {
+  --bg-main: #0B0F19;
+  --bg-header: #111827;
+  --bg-card: rgba(17, 24, 39, 0.85);
+  --border-color: rgba(245, 158, 11, 0.2);
+  --accent-color: #F59E0B;
+  --text-main: #F9FAFB;
+  --text-muted: #9CA3AF;
+}
+
+/* 2. Chalkboard Taproom */
+body[data-theme="chalkboard"] {
+  --bg-main: #181E24;
+  --bg-header: #202730;
+  --bg-card: rgba(32, 39, 48, 0.9);
+  --border-color: rgba(255, 255, 255, 0.25);
+  --accent-color: #FCD34D;
+  --text-main: #F3F4F6;
+  --text-muted: #D1D5DB;
+  --font-title: 'Balsamiq Sans', cursive;
+  --font-body: 'Balsamiq Sans', cursive;
+}
+body[data-theme="chalkboard"] .tap-card {
+  border: 2px dashed rgba(255, 255, 255, 0.3);
+}
+
+/* 3. Cyberpunk Neon */
+body[data-theme="cyberpunk"] {
+  --bg-main: #0D0221;
+  --bg-header: #19053B;
+  --bg-card: rgba(25, 5, 59, 0.85);
+  --border-color: #00F0FF;
+  --accent-color: #FF007F;
+  --text-main: #00F0FF;
+  --text-muted: #B800FF;
+  --card-shadow: 0 0 20px rgba(0, 240, 255, 0.3);
+}
+body[data-theme="cyberpunk"] .tap-card {
+  box-shadow: 0 0 15px rgba(255, 0, 127, 0.3);
+}
+
+/* 4. Minimalist Craft */
+body[data-theme="minimalist"] {
+  --bg-main: #F8FAFC;
+  --bg-header: #FFFFFF;
+  --bg-card: #FFFFFF;
+  --border-color: #E2E8F0;
+  --accent-color: #D97706;
+  --text-main: #1E293B;
+  --text-muted: #64748B;
+  --card-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+}
+
+/* 5. Retro Pub */
+body[data-theme="retro_pub"] {
+  --bg-main: #1C0A00;
+  --bg-header: #2D1204;
+  --bg-card: rgba(45, 18, 4, 0.9);
+  --border-color: #D4AF37;
+  --accent-color: #D4AF37;
+  --text-main: #FDF6E2;
+  --text-muted: #C5A880;
+}
+
+/* ---------------------------------------------------------------------
+ * GLOBAL RESETS & BASE LAYOUT
+ * --------------------------------------------------------------------- */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  font-family: var(--font-body);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+  transition: background-color 0.4s ease, color 0.4s ease;
+}
+
+/* ---------------------------------------------------------------------
+ * HEADER
+ * --------------------------------------------------------------------- */
+
+.app-header {
+  background-color: var(--bg-header);
+  border-bottom: 1px solid var(--border-color);
+  padding: 1.25rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: relative;
+  z-index: 10;
+}
+
+.header-title-container {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.header-title {
+  font-family: var(--font-title);
+  font-size: 2.25rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--accent-color);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.header-info-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 0.4rem 0.9rem;
+  border-radius: 9999px;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.btn-icon {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.4rem;
+  cursor: pointer;
+  padding: 0.4rem;
+  border-radius: 50%;
+  transition: color 0.2s, background 0.2s;
+}
+
+.btn-icon:hover {
+  color: var(--accent-color);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* ---------------------------------------------------------------------
+ * MAIN TAP GRID (1 to 6 Taps Responsive Layout)
+ * --------------------------------------------------------------------- */
+
+.main-content {
+  flex: 1;
+  padding: 2rem;
+  max-width: 1800px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.tap-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 2rem;
+  align-items: stretch;
+}
+
+/* Single column on mobile, max 3-4 columns on TV */
+@media (min-width: 1400px) {
+  .tap-grid[data-count="3"] {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .tap-grid[data-count="4"] {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* ---------------------------------------------------------------------
+ * TAP CARD STYLING
+ * --------------------------------------------------------------------- */
+
+.tap-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 1.25rem;
+  padding: 1.75rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: var(--card-shadow);
+  backdrop-filter: blur(10px);
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+/* Tap Card Header */
+.tap-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.tap-number-badge {
+  background-color: var(--accent-color);
+  color: var(--text-badge);
+  font-family: var(--font-title);
+  font-size: 1.1rem;
+  font-weight: 800;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tap-badges {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.25rem 0.6rem;
+  border-radius: 0.375rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.badge-low-keg {
+  background-color: #EF4444;
+  color: #FFFFFF;
+  animation: pulseLowKeg 1.8s infinite;
+}
+
+.badge-fresh {
+  background-color: #10B981;
+  color: #FFFFFF;
+}
+
+.badge-srm {
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* Tap Beer Info */
+.beer-title {
+  font-family: var(--font-title);
+  font-size: 1.75rem;
+  line-height: 1.2;
+  margin-bottom: 0.35rem;
+  color: var(--text-main);
+}
+
+.beer-style {
+  font-size: 1.1rem;
+  color: var(--accent-color);
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+/* Metrics List (ABV, IBU, OG, FG) */
+.metrics-row {
+  display: flex;
+  gap: 1.25rem;
+  margin-bottom: 1.25rem;
+  padding: 0.6rem 0;
+  border-top: 1px dashed var(--border-color);
+  border-bottom: 1px dashed var(--border-color);
+}
+
+.metric-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.metric-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.metric-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+/* Beer Description */
+.beer-description {
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+  margin-bottom: 1.5rem;
+  flex: 1;
+}
+
+/* Graphic Area & Volume Readout */
+.graphic-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem 0;
+}
+
+.tap-graphic-wrapper {
+  width: 140px;
+  height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.volume-readout {
+  margin-top: 0.75rem;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-main);
+  text-align: center;
+}
+
+/* Empty Tap Card */
+.tap-card.is-empty {
+  opacity: 0.6;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  min-height: 380px;
+}
+
+.empty-tap-text {
+  font-size: 1.3rem;
+  color: var(--text-muted);
+}
+
+/* ---------------------------------------------------------------------
+ * ON DECK PIPELINE TICKER
+ * --------------------------------------------------------------------- */
+
+.ondeck-ticker-container {
+  background-color: var(--bg-header);
+  border-top: 1px solid var(--border-color);
+  padding: 0.75rem 2rem;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  overflow: hidden;
+}
+
+.ondeck-label {
+  font-family: var(--font-title);
+  font-size: 1rem;
+  color: var(--accent-color);
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ondeck-items {
+  display: flex;
+  gap: 2rem;
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: none;
+}
+
+.ondeck-item {
+  font-size: 0.95rem;
+  color: var(--text-muted);
+}
+
+/* ---------------------------------------------------------------------
+ * TOAST NOTIFICATIONS (Real-time Pour Alerts)
+ * --------------------------------------------------------------------- */
+
+.toast-container {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.toast-message {
+  background-color: var(--accent-color);
+  color: var(--text-badge);
+  padding: 0.85rem 1.4rem;
+  border-radius: 0.75rem;
+  font-weight: 700;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+  animation: slideUpToast 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* ---------------------------------------------------------------------
+ * MODAL & THEME STUDIO DRAWER
+ * --------------------------------------------------------------------- */
+
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  z-index: 200;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+
+.drawer-overlay.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.theme-drawer {
+  position: fixed;
+  top: 0;
+  right: -420px;
+  width: 400px;
+  height: 100%;
+  background-color: var(--bg-header);
+  border-left: 1px solid var(--border-color);
+  padding: 2rem;
+  z-index: 201;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  overflow-y: auto;
+  transition: right 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.theme-drawer.is-open {
+  right: 0;
+}
+
+.drawer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 1rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.form-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.form-control {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  padding: 0.6rem 0.85rem;
+  border-radius: 0.5rem;
+  font-size: 0.95rem;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.form-control option {
+  background-color: var(--bg-header);
+  color: var(--text-main);
+}
+
+.tap-cog-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 50%;
+  transition: color 0.2s, background 0.2s, opacity 0.2s;
+  opacity: 0.5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tap-cog-btn:hover {
+  color: var(--accent-color);
+  background: rgba(255, 255, 255, 0.1);
+  opacity: 1;
+}
+
+.btn-primary {
+  background-color: var(--accent-color);
+  color: var(--text-badge);
+  font-weight: 700;
+  border: none;
+  padding: 0.75rem 1.25rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.btn-primary:hover {
+  opacity: 0.9;
+}
+
+.btn-danger {
+  background-color: #EF4444;
+  color: #FFFFFF;
+  font-weight: 700;
+  border: none;
+  padding: 0.6rem 1rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+
+/* ---------------------------------------------------------------------
+ * ANIMATIONS
+ * --------------------------------------------------------------------- */
+
+@keyframes pulseLowKeg {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.75; transform: scale(1.05); }
+}
+
+@keyframes slideUpToast {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes bubbleRise {
+  0% { transform: translateY(0); opacity: 0; }
+  50% { opacity: 0.8; }
+  100% { transform: translateY(-40px); opacity: 0; }
+}
+
+.bubble-anim-1 { animation: bubbleRise 3s infinite ease-in-out; }
+.bubble-anim-2 { animation: bubbleRise 4s infinite ease-in-out 1s; }
+.bubble-anim-3 { animation: bubbleRise 2.5s infinite ease-in-out 0.5s; }
+
+/* Pour Highlight Animations */
+.tap-graphic-wrapper.is-pouring {
+  animation: pourPulse 1s infinite alternate ease-in-out;
+}
+
+@keyframes pourPulse {
+  0% { transform: scale(1); filter: drop-shadow(0 0 2px var(--accent-color)); }
+  100% { transform: scale(1.06); filter: drop-shadow(0 0 14px var(--accent-color)); }
+}
+
+.tap-card.is-pouring-card {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 20px rgba(245, 158, 11, 0.4);
+}
+
+
+/* ---------------------------------------------------------------------
+ * RESPONSIVE GRID & VIEWPORT TWEAKS
+ * --------------------------------------------------------------------- */
+
+@media (max-width: 768px) {
+  .main-content {
+    padding: 1rem;
+  }
+  .tap-grid {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.25rem;
+  }
+  .tap-card {
+    padding: 1.25rem;
+  }
+  .beer-title {
+    font-size: 1.5rem;
+  }
+  .metrics-row {
+    gap: 0.75rem;
+  }
+  .metric-value {
+    font-size: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-header {
+    padding: 1rem;
+    flex-direction: column;
+    gap: 0.75rem;
+    text-align: center;
+  }
+  .header-right {
+    width: 100%;
+    justify-content: center;
+    gap: 0.75rem;
+  }
+  .tap-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+}
+
