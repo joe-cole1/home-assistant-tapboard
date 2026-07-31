@@ -254,26 +254,41 @@ body {
   100% { --srm-border-angle: 360deg; }
 }
 
-/* Header "NOW POURING" Animated Badge */
-.badge-pouring {
-  background-color: var(--beer-srm-color, #FBC02D);
-  color: #1A202C;
+/* Floating "NOW POURING" Badge at Base of Glass */
+.floating-pour-badge {
+  position: absolute;
+  bottom: 26px;
+  left: 50%;
+  transform: translateX(-50%) translateY(8px);
+  z-index: 15;
+  opacity: 0;
+  pointer-events: none;
+  background: var(--bg-header);
+  color: var(--text-main);
   font-family: var(--font-title);
   font-size: 0.75rem;
   font-weight: 800;
-  padding: 0.35rem 0.75rem;
-  border-radius: 0.5rem;
+  padding: 0.35rem 0.85rem;
+  border-radius: 20px;
   letter-spacing: 0.05em;
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  box-shadow: 0 0 12px var(--beer-srm-color, #FBC02D);
-  animation: pulsePourBadge 1.2s infinite ease-in-out alternate;
+  gap: 0.4rem;
+  white-space: nowrap;
+  border: 1.5px solid var(--beer-srm-color, var(--accent-color));
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5), 0 0 12px var(--beer-srm-color, var(--accent-color));
+  transition: opacity 0.4s ease, transform 0.4s ease;
 }
 
-@keyframes pulsePourBadge {
-  0% { transform: scale(1); opacity: 1; }
-  100% { transform: scale(1.08); opacity: 0.85; }
+.tap-card.is-pouring .floating-pour-badge {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  animation: floatPourBadgePulse 1.4s infinite ease-in-out alternate;
+}
+
+@keyframes floatPourBadgePulse {
+  0% { transform: translateX(-50%) translateY(0) scale(1); box-shadow: 0 4px 15px rgba(0,0,0,0.5), 0 0 10px var(--beer-srm-color, var(--accent-color)); }
+  100% { transform: translateX(-50%) translateY(-3px) scale(1.05); box-shadow: 0 6px 20px rgba(0,0,0,0.6), 0 0 20px var(--beer-srm-color, var(--accent-color)); }
 }
 
 /* ---------------------------------------------------------------------
@@ -445,6 +460,7 @@ body {
   align-items: center;
   justify-content: center;
   padding: 1rem 0;
+  position: relative;
 }
 
 .tap-graphic-wrapper {

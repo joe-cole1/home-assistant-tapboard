@@ -195,14 +195,6 @@ function setTapPouringAnimation(tapId, isPouring) {
         foamGroup.style.transform = `translateY(${topRimY - baseY}px)`;
       }
     });
-
-    // Add dynamic "NOW POURING" header badge if not present
-    if (headerBadges && !headerBadges.querySelector('.badge-pouring')) {
-      const badge = document.createElement('span');
-      badge.className = 'badge-pouring';
-      badge.innerHTML = '🍺 NOW POURING';
-      headerBadges.insertBefore(badge, headerBadges.firstChild);
-    }
   } else {
     // Pour Complete: Stream stops & calm 2s settle back to actual remaining keg volume
     if (streamGroup) streamGroup.classList.remove('is-active');
@@ -228,11 +220,6 @@ function setTapPouringAnimation(tapId, isPouring) {
     setTimeout(() => {
       card.classList.remove('is-pouring');
       card.classList.remove('is-settling');
-
-      if (headerBadges) {
-        const badge = headerBadges.querySelector('.badge-pouring');
-        if (badge) badge.remove();
-      }
     }, 2000);
   }
 }
@@ -401,6 +388,7 @@ function createTapCard(tap) {
 
     <div class="graphic-container">
       <div class="tap-graphic-wrapper" id="graphic-tap-${tapId}"></div>
+      <div class="floating-pour-badge">🍺 NOW POURING</div>
       <div class="volume-readout">${volumeReadoutText}</div>
     </div>
 
@@ -587,6 +575,7 @@ function openGlobalSettingsModal() {
     }
   }
 
+  updateFontPreviews();
   document.getElementById('globalSettingsModal').style.display = 'flex';
 }
 
@@ -727,8 +716,28 @@ function renderOnDeckTicker() {
   `).join('');
 }
 
+// Live Font Previews in Global Studio Settings
+function updateFontPreviews() {
+  const titleSelect = document.getElementById('titleFontSelect');
+  const titlePreview = document.getElementById('titleFontPreview');
+  const bodySelect = document.getElementById('bodyFontSelect');
+  const bodyPreview = document.getElementById('bodyFontPreview');
+
+  if (titleSelect && titlePreview) {
+    titlePreview.style.fontFamily = `'${titleSelect.value}', sans-serif`;
+  }
+  if (bodySelect && bodyPreview) {
+    bodyPreview.style.fontFamily = `'${bodySelect.value}', sans-serif`;
+  }
+}
+
 // Modal Listeners Setup
 function initModalListeners() {
+  // Font Select Live Preview Listeners
+  document.getElementById('titleFontSelect')?.addEventListener('change', updateFontPreviews);
+  document.getElementById('titleFontSelect')?.addEventListener('input', updateFontPreviews);
+  document.getElementById('bodyFontSelect')?.addEventListener('change', updateFontPreviews);
+  document.getElementById('bodyFontSelect')?.addEventListener('input', updateFontPreviews);
   // Close Recipe Modal
   const closeRecipeBtn = document.getElementById('closeRecipeBtn');
   if (closeRecipeBtn) {
