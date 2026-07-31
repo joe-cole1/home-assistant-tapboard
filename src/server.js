@@ -123,6 +123,11 @@ setInterval(() => {
 }, 15000);
 
 // HA Event Listeners
+haClient.on('connection_change', isConnected => {
+  console.log(`[HAClient Connection Change] HA isConnected: ${isConnected}`);
+  broadcastSSE('ha_connection_status', { isConnected });
+});
+
 haClient.on('state_changed', data => {
   broadcastSSE('state_changed', data);
 });
@@ -161,6 +166,7 @@ function getFullStateSnapshot() {
     batches,
     catalog,
     haStates,
+    haConnected: haClient.isConnected,
     kegKickForecasts,
     timestamp: new Date().toISOString()
   };

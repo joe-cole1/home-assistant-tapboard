@@ -14,6 +14,7 @@ export class HAClient extends EventEmitter {
     this.statesMap = new Map();
     this.eventQueue = [];
     this.isHydrated = false;
+    this.isConnected = false;
     this.reconnectTimeout = null;
     this.reconnectDelay = 1000;
 
@@ -35,6 +36,8 @@ export class HAClient extends EventEmitter {
   connect() {
     if (!this.haToken) {
       console.warn('[HAClient] No HA_TOKEN provided in .env. Real-time HA WebSocket sync disabled.');
+      this.isConnected = false;
+      this.emit('connection_change', false);
       return;
     }
 
@@ -57,11 +60,15 @@ export class HAClient extends EventEmitter {
     this.ws.on('close', (code, reason) => {
       console.warn(`[HAClient] WebSocket closed (code: ${code}). Reconnecting...`);
       this.isHydrated = false;
+      this.isConnected = false;
+      this.emit('connection_change', false);
       this.scheduleReconnect();
     });
 
     this.ws.on('error', (err) => {
       console.error('[HAClient] WebSocket socket error:', err.message);
+      this.isConnected = false;
+      this.emit('connection_change', false);
     });
   }
 
@@ -98,12 +105,16 @@ export class HAClient extends EventEmitter {
     if (msg.type === 'auth_ok') {
       console.log('[HAClient] Authentication successful! Initiating event replay sync...');
       this.reconnectDelay = 1000;
+      this.isConnected = true;
+      this.emit('connection_change', true);
       await this.initiateSync();
       return;
     }
 
     if (msg.type === 'auth_invalid') {
       console.error('[HAClient] Authentication failed:', msg.message);
+      this.isConnected = false;
+      this.emit('connection_change', false);
       return;
     }
 

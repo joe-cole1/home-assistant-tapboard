@@ -1,4 +1,4 @@
-// Tapboard v3.8 Client Engine
+// Tapboard v3.8.1 Client Engine
 import { renderTapGraphic, srmToHex } from './graphics.js';
 
 let appState = {
@@ -7,6 +7,7 @@ let appState = {
   batches: [],
   catalog: [],
   haStates: {},
+  haConnected: true,
   kegKickForecasts: {}
 };
 
@@ -19,7 +20,7 @@ function initSSE() {
 
   eventSource.onopen = () => {
     console.log('[SSE] Live stream connected.');
-    updateClockStatus('Live Connected');
+    updateClockStatus(appState.haConnected ? 'Live Stream Connected' : 'HA Disconnected (Cached Data)');
   };
 
   eventSource.onerror = (err) => {
@@ -30,24 +31,32 @@ function initSSE() {
   // 1. Initial Snapshot
   eventSource.addEventListener('snapshot', (e) => {
     appState = JSON.parse(e.data);
+    updateClockStatus(appState.haConnected ? 'Live Stream Connected' : 'HA Disconnected (Cached Data)');
     renderApp();
   });
 
-  // 2. HA State Changed
+  // 2. HA Connection Status Change
+  eventSource.addEventListener('ha_connection_status', (e) => {
+    const { isConnected } = JSON.parse(e.data);
+    appState.haConnected = isConnected;
+    updateClockStatus(isConnected ? 'Live Stream Connected' : 'HA Disconnected (Cached Data)');
+  });
+
+  // 3. HA State Changed
   eventSource.addEventListener('state_changed', (e) => {
     const { entity_id, state } = JSON.parse(e.data);
     appState.haStates[entity_id] = state;
     renderApp();
   });
 
-  // 3. Instant Pour Animation Start
+  // 4. Instant Pour Animation Start
   eventSource.addEventListener('pour_start', (e) => {
     const { tapId } = JSON.parse(e.data);
     console.log(`[Pour Start] Animating Tap ${tapId}`);
     setTapPouringAnimation(tapId, true);
   });
 
-  // 4. Pour Complete Summary & Toast Notification
+  // 5. Pour Complete Summary & Toast Notification
   eventSource.addEventListener('pour_complete', (e) => {
     const { tapId, volumePouredOz, beerName } = JSON.parse(e.data);
     console.log(`[Pour Complete] Tap ${tapId}: ${volumePouredOz} oz`);
@@ -55,13 +64,13 @@ function initSSE() {
     showToast(`🍺 Poured ${volumePouredOz} oz of ${beerName}!`);
   });
 
-  // 5. Low Keg Alert
+  // 6. Low Keg Alert
   eventSource.addEventListener('low_keg_alert', (e) => {
     const { tapId, currentPercent } = JSON.parse(e.data);
     showToast(`⚠️ Low Keg Warning: Tap ${tapId} at ${currentPercent}%!`);
   });
 
-  // 6. Settings Updated
+  // 7. Settings Updated
   eventSource.addEventListener('settings_updated', (e) => {
     appState = JSON.parse(e.data);
     renderApp();
@@ -72,6 +81,11 @@ function updateClockStatus(text) {
   const clockEl = document.getElementById('headerClock');
   if (clockEl) {
     clockEl.textContent = text;
+    if (text.includes('Disconnected') || text.includes('Reconnecting')) {
+      clockEl.style.color = '#ffa726';
+    } else {
+      clockEl.style.color = '';
+    }
   }
 }
 
