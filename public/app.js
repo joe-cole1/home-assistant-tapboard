@@ -1,4 +1,4 @@
-// Tapboard v3.5.4 Client Engine
+// Tapboard v3.5.5 Client Engine
 import { renderTapGraphic, srmToHex } from './graphics.js';
 
 let appState = {
@@ -425,26 +425,63 @@ function openGlobalSettingsModal() {
   document.getElementById('globalSettingsModal').style.display = 'flex';
 }
 
-// Open Per-Tap Settings Modal
+// Open Per-Tap Settings Modal with Conditioning Filtering & Topo Chico at Bottom
 function openTapSettings(tapId) {
   editingTapId = tapId;
   const tap = appState.taps.find(t => t.tap_id === tapId) || {};
   const batchAttr = appState.haStates[`sensor.tap_${tapId}_batch_info`]?.attributes || {};
+  const selectEntity = appState.haStates[`select.tap_${tapId}_batch_select`];
+  const rawOptions = selectEntity?.attributes?.options || [];
 
   document.getElementById('tapSettingsTitle').textContent = `Tap ${tapId} Settings Studio`;
 
   // Populate Batch Select Dropdown
   const batchSelect = document.getElementById('tapSettingsBatchSelect');
-  batchSelect.innerHTML = '<option value="">-- Empty / Off Tap --</option>';
+  batchSelect.innerHTML = '';
 
-  const activeBatches = appState.batches || [];
-  activeBatches.forEach(b => {
+  // 1. First Option: Off-Tap
+  const offTapOpt = document.createElement('option');
+  offTapOpt.value = '';
+  offTapOpt.textContent = '-- Empty / Off Tap --';
+  batchSelect.appendChild(offTapOpt);
+
+  // 2. Filter Brewfather options for (Conditioning) status
+  const conditioningBatches = [];
+  let topoChicoOption = null;
+
+  rawOptions.forEach(optStr => {
+    if (!optStr || optStr.trim() === '') return;
+
+    if (optStr.toLowerCase().includes('topo_chico') || optStr.toLowerCase().includes('topo chico')) {
+      topoChicoOption = optStr;
+    } else if (optStr.includes('(Conditioning)') || optStr.includes('Conditioning')) {
+      conditioningBatches.push(optStr);
+    }
+  });
+
+  // Append Conditioning Batches
+  conditioningBatches.forEach(optStr => {
     const opt = document.createElement('option');
-    opt.value = b.batch_id;
-    opt.textContent = `${b.recipe_name} (${b.style || 'Batch'})`;
-    if (b.batch_id === batchAttr.batch_id) opt.selected = true;
+    opt.value = optStr;
+    const parts = optStr.split('|');
+    const label = parts.length > 1 ? parts[1].trim() : optStr;
+    opt.textContent = label;
+
+    if (selectEntity?.state === optStr || (batchAttr.batch_id && optStr.includes(batchAttr.batch_id))) {
+      opt.selected = true;
+    }
     batchSelect.appendChild(opt);
   });
+
+  // 3. Last Option: ALWAYS Topo Chico 0%
+  const topoOpt = document.createElement('option');
+  const topoVal = topoChicoOption || 'custom:topo_chico | Topo Chico 0%';
+  topoOpt.value = topoVal;
+  topoOpt.textContent = 'Topo Chico 0%';
+  if (selectEntity?.state === topoVal || selectEntity?.state === 'custom:topo_chico' || (batchAttr.name && batchAttr.name.toLowerCase().includes('topo chico'))) {
+    topoOpt.selected = true;
+  }
+  batchSelect.appendChild(topoOpt);
 
   // Set Graphic & Enabled
   document.getElementById('tapSettingsGraphicSelect').value = tap.graphic || 'corny_keg';
