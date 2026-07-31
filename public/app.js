@@ -1,4 +1,4 @@
-// Tapboard v3.5 Client Engine
+// Tapboard v3.5.3 Client Engine
 import { renderTapGraphic, srmToHex } from './graphics.js';
 
 let appState = {
@@ -181,15 +181,24 @@ function createTapCard(tap) {
   const hasOverride = tap.override_enabled === 1;
   const beerName = (hasOverride && tap.override_name && tap.override_name.trim() !== '') ? tap.override_name : bfName;
   const style = (hasOverride && tap.override_style && tap.override_style.trim() !== '') ? tap.override_style : bfStyle;
-  const abv = (hasOverride && tap.override_abv !== null && tap.override_abv !== undefined && tap.override_abv !== '') ? `${tap.override_abv}%` : (bfAbv !== '--' ? `${bfAbv}%` : '--');
-  const ibu = (hasOverride && tap.override_ibu !== null && tap.override_ibu !== undefined && tap.override_ibu !== '') ? tap.override_ibu : bfIbu;
-  const og = (hasOverride && tap.override_og !== null && tap.override_og !== undefined && tap.override_og !== '') ? tap.override_og : bfOg;
-  const fg = (hasOverride && tap.override_fg !== null && tap.override_fg !== undefined && tap.override_fg !== '') ? tap.override_fg : bfFg;
-  const srm = (hasOverride && tap.override_srm !== null && tap.override_srm !== undefined && tap.override_srm !== '') ? tap.override_srm : bfSrm;
+
+  // Check if beverage is Water / Topo Chico / Sparkling Water / Seltzer
+  const isWaterOrTopo = beerName.toLowerCase().includes('topo chico') ||
+                        beerName.toLowerCase().includes('water') ||
+                        style.toLowerCase().includes('water') ||
+                        style.toLowerCase().includes('seltzer') ||
+                        bfSrm === 0 ||
+                        (hasOverride && tap.override_srm === 0);
+
+  const abv = isWaterOrTopo ? '0.0%' : ((hasOverride && tap.override_abv !== null && tap.override_abv !== undefined && tap.override_abv !== '') ? `${tap.override_abv}%` : (bfAbv !== '--' ? `${bfAbv}%` : '--'));
+  const ibu = isWaterOrTopo ? '-' : ((hasOverride && tap.override_ibu !== null && tap.override_ibu !== undefined && tap.override_ibu !== '') ? tap.override_ibu : bfIbu);
+  const og = isWaterOrTopo ? '-' : ((hasOverride && tap.override_og !== null && tap.override_og !== undefined && tap.override_og !== '') ? tap.override_og : bfOg);
+  const fg = isWaterOrTopo ? '-' : ((hasOverride && tap.override_fg !== null && tap.override_fg !== undefined && tap.override_fg !== '') ? tap.override_fg : bfFg);
+  const srm = isWaterOrTopo ? 0 : ((hasOverride && tap.override_srm !== null && tap.override_srm !== undefined && tap.override_srm !== '') ? tap.override_srm : bfSrm);
   const description = (hasOverride && tap.override_description && tap.override_description.trim() !== '') ? tap.override_description : bfDesc;
 
-  // Convert SRM to Hex Color
-  const beerColorHex = srmToHex(srm);
+  // Convert SRM to Hex Color (or WATER)
+  const beerColorHex = isWaterOrTopo ? 'WATER' : srmToHex(srm);
 
   // 14-Day Rolling Keg Kick Forecast
   const forecast = appState.kegKickForecasts[tapId] || {};
@@ -294,7 +303,7 @@ function openRecipeModal(tapId, beerName, style, abv, ibu, og, fg, srm, descript
     <div style="margin-top:0.75rem;">
       <strong>Tasting Notes & Profile:</strong>
       <p style="color:var(--text-muted); margin-top:0.35rem; line-height:1.4;">
-        ${description || 'Crafted with premium grains and fresh hops.'}
+        ${description || 'Crafted with premium ingredients.'}
       </p>
     </div>
   `;

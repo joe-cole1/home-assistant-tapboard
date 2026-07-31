@@ -1,7 +1,7 @@
 /* =====================================================================
- * TAP BOARD STYLESHEET (styles.css) - v3.5
+ * TAP BOARD STYLESHEET (styles.css) - v3.5.3
  * Reference-matched design system supporting customizable themes, Google Fonts,
- * responsive tap grid, SVG foam animations, and per-tap settings studio.
+ * responsive tap grid, SVG carbonation animations, and per-tap settings studio.
  * ===================================================================== */
 
 :root {
@@ -322,6 +322,25 @@ body {
   0% { transform: scale(1); }
   50% { transform: scale(1.03); }
   100% { transform: scale(1); }
+}
+
+/* Animated Effervescent Carbonation Bubbles */
+@keyframes riseBubble {
+  0% {
+    transform: translateY(0) translateX(0) scale(0.6);
+    opacity: 0.2;
+  }
+  30% {
+    opacity: 0.85;
+  }
+  70% {
+    transform: translateY(-40px) translateX(3px) scale(1);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateY(-90px) translateX(-3px) scale(1.2);
+    opacity: 0;
+  }
 }
 
 .volume-readout {
