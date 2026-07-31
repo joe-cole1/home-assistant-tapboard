@@ -208,8 +208,9 @@ function setTapPouringAnimation(tapId, isPouring) {
     card.classList.add('is-settling');
 
     // Calculate target Y & height for real remaining keg percentage
-    const fillState = appState.haStates[`sensor.tap_${tapId}_fill`]?.state || '100';
-    const fillPct = Math.min(100, Math.max(0, parseFloat(fillState) || 75));
+    const fillState = appState.haStates[`sensor.tap_${tapId}_fill`]?.state;
+    const parsedFill = parseFloat(fillState);
+    const fillPct = Math.min(100, Math.max(0, isNaN(parsedFill) ? 0 : parsedFill));
     const targetY = 220 - (fillPct / 100) * 150;
     const targetHeight = 220 - targetY;
 
