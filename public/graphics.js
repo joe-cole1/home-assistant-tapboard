@@ -234,7 +234,6 @@ function renderPintGlass(pct, color, isPouring, id) {
         </clipPath>
       </defs>
 
-      <ellipse cx="80" cy="228" rx="25" ry="6" fill="#E2E8F0" opacity="0.4" stroke="#CBD5E0" stroke-width="1.5" />
       <polygon points="45,40 115,40 105,225 55,225" 
                fill="#1A202C" opacity="0.6" stroke="#CBD5E0" stroke-width="2" />
 
@@ -300,7 +299,6 @@ function renderWheatGlass(pct, color, isPouring, id) {
         </clipPath>
       </defs>
 
-      <ellipse cx="80" cy="235" rx="35" ry="8" fill="#E2E8F0" opacity="0.4" stroke="#CBD5E0" stroke-width="1.5" />
       <path d="M 50 30 Q 30 110, 62 170 L 60 220 Q 80 225, 100 220 L 98 170 Q 130 110, 110 30 Z" 
             fill="#1A202C" opacity="0.6" stroke="#CBD5E0" stroke-width="2" />
 
@@ -459,7 +457,6 @@ function renderStoutGlass(pct, color, isPouring, id) {
         </clipPath>
       </defs>
 
-      <ellipse cx="80" cy="235" rx="30" ry="7" fill="#E2E8F0" opacity="0.4" stroke="#CBD5E0" stroke-width="1.5" />
       <path d="M 52 45 C 44 80, 40 120, 58 175 L 56 220 Q 80 225, 104 220 L 102 175 C 120 120, 116 80, 108 45 Z" 
             fill="#1A202C" opacity="0.6" stroke="#CBD5E0" stroke-width="2" />
 
