@@ -1,15 +1,15 @@
 /**
- * TAP BOARD GRAPHICS ENGINE (graphics.js) - v3.5.4
+ * TAP BOARD GRAPHICS ENGINE (graphics.js) - v3.7
  * Dynamic SVG vector renderer for Corny Kegs & 6 Beer Glassware styles.
  * Features:
+ * - Full 1-50 SRM color palette interpolation (Stouts, Porters, Dark Ales, Lagers)
  * - Transparent liquid rendering for Water / Topo Chico / Seltzer
- * - Half-speed, low-count effervescent carbonation bubble generator
- * - Smooth in-place DOM updates for uninterrupted animations
+ * - Half-speed effervescent carbonation bubble generator
  */
 
-// SRM to Hex Color conversion lookup table
+// Full SRM to Hex Color conversion lookup table (1-50 SRM)
 const SRM_COLORS = {
-  0: "WATER", // Topo Chico / Water / Seltzer transparent handling
+  0: "WATER",
   1: "#F8F753",
   2: "#F6F513",
   3: "#ECE61A",
@@ -30,10 +30,27 @@ const SRM_COLORS = {
   18: "#601100",
   19: "#580E00",
   20: "#530C00",
+  21: "#4E0B00",
+  22: "#480A00",
+  23: "#420900",
+  24: "#3C0800",
   25: "#380600",
+  26: "#340500",
+  27: "#300400",
+  28: "#2C0300",
+  29: "#2A0300",
   30: "#280200",
+  31: "#250200",
+  32: "#220200",
+  33: "#200100",
+  34: "#1E0100",
   35: "#1D0100",
+  36: "#1B0100",
+  37: "#190100",
+  38: "#170100",
+  39: "#150100",
   40: "#130100",
+  45: "#0B0100",
   50: "#080100"
 };
 
@@ -48,8 +65,18 @@ export function srmToHex(srmVal, fallbackHex = null) {
   if (parsed === 0) return 'WATER';
   const normalized = Number.isFinite(parsed) ? parsed : 3;
   const srm = Math.max(0, Math.min(50, Math.round(normalized)));
+  
   if (SRM_COLORS[srm]) return SRM_COLORS[srm];
-  return "#E8A317";
+
+  // Nearest SRM key interpolation for any unmapped integer between 1 and 50
+  const keys = Object.keys(SRM_COLORS).map(Number).filter(k => k > 0).sort((a, b) => a - b);
+  let closest = keys[0];
+  for (const k of keys) {
+    if (Math.abs(k - srm) < Math.abs(closest - srm)) {
+      closest = k;
+    }
+  }
+  return SRM_COLORS[closest] || "#200100";
 }
 
 let generatedGraphicId = 0;
@@ -62,15 +89,12 @@ function renderCarbonationBubbles(leftX, rightX, bottomY, topY, count = 6) {
   const width = rightX - leftX;
 
   for (let i = 0; i < count; i++) {
-    // Randomize initial seed positions near the lower portion of the glass
     const cx = (leftX + 5 + Math.random() * (width - 10)).toFixed(1);
     const startY = (bottomY - Math.random() * 30).toFixed(1);
     const r = (1.0 + Math.random() * 1.5).toFixed(1);
-    const duration = (4.0 + Math.random() * 4.5).toFixed(2); // 4.0s - 8.5s (Half speed)
-    const delay = (Math.random() * 4.0).toFixed(2); // 0s - 4.0s staggered start
+    const duration = (4.0 + Math.random() * 4.5).toFixed(2);
+    const delay = (Math.random() * 4.0).toFixed(2);
     const opacity = (0.35 + Math.random() * 0.45).toFixed(2);
-    
-    // Calculate total rise distance to surface level topY
     const riseDist = (startY - topY + 5).toFixed(1);
 
     bubblesSvg += `
@@ -118,7 +142,7 @@ export function renderTapGraphic(
 function renderCornyKeg(pct, color, isPouring, id) {
   const liquidY = 220 - (pct / 100) * 150;
   const isWater = color === 'WATER';
-  const isDark = color === '#080100' || color === '#130100' || color === '#000000';
+  const isDark = color === '#080100' || color === '#130100' || color === '#200100' || color === '#280200' || color === '#000000';
   const foamColor = isDark ? '#F5EBE6' : '#FFFDF5';
 
   const fillStyle = isWater
@@ -163,10 +187,8 @@ function renderCornyKeg(pct, color, isPouring, id) {
       ${pct > 0 ? `
         <g clip-path="url(#kegLiquidClip_${id})">
           <rect x="30" y="60" width="100" height="165" ${fillStyle} />
-          <!-- Animated Carbonation Bubbles -->
           ${renderCarbonationBubbles(38, 122, 218, liquidY, 6)}
         </g>
-        <!-- Foam Cap -->
         ${!isWater ? `
           <path d="M 35 ${liquidY} Q 50 ${liquidY - 4}, 80 ${liquidY} Q 110 ${liquidY + 4}, 125 ${liquidY} L 125 ${Math.max(68, liquidY - 10)} Q 95 ${Math.max(65, liquidY - 13)}, 65 ${Math.max(67, liquidY - 9)} Q 35 ${Math.max(68, liquidY - 10)}, 35 ${liquidY} Z" 
                 fill="${foamColor}" opacity="0.95" />
@@ -186,7 +208,7 @@ function renderCornyKeg(pct, color, isPouring, id) {
 function renderPintGlass(pct, color, isPouring, id) {
   const liquidY = 220 - (pct / 100) * 165;
   const isWater = color === 'WATER';
-  const isDark = color === '#080100' || color === '#130100' || color === '#000000';
+  const isDark = color === '#080100' || color === '#130100' || color === '#200100' || color === '#280200' || color === '#000000';
   const foamColor = isDark ? '#F5EBE6' : '#FFFDF5';
   const fillStyle = isWater
     ? `fill="rgba(224, 247, 250, 0.25)"`
@@ -225,7 +247,7 @@ function renderPintGlass(pct, color, isPouring, id) {
 function renderWheatGlass(pct, color, isPouring, id) {
   const liquidY = 220 - (pct / 100) * 170;
   const isWater = color === 'WATER';
-  const isDark = color === '#080100' || color === '#130100' || color === '#000000';
+  const isDark = color === '#080100' || color === '#130100' || color === '#200100' || color === '#280200' || color === '#000000';
   const foamColor = isDark ? '#F5EBE6' : '#FFFDF5';
   const fillStyle = isWater
     ? `fill="rgba(224, 247, 250, 0.25)"`
@@ -271,7 +293,7 @@ function renderWheatGlass(pct, color, isPouring, id) {
 function renderTulipGlass(pct, color, isPouring, id) {
   const liquidY = 210 - (pct / 100) * 140;
   const isWater = color === 'WATER';
-  const isDark = color === '#080100' || color === '#130100' || color === '#000000';
+  const isDark = color === '#080100' || color === '#130100' || color === '#200100' || color === '#280200' || color === '#000000';
   const foamColor = isDark ? '#F5EBE6' : '#FFFDF5';
   const fillStyle = isWater
     ? `fill="rgba(224, 247, 250, 0.25)"`
@@ -312,7 +334,7 @@ function renderTulipGlass(pct, color, isPouring, id) {
 function renderMug(pct, color, isPouring, id) {
   const liquidY = 215 - (pct / 100) * 145;
   const isWater = color === 'WATER';
-  const isDark = color === '#080100' || color === '#130100' || color === '#000000';
+  const isDark = color === '#080100' || color === '#130100' || color === '#200100' || color === '#280200' || color === '#000000';
   const foamColor = isDark ? '#F5EBE6' : '#FFFDF5';
   const fillStyle = isWater
     ? `fill="rgba(224, 247, 250, 0.25)"`
@@ -355,7 +377,7 @@ function renderMug(pct, color, isPouring, id) {
 function renderStoutGlass(pct, color, isPouring, id) {
   const liquidY = 215 - (pct / 100) * 155;
   const isWater = color === 'WATER';
-  const isDark = color === '#080100' || color === '#130100' || color === '#000000';
+  const isDark = color === '#080100' || color === '#130100' || color === '#200100' || color === '#280200' || color === '#000000';
   const foamColor = isDark ? '#F5EBE6' : '#FFFDF5';
   const fillStyle = isWater
     ? `fill="rgba(224, 247, 250, 0.25)"`
@@ -394,7 +416,7 @@ function renderStoutGlass(pct, color, isPouring, id) {
 function renderSnifter(pct, color, isPouring, id) {
   const liquidY = 205 - (pct / 100) * 125;
   const isWater = color === 'WATER';
-  const isDark = color === '#080100' || color === '#130100' || color === '#000000';
+  const isDark = color === '#080100' || color === '#130100' || color === '#200100' || color === '#280200' || color === '#000000';
   const foamColor = isDark ? '#F5EBE6' : '#FFFDF5';
   const fillStyle = isWater
     ? `fill="rgba(224, 247, 250, 0.25)"`

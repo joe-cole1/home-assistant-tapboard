@@ -1,4 +1,4 @@
-// Tapboard v3.6 Client Engine
+// Tapboard v3.7 Client Engine
 import { renderTapGraphic, srmToHex } from './graphics.js';
 
 let appState = {
@@ -139,7 +139,7 @@ function formatVolumeReadout(tap, fillPercent, currentOz, pintsRemaining) {
   }
 }
 
-// Helper: Clean Format Forecast Readout (No ~, no (baseline estimate), no (< 1 day))
+// Helper: Clean Format Forecast Readout
 function formatForecastText(forecast) {
   if (forecast.estimatedDaysRemaining === null || forecast.estimatedDaysRemaining === undefined) {
     return `⌛ Forecast calculating...`;
@@ -359,7 +359,7 @@ function updateTapCard(card, tap) {
   const forecastText = formatForecastText(forecast);
   const newVolText = formatVolumeReadout(tap, fillPercent, currentOz, pintsRemaining);
 
-  // Update text content in-place without touching SVG DOM tree
+  // Update text content in-place
   const titleEl = card.querySelector('.beer-title');
   if (titleEl && titleEl.textContent !== beerName) titleEl.textContent = beerName;
 
@@ -384,7 +384,7 @@ function updateTapCard(card, tap) {
     forecastEl.textContent = forecastText;
   }
 
-  // Re-render SVG only if graphic style or beer color changed
+  // Re-render SVG if graphic style, color hex, or fill percent changed
   const graphicContainer = card.querySelector(`#graphic-tap-${tapId}`);
   const currentGraphicStyle = card.getAttribute('data-graphic-style');
   const currentColorHex = card.getAttribute('data-color-hex');
@@ -448,7 +448,7 @@ function openGlobalSettingsModal() {
   document.getElementById('globalSettingsModal').style.display = 'flex';
 }
 
-// Open Per-Tap Settings Modal with Conditioning Filtering & Volume Format Selector
+// Open Per-Tap Settings Modal
 function openTapSettings(tapId) {
   editingTapId = tapId;
   const tap = appState.taps.find(t => t.tap_id === tapId) || {};
@@ -458,7 +458,6 @@ function openTapSettings(tapId) {
 
   document.getElementById('tapSettingsTitle').textContent = `Tap ${tapId} Settings Studio`;
 
-  // Populate Batch Select Dropdown
   const batchSelect = document.getElementById('tapSettingsBatchSelect');
   batchSelect.innerHTML = '';
 
@@ -502,9 +501,19 @@ function openTapSettings(tapId) {
   }
   batchSelect.appendChild(topoOpt);
 
+  // Auto-check "Show Tap on Dashboard" whenever a non-empty brew batch is chosen
+  batchSelect.onchange = () => {
+    if (batchSelect.value !== '') {
+      document.getElementById('tapSettingsEnabledCheckbox').checked = true;
+    }
+  };
+
   // Set Graphic & Enabled
   document.getElementById('tapSettingsGraphicSelect').value = tap.graphic || 'corny_keg';
-  document.getElementById('tapSettingsEnabledCheckbox').checked = tap.enabled === 1;
+
+  // If a batch is assigned or selected, default enabled to true
+  const isEnabled = tap.enabled === 1 || (batchSelect.value !== '');
+  document.getElementById('tapSettingsEnabledCheckbox').checked = isEnabled;
 
   // Set Display Unit & Custom Pour Input
   const unitSelect = document.getElementById('tapSettingsDisplayUnitSelect');
@@ -688,7 +697,7 @@ function initModalListeners() {
     }
   });
 
-  // Save Per-Tap Settings (including Display Unit & Custom Pour Size)
+  // Save Per-Tap Settings
   document.getElementById('saveTapSettingsBtn')?.addEventListener('click', async () => {
     if (!editingTapId) return;
 

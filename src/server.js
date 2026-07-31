@@ -67,7 +67,6 @@ function calculateKegKickForecast(tapId) {
 
   const totalOz = stats?.total_oz || 0;
 
-  // Multi-sensor lookup for current volume in oz
   let currentOz = 0;
   const ozState = haClient.statesMap.get(`sensor.tap_${tapId}_fl_oz`)?.state;
   const fillState = haClient.statesMap.get(`sensor.tap_${tapId}_fill`)?.state;
@@ -172,7 +171,6 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const clientIp = req.socket.remoteAddress || 'unknown';
 
-  // Enable CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -195,7 +193,6 @@ const server = http.createServer(async (req, res) => {
     res.write(': connected\n\n');
     sseClients.add(res);
 
-    // Send initial snapshot on join
     res.write(`event: snapshot\ndata: ${JSON.stringify(getFullStateSnapshot())}\n\n`);
 
     req.on('close', () => {
@@ -323,6 +320,12 @@ const server = http.createServer(async (req, res) => {
 
     try {
       const body = await parseJsonBody(req);
+
+      // Auto-enable tap if a batch is assigned
+      let shouldEnable = body.enabled !== undefined ? (body.enabled ? 1 : 0) : null;
+      if (body.batch_option !== undefined && body.batch_option !== '') {
+        shouldEnable = 1;
+      }
       
       db.prepare(`
         UPDATE taps SET
@@ -343,7 +346,7 @@ const server = http.createServer(async (req, res) => {
           custom_pour_size = COALESCE(?, custom_pour_size)
         WHERE tap_id = ?
       `).run(
-        body.enabled !== undefined ? (body.enabled ? 1 : 0) : null,
+        shouldEnable,
         body.graphic,
         body.override_enabled !== undefined ? (body.override_enabled ? 1 : 0) : null,
         body.override_name !== undefined ? body.override_name : null,
