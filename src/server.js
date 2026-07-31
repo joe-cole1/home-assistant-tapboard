@@ -52,38 +52,60 @@ function parseJsonBody(req) {
   });
 }
 
-// Helper: Calculate 14-Day Rolling Keg Kick Forecast
+// Helper: Calculate 14-Day Rolling Keg Kick Forecast with Multi-Sensor Lookup & Baseline Fallback
 function calculateKegKickForecast(tapId) {
   const fourteenDaysAgo = new Date(Date.now() - 14 * 86400 * 1000).toISOString();
   
   const stats = db.prepare(`
     SELECT 
       SUM(volume_poured_oz) as total_oz,
-      COUNT(DISTINCT DATE(timestamp)) as active_days
+      COUNT(DISTINCT DATE(timestamp)) as active_days,
+      MIN(timestamp) as first_pour_time
     FROM pour_logs
     WHERE tap_id = ? AND timestamp >= ?
   `).get(tapId, fourteenDaysAgo);
 
   const totalOz = stats?.total_oz || 0;
-  const activeDays = Math.max(1, stats?.active_days || 0);
-  const avgDailyOz = totalOz / 14;
 
-  const haState = haClient.statesMap.get(`sensor.tap_${tapId}_fl_oz`) || haClient.statesMap.get(`sensor.tap_${tapId}_fill`);
-  const currentOz = parseFloat(haState?.state || '0');
+  // Multi-sensor lookup for current volume in oz
+  let currentOz = 0;
+  const ozState = haClient.statesMap.get(`sensor.tap_${tapId}_fl_oz`)?.state;
+  const fillState = haClient.statesMap.get(`sensor.tap_${tapId}_fill`)?.state;
+  const pintsState = haClient.statesMap.get(`sensor.tap_${tapId}_pints_remaining`)?.state;
 
-  if (isNaN(currentOz) || currentOz <= 0 || avgDailyOz <= 0) {
+  if (ozState && !isNaN(parseFloat(ozState)) && parseFloat(ozState) > 0) {
+    currentOz = parseFloat(ozState);
+  } else if (pintsState && !isNaN(parseFloat(pintsState)) && parseFloat(pintsState) > 0) {
+    currentOz = parseFloat(pintsState) * 16.0;
+  } else if (fillState && !isNaN(parseFloat(fillState)) && parseFloat(fillState) > 0) {
+    currentOz = (parseFloat(fillState) / 100.0) * 640.0; // 5 gal corny keg baseline
+  }
+
+  let avgDailyOz = 0;
+  let isEstimatedBaseline = false;
+
+  if (totalOz > 0 && stats?.first_pour_time) {
+    const daysSpan = Math.max(1, (Date.now() - new Date(stats.first_pour_time).getTime()) / (86400 * 1000));
+    avgDailyOz = totalOz / Math.min(14, daysSpan);
+  } else {
+    // Standard taproom estimate: 16 oz (1 pint) / day for active kegs awaiting first logged pour session
+    avgDailyOz = 16.0;
+    isEstimatedBaseline = true;
+  }
+
+  if (currentOz <= 0) {
     return { 
       avgDailyOz: Math.round(avgDailyOz * 10) / 10,
-      activeDays,
-      estimatedDaysRemaining: null 
+      estimatedDaysRemaining: null,
+      isEstimatedBaseline: true
     };
   }
 
   const daysRemaining = Math.round((currentOz / avgDailyOz) * 10) / 10;
   return { 
     avgDailyOz: Math.round(avgDailyOz * 10) / 10,
-    activeDays,
-    estimatedDaysRemaining: daysRemaining 
+    estimatedDaysRemaining: daysRemaining,
+    isEstimatedBaseline
   };
 }
 
@@ -115,6 +137,7 @@ haClient.on('pour_start', data => {
 haClient.on('pour_complete', data => {
   console.log(`[SSE Broadcast] pour_complete on Tap ${data.tapId}: ${data.volumePouredOz} oz`);
   broadcastSSE('pour_complete', data);
+  broadcastSSE('settings_updated', getFullStateSnapshot());
 });
 
 haClient.on('low_keg_alert', data => {

@@ -197,6 +197,8 @@ function createTapCard(tap) {
   if (forecast.estimatedDaysRemaining !== null && forecast.estimatedDaysRemaining !== undefined) {
     if (forecast.estimatedDaysRemaining < 1.0) {
       forecastText = `🔴 Kicking soon (< 1 day remaining)`;
+    } else if (forecast.isEstimatedBaseline) {
+      forecastText = `⌛ ~${forecast.estimatedDaysRemaining} days remaining (baseline estimate)`;
     } else {
       forecastText = `⌛ ~${forecast.estimatedDaysRemaining} days remaining (${forecast.avgDailyOz} oz/day avg)`;
     }
