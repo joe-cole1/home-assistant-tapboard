@@ -167,7 +167,7 @@ function renderCornyKeg(pct, color, isPouring, id) {
           </linearGradient>
         ` : ''}
         <clipPath id="kegLiquidClip_${id}">
-          <rect x="35" y="${liquidY}" width="90" height="${220 - liquidY}" rx="4" class="beer-liquid-clip" />
+          <rect x="35" y="65" width="90" height="155" rx="6" />
         </clipPath>
       </defs>
 
@@ -184,25 +184,23 @@ function renderCornyKeg(pct, color, isPouring, id) {
       <rect x="35" y="65" width="90" height="155" rx="6" fill="#1A202C" opacity="0.75" />
 
       <!-- Liquid Fill with Two-Tone SRM Split & Clipped Foam Head -->
-      ${pct > 0 ? `
-        <g clip-path="url(#kegLiquidClip_${id})">
-          <rect x="30" y="${liquidY}" width="100" height="${220 - liquidY}" ${fillStyle} class="beer-liquid-rect" />
-          <!-- Two-Tone Darker SRM Right-Half Overlay -->
-          <rect x="80" y="${liquidY}" width="50" height="${220 - liquidY}" fill="rgba(0, 0, 0, 0.22)" class="beer-liquid-shadow" />
-          ${renderCarbonationBubbles(38, 122, 218, liquidY, 6)}
-          ${!isWater ? `
-            <!-- Puffy Cloud Foam Head (Clipped to Keg Walls) -->
-            <g class="beer-cloud-foam">
-              <rect x="30" y="${liquidY - 8}" width="100" height="16" fill="${foamColor}" opacity="0.9" />
-              <circle cx="48" cy="${liquidY - 5}" r="12" fill="${foamColor}" />
-              <circle cx="68" cy="${liquidY - 8}" r="15" fill="${foamColor}" />
-              <circle cx="88" cy="${liquidY - 7}" r="14" fill="${foamColor}" />
-              <circle cx="108" cy="${liquidY - 5}" r="11" fill="${foamColor}" />
-              <circle cx="74" cy="${liquidY - 9}" r="10" fill="#FFFFFF" opacity="0.5" />
-            </g>
-          ` : ''}
-        </g>
-      ` : ''}
+      <g clip-path="url(#kegLiquidClip_${id})">
+        <rect x="30" y="${liquidY}" width="100" height="${220 - liquidY}" ${fillStyle} class="beer-liquid-rect" />
+        <!-- Two-Tone Darker SRM Right-Half Overlay -->
+        <rect x="80" y="${liquidY}" width="50" height="${220 - liquidY}" fill="rgba(0, 0, 0, 0.22)" class="beer-liquid-shadow" />
+        ${renderCarbonationBubbles(38, 122, 218, liquidY, 6)}
+        ${!isWater ? `
+          <!-- Puffy Cloud Foam Head (Clipped to Keg Walls) -->
+          <g class="beer-cloud-foam">
+            <rect x="30" y="${liquidY - 8}" width="100" height="16" fill="${foamColor}" opacity="0.9" />
+            <circle cx="48" cy="${liquidY - 5}" r="12" fill="${foamColor}" />
+            <circle cx="68" cy="${liquidY - 8}" r="15" fill="${foamColor}" />
+            <circle cx="88" cy="${liquidY - 7}" r="14" fill="${foamColor}" />
+            <circle cx="108" cy="${liquidY - 5}" r="11" fill="${foamColor}" />
+            <circle cx="74" cy="${liquidY - 9}" r="10" fill="#FFFFFF" opacity="0.5" />
+          </g>
+        ` : ''}
+      </g>
 
       <!-- Pour Stream Group -->
       <g class="pour-stream-group ${isPouring ? 'is-active' : ''}">
@@ -241,25 +239,24 @@ function renderPintGlass(pct, color, isPouring, id) {
       <polygon points="45,40 115,40 105,225 55,225" 
                fill="#1A202C" opacity="0.6" stroke="#CBD5E0" stroke-width="2" />
 
-      ${pct > 0 ? `
-        <g clip-path="url(#pintGlassClip_${id})">
-          <rect x="30" y="${liquidY}" width="100" height="${230 - liquidY}" ${fillStyle} class="beer-liquid-rect" />
-          <!-- Two-Tone Darker SRM Right-Half Overlay -->
-          <rect x="80" y="${liquidY}" width="50" height="${230 - liquidY}" fill="rgba(0, 0, 0, 0.22)" class="beer-liquid-shadow" />
-          ${renderCarbonationBubbles(50, 110, 220, liquidY, 6)}
-          ${!isWater ? `
-            <!-- Puffy Cloud Foam Head (Clipped to Pint Glass Walls) -->
-            <g class="beer-cloud-foam">
-              <rect x="30" y="${liquidY - 8}" width="100" height="16" fill="${foamColor}" opacity="0.9" />
-              <circle cx="50" cy="${liquidY - 5}" r="11" fill="${foamColor}" />
-              <circle cx="68" cy="${liquidY - 8}" r="14" fill="${foamColor}" />
-              <circle cx="88" cy="${liquidY - 7}" r="13" fill="${foamColor}" />
-              <circle cx="106" cy="${liquidY - 5}" r="10" fill="${foamColor}" />
-              <circle cx="72" cy="${liquidY - 9}" r="9" fill="#FFFFFF" opacity="0.5" />
-            </g>
-          ` : ''}
-        </g>
-      ` : ''}
+      <!-- Liquid Fill with Two-Tone SRM Split & Clipped Foam Head -->
+      <g clip-path="url(#pintGlassClip_${id})">
+        <rect x="30" y="${liquidY}" width="100" height="${230 - liquidY}" ${fillStyle} class="beer-liquid-rect" />
+        <!-- Two-Tone Darker SRM Right-Half Overlay -->
+        <rect x="80" y="${liquidY}" width="50" height="${230 - liquidY}" fill="rgba(0, 0, 0, 0.22)" class="beer-liquid-shadow" />
+        ${renderCarbonationBubbles(50, 110, 220, liquidY, 6)}
+        ${!isWater ? `
+          <!-- Puffy Cloud Foam Head (Clipped to Pint Glass Walls) -->
+          <g class="beer-cloud-foam">
+            <rect x="30" y="${liquidY - 8}" width="100" height="16" fill="${foamColor}" opacity="0.9" />
+            <circle cx="50" cy="${liquidY - 5}" r="11" fill="${foamColor}" />
+            <circle cx="68" cy="${liquidY - 8}" r="14" fill="${foamColor}" />
+            <circle cx="88" cy="${liquidY - 7}" r="13" fill="${foamColor}" />
+            <circle cx="106" cy="${liquidY - 5}" r="10" fill="${foamColor}" />
+            <circle cx="72" cy="${liquidY - 9}" r="9" fill="#FFFFFF" opacity="0.5" />
+          </g>
+        ` : ''}
+      </g>
 
       <!-- Pour Stream Group -->
       <g class="pour-stream-group ${isPouring ? 'is-active' : ''}">
@@ -303,23 +300,22 @@ function renderWheatGlass(pct, color, isPouring, id) {
       <path d="M 50 30 Q 30 110, 62 170 L 60 220 Q 80 225, 100 220 L 98 170 Q 130 110, 110 30 Z" 
             fill="#1A202C" opacity="0.6" stroke="#CBD5E0" stroke-width="2" />
 
-      ${pct > 0 ? `
-        <g clip-path="url(#wheatGlassClip_${id})">
-          <rect x="25" y="${liquidY}" width="110" height="${240 - liquidY}" ${fillStyle} class="beer-liquid-rect" />
-          <rect x="80" y="${liquidY}" width="55" height="${240 - liquidY}" fill="rgba(0, 0, 0, 0.22)" class="beer-liquid-shadow" />
-          ${renderCarbonationBubbles(45, 115, 215, liquidY, 6)}
-          ${!isWater ? `
-            <g class="beer-cloud-foam">
-              <rect x="25" y="${liquidY - 8}" width="110" height="16" fill="${foamColor}" opacity="0.9" />
-              <circle cx="48" cy="${liquidY - 5}" r="11" fill="${foamColor}" />
-              <circle cx="68" cy="${liquidY - 8}" r="14" fill="${foamColor}" />
-              <circle cx="88" cy="${liquidY - 7}" r="13" fill="${foamColor}" />
-              <circle cx="106" cy="${liquidY - 5}" r="10" fill="${foamColor}" />
-              <circle cx="72" cy="${liquidY - 9}" r="9" fill="#FFFFFF" opacity="0.5" />
-            </g>
-          ` : ''}
-        </g>
-      ` : ''}
+      <!-- Liquid Fill with Two-Tone SRM Split & Clipped Foam Head -->
+      <g clip-path="url(#wheatGlassClip_${id})">
+        <rect x="25" y="${liquidY}" width="110" height="${240 - liquidY}" ${fillStyle} class="beer-liquid-rect" />
+        <rect x="80" y="${liquidY}" width="55" height="${240 - liquidY}" fill="rgba(0, 0, 0, 0.22)" class="beer-liquid-shadow" />
+        ${renderCarbonationBubbles(45, 115, 215, liquidY, 6)}
+        ${!isWater ? `
+          <g class="beer-cloud-foam">
+            <rect x="25" y="${liquidY - 8}" width="110" height="16" fill="${foamColor}" opacity="0.9" />
+            <circle cx="48" cy="${liquidY - 5}" r="11" fill="${foamColor}" />
+            <circle cx="68" cy="${liquidY - 8}" r="14" fill="${foamColor}" />
+            <circle cx="88" cy="${liquidY - 7}" r="13" fill="${foamColor}" />
+            <circle cx="106" cy="${liquidY - 5}" r="10" fill="${foamColor}" />
+            <circle cx="72" cy="${liquidY - 9}" r="9" fill="#FFFFFF" opacity="0.5" />
+          </g>
+        ` : ''}
+      </g>
 
       <g class="pour-stream-group ${isPouring ? 'is-active' : ''}">
         <rect x="76" y="0" width="8" height="${liquidY + 10}" fill="${isWater ? 'rgba(224, 247, 250, 0.85)' : color}" rx="4" class="liquid-pour-stream-bar" />
@@ -357,23 +353,22 @@ function renderTulipGlass(pct, color, isPouring, id) {
       <path d="M 52 40 C 40 90, 30 150, 80 170 C 130 150, 120 90, 108 40 Z" 
             fill="#1A202C" opacity="0.6" stroke="#CBD5E0" stroke-width="2" />
 
-      ${pct > 0 ? `
-        <g clip-path="url(#tulipGlassClip_${id})">
-          <rect x="25" y="${liquidY}" width="110" height="${220 - liquidY}" ${fillStyle} class="beer-liquid-rect" />
-          <rect x="80" y="${liquidY}" width="55" height="${220 - liquidY}" fill="rgba(0, 0, 0, 0.22)" class="beer-liquid-shadow" />
-          ${renderCarbonationBubbles(45, 115, 165, liquidY, 6)}
-          ${!isWater ? `
-            <g class="beer-cloud-foam">
-              <rect x="25" y="${liquidY - 8}" width="110" height="16" fill="${foamColor}" opacity="0.9" />
-              <circle cx="48" cy="${liquidY - 5}" r="11" fill="${foamColor}" />
-              <circle cx="68" cy="${liquidY - 8}" r="14" fill="${foamColor}" />
-              <circle cx="88" cy="${liquidY - 7}" r="13" fill="${foamColor}" />
-              <circle cx="106" cy="${liquidY - 5}" r="10" fill="${foamColor}" />
-              <circle cx="72" cy="${liquidY - 9}" r="9" fill="#FFFFFF" opacity="0.5" />
-            </g>
-          ` : ''}
-        </g>
-      ` : ''}
+      <!-- Liquid Fill with Two-Tone SRM Split & Clipped Foam Head -->
+      <g clip-path="url(#tulipGlassClip_${id})">
+        <rect x="25" y="${liquidY}" width="110" height="${220 - liquidY}" ${fillStyle} class="beer-liquid-rect" />
+        <rect x="80" y="${liquidY}" width="55" height="${220 - liquidY}" fill="rgba(0, 0, 0, 0.22)" class="beer-liquid-shadow" />
+        ${renderCarbonationBubbles(45, 115, 165, liquidY, 6)}
+        ${!isWater ? `
+          <g class="beer-cloud-foam">
+            <rect x="25" y="${liquidY - 8}" width="110" height="16" fill="${foamColor}" opacity="0.9" />
+            <circle cx="48" cy="${liquidY - 5}" r="11" fill="${foamColor}" />
+            <circle cx="68" cy="${liquidY - 8}" r="14" fill="${foamColor}" />
+            <circle cx="88" cy="${liquidY - 7}" r="13" fill="${foamColor}" />
+            <circle cx="106" cy="${liquidY - 5}" r="10" fill="${foamColor}" />
+            <circle cx="72" cy="${liquidY - 9}" r="9" fill="#FFFFFF" opacity="0.5" />
+          </g>
+        ` : ''}
+      </g>
 
       <g class="pour-stream-group ${isPouring ? 'is-active' : ''}">
         <rect x="76" y="0" width="8" height="${liquidY + 10}" fill="${isWater ? 'rgba(224, 247, 250, 0.85)' : color}" rx="4" class="liquid-pour-stream-bar" />
@@ -413,23 +408,22 @@ function renderMug(pct, color, isPouring, id) {
       <line x1="80" y1="50" x2="80" y2="220" stroke="#718096" stroke-width="1.5" opacity="0.4" />
       <line x1="100" y1="50" x2="100" y2="220" stroke="#718096" stroke-width="1.5" opacity="0.4" />
 
-      ${pct > 0 ? `
-        <g clip-path="url(#mugGlassClip_${id})">
-          <rect x="35" y="${liquidY}" width="90" height="${220 - liquidY}" ${fillStyle} class="beer-liquid-rect" />
-          <rect x="80" y="${liquidY}" width="45" height="${220 - liquidY}" fill="rgba(0, 0, 0, 0.22)" class="beer-liquid-shadow" />
-          ${renderCarbonationBubbles(45, 115, 210, liquidY, 6)}
-          ${!isWater ? `
-            <g class="beer-cloud-foam">
-              <rect x="40" y="${liquidY - 8}" width="80" height="16" fill="${foamColor}" opacity="0.9" />
-              <circle cx="52" cy="${liquidY - 5}" r="10" fill="${foamColor}" />
-              <circle cx="68" cy="${liquidY - 8}" r="13" fill="${foamColor}" />
-              <circle cx="86" cy="${liquidY - 7}" r="13" fill="${foamColor}" />
-              <circle cx="102" cy="${liquidY - 5}" r="10" fill="${foamColor}" />
-              <circle cx="72" cy="${liquidY - 9}" r="8" fill="#FFFFFF" opacity="0.5" />
-            </g>
-          ` : ''}
-        </g>
-      ` : ''}
+      <!-- Liquid Fill with Two-Tone SRM Split & Clipped Foam Head -->
+      <g clip-path="url(#mugGlassClip_${id})">
+        <rect x="35" y="${liquidY}" width="90" height="${220 - liquidY}" ${fillStyle} class="beer-liquid-rect" />
+        <rect x="80" y="${liquidY}" width="45" height="${220 - liquidY}" fill="rgba(0, 0, 0, 0.22)" class="beer-liquid-shadow" />
+        ${renderCarbonationBubbles(45, 115, 210, liquidY, 6)}
+        ${!isWater ? `
+          <g class="beer-cloud-foam">
+            <rect x="40" y="${liquidY - 8}" width="80" height="16" fill="${foamColor}" opacity="0.9" />
+            <circle cx="52" cy="${liquidY - 5}" r="10" fill="${foamColor}" />
+            <circle cx="68" cy="${liquidY - 8}" r="13" fill="${foamColor}" />
+            <circle cx="86" cy="${liquidY - 7}" r="13" fill="${foamColor}" />
+            <circle cx="102" cy="${liquidY - 5}" r="10" fill="${foamColor}" />
+            <circle cx="72" cy="${liquidY - 9}" r="8" fill="#FFFFFF" opacity="0.5" />
+          </g>
+        ` : ''}
+      </g>
 
       <g class="pour-stream-group ${isPouring ? 'is-active' : ''}">
         <rect x="76" y="0" width="8" height="${liquidY + 10}" fill="${isWater ? 'rgba(224, 247, 250, 0.85)' : color}" rx="4" class="liquid-pour-stream-bar" />
@@ -465,23 +459,22 @@ function renderStoutGlass(pct, color, isPouring, id) {
       <path d="M 52 45 C 44 80, 40 120, 58 175 L 56 220 Q 80 225, 104 220 L 102 175 C 120 120, 116 80, 108 45 Z" 
             fill="#1A202C" opacity="0.6" stroke="#CBD5E0" stroke-width="2" />
 
-      ${pct > 0 ? `
-        <g clip-path="url(#stoutGlassClip_${id})">
-          <rect x="25" y="${liquidY}" width="110" height="${230 - liquidY}" ${fillStyle} class="beer-liquid-rect" />
-          <rect x="80" y="${liquidY}" width="55" height="${230 - liquidY}" fill="rgba(0, 0, 0, 0.22)" class="beer-liquid-shadow" />
-          ${renderCarbonationBubbles(48, 112, 215, liquidY, 6)}
-          ${!isWater ? `
-            <g class="beer-cloud-foam">
-              <rect x="25" y="${liquidY - 8}" width="110" height="16" fill="${foamColor}" opacity="0.9" />
-              <circle cx="48" cy="${liquidY - 5}" r="11" fill="${foamColor}" />
-              <circle cx="68" cy="${liquidY - 8}" r="14" fill="${foamColor}" />
-              <circle cx="88" cy="${liquidY - 7}" r="13" fill="${foamColor}" />
-              <circle cx="106" cy="${liquidY - 5}" r="10" fill="${foamColor}" />
-              <circle cx="72" cy="${liquidY - 9}" r="9" fill="#FFFFFF" opacity="0.5" />
-            </g>
-          ` : ''}
-        </g>
-      ` : ''}
+      <!-- Liquid Fill with Two-Tone SRM Split & Clipped Foam Head -->
+      <g clip-path="url(#stoutGlassClip_${id})">
+        <rect x="25" y="${liquidY}" width="110" height="${230 - liquidY}" ${fillStyle} class="beer-liquid-rect" />
+        <rect x="80" y="${liquidY}" width="55" height="${230 - liquidY}" fill="rgba(0, 0, 0, 0.22)" class="beer-liquid-shadow" />
+        ${renderCarbonationBubbles(48, 112, 215, liquidY, 6)}
+        ${!isWater ? `
+          <g class="beer-cloud-foam">
+            <rect x="25" y="${liquidY - 8}" width="110" height="16" fill="${foamColor}" opacity="0.9" />
+            <circle cx="48" cy="${liquidY - 5}" r="11" fill="${foamColor}" />
+            <circle cx="68" cy="${liquidY - 8}" r="14" fill="${foamColor}" />
+            <circle cx="88" cy="${liquidY - 7}" r="13" fill="${foamColor}" />
+            <circle cx="106" cy="${liquidY - 5}" r="10" fill="${foamColor}" />
+            <circle cx="72" cy="${liquidY - 9}" r="9" fill="#FFFFFF" opacity="0.5" />
+          </g>
+        ` : ''}
+      </g>
 
       <g class="pour-stream-group ${isPouring ? 'is-active' : ''}">
         <rect x="76" y="0" width="8" height="${liquidY + 10}" fill="${isWater ? 'rgba(224, 247, 250, 0.85)' : color}" rx="4" class="liquid-pour-stream-bar" />
@@ -519,23 +512,22 @@ function renderSnifter(pct, color, isPouring, id) {
       <path d="M 58 55 C 32 105, 32 155, 80 175 C 128 155, 128 105, 102 55 Z" 
             fill="#1A202C" opacity="0.6" stroke="#CBD5E0" stroke-width="2" />
 
-      ${pct > 0 ? `
-        <g clip-path="url(#snifterGlassClip_${id})">
-          <rect x="20" y="${liquidY}" width="120" height="${210 - liquidY}" ${fillStyle} class="beer-liquid-rect" />
-          <rect x="80" y="${liquidY}" width="60" height="${210 - liquidY}" fill="rgba(0, 0, 0, 0.22)" class="beer-liquid-shadow" />
-          ${renderCarbonationBubbles(42, 118, 170, liquidY, 6)}
-          ${!isWater ? `
-            <g class="beer-cloud-foam">
-              <rect x="20" y="${liquidY - 8}" width="120" height="16" fill="${foamColor}" opacity="0.9" />
-              <circle cx="48" cy="${liquidY - 5}" r="11" fill="${foamColor}" />
-              <circle cx="68" cy="${liquidY - 8}" r="14" fill="${foamColor}" />
-              <circle cx="88" cy="${liquidY - 7}" r="13" fill="${foamColor}" />
-              <circle cx="106" cy="${liquidY - 5}" r="10" fill="${foamColor}" />
-              <circle cx="72" cy="${liquidY - 9}" r="9" fill="#FFFFFF" opacity="0.5" />
-            </g>
-          ` : ''}
-        </g>
-      ` : ''}
+      <!-- Liquid Fill with Two-Tone SRM Split & Clipped Foam Head -->
+      <g clip-path="url(#snifterGlassClip_${id})">
+        <rect x="20" y="${liquidY}" width="120" height="${210 - liquidY}" ${fillStyle} class="beer-liquid-rect" />
+        <rect x="80" y="${liquidY}" width="60" height="${210 - liquidY}" fill="rgba(0, 0, 0, 0.22)" class="beer-liquid-shadow" />
+        ${renderCarbonationBubbles(42, 118, 170, liquidY, 6)}
+        ${!isWater ? `
+          <g class="beer-cloud-foam">
+            <rect x="20" y="${liquidY - 8}" width="120" height="16" fill="${foamColor}" opacity="0.9" />
+            <circle cx="48" cy="${liquidY - 5}" r="11" fill="${foamColor}" />
+            <circle cx="68" cy="${liquidY - 8}" r="14" fill="${foamColor}" />
+            <circle cx="88" cy="${liquidY - 7}" r="13" fill="${foamColor}" />
+            <circle cx="106" cy="${liquidY - 5}" r="10" fill="${foamColor}" />
+            <circle cx="72" cy="${liquidY - 9}" r="9" fill="#FFFFFF" opacity="0.5" />
+          </g>
+        ` : ''}
+      </g>
 
       <g class="pour-stream-group ${isPouring ? 'is-active' : ''}">
         <rect x="76" y="0" width="8" height="${liquidY + 10}" fill="${isWater ? 'rgba(224, 247, 250, 0.85)' : color}" rx="4" class="liquid-pour-stream-bar" />
