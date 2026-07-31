@@ -282,7 +282,11 @@ const server = http.createServer(async (req, res) => {
         const updateTapEnabled = db.prepare('UPDATE taps SET enabled = ? WHERE tap_id = ?');
         for (let i = 1; i <= 6; i++) {
           if (tap_visibilities[i] !== undefined) {
-            updateTapEnabled.run(tap_visibilities[i] ? 1 : 0, i);
+            const isEnabled = tap_visibilities[i] ? 1 : 0;
+            updateTapEnabled.run(isEnabled, i);
+            haClient.callHAService('input_boolean', isEnabled ? 'turn_on' : 'turn_off', {
+              entity_id: `input_boolean.tap_${i}_enabled`
+            }).catch(err => {});
           }
         }
       }
@@ -323,13 +327,20 @@ const server = http.createServer(async (req, res) => {
 
       // Auto-enable tap if a batch is assigned
       let shouldEnable = body.enabled !== undefined ? (body.enabled ? 1 : 0) : null;
-      if (body.batch_option !== undefined && body.batch_option !== '') {
-        shouldEnable = 1;
+      let extractedBatchId = null;
+      if (body.batch_option !== undefined) {
+        if (body.batch_option !== '') {
+          shouldEnable = 1;
+          extractedBatchId = body.batch_option.split('|')[0].trim();
+        } else {
+          extractedBatchId = '';
+        }
       }
       
       db.prepare(`
         UPDATE taps SET
           enabled = COALESCE(?, enabled),
+          batch_id = COALESCE(?, batch_id),
           graphic = COALESCE(?, graphic),
           override_enabled = COALESCE(?, override_enabled),
           override_name = COALESCE(?, override_name),
@@ -347,6 +358,7 @@ const server = http.createServer(async (req, res) => {
         WHERE tap_id = ?
       `).run(
         shouldEnable,
+        extractedBatchId,
         body.graphic,
         body.override_enabled !== undefined ? (body.override_enabled ? 1 : 0) : null,
         body.override_name !== undefined ? body.override_name : null,
@@ -364,11 +376,25 @@ const server = http.createServer(async (req, res) => {
         tapId
       );
 
+      // Sync Home Assistant input_boolean.tap_N_enabled
+      const haEnabledService = (shouldEnable === 1 || shouldEnable === null) ? 'turn_on' : 'turn_off';
+      await haClient.callHAService('input_boolean', haEnabledService, {
+        entity_id: `input_boolean.tap_${tapId}_enabled`
+      }).catch(err => console.warn(`[HA Warning] Enable boolean call failed:`, err.message));
+
       if (body.batch_option !== undefined) {
         await haClient.callHAService('select', 'select_option', {
           entity_id: `select.tap_${tapId}_batch_select`,
           option: body.batch_option
-        }).catch(err => console.warn(`[HA Call Warning] Select option failed:`, err.message));
+        }).catch(err => console.warn(`[HA Warning] Select option failed:`, err.message));
+
+        const batchId = body.batch_option.split('|')[0].trim();
+        if (batchId) {
+          await haClient.callHAService('input_text', 'set_value', {
+            entity_id: `input_text.tap_${tapId}_batch`,
+            value: batchId
+          }).catch(err => console.warn(`[HA Warning] Batch text set failed:`, err.message));
+        }
       }
 
       broadcastSSE('settings_updated', getFullStateSnapshot());
@@ -397,6 +423,7 @@ const server = http.createServer(async (req, res) => {
 
       db.prepare(`
         UPDATE taps SET
+          batch_id = NULL,
           override_enabled = 0,
           override_name = NULL,
           override_style = NULL,
@@ -431,6 +458,7 @@ const server = http.createServer(async (req, res) => {
     try {
       db.prepare(`
         UPDATE taps SET
+          batch_id = NULL,
           override_enabled = 0,
           override_name = NULL,
           override_style = NULL,

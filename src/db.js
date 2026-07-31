@@ -35,6 +35,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS taps (
     tap_id INTEGER PRIMARY KEY CHECK (tap_id BETWEEN 1 AND 6),
     enabled INTEGER DEFAULT 1,
+    batch_id TEXT,
     graphic TEXT DEFAULT 'corny_keg',
     override_enabled INTEGER DEFAULT 0,
     override_name TEXT,
@@ -53,6 +54,7 @@ db.exec(`
 `);
 
 // Safely alter existing database tables if columns don't exist
+try { db.exec(`ALTER TABLE taps ADD COLUMN batch_id TEXT;`); } catch (e) {}
 try { db.exec(`ALTER TABLE taps ADD COLUMN display_unit TEXT DEFAULT 'percent';`); } catch (e) {}
 try { db.exec(`ALTER TABLE taps ADD COLUMN custom_pour_size REAL DEFAULT 12.0;`); } catch (e) {}
 

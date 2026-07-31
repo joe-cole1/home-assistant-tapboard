@@ -154,6 +154,16 @@ export class HAClient extends EventEmitter {
         }
       }
 
+      // Ensure HA input_boolean.tap_N_enabled matches active taps in database
+      try {
+        const activeTaps = db.prepare('SELECT tap_id FROM taps WHERE enabled = 1').all();
+        for (const t of activeTaps) {
+          this.callHAService('input_boolean', 'turn_on', {
+            entity_id: `input_boolean.tap_${t.tap_id}_enabled`
+          }).catch(err => {});
+        }
+      } catch (e) {}
+
       console.log(`[HAClient] Hydrated ${this.statesMap.size} entities from snapshot.`);
 
       console.log(`[HAClient] Step 3: Replaying ${this.eventQueue.length} buffered queue events...`);
@@ -201,7 +211,6 @@ export class HAClient extends EventEmitter {
     const rawValue = parseFloat(stateObj.state);
     const tracker = this.pourTracker.get(tapId);
 
-    // Stage 1: Outlier & Glitch Suppression
     if (isNaN(rawValue) || stateObj.state === 'unavailable' || stateObj.state === 'unknown') {
       return;
     }
@@ -214,17 +223,14 @@ export class HAClient extends EventEmitter {
 
     const delta = rawValue - tracker.lastVolume;
 
-    // Reject extreme instantaneous spikes (> 50 oz jump)
     if (Math.abs(delta) > 50) {
       return;
     }
 
-    // Stage 2: Noise Floor Hysteresis (Ignore micro-jitter |ΔV| < 0.5 oz)
     if (Math.abs(delta) < 0.5 && !tracker.isPouring) {
       return;
     }
 
-    // Stage 3: Pour Trigger Window (Detect drop >= 0.8 oz within 3s)
     if (delta <= -0.8 && !tracker.isPouring) {
       tracker.isPouring = true;
       tracker.startVolume = tracker.lastVolume;
@@ -240,7 +246,6 @@ export class HAClient extends EventEmitter {
         tracker.lastDropTime = Date.now();
       }
 
-      // Stage 4: Settling & Session Finalization (5s quiet period)
       if (tracker.settleTimer) clearTimeout(tracker.settleTimer);
       tracker.settleTimer = setTimeout(() => {
         this.finalizePourSession(tapId);
@@ -323,9 +328,7 @@ export class HAClient extends EventEmitter {
           status = excluded.status,
           last_synced_at = datetime('now')
       `).run(batchId, recipeName, style, brewDate, og, fg, abv, ibu, srm, status);
-    } catch (e) {
-      // Safe fallback if optional fields are missing
-    }
+    } catch (e) {}
   }
 
   getFormattedState() {
