@@ -167,7 +167,7 @@ function renderCornyKeg(pct, color, isPouring, id) {
           </linearGradient>
         ` : ''}
         <clipPath id="kegLiquidClip_${id}">
-          <rect x="35" y="65" width="90" height="155" rx="6" />
+          <rect x="35" y="45" width="90" height="175" rx="6" />
         </clipPath>
       </defs>
 
@@ -231,7 +231,7 @@ function renderPintGlass(pct, color, isPouring, id) {
     <svg viewBox="0 0 160 260" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <clipPath id="pintGlassClip_${id}">
-          <polygon points="46,45 114,45 104,225 56,225" />
+          <polygon points="30,0 130,0 114,45 104,225 56,225 46,45" />
         </clipPath>
       </defs>
 
@@ -292,7 +292,7 @@ function renderWheatGlass(pct, color, isPouring, id) {
           </linearGradient>
         ` : ''}
         <clipPath id="wheatGlassClip_${id}">
-          <path d="M 50 30 Q 30 110, 62 170 L 60 220 Q 80 225, 100 220 L 98 170 Q 130 110, 110 30 Z" />
+          <path d="M 30 0 L 130 0 L 110 30 Q 130 110, 98 170 L 100 220 Q 80 225, 60 220 L 62 170 Q 30 110, 50 30 Z" />
         </clipPath>
       </defs>
 
@@ -343,7 +343,7 @@ function renderTulipGlass(pct, color, isPouring, id) {
     <svg viewBox="0 0 160 260" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <clipPath id="tulipGlassClip_${id}">
-          <path d="M 52 40 C 40 90, 30 150, 80 170 C 130 150, 120 90, 108 40 C 95 38, 65 38, 52 40 Z" />
+          <path d="M 30 0 L 130 0 L 108 40 C 120 90, 130 150, 80 170 C 30 150, 40 90, 52 40 Z" />
         </clipPath>
       </defs>
 
@@ -396,7 +396,7 @@ function renderMug(pct, color, isPouring, id) {
     <svg viewBox="0 0 160 260" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <clipPath id="mugGlassClip_${id}">
-          <rect x="42" y="55" width="76" height="160" rx="6" />
+          <path d="M 30 0 L 130 0 L 118 55 L 118 215 C 118 220, 42 220, 42 215 L 42 55 Z" />
         </clipPath>
       </defs>
 
@@ -451,7 +451,7 @@ function renderStoutGlass(pct, color, isPouring, id) {
     <svg viewBox="0 0 160 260" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <clipPath id="stoutGlassClip_${id}">
-          <path d="M 52 45 C 44 80, 40 120, 58 175 L 56 220 Q 80 225, 104 220 L 102 175 C 120 120, 116 80, 108 45 Z" />
+          <path d="M 30 0 L 130 0 L 108 45 C 116 80, 120 120, 102 175 L 104 220 Q 80 225, 56 220 L 58 175 C 40 120, 44 80, 52 45 Z" />
         </clipPath>
       </defs>
 
@@ -502,7 +502,7 @@ function renderSnifter(pct, color, isPouring, id) {
     <svg viewBox="0 0 160 260" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <clipPath id="snifterGlassClip_${id}">
-          <path d="M 58 55 C 32 105, 32 155, 80 175 C 128 155, 128 105, 102 55 Z" />
+          <path d="M 30 0 L 130 0 L 102 55 C 128 105, 128 155, 80 175 C 32 155, 32 105, 58 55 Z" />
         </clipPath>
       </defs>
 
