@@ -225,34 +225,42 @@ export class HAClient extends EventEmitter {
 
   // 4-Stage Noise Filtering & Pour Session Tracking Algorithm
   apply4StageNoiseFilter(tapId, stateObj) {
-    const rawValue = parseFloat(stateObj.state);
+    const rawNum = parseFloat(stateObj.state);
+    if (isNaN(rawNum) || stateObj.state === 'unavailable' || stateObj.state === 'unknown') {
+      return;
+    }
+
+    const unit = (stateObj.attributes?.unit_of_measurement || '').toLowerCase();
+    // Convert ml to fl_oz so thresholds are unified regardless of scale sensor unit
+    const isMl = unit.includes('ml') || rawNum > 350;
+    const ozValue = isMl ? (rawNum / 29.5735) : rawNum;
+
     const tracker = this.pourTracker.get(tapId);
 
-    if (isNaN(rawValue) || stateObj.state === 'unavailable' || stateObj.state === 'unknown') {
-      return;
-    }
-
     if (tracker.lastVolume === 0) {
-      tracker.lastVolume = rawValue;
-      tracker.currentVolume = rawValue;
+      tracker.lastVolume = ozValue;
+      tracker.currentVolume = ozValue;
       return;
     }
 
-    const delta = rawValue - tracker.lastVolume;
+    const delta = ozValue - tracker.lastVolume;
 
-    if (Math.abs(delta) > 50) {
+    // Ignore single-frame telemetry spikes (> 30 oz / 887 ml)
+    if (Math.abs(delta) > 30) {
       return;
     }
 
-    if (Math.abs(delta) < 0.5 && !tracker.isPouring) {
+    // Ignore idle scale jitter (< 0.15 oz / ~4 ml)
+    if (Math.abs(delta) < 0.15 && !tracker.isPouring) {
       return;
     }
 
-    if (delta <= -0.8 && !tracker.isPouring) {
+    // Trigger pour start if weight drops by > 0.3 oz (~9 ml)
+    if (delta <= -0.3 && !tracker.isPouring) {
       tracker.isPouring = true;
       tracker.startVolume = tracker.lastVolume;
       tracker.totalPoured = 0;
-      console.log(`[Tap ${tapId}] Pour started! Initial volume: ${tracker.startVolume} oz`);
+      console.log(`[Tap ${tapId}] Pour started! Initial volume: ${tracker.startVolume.toFixed(1)} oz`);
 
       this.emit('pour_start', { tapId, startVolume: tracker.startVolume });
     }
@@ -266,11 +274,11 @@ export class HAClient extends EventEmitter {
       if (tracker.settleTimer) clearTimeout(tracker.settleTimer);
       tracker.settleTimer = setTimeout(() => {
         this.finalizePourSession(tapId);
-      }, 5000);
+      }, 1500);
     }
 
-    tracker.lastVolume = rawValue;
-    tracker.currentVolume = rawValue;
+    tracker.lastVolume = ozValue;
+    tracker.currentVolume = ozValue;
   }
 
   finalizePourSession(tapId) {
