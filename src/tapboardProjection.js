@@ -1,12 +1,13 @@
 const TAP_IDS = Object.freeze([1, 2, 3, 4, 5, 6]);
 
-export const tapEntityIds = tapId => Object.freeze({
-  fill: `sensor.tap_${tapId}_fill`,
-  volume: `sensor.tap_${tapId}_fl_oz`,
-  pints: `sensor.tap_${tapId}_pints_remaining`,
-  batch: `sensor.tap_${tapId}_batch_info`,
-  batchSelection: `select.tap_${tapId}_batch_select`
-});
+export const tapEntityIds = (tapId) =>
+  Object.freeze({
+    fill: `sensor.tap_${tapId}_fill`,
+    volume: `sensor.tap_${tapId}_fl_oz`,
+    pints: `sensor.tap_${tapId}_pints_remaining`,
+    batch: `sensor.tap_${tapId}_batch_info`,
+    batchSelection: `select.tap_${tapId}_batch_select`
+  });
 
 const EMPTY_TAP_STATE = Object.freeze({
   fillPercent: null,
@@ -66,7 +67,7 @@ export function projectBatchSelection(entity) {
   const attributes = entity?.attributes && typeof entity.attributes === 'object' ? entity.attributes : {};
   return {
     value: source && typeof source.state === 'string' ? source.state : '',
-    options: Array.isArray(attributes.options) ? attributes.options.filter(option => typeof option === 'string') : []
+    options: Array.isArray(attributes.options) ? attributes.options.filter((option) => typeof option === 'string') : []
   };
 }
 
@@ -82,7 +83,7 @@ export function projectTapState(statesMap, tapId) {
 }
 
 export function createTapStatesProjection(statesMap) {
-  return Object.fromEntries(TAP_IDS.map(tapId => [String(tapId), projectTapState(statesMap, tapId)]));
+  return Object.fromEntries(TAP_IDS.map((tapId) => [String(tapId), projectTapState(statesMap, tapId)]));
 }
 
 export function projectTapStateChange(entityId, entity) {

@@ -1,19 +1,19 @@
 /* =====================================================================
- * TAP BOARD STYLESHEET (styles.css) - v3.5.4
+ * TAP BOARD STYLESHEET (styles.css)
  * Reference-matched design system supporting customizable themes, Google Fonts,
  * responsive tap grid, SVG carbonation animations, and per-tap settings studio.
  * ===================================================================== */
 
 :root {
   /* Default: Modern Dark Theme Tokens */
-  --bg-main: #0B0F19;
+  --bg-main: #0b0f19;
   --bg-header: #111827;
   --bg-card: rgba(17, 24, 39, 0.9);
   --border-color: rgba(255, 255, 255, 0.2);
-  --accent-color: #FBC02D;
-  --text-main: #FFFFFF;
-  --text-muted: #9CA3AF;
-  --text-badge: #1E2530;
+  --accent-color: #fbc02d;
+  --text-main: #ffffff;
+  --text-muted: #9ca3af;
+  --text-badge: #1e2530;
   --card-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
   --font-title: 'Outfit', cursive, sans-serif;
   --font-body: 'Inter', sans-serif;
@@ -23,45 +23,45 @@
  * THEME PRESETS
  * --------------------------------------------------------------------- */
 
-body[data-theme="modern_dark"] {
-  --bg-main: #0B0F19;
+body[data-theme='modern_dark'] {
+  --bg-main: #0b0f19;
   --bg-header: #111827;
   --bg-card: rgba(17, 24, 39, 0.9);
   --border-color: rgba(255, 255, 255, 0.2);
-  --accent-color: #FBC02D;
-  --text-main: #FFFFFF;
-  --text-muted: #9CA3AF;
+  --accent-color: #fbc02d;
+  --text-main: #ffffff;
+  --text-muted: #9ca3af;
 }
 
-body[data-theme="warm_pub"] {
-  --bg-main: #1C0A00;
-  --bg-header: #2D1204;
+body[data-theme='warm_pub'] {
+  --bg-main: #1c0a00;
+  --bg-header: #2d1204;
   --bg-card: rgba(45, 18, 4, 0.9);
   --border-color: rgba(212, 175, 55, 0.3);
-  --accent-color: #FBC02D;
-  --text-main: #FDF6E2;
-  --text-muted: #C5A880;
+  --accent-color: #fbc02d;
+  --text-main: #fdf6e2;
+  --text-muted: #c5a880;
 }
 
-body[data-theme="cyberpunk"] {
-  --bg-main: #0D0221;
-  --bg-header: #19053B;
+body[data-theme='cyberpunk'] {
+  --bg-main: #0d0221;
+  --bg-header: #19053b;
   --bg-card: rgba(25, 5, 59, 0.85);
-  --border-color: #00F0FF;
-  --accent-color: #FF007F;
-  --text-main: #00F0FF;
-  --text-muted: #B800FF;
+  --border-color: #00f0ff;
+  --accent-color: #ff007f;
+  --text-main: #00f0ff;
+  --text-muted: #b800ff;
   --card-shadow: 0 0 20px rgba(0, 240, 255, 0.3);
 }
 
-body[data-theme="light_minimal"] {
-  --bg-main: #F8FAFC;
-  --bg-header: #FFFFFF;
-  --bg-card: #FFFFFF;
-  --border-color: #CBD5E1;
-  --accent-color: #D97706;
-  --text-main: #0F172A;
-  --text-muted: #64748B;
+body[data-theme='light_minimal'] {
+  --bg-main: #f8fafc;
+  --bg-header: #ffffff;
+  --bg-card: #ffffff;
+  --border-color: #cbd5e1;
+  --accent-color: #d97706;
+  --text-main: #0f172a;
+  --text-muted: #64748b;
   --card-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
 }
 
@@ -75,13 +75,16 @@ body[data-theme="light_minimal"] {
   padding: 0;
 }
 
-html, body {
+html,
+body {
   height: 100%;
   font-family: var(--font-body);
   background-color: var(--bg-main);
   color: var(--text-main);
   overflow-x: hidden;
-  transition: background-color 0.3s ease, color 0.3s ease;
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease;
 }
 
 body {
@@ -133,6 +136,26 @@ body {
   color: var(--text-muted);
 }
 
+.header-info-badge.is-updating {
+  animation: liveUpdatePulse 0.45s ease-out;
+}
+
+@keyframes liveUpdatePulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.55);
+    transform: scale(1);
+  }
+  45% {
+    box-shadow: 0 0 0 7px rgba(76, 175, 80, 0);
+    transform: scale(1.04);
+    color: #81c784;
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(76, 175, 80, 0);
+    transform: scale(1);
+  }
+}
+
 .btn-icon {
   background: transparent;
   border: none;
@@ -141,7 +164,9 @@ body {
   cursor: pointer;
   padding: 0.4rem;
   border-radius: 50%;
-  transition: color 0.2s, background 0.2s;
+  transition:
+    color 0.2s,
+    background 0.2s;
 }
 
 .btn-icon:hover {
@@ -166,10 +191,10 @@ body {
 }
 
 @media (min-width: 768px) {
-  .tap-grid[data-count="3"] {
+  .tap-grid[data-count='3'] {
     grid-template-columns: repeat(3, 1fr);
   }
-  .tap-grid[data-count="4"] {
+  .tap-grid[data-count='4'] {
     grid-template-columns: repeat(4, 1fr);
   }
 }
@@ -237,12 +262,14 @@ body {
   box-shadow: var(--card-shadow);
   position: relative;
   overflow: hidden;
-  transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.4s ease, border-color 0.4s ease, background-color 0.3s ease;
+  transition:
+    box-shadow 0.4s ease,
+    border-color 0.4s ease,
+    background-color 0.3s ease;
 }
 
 .tap-card:hover {
   border-color: var(--accent-color);
-  transform: translateY(-3px);
 }
 
 /* ---------------------------------------------------------------------
@@ -252,16 +279,26 @@ body {
 .tap-card.is-pouring {
   position: relative;
   z-index: 5;
-  border-color: var(--beer-srm-color, #FBC02D) !important;
+  border-color: var(--beer-srm-color, #fbc02d) !important;
   border-style: solid !important;
   transform: translateY(-8px) scale(1.02) !important;
-  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.65), 0 0 28px var(--beer-srm-color, #FBC02D) !important;
+  box-shadow:
+    0 18px 38px rgba(0, 0, 0, 0.65),
+    0 0 28px var(--beer-srm-color, #fbc02d) !important;
   animation: pourCardGlowPulse 1.6s infinite ease-in-out alternate;
 }
 
 @keyframes pourCardGlowPulse {
-  0% { box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6), 0 0 18px var(--beer-srm-color, #FBC02D); }
-  100% { box-shadow: 0 22px 48px rgba(0, 0, 0, 0.75), 0 0 38px var(--beer-srm-color, #FBC02D); }
+  0% {
+    box-shadow:
+      0 16px 36px rgba(0, 0, 0, 0.6),
+      0 0 18px var(--beer-srm-color, #fbc02d);
+  }
+  100% {
+    box-shadow:
+      0 22px 48px rgba(0, 0, 0, 0.75),
+      0 0 38px var(--beer-srm-color, #fbc02d);
+  }
 }
 
 @property --srm-border-angle {
@@ -283,12 +320,14 @@ body {
   background: conic-gradient(
     from var(--srm-border-angle, 0deg),
     transparent 0%,
-    var(--beer-srm-color, #FBC02D) 25%,
-    #FFFFFF 50%,
-    var(--beer-srm-color, #FBC02D) 75%,
+    var(--beer-srm-color, #fbc02d) 25%,
+    #ffffff 50%,
+    var(--beer-srm-color, #fbc02d) 75%,
     transparent 100%
   );
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   z-index: 1;
@@ -298,8 +337,12 @@ body {
 }
 
 @keyframes rotateSrmBorderAngle {
-  0% { --srm-border-angle: 0deg; }
-  100% { --srm-border-angle: 360deg; }
+  0% {
+    --srm-border-angle: 0deg;
+  }
+  100% {
+    --srm-border-angle: 360deg;
+  }
 }
 
 /* Floating "NOW POURING" Badge at Base of Glass */
@@ -324,8 +367,12 @@ body {
   gap: 0.4rem;
   white-space: nowrap;
   border: 1.5px solid var(--beer-srm-color, var(--accent-color));
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5), 0 0 12px var(--beer-srm-color, var(--accent-color));
-  transition: opacity 0.4s ease, transform 0.4s ease;
+  box-shadow:
+    0 4px 15px rgba(0, 0, 0, 0.5),
+    0 0 12px var(--beer-srm-color, var(--accent-color));
+  transition:
+    opacity 0.4s ease,
+    transform 0.4s ease;
 }
 
 .tap-card.is-pouring .floating-pour-badge {
@@ -335,8 +382,18 @@ body {
 }
 
 @keyframes floatPourBadgePulse {
-  0% { transform: translateX(-50%) translateY(0) scale(1); box-shadow: 0 4px 15px rgba(0,0,0,0.5), 0 0 10px var(--beer-srm-color, var(--accent-color)); }
-  100% { transform: translateX(-50%) translateY(-3px) scale(1.05); box-shadow: 0 6px 20px rgba(0,0,0,0.6), 0 0 20px var(--beer-srm-color, var(--accent-color)); }
+  0% {
+    transform: translateX(-50%) translateY(0) scale(1);
+    box-shadow:
+      0 4px 15px rgba(0, 0, 0, 0.5),
+      0 0 10px var(--beer-srm-color, var(--accent-color));
+  }
+  100% {
+    transform: translateX(-50%) translateY(-3px) scale(1.05);
+    box-shadow:
+      0 6px 20px rgba(0, 0, 0, 0.6),
+      0 0 20px var(--beer-srm-color, var(--accent-color));
+  }
 }
 
 /* ---------------------------------------------------------------------
@@ -347,18 +404,20 @@ body {
 .tap-card .beer-liquid-shadow,
 .tap-card .beer-liquid-clip rect,
 .tap-card .beer-cloud-foam {
-  transition: y 8.0s cubic-bezier(0.25, 0.1, 0.25, 1.0),
-              height 8.0s cubic-bezier(0.25, 0.1, 0.25, 1.0),
-              transform 8.0s cubic-bezier(0.25, 0.1, 0.25, 1.0);
+  transition:
+    y 8s cubic-bezier(0.25, 0.1, 0.25, 1),
+    height 8s cubic-bezier(0.25, 0.1, 0.25, 1),
+    transform 8s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
 .tap-card.is-settling .beer-liquid-rect,
 .tap-card.is-settling .beer-liquid-shadow,
 .tap-card.is-settling .beer-liquid-clip rect,
 .tap-card.is-settling .beer-cloud-foam {
-  transition: y 2.0s ease-out,
-              height 2.0s ease-out,
-              transform 2.0s ease-out !important;
+  transition:
+    y 2s ease-out,
+    height 2s ease-out,
+    transform 2s ease-out !important;
 }
 
 .tap-card.no-anim .beer-liquid-rect,
@@ -387,8 +446,8 @@ body {
 }
 
 .tap-number-badge {
-  background-color: #FBC02D;
-  color: #1E2530;
+  background-color: #fbc02d;
+  color: #1e2530;
   font-family: var(--font-title);
   font-size: 1.15rem;
   font-weight: 800;
@@ -420,20 +479,29 @@ body.is-authenticated .tap-cog-btn {
 }
 
 .badge-low {
-  background-color: #E53935;
-  color: #FFFFFF;
+  background-color: #e53935;
+  color: #ffffff;
   animation: pulseLowKeg 1.8s infinite;
 }
 
 .badge-fresh {
-  background-color: #43A047;
-  color: #FFFFFF;
+  background-color: #43a047;
+  color: #ffffff;
 }
 
 @keyframes pulseLowKeg {
-  0% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.75; transform: scale(1.05); }
-  100% { opacity: 1; transform: scale(1); }
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.75;
+    transform: scale(1.05);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 /* Beer Title & Style Subtitle */
@@ -448,7 +516,7 @@ body.is-authenticated .tap-cog-btn {
 
 .beer-style {
   font-size: 1.15rem;
-  color: #FBC02D;
+  color: #fbc02d;
   font-weight: 700;
   margin-bottom: 1.25rem;
 }
@@ -509,9 +577,15 @@ body.is-authenticated .tap-cog-btn {
 }
 
 @keyframes tapPulse {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.03); }
-  100% { transform: scale(1); }
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.03);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 /* Animated Effervescent Carbonation Bubbles (Consumes --rise-dist) */
@@ -618,7 +692,7 @@ body.is-authenticated .tap-cog-btn {
   border: 1px solid var(--accent-color);
   padding: 1rem 1.25rem;
   border-radius: 0.75rem;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
   font-weight: 600;
   margin-bottom: 0.75rem;
   animation: fadeIn 0.3s ease;
@@ -650,6 +724,24 @@ body.is-authenticated .tap-cog-btn {
 .form-control:focus {
   outline: none;
   border-color: var(--accent-color);
+}
+
+.tap-override-number-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.tap-override-number-grid .form-group,
+.tap-override-number-grid .form-control {
+  min-width: 0;
+  width: 100%;
+}
+
+@media (max-width: 480px) {
+  .tap-override-number-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .btn-primary {

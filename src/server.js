@@ -7,6 +7,8 @@ import dotenv from 'dotenv';
 import db from './db.js';
 import { HAClient } from './haClient.js';
 import { SSEHub } from './sseHub.js';
+import { calculateKegKickForecast as calculateForecast } from './kegForecast.js';
+import { activeLifecycle, assignKegLifecycle, closeKegLifecycle } from './kegLifecycle.js';
 import {
   HttpError,
   applySecurityHeaders,
@@ -17,9 +19,19 @@ import {
   readJsonBody,
   resolvePublicPath
 } from './httpSecurity.js';
-import { ValidationError, tapId as validateTapId, validateAuth, validateCatalog, validateSettings, validateTap } from './validation.js';
+import {
+  ValidationError,
+  tapId as validateTapId,
+  validateAuth,
+  validateCatalog,
+  validateSettings,
+  validateTap
+} from './validation.js';
 
-dotenv.config(process.env.DOTENV_CONFIG_PATH ? { path: process.env.DOTENV_CONFIG_PATH } : undefined);
+dotenv.config({
+  quiet: true,
+  ...(process.env.DOTENV_CONFIG_PATH ? { path: process.env.DOTENV_CONFIG_PATH } : {})
+});
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const PUBLIC_DIR = path.resolve(process.cwd(), 'public');
@@ -35,8 +47,12 @@ const sseHub = new SSEHub();
 const authAttempts = new Map();
 
 // Helper: Check Admin Authorization Header
-function sessionDigest(token) { return `sha256:${crypto.createHash('sha256').update(token).digest('hex')}`; }
-function pruneSessions() { db.prepare("DELETE FROM admin_sessions WHERE datetime(expires_at) <= datetime('now')").run(); }
+function sessionDigest(token) {
+  return `sha256:${crypto.createHash('sha256').update(token).digest('hex')}`;
+}
+function pruneSessions() {
+  db.prepare("DELETE FROM admin_sessions WHERE datetime(expires_at) <= datetime('now')").run();
+}
 function adminPinInitialized() {
   return db.prepare('SELECT admin_pin_initialized FROM settings WHERE id = 1').get()?.admin_pin_initialized === 1;
 }
@@ -46,10 +62,14 @@ function isAuthorized(req) {
   if (!token) return false;
 
   pruneSessions();
-  const session = db.prepare(`
+  const session = db
+    .prepare(
+      `
     SELECT token FROM admin_sessions
     WHERE token = ? AND datetime(expires_at) > datetime('now')
-  `).get(sessionDigest(token));
+  `
+    )
+    .get(sessionDigest(token));
 
   return !!session;
 }
@@ -71,7 +91,9 @@ function sendJson(res, status, payload) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
   res.end(JSON.stringify(payload));
 }
-function sendError(res, status, error) { sendJson(res, status, { error }); }
+function sendError(res, status, error) {
+  sendJson(res, status, { error });
+}
 function handleError(res, error, context = 'request') {
   if (error instanceof ValidationError) {
     sendError(res, 400, error.message);
@@ -89,21 +111,8 @@ function allowedMethodsForApiPath(pathname) {
   return null;
 }
 
-// Helper: Calculate 14-Day Rolling Keg Kick Forecast with Multi-Sensor Lookup
+// Calculate a 14-day forecast from the current tap's lifecycle-scoped usage history.
 function calculateKegKickForecast(tapId) {
-  const fourteenDaysAgo = new Date(Date.now() - 14 * 86400 * 1000).toISOString();
-  
-  const stats = db.prepare(`
-    SELECT 
-      SUM(volume_poured_oz) as total_oz,
-      COUNT(DISTINCT DATE(timestamp)) as active_days,
-      MIN(timestamp) as first_pour_time
-    FROM pour_logs
-    WHERE tap_id = ? AND timestamp >= ?
-  `).get(tapId, fourteenDaysAgo);
-
-  const totalOz = stats?.total_oz || 0;
-
   let currentOz = 0;
   const ozState = haClient.statesMap.get(`sensor.tap_${tapId}_fl_oz`)?.state;
   const fillState = haClient.statesMap.get(`sensor.tap_${tapId}_fill`)?.state;
@@ -117,35 +126,34 @@ function calculateKegKickForecast(tapId) {
     currentOz = (parseFloat(fillState) / 100.0) * 640.0;
   }
 
-  let avgDailyOz = 0;
-  let isEstimatedBaseline = false;
+  return calculateForecast({ db, tapId, currentOz });
+}
 
-  if (totalOz > 0 && stats?.first_pour_time) {
-    const daysSpan = Math.max(1, (Date.now() - new Date(stats.first_pour_time).getTime()) / (86400 * 1000));
-    avgDailyOz = totalOz / Math.min(14, daysSpan);
-  } else {
-    avgDailyOz = 16.0;
-    isEstimatedBaseline = true;
-  }
-
-  if (currentOz <= 0) {
-    return { 
-      avgDailyOz: Math.round(avgDailyOz * 10) / 10,
-      estimatedDaysRemaining: null,
-      isEstimatedBaseline: true
+function assignmentIdentity({ batchId, overrideEnabled, overrideName }) {
+  const normalizedBatchId = typeof batchId === 'string' && batchId.trim() ? batchId.trim() : null;
+  if (normalizedBatchId) {
+    return {
+      batchId: normalizedBatchId,
+      assignmentKind: normalizedBatchId.startsWith('custom:') ? 'custom' : 'brewfather'
     };
   }
+  if (overrideEnabled && typeof overrideName === 'string' && overrideName.trim()) {
+    return { batchId: null, assignmentKind: 'override' };
+  }
+  return null;
+}
 
-  const daysRemaining = Math.round((currentOz / avgDailyOz) * 10) / 10;
-  return { 
-    avgDailyOz: Math.round(avgDailyOz * 10) / 10,
-    estimatedDaysRemaining: daysRemaining,
-    isEstimatedBaseline
-  };
+function lifecycleMatchesAssignment(lifecycle, assignment) {
+  return Boolean(
+    lifecycle &&
+    assignment &&
+    (lifecycle.batch_id ?? null) === assignment.batchId &&
+    lifecycle.assignment_kind === assignment.assignmentKind
+  );
 }
 
 // HA Event Listeners
-haClient.on('connection_change', isConnected => {
+haClient.on('connection_change', (isConnected) => {
   console.log(`[HAClient Connection Change] HA isConnected: ${isConnected}`);
   sseHub.publishImmediate('ha_connection_status', {
     isConnected,
@@ -153,16 +161,16 @@ haClient.on('connection_change', isConnected => {
   });
 });
 
-haClient.on('state_changed', data => {
+haClient.on('state_changed', (data) => {
   sseHub.publish('state_changed', data);
 });
 
-haClient.on('pour_start', data => {
+haClient.on('pour_start', (data) => {
   console.log(`[SSE Broadcast] pour_start on Tap ${data.tapId}`);
   sseHub.publishImmediate('pour_start', data);
 });
 
-haClient.on('pour_complete', data => {
+haClient.on('pour_complete', (data) => {
   console.log(`[SSE Broadcast] pour_complete on Tap ${data.tapId}: ${data.volumePouredOz} oz`);
   sseHub.publishImmediate('pour_complete', {
     ...data,
@@ -170,35 +178,53 @@ haClient.on('pour_complete', data => {
   });
 });
 
-haClient.on('pour_cancel', data => {
+haClient.on('pour_cancel', (data) => {
   console.log(`[SSE Broadcast] pour_cancel on Tap ${data.tapId}: ${data.reason}`);
   sseHub.publishImmediate('pour_cancel', data);
 });
 
-haClient.on('low_keg_alert', data => {
+haClient.on('low_keg_alert', (data) => {
   sseHub.publishImmediate('low_keg_alert', data);
+});
+
+haClient.on('hydrated', () => {
+  sseHub.publishImmediate('snapshot', getFullStateSnapshot());
 });
 
 // Construct Full Application State Snapshot
 function getFullStateSnapshot() {
-  const settings = db.prepare('SELECT id, theme, volume_format, title, font_title, font_body, show_ondeck FROM settings WHERE id = 1').get();
-  const taps = db.prepare(`
+  const settings = db
+    .prepare('SELECT id, theme, volume_format, title, font_title, font_body, show_ondeck FROM settings WHERE id = 1')
+    .get();
+  const taps = db
+    .prepare(
+      `
     SELECT tap_id, enabled, batch_id, graphic, override_enabled, override_name,
       override_style, override_abv, override_ibu, override_og, override_fg,
       override_srm, override_description, badge_low_keg, badge_fresh,
-      display_unit, custom_pour_size
+      on_tap_at, display_unit, custom_pour_size
     FROM taps ORDER BY tap_id ASC
-  `).all();
-  const batches = db.prepare(`
+  `
+    )
+    .all();
+  const batches = db
+    .prepare(
+      `
     SELECT batch_id, recipe_name, style, brew_date, og, fg, abv, ibu, srm,
       status, last_synced_at
     FROM batches ORDER BY last_synced_at DESC
-  `).all();
-  const catalog = db.prepare(`
+  `
+    )
+    .all();
+  const catalog = db
+    .prepare(
+      `
     SELECT id, name, style, abv, ibu, srm_color, description, on_deck,
       target_tap_id
     FROM beverage_catalog ORDER BY id DESC
-  `).all();
+  `
+    )
+    .all();
   const tapStates = haClient.getPublicTapStates();
 
   const kegKickForecasts = {};
@@ -220,37 +246,58 @@ function getFullStateSnapshot() {
 }
 
 // HTTP Server Logic
+let shuttingDown = false;
+function ensureServing() {
+  if (shuttingDown) throw new HttpError(503, 'Service is shutting down');
+}
+
 const server = http.createServer(async (req, res) => {
   const requestId = crypto.randomUUID();
   applySecurityHeaders(res);
   res.setHeader('X-Request-ID', requestId);
   let url;
-  try { url = new URL(req.url, `http://${req.headers.host || 'localhost'}`); }
-  catch { sendError(res, 400, 'Invalid request URL'); return; }
+  try {
+    url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+  } catch {
+    sendError(res, 400, 'Invalid request URL');
+    return;
+  }
   const clientIp = req.socket.remoteAddress || 'unknown';
   const requestContext = (operation, tapId = '-') =>
     `${operation} request_id=${requestId} method=${req.method} route=${url.pathname} tap_id=${tapId} client=${clientIp}`;
-  try { enforceOrigin(req); } catch (error) { handleError(res, error, requestContext('origin check')); return; }
+  try {
+    enforceOrigin(req);
+  } catch (error) {
+    handleError(res, error, requestContext('origin check'));
+    return;
+  }
+  if (shuttingDown) {
+    sendError(res, 503, 'Service is shutting down');
+    return;
+  }
 
   if (req.method === 'OPTIONS') {
     const methods = allowedMethodsForApiPath(url.pathname);
     if (methods) {
       res.writeHead(204, { Allow: [...methods, 'OPTIONS'].join(', '), 'Cache-Control': 'no-store' });
       res.end();
-    }
-    else sendError(res, 404, 'Not found');
+    } else sendError(res, 404, 'Not found');
     return;
   }
 
   // 1. SSE Real-Time Stream (/events)
   if (url.pathname === '/events' && req.method === 'GET') {
     let snapshot;
-    try { snapshot = getFullStateSnapshot(); }
-    catch (error) { handleError(res, error, requestContext('create SSE snapshot')); return; }
+    try {
+      snapshot = getFullStateSnapshot();
+    } catch (error) {
+      handleError(res, error, requestContext('create SSE snapshot'));
+      return;
+    }
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache, no-transform',
-      'Connection': 'keep-alive',
+      Connection: 'keep-alive',
       'X-Accel-Buffering': 'no'
     });
 
@@ -281,6 +328,7 @@ const server = http.createServer(async (req, res) => {
       }
 
       const body = validateAuth(await readJsonBody(req));
+      ensureServing();
       const settings = db.prepare('SELECT admin_pin_hash, admin_pin_initialized FROM settings WHERE id = 1').get();
 
       if (!settings.admin_pin_initialized) {
@@ -292,9 +340,13 @@ const server = http.createServer(async (req, res) => {
         attempt.count += 1;
         if (attempt.count >= 5) {
           attempt.lockUntil = now + 15 * 60 * 1000;
-          console.warn(`[AUTH SECURITY] Client locked out after failed PIN attempts request_id=${requestId} client=${clientIp}`);
+          console.warn(
+            `[AUTH SECURITY] Client locked out after failed PIN attempts request_id=${requestId} client=${clientIp}`
+          );
         } else {
-          console.warn(`[AUTH ACTION] Failed admin PIN attempt request_id=${requestId} client=${clientIp} attempt=${attempt.count}/5`);
+          console.warn(
+            `[AUTH ACTION] Failed admin PIN attempt request_id=${requestId} client=${clientIp} attempt=${attempt.count}/5`
+          );
         }
         authAttempts.set(clientIp, attempt);
 
@@ -308,13 +360,14 @@ const server = http.createServer(async (req, res) => {
       const token = crypto.randomBytes(32).toString('hex');
       const expiresAt = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
 
-      db.prepare(`
+      db.prepare(
+        `
         INSERT INTO admin_sessions (token, expires_at) VALUES (?, ?)
-      `).run(sessionDigest(token), expiresAt);
+      `
+      ).run(sessionDigest(token), expiresAt);
 
       console.log(`[AUTH ACTION] Successful admin PIN authentication request_id=${requestId} client=${clientIp}`);
       sendJson(res, 200, { token, expiresAt });
-
     } catch (err) {
       handleError(res, err, requestContext('admin authentication'));
     }
@@ -323,8 +376,11 @@ const server = http.createServer(async (req, res) => {
 
   // 3. Get Public Snapshot (/api/state)
   if (url.pathname === '/api/state' && req.method === 'GET') {
-    try { sendJson(res, 200, getFullStateSnapshot()); }
-    catch (error) { handleError(res, error, requestContext('create state snapshot')); }
+    try {
+      sendJson(res, 200, getFullStateSnapshot());
+    } catch (error) {
+      handleError(res, error, requestContext('create state snapshot'));
+    }
     return;
   }
 
@@ -334,9 +390,11 @@ const server = http.createServer(async (req, res) => {
 
     try {
       const body = validateSettings(await readJsonBody(req));
+      ensureServing();
       const { theme, volume_format, title, font_title, font_body, show_ondeck, tap_visibilities, new_pin } = body;
 
-      db.prepare(`
+      db.prepare(
+        `
         UPDATE settings SET
           theme = COALESCE(?, theme),
           volume_format = COALESCE(?, volume_format),
@@ -345,7 +403,15 @@ const server = http.createServer(async (req, res) => {
           font_body = COALESCE(?, font_body),
           show_ondeck = COALESCE(?, show_ondeck)
         WHERE id = 1
-      `).run(theme, volume_format, title, font_title, font_body, show_ondeck !== undefined ? (show_ondeck ? 1 : 0) : null);
+      `
+      ).run(
+        theme,
+        volume_format,
+        title,
+        font_title,
+        font_body,
+        show_ondeck !== undefined ? (show_ondeck ? 1 : 0) : null
+      );
 
       if (tap_visibilities && typeof tap_visibilities === 'object') {
         const updateTapEnabled = db.prepare('UPDATE taps SET enabled = ? WHERE tap_id = ?');
@@ -353,9 +419,13 @@ const server = http.createServer(async (req, res) => {
           if (tap_visibilities[i] !== undefined) {
             const isEnabled = tap_visibilities[i] ? 1 : 0;
             updateTapEnabled.run(isEnabled, i);
-            haClient.callHAService('input_boolean', isEnabled ? 'turn_on' : 'turn_off', {
-              entity_id: `input_boolean.tap_${i}_enabled`
-            }).catch(err => {});
+            haClient
+              .callHAService('input_boolean', isEnabled ? 'turn_on' : 'turn_off', {
+                entity_id: `input_boolean.tap_${i}_enabled`
+              })
+              .catch((_err) => {
+                // HA synchronization is best-effort after the local change commits.
+              });
           }
         }
       }
@@ -373,7 +443,6 @@ const server = http.createServer(async (req, res) => {
 
       sseHub.publishImmediate('settings_updated', getFullStateSnapshot());
       sendJson(res, 200, { success: true, sessionsRevoked: Boolean(new_pin) });
-
     } catch (err) {
       handleError(res, err, requestContext('update global settings'));
     }
@@ -385,32 +454,67 @@ const server = http.createServer(async (req, res) => {
     if (!requireAdmin(req, res)) return;
 
     let tapId;
-    try { tapId = validateTapId(url.pathname.split('/')[3]); } catch { sendError(res, 400, 'Invalid tap ID'); return; }
+    try {
+      tapId = validateTapId(url.pathname.split('/')[3]);
+    } catch {
+      sendError(res, 400, 'Invalid tap ID');
+      return;
+    }
 
     try {
       const body = validateTap(await readJsonBody(req));
+      ensureServing();
 
-      if (body.batch_option !== undefined && body.batch_option !== '' && body.batch_option !== 'custom:topo_chico | Topo Chico 0%') {
+      if (
+        body.batch_option !== undefined &&
+        body.batch_option !== '' &&
+        body.batch_option !== 'custom:topo_chico | Topo Chico 0%'
+      ) {
         const options = haClient.getPublicTapStates()?.[String(tapId)]?.batchSelection?.options;
-        if (!Array.isArray(options) || !options.includes(body.batch_option)) throw new ValidationError('Invalid batch option');
+        if (!Array.isArray(options) || !options.includes(body.batch_option))
+          throw new ValidationError('Invalid batch option');
       }
 
       // Auto-enable tap if a batch is assigned
       let shouldEnable = body.enabled !== undefined ? (body.enabled ? 1 : 0) : null;
       let extractedBatchId = null;
+      const currentTap = db
+        .prepare(
+          `SELECT batch_id, on_tap_at, override_enabled, override_name
+        FROM taps WHERE tap_id = ?`
+        )
+        .get(tapId);
+      let onTapAt = currentTap.on_tap_at;
       if (body.batch_option !== undefined) {
         if (body.batch_option !== '') {
           shouldEnable = 1;
           extractedBatchId = body.batch_option.split('|')[0].trim();
+          if (extractedBatchId !== currentTap.batch_id || !onTapAt) onTapAt = new Date().toISOString();
         } else {
           extractedBatchId = '';
+          onTapAt = null;
         }
       }
-      
-      db.prepare(`
+
+      const finalBatchId = body.batch_option === undefined ? currentTap.batch_id : extractedBatchId || null;
+      const finalOverrideEnabled =
+        body.override_enabled === undefined ? currentTap.override_enabled === 1 : body.override_enabled;
+      const finalOverrideName = body.override_name === undefined ? currentTap.override_name : body.override_name;
+      const desiredAssignment = assignmentIdentity({
+        batchId: finalBatchId,
+        overrideEnabled: finalOverrideEnabled,
+        overrideName: finalOverrideName
+      });
+      const currentLifecycle = activeLifecycle(db, tapId);
+      const lifecycleChanges = !lifecycleMatchesAssignment(currentLifecycle, desiredAssignment);
+      if (!desiredAssignment) onTapAt = null;
+      else if (lifecycleChanges || !onTapAt) onTapAt = new Date().toISOString();
+
+      const updateTap = db.prepare(`
         UPDATE taps SET
           enabled = COALESCE(?, enabled),
           batch_id = COALESCE(?, batch_id),
+          on_tap_at = ?,
           graphic = COALESCE(?, graphic),
           override_enabled = COALESCE(?, override_enabled),
           override_name = COALESCE(?, override_name),
@@ -426,52 +530,83 @@ const server = http.createServer(async (req, res) => {
           display_unit = COALESCE(?, display_unit),
           custom_pour_size = COALESCE(?, custom_pour_size)
         WHERE tap_id = ?
-      `).run(
-        shouldEnable,
-        extractedBatchId,
-        body.graphic,
-        body.override_enabled !== undefined ? (body.override_enabled ? 1 : 0) : null,
-        body.override_name !== undefined ? body.override_name : null,
-        body.override_style !== undefined ? body.override_style : null,
-        body.override_abv !== undefined ? (body.override_abv !== '' ? parseFloat(body.override_abv) : null) : null,
-        body.override_ibu !== undefined ? (body.override_ibu !== '' ? parseInt(body.override_ibu) : null) : null,
-        body.override_og !== undefined ? (body.override_og !== '' ? parseFloat(body.override_og) : null) : null,
-        body.override_fg !== undefined ? (body.override_fg !== '' ? parseFloat(body.override_fg) : null) : null,
-        body.override_srm !== undefined ? (body.override_srm !== '' ? parseInt(body.override_srm) : null) : null,
-        body.override_description !== undefined ? body.override_description : null,
-        body.badge_low_keg !== undefined ? parseFloat(body.badge_low_keg) : null,
-        body.badge_fresh !== undefined ? (body.badge_fresh ? 1 : 0) : null,
-        body.display_unit !== undefined ? body.display_unit : null,
-        body.custom_pour_size !== undefined ? (body.custom_pour_size !== '' ? parseFloat(body.custom_pour_size) : null) : null,
-        tapId
-      );
+      `);
+      const applyTapUpdate = () => {
+        updateTap.run(
+          shouldEnable,
+          extractedBatchId,
+          onTapAt,
+          body.graphic,
+          body.override_enabled !== undefined ? (body.override_enabled ? 1 : 0) : null,
+          body.override_name !== undefined ? body.override_name : null,
+          body.override_style !== undefined ? body.override_style : null,
+          body.override_abv !== undefined ? (body.override_abv !== '' ? parseFloat(body.override_abv) : null) : null,
+          body.override_ibu !== undefined ? (body.override_ibu !== '' ? parseInt(body.override_ibu) : null) : null,
+          body.override_og !== undefined ? (body.override_og !== '' ? parseFloat(body.override_og) : null) : null,
+          body.override_fg !== undefined ? (body.override_fg !== '' ? parseFloat(body.override_fg) : null) : null,
+          body.override_srm !== undefined ? (body.override_srm !== '' ? parseInt(body.override_srm) : null) : null,
+          body.override_description !== undefined ? body.override_description : null,
+          body.badge_low_keg !== undefined ? parseFloat(body.badge_low_keg) : null,
+          body.badge_fresh !== undefined ? (body.badge_fresh ? 1 : 0) : null,
+          body.display_unit !== undefined ? body.display_unit : null,
+          body.custom_pour_size !== undefined
+            ? body.custom_pour_size !== ''
+              ? parseFloat(body.custom_pour_size)
+              : null
+            : null,
+          tapId
+        );
+      };
+      if (lifecycleChanges && desiredAssignment) {
+        assignKegLifecycle(db, {
+          tapId,
+          ...desiredAssignment,
+          startedAt: onTapAt,
+          closeReason: currentLifecycle ? 'reassigned' : 'opened',
+          updateTap: applyTapUpdate
+        });
+      } else if (lifecycleChanges && currentLifecycle) {
+        closeKegLifecycle(db, {
+          tapId,
+          closedAt: new Date().toISOString(),
+          closeReason: 'cleared',
+          updateTap: applyTapUpdate
+        });
+      } else {
+        db.transaction(applyTapUpdate)();
+      }
 
       console.log(`[TAP ACTION] Tap settings updated request_id=${requestId} tap_id=${tapId} client=${clientIp}`);
 
       // Sync Home Assistant input_boolean.tap_N_enabled
-      const haEnabledService = (shouldEnable === 1 || shouldEnable === null) ? 'turn_on' : 'turn_off';
-      await haClient.callHAService('input_boolean', haEnabledService, {
-        entity_id: `input_boolean.tap_${tapId}_enabled`
-      }).catch(err => console.warn(`[HA Warning] Enable boolean call failed:`, err.message));
+      const haEnabledService = shouldEnable === 1 || shouldEnable === null ? 'turn_on' : 'turn_off';
+      await haClient
+        .callHAService('input_boolean', haEnabledService, {
+          entity_id: `input_boolean.tap_${tapId}_enabled`
+        })
+        .catch((err) => console.warn(`[HA Warning] Enable boolean call failed:`, err.message));
 
       if (body.batch_option !== undefined) {
-        await haClient.callHAService('select', 'select_option', {
-          entity_id: `select.tap_${tapId}_batch_select`,
-          option: body.batch_option
-        }).catch(err => console.warn(`[HA Warning] Select option failed:`, err.message));
+        await haClient
+          .callHAService('select', 'select_option', {
+            entity_id: `select.tap_${tapId}_batch_select`,
+            option: body.batch_option
+          })
+          .catch((err) => console.warn(`[HA Warning] Select option failed:`, err.message));
 
         const batchId = body.batch_option.split('|')[0].trim();
         if (batchId) {
-          await haClient.callHAService('input_text', 'set_value', {
-            entity_id: `input_text.tap_${tapId}_batch`,
-            value: batchId
-          }).catch(err => console.warn(`[HA Warning] Batch text set failed:`, err.message));
+          await haClient
+            .callHAService('input_text', 'set_value', {
+              entity_id: `input_text.tap_${tapId}_batch`,
+              value: batchId
+            })
+            .catch((err) => console.warn(`[HA Warning] Batch text set failed:`, err.message));
         }
       }
 
       sseHub.publishImmediate('settings_updated', getFullStateSnapshot());
       sendJson(res, 200, { success: true });
-
     } catch (err) {
       handleError(res, err, requestContext('update tap', tapId));
     }
@@ -483,7 +618,14 @@ const server = http.createServer(async (req, res) => {
     if (!requireAdmin(req, res)) return;
 
     let tapId;
-    try { tapId = validateTapId(url.pathname.split('/')[3]); await readEmptyJsonBody(req); } catch (err) { handleError(res, err, requestContext('end batch validation', tapId)); return; }
+    try {
+      tapId = validateTapId(url.pathname.split('/')[3]);
+      await readEmptyJsonBody(req);
+      ensureServing();
+    } catch (err) {
+      handleError(res, err, requestContext('end batch validation', tapId));
+      return;
+    }
     try {
       try {
         await haClient.callHAService('script', 'end_tap_batch', { tap_number: tapId });
@@ -491,10 +633,12 @@ const server = http.createServer(async (req, res) => {
         console.error(`[HA ERROR] End batch failed for Tap ${tapId}:`, error);
         throw new HttpError(502, 'Home Assistant request failed');
       }
+      ensureServing();
 
-      db.prepare(`
+      const clearBatch = db.prepare(`
         UPDATE taps SET
           batch_id = NULL,
+          on_tap_at = NULL,
           override_enabled = 0,
           override_name = NULL,
           override_style = NULL,
@@ -505,7 +649,13 @@ const server = http.createServer(async (req, res) => {
           override_srm = NULL,
           override_description = NULL
         WHERE tap_id = ?
-      `).run(tapId);
+      `);
+      closeKegLifecycle(db, {
+        tapId,
+        closedAt: new Date().toISOString(),
+        closeReason: 'end_batch',
+        updateTap: () => clearBatch.run(tapId)
+      });
 
       sseHub.publishImmediate('settings_updated', getFullStateSnapshot());
       sendJson(res, 200, { success: true, message: `Batch completed and tap ${tapId} cleared.` });
@@ -520,7 +670,14 @@ const server = http.createServer(async (req, res) => {
     if (!requireAdmin(req, res)) return;
 
     let tapId;
-    try { tapId = validateTapId(url.pathname.split('/')[3]); await readEmptyJsonBody(req); } catch (err) { handleError(res, err, requestContext('end keg validation', tapId)); return; }
+    try {
+      tapId = validateTapId(url.pathname.split('/')[3]);
+      await readEmptyJsonBody(req);
+      ensureServing();
+    } catch (err) {
+      handleError(res, err, requestContext('end keg validation', tapId));
+      return;
+    }
     try {
       try {
         await haClient.callHAService('select', 'select_option', {
@@ -531,10 +688,12 @@ const server = http.createServer(async (req, res) => {
         console.error(`[HA ERROR] End keg failed for Tap ${tapId}:`, error);
         throw new HttpError(502, 'Home Assistant request failed');
       }
+      ensureServing();
 
-      db.prepare(`
+      const clearKeg = db.prepare(`
         UPDATE taps SET
           batch_id = NULL,
+          on_tap_at = NULL,
           override_enabled = 0,
           override_name = NULL,
           override_style = NULL,
@@ -545,7 +704,13 @@ const server = http.createServer(async (req, res) => {
           override_srm = NULL,
           override_description = NULL
         WHERE tap_id = ?
-      `).run(tapId);
+      `);
+      closeKegLifecycle(db, {
+        tapId,
+        closedAt: new Date().toISOString(),
+        closeReason: 'end_keg',
+        updateTap: () => clearKeg.run(tapId)
+      });
 
       sseHub.publishImmediate('settings_updated', getFullStateSnapshot());
       sendJson(res, 200, { success: true, message: `Tap ${tapId} unassigned / off-tap.` });
@@ -561,6 +726,7 @@ const server = http.createServer(async (req, res) => {
 
     try {
       const body = validateCatalog(await readJsonBody(req));
+      ensureServing();
       const stmt = db.prepare(`
         INSERT INTO beverage_catalog (name, style, abv, ibu, srm_color, description, on_deck, target_tap_id)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -594,40 +760,62 @@ const server = http.createServer(async (req, res) => {
   }
 
   // 9. Static Asset Serving
-  if (!['GET', 'HEAD'].includes(req.method)) { sendError(res, 405, 'Method not allowed'); return; }
+  if (!['GET', 'HEAD'].includes(req.method)) {
+    sendError(res, 405, 'Method not allowed');
+    return;
+  }
   let candidate;
-  try { candidate = resolvePublicPath(PUBLIC_DIR, url.pathname); }
-  catch (error) { handleError(res, error, requestContext('static path validation')); return; }
+  try {
+    candidate = resolvePublicPath(PUBLIC_DIR, url.pathname);
+  } catch (error) {
+    handleError(res, error, requestContext('static path validation'));
+    return;
+  }
 
   fs.realpath(candidate, (err, realPath) => {
     if (err) {
       res.writeHead(404, { 'Content-Type': 'text/plain' });
-      if (req.method !== 'HEAD') res.end('404 Not Found'); else res.end();
+      if (req.method !== 'HEAD') res.end('404 Not Found');
+      else res.end();
       return;
     }
-    if (!isContainedPath(PUBLIC_REAL_DIR, realPath)) { sendError(res, 403, 'Forbidden'); return; }
+    if (!isContainedPath(PUBLIC_REAL_DIR, realPath)) {
+      sendError(res, 403, 'Forbidden');
+      return;
+    }
     fs.stat(realPath, (statError, stats) => {
-      if (statError || !stats.isFile()) { sendError(res, 404, 'Not found'); return; }
+      if (statError || !stats.isFile()) {
+        sendError(res, 404, 'Not found');
+        return;
+      }
 
-    const ext = path.extname(realPath).toLowerCase();
-    const mimeTypes = {
-      '.html': 'text/html; charset=UTF-8',
-      '.css': 'text/css; charset=UTF-8',
-      '.js': 'application/javascript; charset=UTF-8',
-      '.json': 'application/json; charset=UTF-8',
-      '.png': 'image/png',
-      '.jpg': 'image/jpeg',
-      '.svg': 'image/svg+xml',
-      '.ico': 'image/x-icon'
-    };
+      const ext = path.extname(realPath).toLowerCase();
+      const mimeTypes = {
+        '.html': 'text/html; charset=UTF-8',
+        '.css': 'text/css; charset=UTF-8',
+        '.js': 'application/javascript; charset=UTF-8',
+        '.json': 'application/json; charset=UTF-8',
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.svg': 'image/svg+xml',
+        '.ico': 'image/x-icon'
+      };
 
-    res.writeHead(200, {
-      'Content-Type': mimeTypes[ext] || 'application/octet-stream',
-      'Cache-Control': 'no-cache'
-    });
+      res.writeHead(200, {
+        'Content-Type': mimeTypes[ext] || 'application/octet-stream',
+        'Cache-Control': 'no-cache'
+      });
 
-    if (req.method === 'HEAD') { res.end(); return; }
-    fs.createReadStream(realPath).on('error', () => { if (!res.headersSent) sendError(res, 500, 'Internal server error'); else res.destroy(); }).pipe(res);
+      if (req.method === 'HEAD') {
+        res.end();
+        return;
+      }
+      fs.createReadStream(realPath)
+        .on('error', () => {
+          if (!res.headersSent) sendError(res, 500, 'Internal server error');
+          else res.destroy();
+        })
+        .pipe(res);
     });
   });
 });
@@ -635,3 +823,27 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(`[Tapboard Server] Running on http://localhost:${PORT}`);
 });
+
+function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`[Tapboard Server] ${signal} received; shutting down cleanly.`);
+  haClient.stop();
+  sseHub.close();
+  const forceExit = setTimeout(() => {
+    console.error('[Tapboard Server] Graceful shutdown timed out.');
+    process.exit(1);
+  }, 10_000);
+  forceExit.unref?.();
+  server.close(() => {
+    clearTimeout(forceExit);
+    try {
+      db.close();
+    } catch {
+      // The process is already shutting down; closing an unavailable handle is harmless.
+    }
+  });
+}
+
+process.once('SIGTERM', () => shutdown('SIGTERM'));
+process.once('SIGINT', () => shutdown('SIGINT'));

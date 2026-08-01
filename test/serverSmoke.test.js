@@ -12,7 +12,7 @@ async function reservePort() {
     server.once('error', reject);
     server.listen(0, '127.0.0.1', () => {
       const { port } = server.address();
-      server.close(error => error ? reject(error) : resolve(port));
+      server.close((error) => (error ? reject(error) : resolve(port)));
     });
   });
 }
@@ -23,8 +23,10 @@ async function waitForServer(url, child) {
     try {
       const response = await fetch(url);
       if (response.ok) return response;
-    } catch {}
-    await new Promise(resolve => setTimeout(resolve, 50));
+    } catch {
+      // The server may not be listening yet; retry until the bounded deadline.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
   }
   throw new Error('server did not become ready');
 }
@@ -34,11 +36,19 @@ test('healthcheck is lightweight and public HTTP/SSE snapshots use only schema v
   const dataDir = mkdtempSync(path.join(os.tmpdir(), 'tapboard-server-smoke-'));
   const child = spawn(process.execPath, ['src/server.js'], {
     cwd: process.cwd(),
-    env: { ...process.env, PORT: String(port), DATA_DIR: dataDir, HA_TOKEN: '', DOTENV_CONFIG_PATH: path.join(dataDir, '.env-unused') },
+    env: {
+      ...process.env,
+      PORT: String(port),
+      DATA_DIR: dataDir,
+      HA_TOKEN: '',
+      DOTENV_CONFIG_PATH: path.join(dataDir, '.env-unused')
+    },
     stdio: ['ignore', 'pipe', 'pipe']
   });
   let stderr = '';
-  child.stderr.on('data', chunk => { stderr += chunk; });
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk;
+  });
 
   try {
     const baseUrl = `http://127.0.0.1:${port}`;
@@ -59,7 +69,10 @@ test('healthcheck is lightweight and public HTTP/SSE snapshots use only schema v
     const eventsResponse = await fetch(`${baseUrl}/events`, { signal: controller.signal });
     const reader = eventsResponse.body.getReader();
     let eventText = '';
-    while (!eventText.includes('event: snapshot') || !eventText.includes('\n\n', eventText.indexOf('event: snapshot'))) {
+    while (
+      !eventText.includes('event: snapshot') ||
+      !eventText.includes('\n\n', eventText.indexOf('event: snapshot'))
+    ) {
       const { value, done } = await reader.read();
       if (done) break;
       eventText += new TextDecoder().decode(value);
@@ -72,7 +85,7 @@ test('healthcheck is lightweight and public HTTP/SSE snapshots use only schema v
     console.log(`seeded public snapshot measurement: ${Buffer.byteLength(stateText)} bytes`);
   } finally {
     child.kill('SIGTERM');
-    await new Promise(resolve => {
+    await new Promise((resolve) => {
       if (child.exitCode !== null) return resolve();
       child.once('exit', resolve);
       setTimeout(resolve, 2_000).unref();

@@ -1,5 +1,5 @@
 /**
- * TAP BOARD GRAPHICS ENGINE (graphics.js) - v3.7
+ * TAP BOARD GRAPHICS ENGINE (graphics.js)
  * Dynamic SVG vector renderer for Corny Kegs & 6 Beer Glassware styles.
  * Features:
  * - Full 1-50 SRM color palette interpolation (Stouts, Porters, Dark Ales, Lagers)
@@ -9,49 +9,49 @@
 
 // Full SRM to Hex Color conversion lookup table (1-50 SRM)
 const SRM_COLORS = {
-  0: "WATER",
-  1: "#F8F753",
-  2: "#F6F513",
-  3: "#ECE61A",
-  4: "#D5BC00",
-  5: "#BF9200",
-  6: "#BF8100",
-  7: "#BC6800",
-  8: "#B55300",
-  9: "#B34700",
-  10: "#A73D00",
-  11: "#9C3200",
-  12: "#962D00",
-  13: "#8C2400",
-  14: "#801C00",
-  15: "#781900",
-  16: "#701600",
-  17: "#681300",
-  18: "#601100",
-  19: "#580E00",
-  20: "#530C00",
-  21: "#4E0B00",
-  22: "#480A00",
-  23: "#420900",
-  24: "#3C0800",
-  25: "#380600",
-  26: "#340500",
-  27: "#300400",
-  28: "#2C0300",
-  29: "#2A0300",
-  30: "#280200",
-  31: "#250200",
-  32: "#220200",
-  33: "#200100",
-  34: "#1E0100",
-  35: "#1D0100",
-  36: "#1B0100",
-  37: "#190100",
-  38: "#170100",
-  39: "#150100",
-  40: "#130100",
-  45: "#0B0100",
-  50: "#080100"
+  0: 'WATER',
+  1: '#F8F753',
+  2: '#F6F513',
+  3: '#ECE61A',
+  4: '#D5BC00',
+  5: '#BF9200',
+  6: '#BF8100',
+  7: '#BC6800',
+  8: '#B55300',
+  9: '#B34700',
+  10: '#A73D00',
+  11: '#9C3200',
+  12: '#962D00',
+  13: '#8C2400',
+  14: '#801C00',
+  15: '#781900',
+  16: '#701600',
+  17: '#681300',
+  18: '#601100',
+  19: '#580E00',
+  20: '#530C00',
+  21: '#4E0B00',
+  22: '#480A00',
+  23: '#420900',
+  24: '#3C0800',
+  25: '#380600',
+  26: '#340500',
+  27: '#300400',
+  28: '#2C0300',
+  29: '#2A0300',
+  30: '#280200',
+  31: '#250200',
+  32: '#220200',
+  33: '#200100',
+  34: '#1E0100',
+  35: '#1D0100',
+  36: '#1B0100',
+  37: '#190100',
+  38: '#170100',
+  39: '#150100',
+  40: '#130100',
+  45: '#0B0100',
+  50: '#080100'
 };
 
 export function srmToHex(srmVal, fallbackHex = null) {
@@ -65,18 +65,21 @@ export function srmToHex(srmVal, fallbackHex = null) {
   if (parsed === 0) return 'WATER';
   const normalized = Number.isFinite(parsed) ? parsed : 3;
   const srm = Math.max(0, Math.min(50, Math.round(normalized)));
-  
+
   if (SRM_COLORS[srm]) return SRM_COLORS[srm];
 
   // Nearest SRM key interpolation for any unmapped integer between 1 and 50
-  const keys = Object.keys(SRM_COLORS).map(Number).filter(k => k > 0).sort((a, b) => a - b);
+  const keys = Object.keys(SRM_COLORS)
+    .map(Number)
+    .filter((k) => k > 0)
+    .sort((a, b) => a - b);
   let closest = keys[0];
   for (const k of keys) {
     if (Math.abs(k - srm) < Math.abs(closest - srm)) {
       closest = k;
     }
   }
-  return SRM_COLORS[closest] || "#200100";
+  return SRM_COLORS[closest] || '#200100';
 }
 
 let generatedGraphicId = 0;
@@ -114,7 +117,11 @@ export function renderTapGraphic(
 ) {
   const fillPct = Math.max(0, Math.min(100, parseFloat(percent) || 0));
   const isWater = colorHex === 'WATER' || colorHex === '#E0F7FA' || colorHex === '0';
-  const beerColor = isWater ? 'WATER' : (typeof colorHex === 'string' && /^#[0-9a-f]{6}$/i.test(colorHex) ? colorHex.toUpperCase() : '#E8A317');
+  const beerColor = isWater
+    ? 'WATER'
+    : typeof colorHex === 'string' && /^#[0-9a-f]{6}$/i.test(colorHex)
+      ? colorHex.toUpperCase()
+      : '#E8A317';
   const id = String(instanceId).replace(/[^a-zA-Z0-9_-]/g, '_');
 
   switch (style) {
@@ -142,12 +149,11 @@ export function renderTapGraphic(
 function renderCornyKeg(pct, color, isPouring, id) {
   const liquidY = 220 - (pct / 100) * 150;
   const isWater = color === 'WATER';
-  const isDark = color === '#080100' || color === '#130100' || color === '#200100' || color === '#280200' || color === '#000000';
+  const isDark =
+    color === '#080100' || color === '#130100' || color === '#200100' || color === '#280200' || color === '#000000';
   const foamColor = isDark ? '#F5EBE6' : '#FFFDF5';
 
-  const fillStyle = isWater
-    ? `fill="rgba(224, 247, 250, 0.22)"`
-    : `fill="url(#liquidGrad_${id})"`;
+  const fillStyle = isWater ? `fill="rgba(224, 247, 250, 0.22)"` : `fill="url(#liquidGrad_${id})"`;
 
   return `
     <svg viewBox="0 0 160 260" data-bottom-y="220" data-top-rim-y="65" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" xmlns="http://www.w3.org/2000/svg">
@@ -159,13 +165,17 @@ function renderCornyKeg(pct, color, isPouring, id) {
           <stop offset="80%" stop-color="#A0AEC0" />
           <stop offset="100%" stop-color="#2D3748" />
         </linearGradient>
-        ${!isWater ? `
+        ${
+          !isWater
+            ? `
           <linearGradient id="liquidGrad_${id}" x1="0%" y1="0%" x2="100%" y2="0%">
             <stop offset="0%" stop-color="${color}" stop-opacity="0.85" />
             <stop offset="50%" stop-color="${color}" stop-opacity="1" />
             <stop offset="100%" stop-color="${color}" stop-opacity="0.9" />
           </linearGradient>
-        ` : ''}
+        `
+            : ''
+        }
         <clipPath id="kegLiquidClip_${id}">
           <rect x="35" y="45" width="90" height="175" rx="6" />
         </clipPath>
@@ -194,7 +204,9 @@ function renderCornyKeg(pct, color, isPouring, id) {
         <!-- Two-Tone Darker SRM Right-Half Overlay -->
         <rect x="80" y="${liquidY}" width="50" height="${220 - liquidY}" fill="rgba(0, 0, 0, 0.22)" class="beer-liquid-shadow" />
         ${renderCarbonationBubbles(38, 122, 218, liquidY, 6)}
-        ${!isWater ? `
+        ${
+          !isWater
+            ? `
           <!-- Puffy Cloud Foam Head (Clipped to Keg Walls) -->
           <g class="beer-cloud-foam" data-base-y="${liquidY}">
             <rect x="30" y="${liquidY - 8}" width="100" height="16" fill="${foamColor}" opacity="0.9" />
@@ -204,7 +216,9 @@ function renderCornyKeg(pct, color, isPouring, id) {
             <circle cx="108" cy="${liquidY - 5}" r="11" fill="${foamColor}" />
             <circle cx="74" cy="${liquidY - 9}" r="10" fill="#FFFFFF" opacity="0.5" />
           </g>
-        ` : ''}
+        `
+            : ''
+        }
       </g>
 
       <!-- Glass Highlight -->
@@ -220,11 +234,10 @@ function renderCornyKeg(pct, color, isPouring, id) {
 function renderPintGlass(pct, color, isPouring, id) {
   const liquidY = 225 - (pct / 100) * 180;
   const isWater = color === 'WATER';
-  const isDark = color === '#080100' || color === '#130100' || color === '#200100' || color === '#280200' || color === '#000000';
+  const isDark =
+    color === '#080100' || color === '#130100' || color === '#200100' || color === '#280200' || color === '#000000';
   const foamColor = isDark ? '#F5EBE6' : '#FFFDF5';
-  const fillStyle = isWater
-    ? `fill="rgba(224, 247, 250, 0.25)"`
-    : `fill="${color}" opacity="0.9"`;
+  const fillStyle = isWater ? `fill="rgba(224, 247, 250, 0.25)"` : `fill="${color}" opacity="0.9"`;
 
   return `
     <svg viewBox="0 0 160 260" data-bottom-y="225" data-top-rim-y="45" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" xmlns="http://www.w3.org/2000/svg">
@@ -248,7 +261,9 @@ function renderPintGlass(pct, color, isPouring, id) {
         <!-- Two-Tone Darker SRM Right-Half Overlay -->
         <rect x="80" y="${liquidY}" width="50" height="${230 - liquidY}" fill="rgba(0, 0, 0, 0.22)" class="beer-liquid-shadow" />
         ${renderCarbonationBubbles(50, 110, 220, liquidY, 6)}
-        ${!isWater ? `
+        ${
+          !isWater
+            ? `
           <!-- Puffy Cloud Foam Head (Clipped to Pint Glass Walls) -->
           <g class="beer-cloud-foam" data-base-y="${liquidY}">
             <rect x="30" y="${liquidY - 8}" width="100" height="16" fill="${foamColor}" opacity="0.9" />
@@ -258,7 +273,9 @@ function renderPintGlass(pct, color, isPouring, id) {
             <circle cx="106" cy="${liquidY - 5}" r="10" fill="${foamColor}" />
             <circle cx="72" cy="${liquidY - 9}" r="9" fill="#FFFFFF" opacity="0.5" />
           </g>
-        ` : ''}
+        `
+            : ''
+        }
       </g>
 
       <!-- Pour Stream Group -->
@@ -278,22 +295,25 @@ function renderPintGlass(pct, color, isPouring, id) {
 function renderWheatGlass(pct, color, isPouring, id) {
   const liquidY = 220 - (pct / 100) * 190;
   const isWater = color === 'WATER';
-  const isDark = color === '#080100' || color === '#130100' || color === '#200100' || color === '#280200' || color === '#000000';
+  const isDark =
+    color === '#080100' || color === '#130100' || color === '#200100' || color === '#280200' || color === '#000000';
   const foamColor = isDark ? '#F5EBE6' : '#FFFDF5';
-  const fillStyle = isWater
-    ? `fill="rgba(224, 247, 250, 0.25)"`
-    : `fill="url(#wheatLiquid_${id})"`;
+  const fillStyle = isWater ? `fill="rgba(224, 247, 250, 0.25)"` : `fill="url(#wheatLiquid_${id})"`;
 
   return `
     <svg viewBox="0 0 160 260" data-bottom-y="220" data-top-rim-y="30" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" xmlns="http://www.w3.org/2000/svg">
       <defs>
-        ${!isWater ? `
+        ${
+          !isWater
+            ? `
           <linearGradient id="wheatLiquid_${id}" x1="0%" y1="0%" x2="100%" y2="0%">
             <stop offset="0%" stop-color="${color}" stop-opacity="0.8" />
             <stop offset="50%" stop-color="${color}" stop-opacity="1.0" />
             <stop offset="100%" stop-color="${color}" stop-opacity="0.85" />
           </linearGradient>
-        ` : ''}
+        `
+            : ''
+        }
         <clipPath id="wheatGlassClip_${id}">
           <path d="M 30 0 L 130 0 L 110 30 Q 130 110, 98 170 L 100 220 Q 80 225, 60 220 L 62 170 Q 30 110, 50 30 Z" />
         </clipPath>
@@ -312,7 +332,9 @@ function renderWheatGlass(pct, color, isPouring, id) {
         <rect x="25" y="${liquidY}" width="110" height="${240 - liquidY}" ${fillStyle} class="beer-liquid-rect" />
         <rect x="80" y="${liquidY}" width="55" height="${240 - liquidY}" fill="rgba(0, 0, 0, 0.22)" class="beer-liquid-shadow" />
         ${renderCarbonationBubbles(45, 115, 215, liquidY, 6)}
-        ${!isWater ? `
+        ${
+          !isWater
+            ? `
           <g class="beer-cloud-foam" data-base-y="${liquidY}">
             <rect x="25" y="${liquidY - 8}" width="110" height="16" fill="${foamColor}" opacity="0.9" />
             <circle cx="48" cy="${liquidY - 5}" r="11" fill="${foamColor}" />
@@ -321,7 +343,9 @@ function renderWheatGlass(pct, color, isPouring, id) {
             <circle cx="106" cy="${liquidY - 5}" r="10" fill="${foamColor}" />
             <circle cx="72" cy="${liquidY - 9}" r="9" fill="#FFFFFF" opacity="0.5" />
           </g>
-        ` : ''}
+        `
+            : ''
+        }
       </g>
 
       <path d="M 55 35 Q 40 100, 64 165" stroke="#FFFFFF" stroke-width="2.5" fill="none" opacity="0.4" stroke-linecap="round" />
@@ -335,11 +359,10 @@ function renderWheatGlass(pct, color, isPouring, id) {
 function renderTulipGlass(pct, color, isPouring, id) {
   const liquidY = 170 - (pct / 100) * 130;
   const isWater = color === 'WATER';
-  const isDark = color === '#080100' || color === '#130100' || color === '#200100' || color === '#280200' || color === '#000000';
+  const isDark =
+    color === '#080100' || color === '#130100' || color === '#200100' || color === '#280200' || color === '#000000';
   const foamColor = isDark ? '#F5EBE6' : '#FFFDF5';
-  const fillStyle = isWater
-    ? `fill="rgba(224, 247, 250, 0.25)"`
-    : `fill="${color}" opacity="0.9"`;
+  const fillStyle = isWater ? `fill="rgba(224, 247, 250, 0.25)"` : `fill="${color}" opacity="0.9"`;
 
   return `
     <svg viewBox="0 0 160 260" data-bottom-y="170" data-top-rim-y="40" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" xmlns="http://www.w3.org/2000/svg">
@@ -365,7 +388,9 @@ function renderTulipGlass(pct, color, isPouring, id) {
         <rect x="25" y="${liquidY}" width="110" height="${220 - liquidY}" ${fillStyle} class="beer-liquid-rect" />
         <rect x="80" y="${liquidY}" width="55" height="${220 - liquidY}" fill="rgba(0, 0, 0, 0.22)" class="beer-liquid-shadow" />
         ${renderCarbonationBubbles(45, 115, 165, liquidY, 6)}
-        ${!isWater ? `
+        ${
+          !isWater
+            ? `
           <g class="beer-cloud-foam" data-base-y="${liquidY}">
             <rect x="25" y="${liquidY - 8}" width="110" height="16" fill="${foamColor}" opacity="0.9" />
             <circle cx="48" cy="${liquidY - 5}" r="11" fill="${foamColor}" />
@@ -374,7 +399,9 @@ function renderTulipGlass(pct, color, isPouring, id) {
             <circle cx="106" cy="${liquidY - 5}" r="10" fill="${foamColor}" />
             <circle cx="72" cy="${liquidY - 9}" r="9" fill="#FFFFFF" opacity="0.5" />
           </g>
-        ` : ''}
+        `
+            : ''
+        }
       </g>
 
       <path d="M 56 45 C 46 90, 42 135, 75 162" stroke="#FFFFFF" stroke-width="2.5" fill="none" opacity="0.4" />
@@ -388,11 +415,10 @@ function renderTulipGlass(pct, color, isPouring, id) {
 function renderMug(pct, color, isPouring, id) {
   const liquidY = 215 - (pct / 100) * 160;
   const isWater = color === 'WATER';
-  const isDark = color === '#080100' || color === '#130100' || color === '#200100' || color === '#280200' || color === '#000000';
+  const isDark =
+    color === '#080100' || color === '#130100' || color === '#200100' || color === '#280200' || color === '#000000';
   const foamColor = isDark ? '#F5EBE6' : '#FFFDF5';
-  const fillStyle = isWater
-    ? `fill="rgba(224, 247, 250, 0.25)"`
-    : `fill="${color}" opacity="0.9"`;
+  const fillStyle = isWater ? `fill="rgba(224, 247, 250, 0.25)"` : `fill="${color}" opacity="0.9"`;
 
   return `
     <svg viewBox="0 0 160 260" data-bottom-y="215" data-top-rim-y="55" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" xmlns="http://www.w3.org/2000/svg">
@@ -420,7 +446,9 @@ function renderMug(pct, color, isPouring, id) {
         <rect x="35" y="${liquidY}" width="90" height="${220 - liquidY}" ${fillStyle} class="beer-liquid-rect" />
         <rect x="80" y="${liquidY}" width="45" height="${220 - liquidY}" fill="rgba(0, 0, 0, 0.22)" class="beer-liquid-shadow" />
         ${renderCarbonationBubbles(45, 115, 210, liquidY, 6)}
-        ${!isWater ? `
+        ${
+          !isWater
+            ? `
           <g class="beer-cloud-foam" data-base-y="${liquidY}">
             <rect x="40" y="${liquidY - 8}" width="80" height="16" fill="${foamColor}" opacity="0.9" />
             <circle cx="52" cy="${liquidY - 5}" r="10" fill="${foamColor}" />
@@ -429,7 +457,9 @@ function renderMug(pct, color, isPouring, id) {
             <circle cx="102" cy="${liquidY - 5}" r="10" fill="${foamColor}" />
             <circle cx="72" cy="${liquidY - 9}" r="8" fill="#FFFFFF" opacity="0.5" />
           </g>
-        ` : ''}
+        `
+            : ''
+        }
       </g>
 
       <rect x="44" y="55" width="6" height="160" rx="3" fill="#FFFFFF" opacity="0.2" />
@@ -443,11 +473,10 @@ function renderMug(pct, color, isPouring, id) {
 function renderStoutGlass(pct, color, isPouring, id) {
   const liquidY = 220 - (pct / 100) * 175;
   const isWater = color === 'WATER';
-  const isDark = color === '#080100' || color === '#130100' || color === '#200100' || color === '#280200' || color === '#000000';
+  const isDark =
+    color === '#080100' || color === '#130100' || color === '#200100' || color === '#280200' || color === '#000000';
   const foamColor = isDark ? '#F5EBE6' : '#FFFDF5';
-  const fillStyle = isWater
-    ? `fill="rgba(224, 247, 250, 0.25)"`
-    : `fill="${color}" opacity="0.9"`;
+  const fillStyle = isWater ? `fill="rgba(224, 247, 250, 0.25)"` : `fill="${color}" opacity="0.9"`;
 
   return `
     <svg viewBox="0 0 160 260" data-bottom-y="220" data-top-rim-y="45" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" xmlns="http://www.w3.org/2000/svg">
@@ -470,7 +499,9 @@ function renderStoutGlass(pct, color, isPouring, id) {
         <rect x="25" y="${liquidY}" width="110" height="${230 - liquidY}" ${fillStyle} class="beer-liquid-rect" />
         <rect x="80" y="${liquidY}" width="55" height="${230 - liquidY}" fill="rgba(0, 0, 0, 0.22)" class="beer-liquid-shadow" />
         ${renderCarbonationBubbles(48, 112, 215, liquidY, 6)}
-        ${!isWater ? `
+        ${
+          !isWater
+            ? `
           <g class="beer-cloud-foam" data-base-y="${liquidY}">
             <rect x="25" y="${liquidY - 8}" width="110" height="16" fill="${foamColor}" opacity="0.9" />
             <circle cx="48" cy="${liquidY - 5}" r="11" fill="${foamColor}" />
@@ -479,7 +510,9 @@ function renderStoutGlass(pct, color, isPouring, id) {
             <circle cx="106" cy="${liquidY - 5}" r="10" fill="${foamColor}" />
             <circle cx="72" cy="${liquidY - 9}" r="9" fill="#FFFFFF" opacity="0.5" />
           </g>
-        ` : ''}
+        `
+            : ''
+        }
       </g>
 
       <path d="M 55 50 C 48 85, 46 120, 60 170" stroke="#FFFFFF" stroke-width="2.5" fill="none" opacity="0.35" />
@@ -493,11 +526,10 @@ function renderStoutGlass(pct, color, isPouring, id) {
 function renderSnifter(pct, color, isPouring, id) {
   const liquidY = 175 - (pct / 100) * 120;
   const isWater = color === 'WATER';
-  const isDark = color === '#080100' || color === '#130100' || color === '#200100' || color === '#280200' || color === '#000000';
+  const isDark =
+    color === '#080100' || color === '#130100' || color === '#200100' || color === '#280200' || color === '#000000';
   const foamColor = isDark ? '#F5EBE6' : '#FFFDF5';
-  const fillStyle = isWater
-    ? `fill="rgba(224, 247, 250, 0.25)"`
-    : `fill="${color}" opacity="0.9"`;
+  const fillStyle = isWater ? `fill="rgba(224, 247, 250, 0.25)"` : `fill="${color}" opacity="0.9"`;
 
   return `
     <svg viewBox="0 0 160 260" data-bottom-y="175" data-top-rim-y="55" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" xmlns="http://www.w3.org/2000/svg">
@@ -523,7 +555,9 @@ function renderSnifter(pct, color, isPouring, id) {
         <rect x="20" y="${liquidY}" width="120" height="${210 - liquidY}" ${fillStyle} class="beer-liquid-rect" />
         <rect x="80" y="${liquidY}" width="60" height="${210 - liquidY}" fill="rgba(0, 0, 0, 0.22)" class="beer-liquid-shadow" />
         ${renderCarbonationBubbles(42, 118, 170, liquidY, 6)}
-        ${!isWater ? `
+        ${
+          !isWater
+            ? `
           <g class="beer-cloud-foam" data-base-y="${liquidY}">
             <rect x="20" y="${liquidY - 8}" width="120" height="16" fill="${foamColor}" opacity="0.9" />
             <circle cx="48" cy="${liquidY - 5}" r="11" fill="${foamColor}" />
@@ -532,7 +566,9 @@ function renderSnifter(pct, color, isPouring, id) {
             <circle cx="106" cy="${liquidY - 5}" r="10" fill="${foamColor}" />
             <circle cx="72" cy="${liquidY - 9}" r="9" fill="#FFFFFF" opacity="0.5" />
           </g>
-        ` : ''}
+        `
+            : ''
+        }
       </g>
 
       <path d="M 60 60 C 40 105, 42 150, 72 168" stroke="#FFFFFF" stroke-width="2.5" fill="none" opacity="0.4" />

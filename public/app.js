@@ -1,7 +1,13 @@
-// Tapboard v3.8.2 Client Engine
 import { renderTapGraphic, srmToHex } from './graphics.js';
 import { createLiveUpdateController, updateGraphicFill } from './liveUpdates.js';
-import { buildOnDeckItems, buildRecipeModalContent, buildTapCardContent, createSelectOption, createToast } from './domBuilders.js';
+import {
+  buildOnDeckItems,
+  buildRecipeModalContent,
+  buildTapCardContent,
+  createSelectOption,
+  createToast
+} from './domBuilders.js';
+import { shouldShowNewBadge } from './freshness.js';
 
 let appState = {
   settings: {},
@@ -16,6 +22,9 @@ let appState = {
 let editingTapId = null;
 let authToken = sessionStorage.getItem('tapboard_token') || null;
 let liveUpdates;
+const simulatedPourTimers = new Map();
+const LONG_PRESS_MS = 600;
+const SIMULATED_POUR_MS = 8000;
 
 function getTapState(tapId) {
   return appState.tapStates[String(tapId)] || {};
@@ -33,8 +42,8 @@ function getBatchSelection(tapId) {
 }
 
 function scheduleTapUpdates(tapIds) {
-  tapIds.forEach(tapId => {
-    const tap = appState.taps.find(item => item.tap_id === Number(tapId));
+  tapIds.forEach((tapId) => {
+    const tap = appState.taps.find((item) => item.tap_id === Number(tapId));
     const card = document.querySelector(`.tap-card[data-tap-id="${tapId}"]`);
     if (tap && tap.enabled === 1 && card) updateTapCard(card, tap);
   });
@@ -42,9 +51,11 @@ function scheduleTapUpdates(tapIds) {
 
 liveUpdates = createLiveUpdateController({
   getState: () => appState,
-  setState: state => { appState = state; },
+  setState: (state) => {
+    appState = state;
+  },
   onDirty: scheduleTapUpdates,
-  requestFrame: callback => requestAnimationFrame(callback)
+  requestFrame: (callback) => requestAnimationFrame(callback)
 });
 
 function updateAuthUI() {
@@ -103,6 +114,7 @@ function initSSE() {
   eventSource.addEventListener('snapshot', (e) => {
     liveUpdates.replaceSnapshot(JSON.parse(e.data));
     updateClockStatus(appState.haConnected ? 'Live' : 'Disconnected');
+    pulseLiveIndicator();
     renderApp();
   });
 
@@ -111,16 +123,19 @@ function initSSE() {
     const { isConnected } = JSON.parse(e.data);
     appState.haConnected = isConnected;
     updateClockStatus(isConnected ? 'Live' : 'Disconnected');
+    pulseLiveIndicator();
   });
 
   // 3. HA State Changed
   eventSource.addEventListener('state_changed', (e) => {
     liveUpdates.applyStateChanged(JSON.parse(e.data));
+    pulseLiveIndicator();
   });
 
   // 4. Instant Pour Animation Start
   eventSource.addEventListener('pour_start', (e) => {
     const { tapId } = JSON.parse(e.data);
+    pulseLiveIndicator();
     console.log(`[Pour Start] Animating Tap ${tapId}`);
     setTapPouringAnimation(tapId, true);
   });
@@ -128,6 +143,7 @@ function initSSE() {
   // 5. Pour Complete Summary & Toast Notification
   eventSource.addEventListener('pour_complete', (e) => {
     const { tapId, volumePouredOz, beerName, kegKickForecast } = JSON.parse(e.data);
+    pulseLiveIndicator();
     showToast(`🍺 Poured ${volumePouredOz} oz of ${beerName}!`);
     setTapPouringAnimation(tapId, false);
     if (kegKickForecast) {
@@ -145,20 +161,33 @@ function initSSE() {
   // 6. Canceled Pour (rebound, disconnect, large change, or safety timeout)
   eventSource.addEventListener('pour_cancel', (e) => {
     const { tapId } = JSON.parse(e.data);
+    pulseLiveIndicator();
     setTapPouringAnimation(tapId, false);
   });
 
   // 7. Low Keg Alert
   eventSource.addEventListener('low_keg_alert', (e) => {
     const { tapId, currentPercent } = JSON.parse(e.data);
+    pulseLiveIndicator();
     showToast(`⚠️ Low Keg Warning: Tap ${tapId} at ${currentPercent}%!`);
   });
 
   // 8. Settings Updated
   eventSource.addEventListener('settings_updated', (e) => {
     liveUpdates.replaceSnapshot(JSON.parse(e.data));
+    pulseLiveIndicator();
     renderApp();
   });
+}
+
+function pulseLiveIndicator() {
+  if (!appState.haConnected) return;
+  const badge = document.getElementById('liveStatusBadge');
+  if (!badge) return;
+
+  badge.classList.remove('is-updating');
+  void badge.offsetWidth;
+  badge.classList.add('is-updating');
 }
 
 function updateClockStatus(text) {
@@ -199,18 +228,17 @@ function setTapPouringAnimation(tapId, isPouring) {
   const srmColor = colorHex === 'WATER' ? '#E0F7FA' : colorHex;
   card.style.setProperty('--beer-srm-color', srmColor);
 
-  const headerBadges = card.querySelector('.tap-card-header > div:last-child');
   const streamGroup = card.querySelector('.pour-stream-group');
   const liquidRects = card.querySelectorAll('.beer-liquid-rect, .beer-liquid-shadow');
   const foamGroup = card.querySelector('.beer-cloud-foam');
 
   // Read untransformed SVG base Y coordinate for foam head
   const svgEl = card.querySelector('.tap-graphic-svg');
-  const bottomY = svgEl ? (parseFloat(svgEl.getAttribute('data-bottom-y')) || 220) : 220;
-  const topRimY = svgEl ? (parseFloat(svgEl.getAttribute('data-top-rim-y')) || 55) : 55;
+  const bottomY = svgEl ? parseFloat(svgEl.getAttribute('data-bottom-y')) || 220 : 220;
+  const topRimY = svgEl ? parseFloat(svgEl.getAttribute('data-top-rim-y')) || 55 : 55;
   const fullHeight = bottomY - topRimY;
 
-  const baseY = foamGroup ? (parseFloat(foamGroup.getAttribute('data-base-y')) || bottomY) : bottomY;
+  const baseY = foamGroup ? parseFloat(foamGroup.getAttribute('data-base-y')) || bottomY : bottomY;
 
   if (isPouring) {
     card.classList.remove('is-settling');
@@ -221,7 +249,7 @@ function setTapPouringAnimation(tapId, isPouring) {
     // 1. Snap to empty (0% fill at bottomY) without transition
     card.classList.add('no-anim');
 
-    liquidRects.forEach(r => {
+    liquidRects.forEach((r) => {
       r.setAttribute('y', bottomY);
       r.setAttribute('height', 0);
     });
@@ -235,7 +263,7 @@ function setTapPouringAnimation(tapId, isPouring) {
     // 3. Re-enable 8s transition and fill to 100% full
     card.classList.remove('no-anim');
     requestAnimationFrame(() => {
-      liquidRects.forEach(r => {
+      liquidRects.forEach((r) => {
         r.setAttribute('y', topRimY);
         r.setAttribute('height', fullHeight);
       });
@@ -255,7 +283,7 @@ function setTapPouringAnimation(tapId, isPouring) {
     const targetY = bottomY - (fillPct / 100) * fullHeight;
     const targetHeight = bottomY - targetY;
 
-    liquidRects.forEach(r => {
+    liquidRects.forEach((r) => {
       r.setAttribute('y', targetY);
       r.setAttribute('height', targetHeight);
     });
@@ -271,8 +299,65 @@ function setTapPouringAnimation(tapId, isPouring) {
   }
 }
 
+function simulatePour(tapId) {
+  if (!authToken) return;
+
+  const existingTimer = simulatedPourTimers.get(tapId);
+  if (existingTimer) clearTimeout(existingTimer);
+
+  setTapPouringAnimation(tapId, true);
+  showToast(`🍺 Simulating a pour on Tap ${tapId}`);
+
+  const timer = setTimeout(() => {
+    setTapPouringAnimation(tapId, false);
+    simulatedPourTimers.delete(tapId);
+  }, SIMULATED_POUR_MS);
+  simulatedPourTimers.set(tapId, timer);
+}
+
+function addAdminLongPress(card, tapId) {
+  let timer = null;
+  let startX = 0;
+  let startY = 0;
+  let suppressClickUntil = 0;
+
+  const cancel = () => {
+    if (timer) clearTimeout(timer);
+    timer = null;
+  };
+
+  card.addEventListener('pointerdown', (event) => {
+    if (
+      !authToken ||
+      (event.button !== undefined && event.button !== 0) ||
+      event.target.closest('button, input, select, textarea, label')
+    )
+      return;
+    startX = event.clientX;
+    startY = event.clientY;
+    cancel();
+    timer = setTimeout(() => {
+      timer = null;
+      suppressClickUntil = Date.now() + 1000;
+      simulatePour(tapId);
+    }, LONG_PRESS_MS);
+  });
+
+  card.addEventListener('pointermove', (event) => {
+    if (Math.hypot(event.clientX - startX, event.clientY - startY) > 10) cancel();
+  });
+  card.addEventListener('pointerup', cancel);
+  card.addEventListener('pointercancel', cancel);
+  card.addEventListener('pointerleave', cancel);
+  card.addEventListener('contextmenu', (event) => {
+    if (authToken) event.preventDefault();
+  });
+
+  return () => Date.now() < suppressClickUntil;
+}
+
 // Helper: Format Volume Readout based on Per-Tap Display Setting
-function formatVolumeReadout(tap, fillPercent, currentOz, pintsRemaining) {
+function formatVolumeReadout(tap, fillPercent, currentOz) {
   const unit = tap.display_unit || 'percent';
   const customSize = Math.max(0.5, parseFloat(tap.custom_pour_size) || 12.0);
 
@@ -294,15 +379,11 @@ function formatVolumeReadout(tap, fillPercent, currentOz, pintsRemaining) {
 // Helper: Clean Format Forecast Readout
 function formatForecastText(forecast) {
   if (forecast.estimatedDaysRemaining === null || forecast.estimatedDaysRemaining === undefined) {
-    return `⌛ Forecast calculating...`;
+    return '';
   }
 
   if (forecast.estimatedDaysRemaining < 1.0) {
     return `🔴 Kicking soon`;
-  }
-
-  if (forecast.isEstimatedBaseline) {
-    return `⌛ ${forecast.estimatedDaysRemaining} days remaining`;
   }
 
   return `⌛ ${forecast.estimatedDaysRemaining} days remaining (${forecast.avgDailyOz} oz/day avg)`;
@@ -328,12 +409,12 @@ function renderApp() {
   const tapGrid = document.getElementById('tapGrid');
   if (!tapGrid) return;
 
-  const activeTaps = taps.filter(t => t.enabled === 1);
-  const activeTapIds = new Set(activeTaps.map(t => t.tap_id));
+  const activeTaps = taps.filter((t) => t.enabled === 1);
+  const activeTapIds = new Set(activeTaps.map((t) => t.tap_id));
   tapGrid.setAttribute('data-count', activeTaps.length);
 
   // 1. Remove cards for disabled/hidden taps
-  Array.from(tapGrid.querySelectorAll('.tap-card')).forEach(card => {
+  Array.from(tapGrid.querySelectorAll('.tap-card')).forEach((card) => {
     const tapId = parseInt(card.getAttribute('data-tap-id'), 10);
     if (!activeTapIds.has(tapId)) {
       card.remove();
@@ -341,7 +422,7 @@ function renderApp() {
   });
 
   // 2. Add or update active tap cards in-place
-  activeTaps.forEach(tap => {
+  activeTaps.forEach((tap) => {
     const existingCard = tapGrid.querySelector(`.tap-card[data-tap-id="${tap.tap_id}"]`);
     if (existingCard) {
       updateTapCard(existingCard, tap);
@@ -362,11 +443,11 @@ function createTapCard(tap) {
   const batchAttr = getBatchState(tapId);
 
   // 3-Tier Recipe Lookup Hierarchy (Overrides -> HA Attributes -> Local Batches Cache)
-  const cachedBatch = (tap.batch_id && appState.batches) ? appState.batches.find(b => b.batch_id === tap.batch_id) : null;
+  const cachedBatch =
+    tap.batch_id && appState.batches ? appState.batches.find((b) => b.batch_id === tap.batch_id) : null;
 
   const fillPercent = Math.min(100, Math.max(0, parseFloat(tapState.fillPercent) || 0));
   const currentOz = parseFloat(tapState.volumeOz) > 0 ? parseFloat(tapState.volumeOz) : (fillPercent / 100.0) * 640.0;
-  const pintsRemaining = parseFloat(tapState.pintsRemaining) || (currentOz / 16.0);
 
   const bfName = batchAttr.recipeName || (cachedBatch ? cachedBatch.recipe_name : null) || `Tap ${tapId}`;
   const rawStyle = batchAttr.style || (cachedBatch ? cachedBatch.style : null) || 'Craft Beer';
@@ -379,28 +460,54 @@ function createTapCard(tap) {
   const bfDesc = batchAttr.description || (cachedBatch ? cachedBatch.description : null) || '';
 
   const hasOverride = tap.override_enabled === 1;
-  const beerName = (hasOverride && tap.override_name && tap.override_name.trim() !== '') ? tap.override_name : bfName;
-  const style = (hasOverride && tap.override_style && tap.override_style.trim() !== '') ? tap.override_style : bfStyle;
+  const beerName = hasOverride && tap.override_name && tap.override_name.trim() !== '' ? tap.override_name : bfName;
+  const style = hasOverride && tap.override_style && tap.override_style.trim() !== '' ? tap.override_style : bfStyle;
 
-  const isWaterOrTopo = beerName.toLowerCase().includes('topo chico') ||
-                        beerName.toLowerCase().includes('water') ||
-                        style.toLowerCase().includes('water') ||
-                        style.toLowerCase().includes('seltzer') ||
-                        bfSrm === 0 ||
-                        (hasOverride && tap.override_srm === 0);
+  const isWaterOrTopo =
+    beerName.toLowerCase().includes('topo chico') ||
+    beerName.toLowerCase().includes('water') ||
+    style.toLowerCase().includes('water') ||
+    style.toLowerCase().includes('seltzer') ||
+    bfSrm === 0 ||
+    (hasOverride && tap.override_srm === 0);
 
-  const abv = isWaterOrTopo ? '0.0%' : ((hasOverride && tap.override_abv !== null && tap.override_abv !== undefined && tap.override_abv !== '') ? `${tap.override_abv}%` : (bfAbv !== '--' ? `${bfAbv}%` : '--'));
-  const ibu = isWaterOrTopo ? '-' : ((hasOverride && tap.override_ibu !== null && tap.override_ibu !== undefined && tap.override_ibu !== '') ? tap.override_ibu : bfIbu);
-  const og = isWaterOrTopo ? '-' : ((hasOverride && tap.override_og !== null && tap.override_og !== undefined && tap.override_og !== '') ? tap.override_og : bfOg);
-  const fg = isWaterOrTopo ? '-' : ((hasOverride && tap.override_fg !== null && tap.override_fg !== undefined && tap.override_fg !== '') ? tap.override_fg : bfFg);
-  const srm = isWaterOrTopo ? 0 : ((hasOverride && tap.override_srm !== null && tap.override_srm !== undefined && tap.override_srm !== '') ? tap.override_srm : bfSrm);
-  const description = (hasOverride && tap.override_description && tap.override_description.trim() !== '') ? tap.override_description : bfDesc;
+  const abv = isWaterOrTopo
+    ? '0.0%'
+    : hasOverride && tap.override_abv !== null && tap.override_abv !== undefined && tap.override_abv !== ''
+      ? `${tap.override_abv}%`
+      : bfAbv !== '--'
+        ? `${bfAbv}%`
+        : '--';
+  const ibu = isWaterOrTopo
+    ? '-'
+    : hasOverride && tap.override_ibu !== null && tap.override_ibu !== undefined && tap.override_ibu !== ''
+      ? tap.override_ibu
+      : bfIbu;
+  const og = isWaterOrTopo
+    ? '-'
+    : hasOverride && tap.override_og !== null && tap.override_og !== undefined && tap.override_og !== ''
+      ? tap.override_og
+      : bfOg;
+  const fg = isWaterOrTopo
+    ? '-'
+    : hasOverride && tap.override_fg !== null && tap.override_fg !== undefined && tap.override_fg !== ''
+      ? tap.override_fg
+      : bfFg;
+  const srm = isWaterOrTopo
+    ? 0
+    : hasOverride && tap.override_srm !== null && tap.override_srm !== undefined && tap.override_srm !== ''
+      ? tap.override_srm
+      : bfSrm;
+  const description =
+    hasOverride && tap.override_description && tap.override_description.trim() !== ''
+      ? tap.override_description
+      : bfDesc;
 
   const beerColorHex = isWaterOrTopo ? 'WATER' : srmToHex(srm);
 
   const forecast = appState.kegKickForecasts[tapId] || {};
   const forecastText = formatForecastText(forecast);
-  const volumeReadoutText = formatVolumeReadout(tap, fillPercent, currentOz, pintsRemaining);
+  const volumeReadoutText = formatVolumeReadout(tap, fillPercent, currentOz);
 
   const card = document.createElement('div');
   card.className = 'tap-card';
@@ -408,15 +515,34 @@ function createTapCard(tap) {
   card.setAttribute('data-graphic-style', tap.graphic || 'corny_keg');
   card.setAttribute('data-color-hex', beerColorHex);
 
-  card.replaceChildren(buildTapCardContent({
-    tapId, fillPercent, fresh: tap.badge_fresh === 1, lowThreshold: tap.badge_low_keg || 20,
-    beerName, style, description, abv, ibu, og, fg, volumeReadoutText, forecastText
-  }));
+  card.replaceChildren(
+    buildTapCardContent({
+      tapId,
+      fillPercent,
+      fresh: shouldShowNewBadge(tap),
+      lowThreshold: tap.badge_low_keg || 20,
+      beerName,
+      style,
+      description,
+      abv,
+      ibu,
+      og,
+      fg,
+      volumeReadoutText,
+      forecastText
+    })
+  );
 
   // Render SVG Graphic initially
   const graphicContainer = card.querySelector(`#graphic-tap-${tapId}`);
   if (graphicContainer && typeof renderTapGraphic === 'function') {
-    graphicContainer.innerHTML = renderTapGraphic(tap.graphic || 'corny_keg', fillPercent, beerColorHex, false, `tap_${tapId}`);
+    graphicContainer.innerHTML = renderTapGraphic(
+      tap.graphic || 'corny_keg',
+      fillPercent,
+      beerColorHex,
+      false,
+      `tap_${tapId}`
+    );
   }
 
   // Cog Button Click: Open Per-Tap Settings
@@ -428,13 +554,21 @@ function createTapCard(tap) {
         openTapSettings(tapId);
       } else {
         editingTapId = tapId;
-        document.getElementById('pinModal').style.display = 'flex';
+        openPinModal();
       }
     });
   }
 
+  const wasLongPress = addAdminLongPress(card, tapId);
+
   // Card Body Click: Open Recipe Detail Modal
-  card.addEventListener('click', () => openRecipeModal(tapId));
+  card.addEventListener('click', (event) => {
+    if (wasLongPress()) {
+      event.preventDefault();
+      return;
+    }
+    openRecipeModal(tapId);
+  });
 
   return card;
 }
@@ -446,11 +580,11 @@ function updateTapCard(card, tap) {
   const batchAttr = getBatchState(tapId);
 
   // 3-Tier Recipe Lookup Hierarchy (Overrides -> HA Attributes -> Local Batches Cache)
-  const cachedBatch = (tap.batch_id && appState.batches) ? appState.batches.find(b => b.batch_id === tap.batch_id) : null;
+  const cachedBatch =
+    tap.batch_id && appState.batches ? appState.batches.find((b) => b.batch_id === tap.batch_id) : null;
 
   const fillPercent = Math.min(100, Math.max(0, parseFloat(tapState.fillPercent) || 0));
   const currentOz = parseFloat(tapState.volumeOz) > 0 ? parseFloat(tapState.volumeOz) : (fillPercent / 100.0) * 640.0;
-  const pintsRemaining = parseFloat(tapState.pintsRemaining) || (currentOz / 16.0);
 
   const bfName = batchAttr.recipeName || (cachedBatch ? cachedBatch.recipe_name : null) || `Tap ${tapId}`;
   const rawStyle = batchAttr.style || (cachedBatch ? cachedBatch.style : null) || 'Craft Beer';
@@ -462,26 +596,49 @@ function updateTapCard(card, tap) {
   const bfSrm = batchAttr.srm ?? cachedBatch?.srm ?? 3;
 
   const hasOverride = tap.override_enabled === 1;
-  const beerName = (hasOverride && tap.override_name && tap.override_name.trim() !== '') ? tap.override_name : bfName;
-  const style = (hasOverride && tap.override_style && tap.override_style.trim() !== '') ? tap.override_style : bfStyle;
+  const beerName = hasOverride && tap.override_name && tap.override_name.trim() !== '' ? tap.override_name : bfName;
+  const style = hasOverride && tap.override_style && tap.override_style.trim() !== '' ? tap.override_style : bfStyle;
 
-  const isWaterOrTopo = beerName.toLowerCase().includes('topo chico') ||
-                        beerName.toLowerCase().includes('water') ||
-                        style.toLowerCase().includes('water') ||
-                        style.toLowerCase().includes('seltzer') ||
-                        bfSrm === 0 ||
-                        (hasOverride && tap.override_srm === 0);
+  const isWaterOrTopo =
+    beerName.toLowerCase().includes('topo chico') ||
+    beerName.toLowerCase().includes('water') ||
+    style.toLowerCase().includes('water') ||
+    style.toLowerCase().includes('seltzer') ||
+    bfSrm === 0 ||
+    (hasOverride && tap.override_srm === 0);
 
-  const abv = isWaterOrTopo ? '0.0%' : ((hasOverride && tap.override_abv !== null && tap.override_abv !== undefined && tap.override_abv !== '') ? `${tap.override_abv}%` : (bfAbv !== '--' ? `${bfAbv}%` : '--'));
-  const ibu = isWaterOrTopo ? '-' : ((hasOverride && tap.override_ibu !== null && tap.override_ibu !== undefined && tap.override_ibu !== '') ? tap.override_ibu : bfIbu);
-  const og = isWaterOrTopo ? '-' : ((hasOverride && tap.override_og !== null && tap.override_og !== undefined && tap.override_og !== '') ? tap.override_og : bfOg);
-  const fg = isWaterOrTopo ? '-' : ((hasOverride && tap.override_fg !== null && tap.override_fg !== undefined && tap.override_fg !== '') ? tap.override_fg : bfFg);
-  const srm = isWaterOrTopo ? 0 : ((hasOverride && tap.override_srm !== null && tap.override_srm !== undefined && tap.override_srm !== '') ? tap.override_srm : bfSrm);
+  const abv = isWaterOrTopo
+    ? '0.0%'
+    : hasOverride && tap.override_abv !== null && tap.override_abv !== undefined && tap.override_abv !== ''
+      ? `${tap.override_abv}%`
+      : bfAbv !== '--'
+        ? `${bfAbv}%`
+        : '--';
+  const ibu = isWaterOrTopo
+    ? '-'
+    : hasOverride && tap.override_ibu !== null && tap.override_ibu !== undefined && tap.override_ibu !== ''
+      ? tap.override_ibu
+      : bfIbu;
+  const og = isWaterOrTopo
+    ? '-'
+    : hasOverride && tap.override_og !== null && tap.override_og !== undefined && tap.override_og !== ''
+      ? tap.override_og
+      : bfOg;
+  const fg = isWaterOrTopo
+    ? '-'
+    : hasOverride && tap.override_fg !== null && tap.override_fg !== undefined && tap.override_fg !== ''
+      ? tap.override_fg
+      : bfFg;
+  const srm = isWaterOrTopo
+    ? 0
+    : hasOverride && tap.override_srm !== null && tap.override_srm !== undefined && tap.override_srm !== ''
+      ? tap.override_srm
+      : bfSrm;
   const beerColorHex = isWaterOrTopo ? 'WATER' : srmToHex(srm);
 
   const forecast = appState.kegKickForecasts[tapId] || {};
   const forecastText = formatForecastText(forecast);
-  const newVolText = formatVolumeReadout(tap, fillPercent, currentOz, pintsRemaining);
+  const newVolText = formatVolumeReadout(tap, fillPercent, currentOz);
 
   // Update text content in-place
   const titleEl = card.querySelector('.beer-title');
@@ -491,9 +648,10 @@ function updateTapCard(card, tap) {
   if (styleEl && styleEl.textContent !== style) styleEl.textContent = style;
 
   let descriptionEl = card.querySelector('.beer-description');
-  const description = (hasOverride && tap.override_description && tap.override_description.trim() !== '')
-    ? tap.override_description
-    : (batchAttr.description || (cachedBatch ? cachedBatch.description : null) || '');
+  const description =
+    hasOverride && tap.override_description && tap.override_description.trim() !== ''
+      ? tap.override_description
+      : batchAttr.description || (cachedBatch ? cachedBatch.description : null) || '';
   if (description && !descriptionEl) {
     descriptionEl = document.createElement('p');
     descriptionEl.className = 'beer-description';
@@ -516,6 +674,17 @@ function updateTapCard(card, tap) {
     } else if (!isLow && lowBadge) {
       lowBadge.remove();
     }
+
+    let newBadge = badges.querySelector('.badge-fresh');
+    const isNew = shouldShowNewBadge(tap);
+    if (isNew && !newBadge) {
+      newBadge = document.createElement('span');
+      newBadge.className = 'badge badge-fresh';
+      newBadge.textContent = 'NEW';
+      badges.querySelector('.tap-cog-btn')?.before(newBadge);
+    } else if (!isNew && newBadge) {
+      newBadge.remove();
+    }
   }
 
   const metrics = card.querySelectorAll('.metric-value');
@@ -532,8 +701,9 @@ function updateTapCard(card, tap) {
   }
 
   const forecastEl = card.querySelector('.forecast-readout');
-  if (forecastEl && forecastEl.textContent !== forecastText) {
-    forecastEl.textContent = forecastText;
+  if (forecastEl) {
+    if (forecastEl.textContent !== forecastText) forecastEl.textContent = forecastText;
+    forecastEl.hidden = !forecastText;
   }
 
   // Numeric telemetry mutates the existing SVG so carbonation nodes keep animating.
@@ -541,10 +711,20 @@ function updateTapCard(card, tap) {
   const currentGraphicStyle = card.getAttribute('data-graphic-style');
   const currentColorHex = card.getAttribute('data-color-hex');
 
-  if (!graphicContainer.firstChild || currentGraphicStyle !== (tap.graphic || 'corny_keg') || currentColorHex !== beerColorHex) {
+  if (
+    !graphicContainer.firstChild ||
+    currentGraphicStyle !== (tap.graphic || 'corny_keg') ||
+    currentColorHex !== beerColorHex
+  ) {
     card.setAttribute('data-graphic-style', tap.graphic || 'corny_keg');
     card.setAttribute('data-color-hex', beerColorHex);
-    graphicContainer.innerHTML = renderTapGraphic(tap.graphic || 'corny_keg', fillPercent, beerColorHex, false, `tap_${tapId}`);
+    graphicContainer.innerHTML = renderTapGraphic(
+      tap.graphic || 'corny_keg',
+      fillPercent,
+      beerColorHex,
+      false,
+      `tap_${tapId}`
+    );
   } else {
     updateGraphicFill(card, fillPercent);
   }
@@ -558,29 +738,58 @@ function openRecipeModal(tapId) {
 
   if (!modal || !title || !body) return;
 
-  const tap = appState.taps.find(item => item.tap_id === tapId) || {};
+  const tap = appState.taps.find((item) => item.tap_id === tapId) || {};
   const batchAttr = getBatchState(tapId);
-  const cachedBatch = tap.batch_id ? appState.batches.find(batch => batch.batch_id === tap.batch_id) : null;
+  const cachedBatch = tap.batch_id ? appState.batches.find((batch) => batch.batch_id === tap.batch_id) : null;
   const hasOverride = tap.override_enabled === 1;
-  const beerName = (hasOverride && tap.override_name) || batchAttr.recipeName || cachedBatch?.recipe_name || `Tap ${tapId}`;
-  const style = (hasOverride && tap.override_style) || deriveBeerStyle(beerName, batchAttr.style || cachedBatch?.style || 'Craft Beer');
+  const beerName =
+    (hasOverride && tap.override_name) || batchAttr.recipeName || cachedBatch?.recipe_name || `Tap ${tapId}`;
+  const style =
+    (hasOverride && tap.override_style) ||
+    deriveBeerStyle(beerName, batchAttr.style || cachedBatch?.style || 'Craft Beer');
   const projectedSrm = batchAttr.srm ?? cachedBatch?.srm ?? 3;
-  const isWater = beerName.toLowerCase().includes('water') ||
+  const isWater =
+    beerName.toLowerCase().includes('water') ||
     beerName.toLowerCase().includes('topo chico') ||
     style.toLowerCase().includes('water') ||
     style.toLowerCase().includes('seltzer') ||
     projectedSrm === 0 ||
     (hasOverride && tap.override_srm === 0);
   const batchAbv = batchAttr.abv ?? cachedBatch?.abv;
-  const abv = isWater ? '0.0%' : (hasOverride && tap.override_abv !== '' && tap.override_abv != null ? `${tap.override_abv}%` : (batchAbv != null ? `${batchAbv}%` : '--'));
-  const ibu = isWater ? '-' : (hasOverride && tap.override_ibu !== '' && tap.override_ibu != null ? tap.override_ibu : (batchAttr.ibu ?? cachedBatch?.ibu ?? '--'));
-  const og = isWater ? '-' : (hasOverride && tap.override_og !== '' && tap.override_og != null ? tap.override_og : (batchAttr.og ?? cachedBatch?.og ?? '--'));
-  const fg = isWater ? '-' : (hasOverride && tap.override_fg !== '' && tap.override_fg != null ? tap.override_fg : (batchAttr.fg ?? cachedBatch?.fg ?? '--'));
-  const srm = isWater ? 0 : (hasOverride && tap.override_srm !== '' && tap.override_srm != null ? tap.override_srm : projectedSrm);
-  const description = (hasOverride && tap.override_description) || batchAttr.description || cachedBatch?.description || '';
+  const abv = isWater
+    ? '0.0%'
+    : hasOverride && tap.override_abv !== '' && tap.override_abv !== null && tap.override_abv !== undefined
+      ? `${tap.override_abv}%`
+      : batchAbv !== null && batchAbv !== undefined
+        ? `${batchAbv}%`
+        : '--';
+  const ibu = isWater
+    ? '-'
+    : hasOverride && tap.override_ibu !== '' && tap.override_ibu !== null && tap.override_ibu !== undefined
+      ? tap.override_ibu
+      : (batchAttr.ibu ?? cachedBatch?.ibu ?? '--');
+  const og = isWater
+    ? '-'
+    : hasOverride && tap.override_og !== '' && tap.override_og !== null && tap.override_og !== undefined
+      ? tap.override_og
+      : (batchAttr.og ?? cachedBatch?.og ?? '--');
+  const fg = isWater
+    ? '-'
+    : hasOverride && tap.override_fg !== '' && tap.override_fg !== null && tap.override_fg !== undefined
+      ? tap.override_fg
+      : (batchAttr.fg ?? cachedBatch?.fg ?? '--');
+  const srm = isWater
+    ? 0
+    : hasOverride && tap.override_srm !== '' && tap.override_srm !== null && tap.override_srm !== undefined
+      ? tap.override_srm
+      : projectedSrm;
+  const description =
+    (hasOverride && tap.override_description) || batchAttr.description || cachedBatch?.description || '';
 
   title.textContent = `${beerName}`;
-  body.replaceChildren(buildRecipeModalContent({ style, abv, ibu, srm, og, fg, brewDate: batchAttr.brewDate, description }));
+  body.replaceChildren(
+    buildRecipeModalContent({ style, abv, ibu, srm, og, fg, brewDate: batchAttr.brewDate, description })
+  );
 
   modal.style.display = 'flex';
 }
@@ -588,7 +797,7 @@ function openRecipeModal(tapId) {
 // Open Global Settings Modal
 function openGlobalSettingsModal() {
   const { settings, taps } = appState;
-  
+
   if (settings.theme) document.getElementById('themeSelect').value = settings.theme;
   if (settings.title) document.getElementById('headerTitleInput').value = settings.title;
   if (settings.font_title) document.getElementById('titleFontSelect').value = settings.font_title;
@@ -597,8 +806,8 @@ function openGlobalSettingsModal() {
   for (let i = 1; i <= 6; i++) {
     const check = document.getElementById(`globalTapCheck_${i}`);
     if (check) {
-      const tapRow = taps.find(t => t.tap_id === i);
-      check.checked = tapRow ? tapRow.enabled === 1 : (i <= 3);
+      const tapRow = taps.find((t) => t.tap_id === i);
+      check.checked = tapRow ? tapRow.enabled === 1 : i <= 3;
     }
   }
 
@@ -609,7 +818,7 @@ function openGlobalSettingsModal() {
 // Open Per-Tap Settings Modal
 function openTapSettings(tapId) {
   editingTapId = tapId;
-  const tap = appState.taps.find(t => t.tap_id === tapId) || {};
+  const tap = appState.taps.find((t) => t.tap_id === tapId) || {};
   const batchAttr = getBatchState(tapId);
   const batchSelection = getBatchSelection(tapId);
   const rawOptions = batchSelection.options || [];
@@ -626,7 +835,7 @@ function openTapSettings(tapId) {
   const conditioningBatches = [];
   let topoChicoOption = null;
 
-  rawOptions.forEach(optStr => {
+  rawOptions.forEach((optStr) => {
     if (!optStr || optStr.trim() === '') return;
 
     if (optStr.toLowerCase().includes('topo_chico') || optStr.toLowerCase().includes('topo chico')) {
@@ -636,17 +845,27 @@ function openTapSettings(tapId) {
     }
   });
 
-  conditioningBatches.forEach(optStr => {
+  conditioningBatches.forEach((optStr) => {
     const parts = optStr.split('|');
     const label = parts.length > 1 ? parts[1].trim() : optStr;
-    const opt = createSelectOption(optStr, label,
-      selectedBatch === optStr || (tap.batch_id && optStr.includes(tap.batch_id)) || (batchAttr.batchId && optStr.includes(batchAttr.batchId)));
+    const opt = createSelectOption(
+      optStr,
+      label,
+      selectedBatch === optStr ||
+        (tap.batch_id && optStr.includes(tap.batch_id)) ||
+        (batchAttr.batchId && optStr.includes(batchAttr.batchId))
+    );
     batchSelect.appendChild(opt);
   });
 
   const topoVal = topoChicoOption || 'custom:topo_chico | Topo Chico 0%';
-  const topoOpt = createSelectOption(topoVal, 'Topo Chico 0%',
-    selectedBatch === topoVal || selectedBatch === 'custom:topo_chico' || (batchAttr.recipeName && batchAttr.recipeName.toLowerCase().includes('topo chico')));
+  const topoOpt = createSelectOption(
+    topoVal,
+    'Topo Chico 0%',
+    selectedBatch === topoVal ||
+      selectedBatch === 'custom:topo_chico' ||
+      (batchAttr.recipeName && batchAttr.recipeName.toLowerCase().includes('topo chico'))
+  );
   batchSelect.appendChild(topoOpt);
 
   // Auto-check "Show Tap on Dashboard" whenever a non-empty brew batch is chosen
@@ -659,13 +878,13 @@ function openTapSettings(tapId) {
   // Set Graphic & Enabled
   document.getElementById('tapSettingsGraphicSelect').value = tap.graphic || 'corny_keg';
 
-  const isEnabled = tap.enabled === 1 || (batchSelect.value !== '');
+  const isEnabled = tap.enabled === 1 || batchSelect.value !== '';
   document.getElementById('tapSettingsEnabledCheckbox').checked = isEnabled;
 
   // Set Display Unit & Custom Pour Input
   const unitSelect = document.getElementById('tapSettingsDisplayUnitSelect');
   unitSelect.value = tap.display_unit || 'percent';
-  
+
   const customInput = document.getElementById('tapSettingsCustomPourInput');
   customInput.value = tap.custom_pour_size || 12.0;
 
@@ -679,11 +898,16 @@ function openTapSettings(tapId) {
 
   document.getElementById('overrideName').value = tap.override_name || '';
   document.getElementById('overrideStyle').value = tap.override_style || '';
-  document.getElementById('overrideAbv').value = tap.override_abv !== null && tap.override_abv !== undefined ? tap.override_abv : '';
-  document.getElementById('overrideIbu').value = tap.override_ibu !== null && tap.override_ibu !== undefined ? tap.override_ibu : '';
-  document.getElementById('overrideOg').value = tap.override_og !== null && tap.override_og !== undefined ? tap.override_og : '';
-  document.getElementById('overrideFg').value = tap.override_fg !== null && tap.override_fg !== undefined ? tap.override_fg : '';
-  document.getElementById('overrideSrm').value = tap.override_srm !== null && tap.override_srm !== undefined ? tap.override_srm : '';
+  document.getElementById('overrideAbv').value =
+    tap.override_abv !== null && tap.override_abv !== undefined ? tap.override_abv : '';
+  document.getElementById('overrideIbu').value =
+    tap.override_ibu !== null && tap.override_ibu !== undefined ? tap.override_ibu : '';
+  document.getElementById('overrideOg').value =
+    tap.override_og !== null && tap.override_og !== undefined ? tap.override_og : '';
+  document.getElementById('overrideFg').value =
+    tap.override_fg !== null && tap.override_fg !== undefined ? tap.override_fg : '';
+  document.getElementById('overrideSrm').value =
+    tap.override_srm !== null && tap.override_srm !== undefined ? tap.override_srm : '';
   document.getElementById('overrideDescription').value = tap.override_description || '';
 
   // Badges
@@ -691,6 +915,14 @@ function openTapSettings(tapId) {
   document.getElementById('badgeFreshToggle').checked = tap.badge_fresh === 1;
 
   document.getElementById('tapSettingsModal').style.display = 'flex';
+}
+
+function openPinModal() {
+  const modal = document.getElementById('pinModal');
+  const input = document.getElementById('pinInput');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  requestAnimationFrame(() => input?.focus());
 }
 
 function toggleCustomPourSizeUI(unitValue) {
@@ -720,7 +952,7 @@ function renderOnDeckTicker() {
   const itemsContainer = document.getElementById('onDeckItems');
   if (!itemsContainer) return;
 
-  const onDeckBrews = appState.catalog.filter(c => c.on_deck === 1);
+  const onDeckBrews = appState.catalog.filter((c) => c.on_deck === 1);
   if (onDeckBrews.length === 0) {
     itemsContainer.replaceChildren(buildOnDeckItems(onDeckBrews));
     return;
@@ -767,42 +999,53 @@ function initModalListeners() {
         openGlobalSettingsModal();
       } else {
         editingTapId = null;
-        document.getElementById('pinModal').style.display = 'flex';
+        openPinModal();
       }
     });
   }
 
   // PIN Submit
   const pinSubmitBtn = document.getElementById('pinSubmitBtn');
-  if (pinSubmitBtn) {
-    pinSubmitBtn.addEventListener('click', async () => {
+  const submitPin = async () => {
+    if (!pinSubmitBtn || pinSubmitBtn.disabled) return;
+    pinSubmitBtn.disabled = true;
+    try {
       const pin = document.getElementById('pinInput').value;
-      try {
-        const res = await fetch('/api/auth', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pin })
-        });
-        const data = await res.json();
-        if (res.ok && data.token) {
-          authToken = data.token;
-          sessionStorage.setItem('tapboard_token', authToken);
-          updateAuthUI();
-          document.getElementById('pinModal').style.display = 'none';
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin })
+      });
+      const data = await res.json();
+      if (res.ok && data.token) {
+        authToken = data.token;
+        sessionStorage.setItem('tapboard_token', authToken);
+        updateAuthUI();
+        document.getElementById('pinModal').style.display = 'none';
+        document.getElementById('pinInput').value = '';
 
-          if (editingTapId) {
-            openTapSettings(editingTapId);
-          } else {
-            openGlobalSettingsModal();
-          }
+        if (editingTapId) {
+          openTapSettings(editingTapId);
         } else {
-          alert(data.error || 'Invalid PIN');
+          openGlobalSettingsModal();
         }
-      } catch (err) {
-        alert('Authentication request failed');
+      } else {
+        alert(data.error || 'Invalid PIN');
       }
-    });
+    } catch (err) {
+      alert('Authentication request failed');
+    } finally {
+      pinSubmitBtn.disabled = false;
+    }
+  };
+  if (pinSubmitBtn) {
+    pinSubmitBtn.addEventListener('click', submitPin);
   }
+  document.getElementById('pinInput')?.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    submitPin();
+  });
 
   // Display Unit Selector Change Listener
   document.getElementById('tapSettingsDisplayUnitSelect')?.addEventListener('change', (e) => {
@@ -823,6 +1066,13 @@ function initModalListeners() {
   });
   document.getElementById('closeTapSettingsBtn')?.addEventListener('click', () => {
     document.getElementById('tapSettingsModal').style.display = 'none';
+  });
+
+  ['recipeModal', 'pinModal', 'globalSettingsModal', 'tapSettingsModal'].forEach((id) => {
+    const modal = document.getElementById(id);
+    modal?.addEventListener('click', (event) => {
+      if (event.target === modal) modal.style.display = 'none';
+    });
   });
 
   // Save Global Settings
@@ -846,7 +1096,7 @@ function initModalListeners() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`
+          Authorization: `Bearer ${authToken}`
         },
         body: JSON.stringify({ theme, title, font_title, font_body, tap_visibilities, new_pin: new_pin || undefined })
       });
@@ -898,7 +1148,7 @@ function initModalListeners() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`
+          Authorization: `Bearer ${authToken}`
         },
         body: JSON.stringify({
           graphic,
@@ -934,11 +1184,15 @@ function initModalListeners() {
   // Action Button: End Batch
   document.getElementById('tapSettingsEndBatchBtn')?.addEventListener('click', async () => {
     if (!editingTapId) return;
-    if (confirm(`Complete Brewfather batch for Tap ${editingTapId}? This will set the batch to Completed and unassign the tap.`)) {
+    if (
+      confirm(
+        `Complete Brewfather batch for Tap ${editingTapId}? This will set the batch to Completed and unassign the tap.`
+      )
+    ) {
       try {
         const res = await fetch(`/api/taps/${editingTapId}/end-batch`, {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${authToken}` }
+          headers: { Authorization: `Bearer ${authToken}` }
         });
         if (res.ok) {
           document.getElementById('tapSettingsModal').style.display = 'none';
@@ -955,11 +1209,15 @@ function initModalListeners() {
   // Action Button: End Keg
   document.getElementById('tapSettingsEndKegBtn')?.addEventListener('click', async () => {
     if (!editingTapId) return;
-    if (confirm(`End keg on Tap ${editingTapId}? This will unassign the tap without marking the Brewfather batch completed.`)) {
+    if (
+      confirm(
+        `End keg on Tap ${editingTapId}? This will unassign the tap without marking the Brewfather batch completed.`
+      )
+    ) {
       try {
         const res = await fetch(`/api/taps/${editingTapId}/end-keg`, {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${authToken}` }
+          headers: { Authorization: `Bearer ${authToken}` }
         });
         if (res.ok) {
           document.getElementById('tapSettingsModal').style.display = 'none';

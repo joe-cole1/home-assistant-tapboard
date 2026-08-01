@@ -23,13 +23,27 @@ export function createSelectOption(value, label, selected = false) {
   return option;
 }
 
-export function buildTapCardContent({ tapId, fillPercent, fresh, lowThreshold, beerName, style, description, abv, ibu, og, fg, volumeReadoutText, forecastText }) {
+export function buildTapCardContent({
+  tapId,
+  fillPercent,
+  fresh,
+  lowThreshold,
+  beerName,
+  style,
+  description,
+  abv,
+  ibu,
+  og,
+  fg,
+  volumeReadoutText,
+  forecastText
+}) {
   const fragment = document.createDocumentFragment();
   const header = element('div', 'tap-card-header');
   const actions = element('div', 'tap-card-actions');
   header.appendChild(element('div', 'tap-number-badge', tapId));
   if (fillPercent <= lowThreshold) actions.appendChild(element('span', 'badge badge-low', 'LOW KEG!'));
-  if (fresh) actions.appendChild(element('span', 'badge badge-fresh', 'FRESH!'));
+  if (fresh) actions.appendChild(element('span', 'badge badge-fresh', 'NEW'));
   const cog = element('button', 'btn-icon tap-cog-btn', '⚙️');
   cog.type = 'button';
   cog.title = `Tap ${tapId} Settings`;
@@ -47,16 +61,29 @@ export function buildTapCardContent({ tapId, fillPercent, fresh, lowThreshold, b
   const graphic = element('div', 'graphic-container');
   const graphicWrapper = element('div', 'tap-graphic-wrapper');
   graphicWrapper.id = `graphic-tap-${tapId}`;
-  graphic.append(graphicWrapper, element('div', 'floating-pour-badge', '🍺 NOW POURING'), element('div', 'volume-readout', volumeReadoutText));
+  graphic.append(
+    graphicWrapper,
+    element('div', 'floating-pour-badge', '🍺 NOW POURING'),
+    element('div', 'volume-readout', volumeReadoutText)
+  );
   fragment.appendChild(graphic);
-  fragment.appendChild(element('div', 'forecast-readout', forecastText));
+  const forecast = element('div', 'forecast-readout', forecastText);
+  forecast.hidden = !forecastText;
+  fragment.appendChild(forecast);
   return fragment;
 }
 
 export function buildRecipeModalContent({ style, abv, ibu, srm, og, fg, brewDate, description }) {
   const fragment = document.createDocumentFragment();
   const grid = element('div', 'recipe-metrics-grid');
-  [['Style:', style], ['ABV:', abv], ['IBU:', ibu], ['SRM Color:', srm], ['Original Gravity:', og], ['Final Gravity:', fg]].forEach(([label, value]) => {
+  [
+    ['Style:', style],
+    ['ABV:', abv],
+    ['IBU:', ibu],
+    ['SRM Color:', srm],
+    ['Original Gravity:', og],
+    ['Final Gravity:', fg]
+  ].forEach(([label, value]) => {
     const row = element('div');
     row.append(element('strong', null, label), document.createTextNode(` ${value}`));
     grid.appendChild(row);
@@ -80,9 +107,13 @@ export function buildOnDeckItems(onDeckBrews) {
     fragment.appendChild(element('span', 'ondeck-item', 'All fermenters available'));
     return fragment;
   }
-  onDeckBrews.forEach(brew => {
+  onDeckBrews.forEach((brew) => {
     const item = element('span', 'ondeck-item');
-    item.append(document.createTextNode('🍺 '), element('strong', null, brew.name), document.createTextNode(` (${brew.style || 'Craft'}) - ${brew.abv}% ABV`));
+    item.append(
+      document.createTextNode('🍺 '),
+      element('strong', null, brew.name),
+      document.createTextNode(` (${brew.style || 'Craft'}) - ${brew.abv}% ABV`)
+    );
     fragment.appendChild(item);
   });
   return fragment;

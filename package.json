@@ -1,21 +1,39 @@
 {
   "name": "home-assistant-tapboard",
-  "version": "3.2.0",
+  "version": "4.0.0",
   "description": "Containerized Home Assistant Tapboard with real-time WebSocket sync and SQLite analytics",
   "main": "src/server.js",
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "lint:fix": "eslint src scripts public test eslint.config.js --fix",
+    "format": "prettier src scripts public test .github package.json package-lock.json eslint.config.js .prettierrc.json README.md architecture.md docs/SECURITY.md docs/DATABASE-OPERATIONS.md --write --ignore-unknown",
+    "format:check": "prettier src scripts public test .github package.json package-lock.json eslint.config.js .prettierrc.json README.md architecture.md docs/SECURITY.md docs/DATABASE-OPERATIONS.md --check --ignore-unknown",
+    "lint": "npm run lint:fix && npm run format",
+    "lint:check": "eslint src scripts public test eslint.config.js --max-warnings=0 && npm run format:check",
+    "check": "npm run lint:check && npm test",
+    "check:fix": "npm run lint && npm test",
+    "db:backup": "node scripts/db-maintenance.js backup",
+    "db:verify": "node scripts/db-maintenance.js verify",
+    "db:restore": "node scripts/db-maintenance.js restore",
+    "db:prune-pours": "node scripts/db-maintenance.js prune-pours"
   },
   "dependencies": {
-    "bcryptjs": "^2.4.3",
-    "better-sqlite3": "^11.8.0",
-    "dotenv": "^16.4.7",
-    "ws": "^8.18.0"
+    "bcryptjs": "3.0.3",
+    "better-sqlite3": "13.0.2",
+    "dotenv": "17.4.2",
+    "ws": "8.21.1"
   },
   "devDependencies": {
-    "linkedom": "^0.18.13"
+    "@eslint/js": "10.0.1",
+    "eslint": "10.8.0",
+    "globals": "17.8.0",
+    "linkedom": "0.18.13",
+    "prettier": "3.9.6"
   }
 }
