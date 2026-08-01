@@ -378,32 +378,6 @@ body {
   opacity: 1;
 }
 
-/* Simulate Pour Button */
-.btn-simulate-pour {
-  background: rgba(251, 192, 45, 0.1);
-  color: var(--accent-color);
-  border: 1px dashed var(--accent-color);
-  padding: 0.45rem 0.85rem;
-  border-radius: 0.5rem;
-  font-size: 0.8rem;
-  font-weight: 700;
-  cursor: pointer;
-  margin-top: 0.8rem;
-  width: 100%;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-}
-
-.btn-simulate-pour:hover {
-  background: var(--accent-color);
-  color: var(--text-badge);
-  border-style: solid;
-  transform: translateY(-1px);
-}
-
 /* Tap Card Header & Badges */
 .tap-card-header {
   display: flex;
@@ -591,6 +565,63 @@ body.is-authenticated .tap-cog-btn {
   overflow-x: auto;
   white-space: nowrap;
   color: var(--text-muted);
+}
+
+.ondeck-item {
+  margin-right: 1.5rem;
+}
+
+.tap-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.beer-description {
+  margin-bottom: 0.75rem;
+}
+
+.forecast-readout {
+  font-size: 0.8rem;
+  color: var(--accent-color);
+  margin-top: 0.6rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.recipe-metrics-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  background: var(--bg-card);
+  padding: 1rem;
+  border-radius: 0.75rem;
+}
+
+.recipe-brew-date {
+  margin-top: 0.5rem;
+}
+
+.recipe-notes {
+  margin-top: 0.75rem;
+}
+
+.recipe-description {
+  color: var(--text-muted);
+  margin-top: 0.35rem;
+  line-height: 1.4;
+}
+
+.toast-message {
+  background: var(--bg-header);
+  color: var(--text-main);
+  border: 1px solid var(--accent-color);
+  padding: 1rem 1.25rem;
+  border-radius: 0.75rem;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  animation: fadeIn 0.3s ease;
 }
 
 /* Forms & Controls */

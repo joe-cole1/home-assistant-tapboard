@@ -34,7 +34,7 @@ test('healthcheck is lightweight and public HTTP/SSE snapshots use only schema v
   const dataDir = mkdtempSync(path.join(os.tmpdir(), 'tapboard-server-smoke-'));
   const child = spawn(process.execPath, ['src/server.js'], {
     cwd: process.cwd(),
-    env: { ...process.env, PORT: String(port), DATA_DIR: dataDir, HA_TOKEN: '' },
+    env: { ...process.env, PORT: String(port), DATA_DIR: dataDir, HA_TOKEN: '', DOTENV_CONFIG_PATH: path.join(dataDir, '.env-unused') },
     stdio: ['ignore', 'pipe', 'pipe']
   });
   let stderr = '';
