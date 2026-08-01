@@ -40,6 +40,40 @@ test('incremental projections are semantic deltas and unrelated entities produce
   );
 });
 
+test('batch options survive unusable selector states without exposing other attributes', () => {
+  const options = ['batch-1 | Privacy IPA', 42, { secret: 'nested' }, 'custom:topo_chico | Topo Chico 0%'];
+  const states = new Map([
+    ['select.tap_1_batch_select', entity('unknown', { options, device_id: 'private' })],
+    ['select.tap_2_batch_select', entity('unavailable', { options, access_token: 'never-public' })],
+    ['select.tap_3_batch_select', entity('unknown', { options: 'malformed' })]
+  ]);
+
+  const projection = createTapStatesProjection(states);
+  for (const tapId of ['1', '2']) {
+    assert.deepEqual(projection[tapId].batchSelection, {
+      value: '',
+      options: ['batch-1 | Privacy IPA', 'custom:topo_chico | Topo Chico 0%']
+    });
+  }
+  assert.deepEqual(projection['3'].batchSelection, { value: '', options: [] });
+  assert.equal(JSON.stringify(projection).includes('private'), false);
+  assert.equal(JSON.stringify(projection).includes('never-public'), false);
+  assert.equal(JSON.stringify(projection).includes('nested'), false);
+
+  assert.deepEqual(
+    projectTapStateChange('select.tap_1_batch_select', entity('unknown', { options })),
+    {
+      tapId: 1,
+      changes: {
+        batchSelection: {
+          value: '',
+          options: ['batch-1 | Privacy IPA', 'custom:topo_chico | Topo Chico 0%']
+        }
+      }
+    }
+  );
+});
+
 test('a 1,273-entity legacy-style map is substantially larger than the fixed public tap projection', () => {
   const states = new Map();
   for (let index = 0; index < 1_273; index++) {

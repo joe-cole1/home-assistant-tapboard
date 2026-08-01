@@ -60,7 +60,10 @@ export function projectBatch(entity) {
 
 export function projectBatchSelection(entity) {
   const source = usableState(entity);
-  const attributes = source?.attributes && typeof source.attributes === 'object' ? source.attributes : {};
+  // Template selects can report an unusable state while still exposing a
+  // current, safe options list. Project the allowlisted options independently
+  // so the picker and server-side validation continue to work.
+  const attributes = entity?.attributes && typeof entity.attributes === 'object' ? entity.attributes : {};
   return {
     value: source && typeof source.state === 'string' ? source.state : '',
     options: Array.isArray(attributes.options) ? attributes.options.filter(option => typeof option === 'string') : []
