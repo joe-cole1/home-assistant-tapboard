@@ -1,6 +1,7 @@
 // Tapboard v3.8.2 Client Engine
 import { renderTapGraphic, srmToHex } from './graphics.js';
 import { createLiveUpdateController, updateGraphicFill } from './liveUpdates.js';
+import { buildOnDeckItems, buildRecipeModalContent, buildTapCardContent, createSelectOption, createToast } from './domBuilders.js';
 
 let appState = {
   settings: {},
@@ -178,20 +179,7 @@ function showToast(message) {
   const container = document.getElementById('toastContainer');
   if (!container) return;
 
-  const toast = document.createElement('div');
-  toast.className = 'toast-message';
-  toast.style.cssText = `
-    background: var(--bg-header);
-    color: var(--text-main);
-    border: 1px solid var(--accent-color);
-    padding: 1rem 1.25rem;
-    border-radius: 0.75rem;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-    font-weight: 600;
-    margin-bottom: 0.75rem;
-    animation: fadeIn 0.3s ease;
-  `;
-  toast.textContent = message;
+  const toast = createToast(message);
 
   container.appendChild(toast);
 
@@ -420,37 +408,10 @@ function createTapCard(tap) {
   card.setAttribute('data-graphic-style', tap.graphic || 'corny_keg');
   card.setAttribute('data-color-hex', beerColorHex);
 
-  card.innerHTML = `
-    <div class="tap-card-header">
-      <div class="tap-number-badge">${tapId}</div>
-      <div style="display:flex; align-items:center; gap:0.5rem;">
-        ${fillPercent <= (tap.badge_low_keg || 20) ? `<span class="badge badge-low">LOW KEG!</span>` : ''}
-        ${tap.badge_fresh === 1 ? `<span class="badge badge-fresh">FRESH!</span>` : ''}
-        <button class="btn-icon tap-cog-btn" title="Tap ${tapId} Settings">⚙️</button>
-      </div>
-    </div>
-
-    <h2 class="beer-title">${beerName}</h2>
-    <div class="beer-style">${style}</div>
-    ${description ? `<p class="beer-description" style="margin-bottom:0.75rem;">${description}</p>` : ''}
-
-    <div class="metrics-row">
-      <div class="metric-item"><span class="metric-label">ABV</span><span class="metric-value">${abv}</span></div>
-      <div class="metric-item"><span class="metric-label">IBU</span><span class="metric-value">${ibu}</span></div>
-      <div class="metric-item"><span class="metric-label">OG</span><span class="metric-value">${og}</span></div>
-      <div class="metric-item"><span class="metric-label">FG</span><span class="metric-value">${fg}</span></div>
-    </div>
-
-    <div class="graphic-container">
-      <div class="tap-graphic-wrapper" id="graphic-tap-${tapId}"></div>
-      <div class="floating-pour-badge">🍺 NOW POURING</div>
-      <div class="volume-readout">${volumeReadoutText}</div>
-    </div>
-
-    <div class="forecast-readout" style="font-size:0.8rem; color:var(--accent-color); margin-top:0.6rem; font-weight:600; text-align:center;">
-      ${forecastText}
-    </div>
-  `;
+  card.replaceChildren(buildTapCardContent({
+    tapId, fillPercent, fresh: tap.badge_fresh === 1, lowThreshold: tap.badge_low_keg || 20,
+    beerName, style, description, abv, ibu, og, fg, volumeReadoutText, forecastText
+  }));
 
   // Render SVG Graphic initially
   const graphicContainer = card.querySelector(`#graphic-tap-${tapId}`);
@@ -536,7 +497,6 @@ function updateTapCard(card, tap) {
   if (description && !descriptionEl) {
     descriptionEl = document.createElement('p');
     descriptionEl.className = 'beer-description';
-    descriptionEl.style.marginBottom = '0.75rem';
     card.querySelector('.metrics-row')?.before(descriptionEl);
   }
   if (descriptionEl) {
@@ -581,7 +541,7 @@ function updateTapCard(card, tap) {
   const currentGraphicStyle = card.getAttribute('data-graphic-style');
   const currentColorHex = card.getAttribute('data-color-hex');
 
-  if (!graphicContainer.innerHTML || currentGraphicStyle !== (tap.graphic || 'corny_keg') || currentColorHex !== beerColorHex) {
+  if (!graphicContainer.firstChild || currentGraphicStyle !== (tap.graphic || 'corny_keg') || currentColorHex !== beerColorHex) {
     card.setAttribute('data-graphic-style', tap.graphic || 'corny_keg');
     card.setAttribute('data-color-hex', beerColorHex);
     graphicContainer.innerHTML = renderTapGraphic(tap.graphic || 'corny_keg', fillPercent, beerColorHex, false, `tap_${tapId}`);
@@ -620,25 +580,7 @@ function openRecipeModal(tapId) {
   const description = (hasOverride && tap.override_description) || batchAttr.description || cachedBatch?.description || '';
 
   title.textContent = `${beerName}`;
-  body.innerHTML = `
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; background:var(--bg-card); padding:1rem; border-radius:0.75rem;">
-      <div><strong>Style:</strong> ${style}</div>
-      <div><strong>ABV:</strong> ${abv}</div>
-      <div><strong>IBU:</strong> ${ibu}</div>
-      <div><strong>SRM Color:</strong> ${srm}</div>
-      <div><strong>Original Gravity:</strong> ${og}</div>
-      <div><strong>Final Gravity:</strong> ${fg}</div>
-    </div>
-    
-    ${batchAttr.brewDate ? `<div style="margin-top:0.5rem;"><strong>Brew Date:</strong> ${batchAttr.brewDate}</div>` : ''}
-    
-    <div style="margin-top:0.75rem;">
-      <strong>Tasting Notes & Profile:</strong>
-      <p style="color:var(--text-muted); margin-top:0.35rem; line-height:1.4;">
-        ${description || 'Crafted with premium ingredients.'}
-      </p>
-    </div>
-  `;
+  body.replaceChildren(buildRecipeModalContent({ style, abv, ibu, srm, og, fg, brewDate: batchAttr.brewDate, description }));
 
   modal.style.display = 'flex';
 }
@@ -676,11 +618,9 @@ function openTapSettings(tapId) {
   document.getElementById('tapSettingsTitle').textContent = `Tap ${tapId} Settings Studio`;
 
   const batchSelect = document.getElementById('tapSettingsBatchSelect');
-  batchSelect.innerHTML = '';
+  batchSelect.replaceChildren();
 
-  const offTapOpt = document.createElement('option');
-  offTapOpt.value = '';
-  offTapOpt.textContent = '-- Empty / Off Tap --';
+  const offTapOpt = createSelectOption('', '-- Empty / Off Tap --');
   batchSelect.appendChild(offTapOpt);
 
   const conditioningBatches = [];
@@ -697,25 +637,16 @@ function openTapSettings(tapId) {
   });
 
   conditioningBatches.forEach(optStr => {
-    const opt = document.createElement('option');
-    opt.value = optStr;
     const parts = optStr.split('|');
     const label = parts.length > 1 ? parts[1].trim() : optStr;
-    opt.textContent = label;
-
-    if (selectedBatch === optStr || (tap.batch_id && optStr.includes(tap.batch_id)) || (batchAttr.batchId && optStr.includes(batchAttr.batchId))) {
-      opt.selected = true;
-    }
+    const opt = createSelectOption(optStr, label,
+      selectedBatch === optStr || (tap.batch_id && optStr.includes(tap.batch_id)) || (batchAttr.batchId && optStr.includes(batchAttr.batchId)));
     batchSelect.appendChild(opt);
   });
 
-  const topoOpt = document.createElement('option');
   const topoVal = topoChicoOption || 'custom:topo_chico | Topo Chico 0%';
-  topoOpt.value = topoVal;
-  topoOpt.textContent = 'Topo Chico 0%';
-  if (selectedBatch === topoVal || selectedBatch === 'custom:topo_chico' || (batchAttr.recipeName && batchAttr.recipeName.toLowerCase().includes('topo chico'))) {
-    topoOpt.selected = true;
-  }
+  const topoOpt = createSelectOption(topoVal, 'Topo Chico 0%',
+    selectedBatch === topoVal || selectedBatch === 'custom:topo_chico' || (batchAttr.recipeName && batchAttr.recipeName.toLowerCase().includes('topo chico')));
   batchSelect.appendChild(topoOpt);
 
   // Auto-check "Show Tap on Dashboard" whenever a non-empty brew batch is chosen
@@ -791,15 +722,11 @@ function renderOnDeckTicker() {
 
   const onDeckBrews = appState.catalog.filter(c => c.on_deck === 1);
   if (onDeckBrews.length === 0) {
-    itemsContainer.innerHTML = `<span class="ondeck-item">All fermenters available</span>`;
+    itemsContainer.replaceChildren(buildOnDeckItems(onDeckBrews));
     return;
   }
 
-  itemsContainer.innerHTML = onDeckBrews.map(brew => `
-    <span class="ondeck-item" style="margin-right:1.5rem;">
-      🍺 <strong>${brew.name}</strong> (${brew.style || 'Craft'}) - ${brew.abv}% ABV
-    </span>
-  `).join('');
+  itemsContainer.replaceChildren(buildOnDeckItems(onDeckBrews));
 }
 
 // Live Font Previews in Global Studio Settings
@@ -924,8 +851,17 @@ function initModalListeners() {
         body: JSON.stringify({ theme, title, font_title, font_body, tap_visibilities, new_pin: new_pin || undefined })
       });
       if (res.ok) {
+        const result = await res.json();
         document.getElementById('globalSettingsModal').style.display = 'none';
-        showToast('✨ Global studio settings saved!');
+        document.getElementById('pinInputSetting').value = '';
+        if (result.sessionsRevoked) {
+          authToken = null;
+          sessionStorage.removeItem('tapboard_token');
+          updateAuthUI();
+          showToast('🔑 PIN updated. Sign in again to manage Tapboard.');
+        } else {
+          showToast('✨ Global studio settings saved!');
+        }
       } else {
         alert('Failed to save settings');
       }

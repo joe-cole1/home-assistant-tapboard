@@ -24,19 +24,36 @@ A lightweight, high-performance brewery tap dashboard for Home Assistant, hosted
    cp .env.example .env
    ```
 
-2. Edit `.env` with your Home Assistant URL and Long-Lived Access Token:
+2. Edit `.env` with your Home Assistant URL, Long-Lived Access Token, and a
+   one-time non-default admin PIN:
    ```env
    HA_URL=http://192.168.1.100:8123
    HA_TOKEN=your_long_lived_access_token
    PORT=3000
+   TAPBOARD_INITIAL_ADMIN_PIN=<choose-four-digits>
    ```
+
+   Choose your own four digits; `0000` is rejected. Tapboard consumes this
+   value only while the database is uninitialized. Never commit or share the
+   `.env` file.
 
 3. Launch with Docker Compose:
    ```bash
    docker compose up -d
    ```
 
-4. Open `http://localhost:3000` in your browser. Default Admin PIN to unlock settings studio is `0000`.
+4. Open `http://localhost:3005` in your browser and authenticate with the PIN
+   you selected.
+
+5. After successful authentication, remove `TAPBOARD_INITIAL_ADMIN_PIN` from
+   `.env` and run `docker compose up -d --force-recreate`. The PIN remains in
+   the database only as a bcrypt hash, and the plaintext is removed from the
+   container environment.
+
+For an HTTPS reverse proxy, set `TAPBOARD_PUBLIC_ORIGIN` to the exact external
+origin, such as `https://tapboard.example.com`. See
+[`docs/SECURITY.md`](docs/SECURITY.md) before exposing Tapboard outside the
+local network.
 
 ---
 

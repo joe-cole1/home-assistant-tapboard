@@ -14,6 +14,8 @@ services:
       - PORT=3000
       - HA_URL=${HA_URL:-http://192.168.0.35:8123}
       - HA_TOKEN=${HA_TOKEN}
+      - TAPBOARD_PUBLIC_ORIGIN=${TAPBOARD_PUBLIC_ORIGIN:-}
+      - TAPBOARD_INITIAL_ADMIN_PIN=${TAPBOARD_INITIAL_ADMIN_PIN:-}
     volumes:
       - ./data:/app/data
     healthcheck:
