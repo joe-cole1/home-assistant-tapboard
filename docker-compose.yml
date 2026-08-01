@@ -8,7 +8,7 @@ services:
     container_name: tapboard
     restart: unless-stopped
     ports:
-      - "3005:3000"
+      - "127.0.0.1:3005:3000"
     environment:
       - NODE_ENV=production
       - PORT=3000
@@ -16,10 +16,29 @@ services:
       - HA_TOKEN=${HA_TOKEN}
       - TAPBOARD_PUBLIC_ORIGIN=${TAPBOARD_PUBLIC_ORIGIN:-}
       - TAPBOARD_INITIAL_ADMIN_PIN=${TAPBOARD_INITIAL_ADMIN_PIN:-}
+      - TAPBOARD_EXPECT_EXISTING_DATA=${TAPBOARD_EXPECT_EXISTING_DATA:-true}
+      - TAPBOARD_REQUIRE_MIGRATION_APPROVAL=true
     volumes:
-      - ./data:/app/data
+      - tapboard_data:/app/data
+      - tapboard_backups:/app/backups
+    user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m,uid=1000,gid=1000,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    init: true
+    stop_grace_period: 15s
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/healthz"]
       interval: 30s
       timeout: 5s
       retries: 3
+
+volumes:
+  tapboard_data:
+    name: tapboard_data
+  tapboard_backups:
+    name: tapboard_backups

@@ -12,11 +12,26 @@ function databaseWithPours(rows = []) {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       tap_id INTEGER NOT NULL,
       volume_poured_oz REAL NOT NULL,
-      timestamp TEXT DEFAULT CURRENT_TIMESTAMP
-    )
+      timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
+      lifecycle_id INTEGER,
+      timestamp_epoch INTEGER
+    );
+    CREATE TABLE keg_lifecycles (
+      lifecycle_id INTEGER PRIMARY KEY, tap_id INTEGER NOT NULL, closed_at TEXT
+    );
   `);
-  const insert = database.prepare('INSERT INTO pour_logs (tap_id, volume_poured_oz, timestamp) VALUES (?, ?, ?)');
-  rows.forEach(row => insert.run(row.tapId, row.volumeOz, row.timestamp));
+  const lifecycle = database.prepare('INSERT INTO keg_lifecycles (lifecycle_id, tap_id) VALUES (?, ?)');
+  const insert = database.prepare(`INSERT INTO pour_logs
+    (tap_id, volume_poured_oz, timestamp, lifecycle_id, timestamp_epoch) VALUES (?, ?, ?, ?, unixepoch(?))`);
+  const lifecycleIds = new Map();
+  let nextLifecycleId = 1;
+  rows.forEach(row => {
+    if (!lifecycleIds.has(row.tapId)) {
+      lifecycleIds.set(row.tapId, nextLifecycleId);
+      lifecycle.run(nextLifecycleId++, row.tapId);
+    }
+    insert.run(row.tapId, row.volumeOz, row.timestamp, lifecycleIds.get(row.tapId), row.timestamp);
+  });
   return database;
 }
 

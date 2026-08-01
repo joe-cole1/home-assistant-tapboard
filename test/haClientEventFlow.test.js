@@ -102,3 +102,23 @@ test('a sensitive unrelated HA entity is absent from HTTP and SSE public seriali
   }
   assert.equal(displayUpdates, 0);
 });
+
+test('pour completion uses the lifecycle captured synchronously at pour start', () => {
+  let activeLifecycleId = 41;
+  let recorded;
+  const detector = { onEvent: null, ingest() {}, hydrate() {}, reset() {} };
+  const client = new HAClient({
+    detector,
+    displayUpdateCoalescer: { enqueue() {} },
+    captureLifecycle: () => ({ lifecycle_id: activeLifecycleId }),
+    recordPourFn: pour => { recorded = pour; }
+  });
+
+  client.handleDetectorEvent({ type: 'start', tapId: 1, startVolume: 100, timestamp: 1_000 });
+  activeLifecycleId = 42;
+  client.handleDetectorEvent({ type: 'complete', tapId: 1, volumePouredOz: 6, timestamp: 2_000 });
+
+  assert.equal(recorded.lifecycleId, 41);
+  assert.equal(recorded.tapId, 1);
+  assert.equal(recorded.volumePouredOz, 6);
+});

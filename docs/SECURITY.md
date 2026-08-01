@@ -66,3 +66,22 @@ trusted origin; do not replace it with a wildcard.
 The four-digit PIN and process-local login rate limit are suitable for a
 private household service but are not a replacement for authentication and
 network controls at an Internet-facing reverse proxy.
+
+## Container boundary
+
+The supported Compose deployment binds only to `127.0.0.1:3005`, runs as the
+non-root `node` UID/GID, uses a read-only root filesystem and a bounded `/tmp`
+tmpfs, drops all Linux capabilities, enables `no-new-privileges`, and uses
+Docker init for signal forwarding. Only the independent data and backup named
+volumes are persistent and writable.
+
+Production startup expects an existing database and refuses an empty named
+volume. An older schema is migrated only after the database has been restored
+and verified by the maintenance command, which writes a one-time approval
+marker tied to the pre-migration schema version, table counts, and database
+SHA-256.
+
+`HA_TOKEN` remains an environment variable for local deployment compatibility.
+Users with permission to inspect Docker container metadata may therefore read
+it. Docker access must be treated as administrator-level access, and diagnostic
+reports must include environment variable names only, never their values.

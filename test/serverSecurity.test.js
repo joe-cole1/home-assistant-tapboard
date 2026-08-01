@@ -199,7 +199,7 @@ test('tokens are stored as digests, expired sessions are pruned, and PIN change 
   }
 });
 
-test('on-tap timestamp starts on assignment, survives re-save, and clears with the batch', async () => {
+test('assignment lifecycles preserve pour history and rotate after a clear', async () => {
   const instance = await startServer();
   const database = new Database(path.join(instance.dataDir, 'tapboard.db'));
   try {
@@ -212,19 +212,53 @@ test('on-tap timestamp starts on assignment, survives re-save, and clears with t
     const assigned = database.prepare('SELECT batch_id, on_tap_at FROM taps WHERE tap_id = 1').get();
     assert.equal(assigned.batch_id, 'custom:topo_chico');
     assert.ok(Number.isFinite(Date.parse(assigned.on_tap_at)));
-    assert.equal(database.prepare('SELECT COUNT(*) count FROM pour_logs WHERE tap_id = 1').get().count, 0);
+    const firstLifecycle = database.prepare('SELECT lifecycle_id FROM keg_lifecycles WHERE tap_id = 1 AND closed_at IS NULL').get().lifecycle_id;
+    assert.equal(database.prepare('SELECT COUNT(*) count FROM pour_logs WHERE tap_id = 1').get().count, 1);
 
     database.prepare('INSERT INTO pour_logs (tap_id, volume_poured_oz) VALUES (1, 8)').run();
     database.prepare("UPDATE taps SET on_tap_at = '2026-01-02T03:04:05.000Z' WHERE tap_id = 1").run();
     assert.equal((await fetch(`${instance.baseUrl}/api/taps/1`, { method: 'POST', headers, body })).status, 200);
     assert.equal(database.prepare('SELECT on_tap_at FROM taps WHERE tap_id = 1').get().on_tap_at, '2026-01-02T03:04:05.000Z');
-    assert.equal(database.prepare('SELECT COUNT(*) count FROM pour_logs WHERE tap_id = 1').get().count, 1);
+    assert.equal(database.prepare('SELECT COUNT(*) count FROM pour_logs WHERE tap_id = 1').get().count, 2);
 
     assert.equal((await fetch(`${instance.baseUrl}/api/taps/1`, {
       method: 'POST', headers, body: JSON.stringify({ batch_option: '' })
     })).status, 200);
     assert.deepEqual(database.prepare('SELECT batch_id, on_tap_at FROM taps WHERE tap_id = 1').get(), { batch_id: '', on_tap_at: null });
-    assert.equal(database.prepare('SELECT COUNT(*) count FROM pour_logs WHERE tap_id = 1').get().count, 0);
+    assert.equal(database.prepare('SELECT COUNT(*) count FROM pour_logs WHERE tap_id = 1').get().count, 2);
+    assert.equal(database.prepare('SELECT closed_at IS NOT NULL closed FROM keg_lifecycles WHERE lifecycle_id = ?').get(firstLifecycle).closed, 1);
+
+    assert.equal((await fetch(`${instance.baseUrl}/api/taps/1`, { method: 'POST', headers, body })).status, 200);
+    const secondLifecycle = database.prepare('SELECT lifecycle_id FROM keg_lifecycles WHERE tap_id = 1 AND closed_at IS NULL').get().lifecycle_id;
+    assert.notEqual(secondLifecycle, firstLifecycle);
+  } finally {
+    database.close();
+    await stopServer(instance.child);
+  }
+});
+
+test('override-only beverages own one lifecycle until explicitly cleared', async () => {
+  const instance = await startServer();
+  const database = new Database(path.join(instance.dataDir, 'tapboard.db'));
+  try {
+    const { token } = await authenticate(instance.baseUrl);
+    const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+    assert.equal((await fetch(`${instance.baseUrl}/api/taps/2`, {
+      method: 'POST', headers, body: JSON.stringify({ override_enabled: true, override_name: 'House Soda' })
+    })).status, 200);
+    const first = database.prepare(`SELECT lifecycle_id, assignment_kind, batch_id
+      FROM keg_lifecycles WHERE tap_id = 2 AND closed_at IS NULL`).get();
+    assert.deepEqual({ assignment_kind: first.assignment_kind, batch_id: first.batch_id }, { assignment_kind: 'override', batch_id: null });
+
+    assert.equal((await fetch(`${instance.baseUrl}/api/taps/2`, {
+      method: 'POST', headers, body: JSON.stringify({ override_name: 'House Soda Corrected' })
+    })).status, 200);
+    assert.equal(database.prepare('SELECT lifecycle_id FROM keg_lifecycles WHERE tap_id = 2 AND closed_at IS NULL').get().lifecycle_id, first.lifecycle_id);
+
+    assert.equal((await fetch(`${instance.baseUrl}/api/taps/2`, {
+      method: 'POST', headers, body: JSON.stringify({ override_enabled: false })
+    })).status, 200);
+    assert.equal(database.prepare('SELECT COUNT(*) count FROM keg_lifecycles WHERE tap_id = 2 AND closed_at IS NULL').get().count, 0);
   } finally {
     database.close();
     await stopServer(instance.child);

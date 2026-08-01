@@ -3,7 +3,7 @@
 **Version**: 3.7.2  
 **Repository**: `joe-cole1/home-assistant-tapboard`  
 **Host & Local Path**: `C:\Users\Joe\OneDrive\Antigravity\home-assistant\tapboard`  
-**Docker Deployment**: Containerized on port `3005:3000` (`http://localhost:3005`) connected to Home Assistant (`http://192.168.0.35:8123`).
+**Docker Deployment**: Containerized on loopback port `127.0.0.1:3005:3000` (`http://localhost:3005`) connected to Home Assistant (`http://192.168.0.35:8123`).
 
 ---
 
@@ -24,14 +24,16 @@ Tapboard is a real-time, low-latency homebrew taproom dashboard application buil
 
 ```
 tapboard/
-├── docker-compose.yml        # Docker compose configuration (Port 3005:3000, volume mount /app/data)
-├── Dockerfile                # Production Node 22 Alpine build manifest
+├── docker-compose.yml        # Loopback port plus independent data/backup named volumes
+├── Dockerfile                # Pinned, non-root Node 22 Alpine production image
 ├── package.json              # Dependencies: better-sqlite3, bcryptjs, dotenv, ws
 ├── .env                      # Target HA URL (http://192.168.0.35:8123) and long-lived access token
 ├── architecture.md           # Authoritative system architecture baseline specification
 ├── src/
-│   ├── db.js                 # SQLite database schema initialization, migrations, WAL mode setup
-│   ├── haClient.js           # Home Assistant WebSocket integration, noise filter & pour session tracker
+│   ├── db.js                 # SQLite connection, explicit pragmas, seeding
+│   ├── dbMigrations.js       # Transactional schema versions and lifecycle migration
+│   ├── kegLifecycle.js       # Immutable assignment ownership and pour attribution
+│   ├── haClient.js           # Bounded HA WebSocket lifecycle and pour detector adapter
 │   └── server.js             # HTTP server, SSE broadcast bus, REST endpoints & forecast engine
 └── public/
     ├── app.js                # Client dashboard controller, SSE listener, in-place DOM engine
@@ -67,9 +69,13 @@ SQLite database file path: `/app/data/tapboard.db`.
 - `batch_id` (TEXT PRIMARY KEY)
 - `recipe_name`, `style`, `brew_date`, `og`, `fg`, `abv`, `ibu`, `srm`, `status`, `last_synced_at`
 
-### 4. `pour_logs` (Pour History & Analytics)
-- `id` (INTEGER PRIMARY KEY AUTOINCREMENT)
-- `tap_id` (INTEGER), `batch_id` (TEXT), `volume_poured_oz` (REAL), `timestamp` (DATETIME DEFAULT CURRENT_TIMESTAMP)
+### 4. `keg_lifecycles` and `pour_logs` (Keg Identity and Durable History)
+- Each explicit batch, custom, or override-only assignment receives an immutable internal lifecycle ID; only one lifecycle may be open per tap.
+- Reusing a Brewfather batch ID after ending a keg creates a distinct lifecycle.
+- `pour_logs` retains its original timestamp string and a normalized integer epoch, and references the lifecycle captured at pour start.
+- Legacy and unassigned pours retain a nullable lifecycle and never contribute to an active forecast.
+- Lifecycle/tap and pour/tap relationships use restrictive SQLite foreign keys enabled explicitly on every application connection.
+- Schema changes use ordered transactional migrations and explicit schema versions; unexpected migration failures abort startup.
 
 ---
 
@@ -84,8 +90,8 @@ Scale sensors from Home Assistant (`sensor.tap_N_fl_oz`) exhibit continuous micr
 
 ### B. 14-Day Rolling Keg Kick Forecast Engine (`src/server.js`)
 Calculates estimated days remaining for each active tap:
-- Queries lifecycle-scoped `pour_logs` for total volume poured over up to the last 14 elapsed days.
-- Changing or clearing a batch, ending a batch, or ending a keg clears that tap's usage history.
+- Queries only the open lifecycle through the `(lifecycle_id, timestamp_epoch)` index for up to the last 14 elapsed days.
+- Changing, clearing, or ending a keg closes its lifecycle without deleting durable pour history.
 - If no logged pours exist for the active tap, the forecast is omitted instead of inventing a baseline rate.
 - Output format: `⌛ 16.3 days remaining` or `🔴 Kicking soon`.
 
@@ -117,3 +123,6 @@ Calculates estimated days remaining for each active tap:
 1. **ES Module HTML Invariant**: When loading JavaScript files containing ES module syntax (`export`, `import`), never add duplicate classic `<script src="file.js"></script>` tags in `index.html` unless explicitly declared with `type="module"`, or rely solely on ES module imports inside `app.js`.
 2. **Live Telemetry DOM Element Preservation**: In real-time WebSocket/SSE dashboard interfaces featuring CSS keyframe animations, implement in-place element diffing (`updateTapCard()`). Update text nodes and numerical attributes directly without recreating or tearing down SVG/DOM wrapper elements.
 3. **Telemetry Unit Isolation Invariant**: Never pass entities measuring different physical units (e.g., fluid ounces vs. fill percentages) into a single volume tracking or noise filtering state machine. Isolate noise filtering strictly to dedicated single-unit telemetry entities (`sensor.tap_N_fl_oz`).
+4. **Reconnect Safety Invariant**: Hydration events are bounded and merged into a fresh snapshot without detector replay. The detector hydrates once from the final state so stale reconnect telemetry cannot synthesize a pour.
+5. **Lifecycle Attribution Invariant**: Capture the immutable keg lifecycle synchronously at pour start. Reassignment before completion must not move the pour to the new keg.
+6. **Persistence Invariant**: The live SQLite database and WAL reside in a Docker named volume, while verified backups use an independent named volume and a rehearsed restore path.

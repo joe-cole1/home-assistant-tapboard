@@ -8,6 +8,7 @@ import db from './db.js';
 import { HAClient } from './haClient.js';
 import { SSEHub } from './sseHub.js';
 import { calculateKegKickForecast as calculateForecast } from './kegForecast.js';
+import { activeLifecycle, assignKegLifecycle, closeKegLifecycle } from './kegLifecycle.js';
 import {
   HttpError,
   applySecurityHeaders,
@@ -108,8 +109,24 @@ function calculateKegKickForecast(tapId) {
   return calculateForecast({ db, tapId, currentOz });
 }
 
-function clearTapUsageHistory(tapId) {
-  db.prepare('DELETE FROM pour_logs WHERE tap_id = ?').run(tapId);
+function assignmentIdentity({ batchId, overrideEnabled, overrideName }) {
+  const normalizedBatchId = typeof batchId === 'string' && batchId.trim() ? batchId.trim() : null;
+  if (normalizedBatchId) {
+    return {
+      batchId: normalizedBatchId,
+      assignmentKind: normalizedBatchId.startsWith('custom:') ? 'custom' : 'brewfather'
+    };
+  }
+  if (overrideEnabled && typeof overrideName === 'string' && overrideName.trim()) {
+    return { batchId: null, assignmentKind: 'override' };
+  }
+  return null;
+}
+
+function lifecycleMatchesAssignment(lifecycle, assignment) {
+  return Boolean(lifecycle && assignment
+    && (lifecycle.batch_id ?? null) === assignment.batchId
+    && lifecycle.assignment_kind === assignment.assignmentKind);
 }
 
 // HA Event Listeners
@@ -145,6 +162,10 @@ haClient.on('pour_cancel', data => {
 
 haClient.on('low_keg_alert', data => {
   sseHub.publishImmediate('low_keg_alert', data);
+});
+
+haClient.on('hydrated', () => {
+  sseHub.publishImmediate('snapshot', getFullStateSnapshot());
 });
 
 // Construct Full Application State Snapshot
@@ -188,6 +209,11 @@ function getFullStateSnapshot() {
 }
 
 // HTTP Server Logic
+let shuttingDown = false;
+function ensureServing() {
+  if (shuttingDown) throw new HttpError(503, 'Service is shutting down');
+}
+
 const server = http.createServer(async (req, res) => {
   const requestId = crypto.randomUUID();
   applySecurityHeaders(res);
@@ -199,6 +225,7 @@ const server = http.createServer(async (req, res) => {
   const requestContext = (operation, tapId = '-') =>
     `${operation} request_id=${requestId} method=${req.method} route=${url.pathname} tap_id=${tapId} client=${clientIp}`;
   try { enforceOrigin(req); } catch (error) { handleError(res, error, requestContext('origin check')); return; }
+  if (shuttingDown) { sendError(res, 503, 'Service is shutting down'); return; }
 
   if (req.method === 'OPTIONS') {
     const methods = allowedMethodsForApiPath(url.pathname);
@@ -249,6 +276,7 @@ const server = http.createServer(async (req, res) => {
       }
 
       const body = validateAuth(await readJsonBody(req));
+      ensureServing();
       const settings = db.prepare('SELECT admin_pin_hash, admin_pin_initialized FROM settings WHERE id = 1').get();
 
       if (!settings.admin_pin_initialized) {
@@ -302,6 +330,7 @@ const server = http.createServer(async (req, res) => {
 
     try {
       const body = validateSettings(await readJsonBody(req));
+      ensureServing();
       const { theme, volume_format, title, font_title, font_body, show_ondeck, tap_visibilities, new_pin } = body;
 
       db.prepare(`
@@ -357,6 +386,7 @@ const server = http.createServer(async (req, res) => {
 
     try {
       const body = validateTap(await readJsonBody(req));
+      ensureServing();
 
       if (body.batch_option !== undefined && body.batch_option !== '' && body.batch_option !== 'custom:topo_chico | Topo Chico 0%') {
         const options = haClient.getPublicTapStates()?.[String(tapId)]?.batchSelection?.options;
@@ -366,7 +396,8 @@ const server = http.createServer(async (req, res) => {
       // Auto-enable tap if a batch is assigned
       let shouldEnable = body.enabled !== undefined ? (body.enabled ? 1 : 0) : null;
       let extractedBatchId = null;
-      const currentTap = db.prepare('SELECT batch_id, on_tap_at FROM taps WHERE tap_id = ?').get(tapId);
+      const currentTap = db.prepare(`SELECT batch_id, on_tap_at, override_enabled, override_name
+        FROM taps WHERE tap_id = ?`).get(tapId);
       let onTapAt = currentTap.on_tap_at;
       if (body.batch_option !== undefined) {
         if (body.batch_option !== '') {
@@ -379,7 +410,25 @@ const server = http.createServer(async (req, res) => {
         }
       }
 
-      const batchChanged = body.batch_option !== undefined && extractedBatchId !== currentTap.batch_id;
+      const finalBatchId = body.batch_option === undefined
+        ? currentTap.batch_id
+        : (extractedBatchId || null);
+      const finalOverrideEnabled = body.override_enabled === undefined
+        ? currentTap.override_enabled === 1
+        : body.override_enabled;
+      const finalOverrideName = body.override_name === undefined
+        ? currentTap.override_name
+        : body.override_name;
+      const desiredAssignment = assignmentIdentity({
+        batchId: finalBatchId,
+        overrideEnabled: finalOverrideEnabled,
+        overrideName: finalOverrideName
+      });
+      const currentLifecycle = activeLifecycle(db, tapId);
+      const lifecycleChanges = !lifecycleMatchesAssignment(currentLifecycle, desiredAssignment);
+      if (!desiredAssignment) onTapAt = null;
+      else if (lifecycleChanges || !onTapAt) onTapAt = new Date().toISOString();
+
       const updateTap = db.prepare(`
         UPDATE taps SET
           enabled = COALESCE(?, enabled),
@@ -401,7 +450,7 @@ const server = http.createServer(async (req, res) => {
           custom_pour_size = COALESCE(?, custom_pour_size)
         WHERE tap_id = ?
       `);
-      db.transaction(() => {
+      const applyTapUpdate = () => {
         updateTap.run(
           shouldEnable,
           extractedBatchId,
@@ -422,8 +471,25 @@ const server = http.createServer(async (req, res) => {
           body.custom_pour_size !== undefined ? (body.custom_pour_size !== '' ? parseFloat(body.custom_pour_size) : null) : null,
           tapId
         );
-        if (batchChanged) clearTapUsageHistory(tapId);
-      })();
+      };
+      if (lifecycleChanges && desiredAssignment) {
+        assignKegLifecycle(db, {
+          tapId,
+          ...desiredAssignment,
+          startedAt: onTapAt,
+          closeReason: currentLifecycle ? 'reassigned' : 'opened',
+          updateTap: applyTapUpdate
+        });
+      } else if (lifecycleChanges && currentLifecycle) {
+        closeKegLifecycle(db, {
+          tapId,
+          closedAt: new Date().toISOString(),
+          closeReason: 'cleared',
+          updateTap: applyTapUpdate
+        });
+      } else {
+        db.transaction(applyTapUpdate)();
+      }
 
       console.log(`[TAP ACTION] Tap settings updated request_id=${requestId} tap_id=${tapId} client=${clientIp}`);
 
@@ -462,7 +528,7 @@ const server = http.createServer(async (req, res) => {
     if (!requireAdmin(req, res)) return;
 
     let tapId;
-    try { tapId = validateTapId(url.pathname.split('/')[3]); await readEmptyJsonBody(req); } catch (err) { handleError(res, err, requestContext('end batch validation', tapId)); return; }
+    try { tapId = validateTapId(url.pathname.split('/')[3]); await readEmptyJsonBody(req); ensureServing(); } catch (err) { handleError(res, err, requestContext('end batch validation', tapId)); return; }
     try {
       try {
         await haClient.callHAService('script', 'end_tap_batch', { tap_number: tapId });
@@ -470,6 +536,7 @@ const server = http.createServer(async (req, res) => {
         console.error(`[HA ERROR] End batch failed for Tap ${tapId}:`, error);
         throw new HttpError(502, 'Home Assistant request failed');
       }
+      ensureServing();
 
       const clearBatch = db.prepare(`
         UPDATE taps SET
@@ -486,10 +553,12 @@ const server = http.createServer(async (req, res) => {
           override_description = NULL
         WHERE tap_id = ?
       `);
-      db.transaction(() => {
-        clearBatch.run(tapId);
-        clearTapUsageHistory(tapId);
-      })();
+      closeKegLifecycle(db, {
+        tapId,
+        closedAt: new Date().toISOString(),
+        closeReason: 'end_batch',
+        updateTap: () => clearBatch.run(tapId)
+      });
 
       sseHub.publishImmediate('settings_updated', getFullStateSnapshot());
       sendJson(res, 200, { success: true, message: `Batch completed and tap ${tapId} cleared.` });
@@ -504,7 +573,7 @@ const server = http.createServer(async (req, res) => {
     if (!requireAdmin(req, res)) return;
 
     let tapId;
-    try { tapId = validateTapId(url.pathname.split('/')[3]); await readEmptyJsonBody(req); } catch (err) { handleError(res, err, requestContext('end keg validation', tapId)); return; }
+    try { tapId = validateTapId(url.pathname.split('/')[3]); await readEmptyJsonBody(req); ensureServing(); } catch (err) { handleError(res, err, requestContext('end keg validation', tapId)); return; }
     try {
       try {
         await haClient.callHAService('select', 'select_option', {
@@ -515,6 +584,7 @@ const server = http.createServer(async (req, res) => {
         console.error(`[HA ERROR] End keg failed for Tap ${tapId}:`, error);
         throw new HttpError(502, 'Home Assistant request failed');
       }
+      ensureServing();
 
       const clearKeg = db.prepare(`
         UPDATE taps SET
@@ -531,10 +601,12 @@ const server = http.createServer(async (req, res) => {
           override_description = NULL
         WHERE tap_id = ?
       `);
-      db.transaction(() => {
-        clearKeg.run(tapId);
-        clearTapUsageHistory(tapId);
-      })();
+      closeKegLifecycle(db, {
+        tapId,
+        closedAt: new Date().toISOString(),
+        closeReason: 'end_keg',
+        updateTap: () => clearKeg.run(tapId)
+      });
 
       sseHub.publishImmediate('settings_updated', getFullStateSnapshot());
       sendJson(res, 200, { success: true, message: `Tap ${tapId} unassigned / off-tap.` });
@@ -550,6 +622,7 @@ const server = http.createServer(async (req, res) => {
 
     try {
       const body = validateCatalog(await readJsonBody(req));
+      ensureServing();
       const stmt = db.prepare(`
         INSERT INTO beverage_catalog (name, style, abv, ibu, srm_color, description, on_deck, target_tap_id)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -624,3 +697,23 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(`[Tapboard Server] Running on http://localhost:${PORT}`);
 });
+
+function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`[Tapboard Server] ${signal} received; shutting down cleanly.`);
+  haClient.stop();
+  sseHub.close();
+  const forceExit = setTimeout(() => {
+    console.error('[Tapboard Server] Graceful shutdown timed out.');
+    process.exit(1);
+  }, 10_000);
+  forceExit.unref?.();
+  server.close(() => {
+    clearTimeout(forceExit);
+    try { db.close(); } catch {}
+  });
+}
+
+process.once('SIGTERM', () => shutdown('SIGTERM'));
+process.once('SIGINT', () => shutdown('SIGINT'));
