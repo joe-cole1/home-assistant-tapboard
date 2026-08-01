@@ -7,7 +7,10 @@ import dotenv from 'dotenv';
 import { migrateDatabase, SCHEMA_VERSION } from './dbMigrations.js';
 import { databaseFileSha256, MIGRATION_APPROVAL_FILE, summarizeDatabase } from './databaseMaintenance.js';
 
-dotenv.config(process.env.DOTENV_CONFIG_PATH ? { path: process.env.DOTENV_CONFIG_PATH } : undefined);
+dotenv.config({
+  quiet: true,
+  ...(process.env.DOTENV_CONFIG_PATH ? { path: process.env.DOTENV_CONFIG_PATH } : {})
+});
 
 const dataDir = process.env.DATA_DIR || path.join(process.cwd(), 'data');
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });

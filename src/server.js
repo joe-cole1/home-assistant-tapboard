@@ -28,7 +28,10 @@ import {
   validateTap
 } from './validation.js';
 
-dotenv.config(process.env.DOTENV_CONFIG_PATH ? { path: process.env.DOTENV_CONFIG_PATH } : undefined);
+dotenv.config({
+  quiet: true,
+  ...(process.env.DOTENV_CONFIG_PATH ? { path: process.env.DOTENV_CONFIG_PATH } : {})
+});
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const PUBLIC_DIR = path.resolve(process.cwd(), 'public');
