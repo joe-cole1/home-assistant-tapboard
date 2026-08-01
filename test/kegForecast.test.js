@@ -25,7 +25,7 @@ function databaseWithPours(rows = []) {
     (tap_id, volume_poured_oz, timestamp, lifecycle_id, timestamp_epoch) VALUES (?, ?, ?, ?, unixepoch(?))`);
   const lifecycleIds = new Map();
   let nextLifecycleId = 1;
-  rows.forEach(row => {
+  rows.forEach((row) => {
     if (!lifecycleIds.has(row.tapId)) {
       lifecycleIds.set(row.tapId, nextLifecycleId);
       lifecycle.run(nextLifecycleId++, row.tapId);

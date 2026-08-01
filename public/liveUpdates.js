@@ -12,7 +12,7 @@ export function createLiveUpdateController({ getState, setState, onDirty, reques
   }
 
   function schedule(tapIds) {
-    tapIds.forEach(tapId => dirtyTapIds.add(String(tapId)));
+    tapIds.forEach((tapId) => dirtyTapIds.add(String(tapId)));
     if (!framePending) {
       framePending = true;
       requestFrame(flush);
@@ -56,7 +56,7 @@ export function updateGraphicFill(card, fillPercent) {
   const fullHeight = bottomY - topRimY;
   const targetY = bottomY - (fillPercent / 100) * fullHeight;
   const targetHeight = bottomY - targetY;
-  card.querySelectorAll('.beer-liquid-rect, .beer-liquid-shadow').forEach(rect => {
+  card.querySelectorAll('.beer-liquid-rect, .beer-liquid-shadow').forEach((rect) => {
     rect.setAttribute('y', targetY);
     rect.setAttribute('height', targetHeight);
   });

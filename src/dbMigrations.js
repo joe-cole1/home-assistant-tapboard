@@ -6,7 +6,12 @@ function tableExists(db, name) {
 }
 
 function columns(db, table) {
-  return new Set(db.prepare(`PRAGMA table_info(${table})`).all().map(column => column.name));
+  return new Set(
+    db
+      .prepare(`PRAGMA table_info(${table})`)
+      .all()
+      .map((column) => column.name)
+  );
 }
 
 function requireColumns(db, table, required) {
@@ -59,27 +64,58 @@ function migrateBaseSchema(db) {
   requireColumns(db, 'pour_logs', ['id', 'tap_id', 'volume_poured_oz', 'timestamp']);
 
   for (const [column, declaration] of Object.entries({
-    theme: "TEXT DEFAULT 'modern_dark'", volume_format: "TEXT DEFAULT 'oz'",
-    title: "TEXT DEFAULT 'Hazardous Brews'", font_title: "TEXT DEFAULT 'Outfit'",
-    font_body: "TEXT DEFAULT 'Inter'", show_ondeck: 'INTEGER DEFAULT 1',
+    theme: "TEXT DEFAULT 'modern_dark'",
+    volume_format: "TEXT DEFAULT 'oz'",
+    title: "TEXT DEFAULT 'Hazardous Brews'",
+    font_title: "TEXT DEFAULT 'Outfit'",
+    font_body: "TEXT DEFAULT 'Inter'",
+    show_ondeck: 'INTEGER DEFAULT 1',
     admin_pin_initialized: 'INTEGER NOT NULL DEFAULT 0'
-  })) addColumnIfMissing(db, 'settings', column, declaration);
+  }))
+    addColumnIfMissing(db, 'settings', column, declaration);
   for (const [column, declaration] of Object.entries({
-    enabled: 'INTEGER DEFAULT 1', batch_id: 'TEXT', graphic: "TEXT DEFAULT 'corny_keg'",
-    override_enabled: 'INTEGER DEFAULT 0', override_name: 'TEXT', override_style: 'TEXT',
-    override_abv: 'REAL', override_ibu: 'INTEGER', override_og: 'REAL', override_fg: 'REAL',
-    override_srm: 'INTEGER', override_description: 'TEXT', badge_low_keg: 'REAL DEFAULT 20.0',
-    badge_fresh: 'INTEGER DEFAULT 1', display_unit: "TEXT DEFAULT 'percent'",
-    custom_pour_size: 'REAL DEFAULT 12.0', on_tap_at: 'TEXT'
-  })) addColumnIfMissing(db, 'taps', column, declaration);
+    enabled: 'INTEGER DEFAULT 1',
+    batch_id: 'TEXT',
+    graphic: "TEXT DEFAULT 'corny_keg'",
+    override_enabled: 'INTEGER DEFAULT 0',
+    override_name: 'TEXT',
+    override_style: 'TEXT',
+    override_abv: 'REAL',
+    override_ibu: 'INTEGER',
+    override_og: 'REAL',
+    override_fg: 'REAL',
+    override_srm: 'INTEGER',
+    override_description: 'TEXT',
+    badge_low_keg: 'REAL DEFAULT 20.0',
+    badge_fresh: 'INTEGER DEFAULT 1',
+    display_unit: "TEXT DEFAULT 'percent'",
+    custom_pour_size: 'REAL DEFAULT 12.0',
+    on_tap_at: 'TEXT'
+  }))
+    addColumnIfMissing(db, 'taps', column, declaration);
   for (const [column, declaration] of Object.entries({
-    recipe_name: 'TEXT', style: 'TEXT', brew_date: 'TEXT', srm: 'INTEGER', og: 'REAL',
-    fg: 'REAL', abv: 'REAL', ibu: 'INTEGER', status: 'TEXT', last_synced_at: 'TEXT'
-  })) addColumnIfMissing(db, 'batches', column, declaration);
+    recipe_name: 'TEXT',
+    style: 'TEXT',
+    brew_date: 'TEXT',
+    srm: 'INTEGER',
+    og: 'REAL',
+    fg: 'REAL',
+    abv: 'REAL',
+    ibu: 'INTEGER',
+    status: 'TEXT',
+    last_synced_at: 'TEXT'
+  }))
+    addColumnIfMissing(db, 'batches', column, declaration);
   for (const [column, declaration] of Object.entries({
-    style: 'TEXT', abv: 'REAL', ibu: 'INTEGER', srm_color: 'INTEGER', description: 'TEXT',
-    on_deck: 'INTEGER DEFAULT 0', target_tap_id: 'INTEGER'
-  })) addColumnIfMissing(db, 'beverage_catalog', column, declaration);
+    style: 'TEXT',
+    abv: 'REAL',
+    ibu: 'INTEGER',
+    srm_color: 'INTEGER',
+    description: 'TEXT',
+    on_deck: 'INTEGER DEFAULT 0',
+    target_tap_id: 'INTEGER'
+  }))
+    addColumnIfMissing(db, 'beverage_catalog', column, declaration);
   addColumnIfMissing(db, 'admin_sessions', 'created_at', 'TEXT DEFAULT CURRENT_TIMESTAMP');
   if (!tableExists(db, 'pour_logs')) {
     db.exec(`CREATE TABLE pour_logs (
@@ -90,16 +126,26 @@ function migrateBaseSchema(db) {
   } else if (!columns(db, 'pour_logs').has('batch_id')) {
     addColumnIfMissing(db, 'pour_logs', 'batch_id', 'TEXT');
   }
-  db.prepare(`UPDATE taps SET on_tap_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-    WHERE on_tap_at IS NULL AND batch_id IS NOT NULL AND trim(batch_id) <> ''`).run();
+  db.prepare(
+    `UPDATE taps SET on_tap_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+    WHERE on_tap_at IS NULL AND batch_id IS NOT NULL AND trim(batch_id) <> ''`
+  ).run();
 }
 
 function migrateLifecycleSchema(db) {
-  const orphan = db.prepare(`SELECT p.id FROM pour_logs p LEFT JOIN taps t ON t.tap_id = p.tap_id
-    WHERE t.tap_id IS NULL LIMIT 1`).get();
+  const orphan = db
+    .prepare(
+      `SELECT p.id FROM pour_logs p LEFT JOIN taps t ON t.tap_id = p.tap_id
+    WHERE t.tap_id IS NULL LIMIT 1`
+    )
+    .get();
   if (orphan) throw new Error(`Cannot add foreign keys: pour_logs row ${orphan.id} references a missing tap`);
-  const invalidTimestampCount = db.prepare(`SELECT COUNT(*) AS count FROM pour_logs
-    WHERE timestamp IS NULL OR unixepoch(timestamp) IS NULL`).get().count;
+  const invalidTimestampCount = db
+    .prepare(
+      `SELECT COUNT(*) AS count FROM pour_logs
+    WHERE timestamp IS NULL OR unixepoch(timestamp) IS NULL`
+    )
+    .get().count;
   if (invalidTimestampCount) throw new Error(`Cannot normalize ${invalidTimestampCount} pour timestamp(s)`);
 
   db.exec(`
@@ -141,17 +187,25 @@ function migrateLifecycleSchema(db) {
       ALTER TABLE pour_logs_new RENAME TO pour_logs;
     `);
   } else {
-    db.prepare('UPDATE pour_logs SET timestamp_epoch = CAST(unixepoch(timestamp) AS INTEGER) WHERE timestamp_epoch IS NULL').run();
+    db.prepare(
+      'UPDATE pour_logs SET timestamp_epoch = CAST(unixepoch(timestamp) AS INTEGER) WHERE timestamp_epoch IS NULL'
+    ).run();
   }
 
   // Legacy pours deliberately remain unscoped.  Only the present tap assignment
   // gets an open lifecycle, so old usage can never leak into a new forecast.
   const insertLifecycle = db.prepare(`INSERT INTO keg_lifecycles (tap_id, batch_id, assignment_kind, started_at)
     VALUES (?, ?, ?, ?)`);
-  for (const tap of db.prepare(`SELECT tap_id, batch_id, on_tap_at, override_enabled, override_name FROM taps
+  for (const tap of db
+    .prepare(
+      `SELECT tap_id, batch_id, on_tap_at, override_enabled, override_name FROM taps
     WHERE (batch_id IS NOT NULL AND trim(batch_id) <> '')
-       OR (override_enabled = 1 AND override_name IS NOT NULL AND trim(override_name) <> '')`).all()) {
-    const open = db.prepare('SELECT lifecycle_id FROM keg_lifecycles WHERE tap_id = ? AND closed_at IS NULL').get(tap.tap_id);
+       OR (override_enabled = 1 AND override_name IS NOT NULL AND trim(override_name) <> '')`
+    )
+    .all()) {
+    const open = db
+      .prepare('SELECT lifecycle_id FROM keg_lifecycles WHERE tap_id = ? AND closed_at IS NULL')
+      .get(tap.tap_id);
     const batchId = tap.batch_id && tap.batch_id.trim() ? tap.batch_id : null;
     const kind = batchId ? (batchId.startsWith('custom:') ? 'custom' : 'brewfather') : 'override';
     if (!open) insertLifecycle.run(tap.tap_id, batchId, kind, tap.on_tap_at || new Date().toISOString());
@@ -167,7 +221,15 @@ function validateLatestSchema(db) {
     taps: ['tap_id', 'batch_id', 'on_tap_at'],
     batches: ['batch_id'],
     pour_logs: ['id', 'tap_id', 'batch_id', 'volume_poured_oz', 'timestamp', 'lifecycle_id', 'timestamp_epoch'],
-    keg_lifecycles: ['lifecycle_id', 'tap_id', 'batch_id', 'assignment_kind', 'started_at', 'closed_at', 'close_reason'],
+    keg_lifecycles: [
+      'lifecycle_id',
+      'tap_id',
+      'batch_id',
+      'assignment_kind',
+      'started_at',
+      'closed_at',
+      'close_reason'
+    ],
     schema_migrations: ['version', 'name', 'applied_at']
   })) {
     if (!tableExists(db, table)) throw new Error(`Incompatible schema version ${SCHEMA_VERSION}: missing ${table}`);
@@ -180,17 +242,23 @@ function validateLatestSchema(db) {
   }
   const foreignKeys = db.prepare('PRAGMA foreign_key_list(pour_logs)').all();
   const lifecycleForeignKey = foreignKeys
-    .filter(fk => fk.table === 'keg_lifecycles')
+    .filter((fk) => fk.table === 'keg_lifecycles')
     .reduce((groups, fk) => groups.set(fk.id, [...(groups.get(fk.id) || []), fk]), new Map());
-  const hasCompositeLifecycleForeignKey = [...lifecycleForeignKey.values()].some(group => {
+  const hasCompositeLifecycleForeignKey = [...lifecycleForeignKey.values()].some((group) => {
     const ordered = group.sort((left, right) => left.seq - right.seq);
-    return ordered.length === 2
-      && ordered[0].from === 'lifecycle_id' && ordered[0].to === 'lifecycle_id'
-      && ordered[1].from === 'tap_id' && ordered[1].to === 'tap_id'
-      && ordered.every(fk => fk.on_update === 'RESTRICT' && fk.on_delete === 'RESTRICT');
+    return (
+      ordered.length === 2 &&
+      ordered[0].from === 'lifecycle_id' &&
+      ordered[0].to === 'lifecycle_id' &&
+      ordered[1].from === 'tap_id' &&
+      ordered[1].to === 'tap_id' &&
+      ordered.every((fk) => fk.on_update === 'RESTRICT' && fk.on_delete === 'RESTRICT')
+    );
   });
-  if (!hasCompositeLifecycleForeignKey ||
-      !foreignKeys.some(fk => fk.table === 'taps' && fk.from === 'tap_id' && fk.to === 'tap_id')) {
+  if (
+    !hasCompositeLifecycleForeignKey ||
+    !foreignKeys.some((fk) => fk.table === 'taps' && fk.from === 'tap_id' && fk.to === 'tap_id')
+  ) {
     throw new Error(`Incompatible schema version ${SCHEMA_VERSION}: pour_logs foreign keys are missing`);
   }
   const violations = db.pragma('foreign_key_check');
@@ -199,7 +267,8 @@ function validateLatestSchema(db) {
 
 export function migrateDatabase(db) {
   db.pragma('foreign_keys = ON');
-  if (db.pragma('foreign_keys', { simple: true }) !== 1) throw new Error('SQLite foreign-key enforcement could not be enabled');
+  if (db.pragma('foreign_keys', { simple: true }) !== 1)
+    throw new Error('SQLite foreign-key enforcement could not be enabled');
   const version = Number(db.pragma('user_version', { simple: true }));
   if (!Number.isInteger(version) || version < 0 || version > SCHEMA_VERSION) {
     throw new Error(`Unsupported database schema version: ${version}`);
@@ -213,12 +282,18 @@ export function migrateDatabase(db) {
       )`);
       if (version < BASE_SCHEMA_VERSION) {
         migrateBaseSchema(db);
-        db.prepare('INSERT OR IGNORE INTO schema_migrations (version, name) VALUES (?, ?)').run(BASE_SCHEMA_VERSION, 'canonical-base-schema');
+        db.prepare('INSERT OR IGNORE INTO schema_migrations (version, name) VALUES (?, ?)').run(
+          BASE_SCHEMA_VERSION,
+          'canonical-base-schema'
+        );
         db.pragma(`user_version = ${BASE_SCHEMA_VERSION}`);
       }
       if (version < SCHEMA_VERSION) {
         migrateLifecycleSchema(db);
-        db.prepare('INSERT OR IGNORE INTO schema_migrations (version, name) VALUES (?, ?)').run(SCHEMA_VERSION, 'immutable-keg-lifecycles');
+        db.prepare('INSERT OR IGNORE INTO schema_migrations (version, name) VALUES (?, ?)').run(
+          SCHEMA_VERSION,
+          'immutable-keg-lifecycles'
+        );
         db.pragma(`user_version = ${SCHEMA_VERSION}`);
       }
     })();

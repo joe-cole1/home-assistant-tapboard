@@ -10,27 +10,35 @@ import { createOnlineBackup, MIGRATION_APPROVAL_FILE, restoreBackup } from '../s
 import { tapId, validateCatalog, validateSettings, validateTap } from '../src/validation.js';
 
 function initialize(dataDir, initialPin = '') {
-  const result = spawnSync(process.execPath, ['--input-type=module', '-e', "import('./src/db.js').then(({default:db}) => db.close())"], {
-    cwd: process.cwd(),
-    env: {
-      ...process.env,
-      DATA_DIR: dataDir,
-      TAPBOARD_EXPECT_EXISTING_DATA: 'false',
-      TAPBOARD_REQUIRE_MIGRATION_APPROVAL: 'false',
-      TAPBOARD_INITIAL_ADMIN_PIN: initialPin,
-      DOTENV_CONFIG_PATH: path.join(dataDir, '.env-unused')
-    },
-    encoding: 'utf8'
-  });
+  const result = spawnSync(
+    process.execPath,
+    ['--input-type=module', '-e', "import('./src/db.js').then(({default:db}) => db.close())"],
+    {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        DATA_DIR: dataDir,
+        TAPBOARD_EXPECT_EXISTING_DATA: 'false',
+        TAPBOARD_REQUIRE_MIGRATION_APPROVAL: 'false',
+        TAPBOARD_INITIAL_ADMIN_PIN: initialPin,
+        DOTENV_CONFIG_PATH: path.join(dataDir, '.env-unused')
+      },
+      encoding: 'utf8'
+    }
+  );
   assert.equal(result.status, 0, result.stderr);
 }
 
 function startDatabase(dataDir, environment = {}) {
-  return spawnSync(process.execPath, ['--input-type=module', '-e', "import('./src/db.js').then(({default:db}) => db.close())"], {
-    cwd: process.cwd(),
-    env: { ...process.env, DATA_DIR: dataDir, DOTENV_CONFIG_PATH: path.join(dataDir, '.env-unused'), ...environment },
-    encoding: 'utf8'
-  });
+  return spawnSync(
+    process.execPath,
+    ['--input-type=module', '-e', "import('./src/db.js').then(({default:db}) => db.close())"],
+    {
+      cwd: process.cwd(),
+      env: { ...process.env, DATA_DIR: dataDir, DOTENV_CONFIG_PATH: path.join(dataDir, '.env-unused'), ...environment },
+      encoding: 'utf8'
+    }
+  );
 }
 
 function open(dataDir) {
@@ -66,8 +74,31 @@ function makeRestorableLegacyDatabase(dataDir, timestamp = '2026-08-01 01:02:03'
 }
 
 test('validation preserves client numeric strings while enforcing every approved boundary', () => {
-  assert.doesNotThrow(() => validateTap({ graphic: 'mug', display_unit: 'pours_custom', custom_pour_size: '0.5', override_abv: '100', override_ibu: '1000', override_og: '2.0', override_fg: '0.5', override_srm: '50', badge_low_keg: '100' }));
-  for (const invalid of [{ graphic: 'evil' }, { custom_pour_size: '0.49' }, { override_abv: '100.1' }, { override_ibu: '1001' }, { override_og: '2.01' }, { override_srm: '51' }, { unknown: true }, { override_name: 'x\u0000y' }, { batch_option: 'x'.repeat(513) }]) assert.throws(() => validateTap(invalid));
+  assert.doesNotThrow(() =>
+    validateTap({
+      graphic: 'mug',
+      display_unit: 'pours_custom',
+      custom_pour_size: '0.5',
+      override_abv: '100',
+      override_ibu: '1000',
+      override_og: '2.0',
+      override_fg: '0.5',
+      override_srm: '50',
+      badge_low_keg: '100'
+    })
+  );
+  for (const invalid of [
+    { graphic: 'evil' },
+    { custom_pour_size: '0.49' },
+    { override_abv: '100.1' },
+    { override_ibu: '1001' },
+    { override_og: '2.01' },
+    { override_srm: '51' },
+    { unknown: true },
+    { override_name: 'x\u0000y' },
+    { batch_option: 'x'.repeat(513) }
+  ])
+    assert.throws(() => validateTap(invalid));
   assert.equal(validateSettings({ title: '  Tapboard  ' }).title, 'Tapboard');
   assert.throws(() => validateSettings({ title: '   ' }));
   assert.throws(() => validateSettings({ title: 'x'.repeat(81) }));
@@ -77,7 +108,8 @@ test('validation preserves client numeric strings while enforcing every approved
   assert.throws(() => validateCatalog({ name: '' }));
   assert.doesNotThrow(() => validateCatalog({ name: 'IPA', description: 'line one\nline two\r\nline three' }));
   assert.throws(() => validateCatalog({ name: 'IPA', description: 'tab\tis not accepted' }));
-  for (const partial of ['.5', '1.', '+1', '01', '1e2']) assert.throws(() => validateTap({ custom_pour_size: partial }));
+  for (const partial of ['.5', '1.', '+1', '01', '1e2'])
+    assert.throws(() => validateTap({ custom_pour_size: partial }));
   for (const invalid of ['0', '01', '7', '-1', '1.0']) assert.throws(() => tapId(invalid));
 });
 
@@ -130,7 +162,10 @@ test('verified restore marker permits migration, is consumed after success, and 
   const restoredDir = path.join(root, 'restored');
   const backupDir = path.join(root, 'backups');
   makeRestorableLegacyDatabase(sourceDir);
-  const backup = await createOnlineBackup({ sourceFile: path.join(sourceDir, 'tapboard.db'), backupDirectory: backupDir });
+  const backup = await createOnlineBackup({
+    sourceFile: path.join(sourceDir, 'tapboard.db'),
+    backupDirectory: backupDir
+  });
   await restoreBackup({ backupFile: backup.file, targetDataDirectory: restoredDir });
   const approvalFile = path.join(restoredDir, MIGRATION_APPROVAL_FILE);
   assert.equal(existsSync(approvalFile), true);
@@ -159,7 +194,10 @@ test('restore marker is rejected when same-count database contents change', asyn
   const sourceDir = path.join(root, 'source');
   const restoredDir = path.join(root, 'restored');
   makeRestorableLegacyDatabase(sourceDir);
-  const backup = await createOnlineBackup({ sourceFile: path.join(sourceDir, 'tapboard.db'), backupDirectory: path.join(root, 'backups') });
+  const backup = await createOnlineBackup({
+    sourceFile: path.join(sourceDir, 'tapboard.db'),
+    backupDirectory: path.join(root, 'backups')
+  });
   await restoreBackup({ backupFile: backup.file, targetDataDirectory: restoredDir });
   const changed = open(restoredDir);
   changed.prepare('UPDATE pour_logs SET volume_poured_oz = 7 WHERE id = 1').run();
@@ -179,7 +217,10 @@ test('restore marker is rejected when a same-count change exists only in WAL sta
   const sourceDir = path.join(root, 'source');
   const restoredDir = path.join(root, 'restored');
   makeRestorableLegacyDatabase(sourceDir);
-  const backup = await createOnlineBackup({ sourceFile: path.join(sourceDir, 'tapboard.db'), backupDirectory: path.join(root, 'backups') });
+  const backup = await createOnlineBackup({
+    sourceFile: path.join(sourceDir, 'tapboard.db'),
+    backupDirectory: path.join(root, 'backups')
+  });
   await restoreBackup({ backupFile: backup.file, targetDataDirectory: restoredDir });
   const changed = open(restoredDir);
   changed.pragma('journal_mode = WAL');
@@ -203,7 +244,10 @@ test('failed approved migration remains uncommitted and retains its restore mark
   const restoredDir = path.join(root, 'restored');
   const backupDir = path.join(root, 'backups');
   makeRestorableLegacyDatabase(sourceDir, 'not-a-timestamp');
-  const backup = await createOnlineBackup({ sourceFile: path.join(sourceDir, 'tapboard.db'), backupDirectory: backupDir });
+  const backup = await createOnlineBackup({
+    sourceFile: path.join(sourceDir, 'tapboard.db'),
+    backupDirectory: backupDir
+  });
   await restoreBackup({ backupFile: backup.file, targetDataDirectory: restoredDir });
 
   const result = startDatabase(restoredDir, {
@@ -224,7 +268,10 @@ test('legacy default remains disabled while an existing non-default PIN migrates
   makeLegacySettings(defaultDir, '0000');
   initialize(defaultDir);
   let database = open(defaultDir);
-  assert.equal(database.prepare('SELECT admin_pin_initialized FROM settings WHERE id = 1').get().admin_pin_initialized, 0);
+  assert.equal(
+    database.prepare('SELECT admin_pin_initialized FROM settings WHERE id = 1').get().admin_pin_initialized,
+    0
+  );
   database.close();
 
   const configuredDir = mkdtempSync(path.join(os.tmpdir(), 'tapboard-db-configured-'));
@@ -244,9 +291,16 @@ test('invalid initialization stays fail-closed and startup prunes legacy and exp
   const dataDir = mkdtempSync(path.join(os.tmpdir(), 'tapboard-db-prune-'));
   initialize(dataDir, '0000');
   let database = open(dataDir);
-  assert.equal(database.prepare('SELECT admin_pin_initialized FROM settings WHERE id = 1').get().admin_pin_initialized, 0);
-  database.prepare("INSERT INTO admin_sessions (token, expires_at) VALUES (?, datetime('now', '+1 day'))").run('legacy-raw-token');
-  database.prepare("INSERT INTO admin_sessions (token, expires_at) VALUES (?, datetime('now', '-1 second'))").run('sha256:expired');
+  assert.equal(
+    database.prepare('SELECT admin_pin_initialized FROM settings WHERE id = 1').get().admin_pin_initialized,
+    0
+  );
+  database
+    .prepare("INSERT INTO admin_sessions (token, expires_at) VALUES (?, datetime('now', '+1 day'))")
+    .run('legacy-raw-token');
+  database
+    .prepare("INSERT INTO admin_sessions (token, expires_at) VALUES (?, datetime('now', '-1 second'))")
+    .run('sha256:expired');
   database.close();
   initialize(dataDir);
   database = open(dataDir);
@@ -258,7 +312,9 @@ test('successful initialization revokes any pre-existing digest sessions', () =>
   const dataDir = mkdtempSync(path.join(os.tmpdir(), 'tapboard-db-init-revoke-'));
   initialize(dataDir);
   let database = open(dataDir);
-  database.prepare("INSERT INTO admin_sessions (token, expires_at) VALUES (?, datetime('now', '+1 day'))").run(`sha256:${'a'.repeat(64)}`);
+  database
+    .prepare("INSERT INTO admin_sessions (token, expires_at) VALUES (?, datetime('now', '+1 day'))")
+    .run(`sha256:${'a'.repeat(64)}`);
   database.close();
   initialize(dataDir, '8642');
   database = open(dataDir);

@@ -37,10 +37,7 @@ function createHub(options = {}) {
 
 test('formats one compact SSE frame per event', () => {
   const frame = formatSSEFrame('state_changed', { taps: [{ tapId: 1, changes: { volumeOz: 12.3 } }] });
-  assert.equal(
-    frame,
-    'event: state_changed\ndata: {"taps":[{"tapId":1,"changes":{"volumeOz":12.3}}]}\n\n'
-  );
+  assert.equal(frame, 'event: state_changed\ndata: {"taps":[{"tapId":1,"changes":{"volumeOz":12.3}}]}\n\n');
   assert.ok(Buffer.byteLength(frame) < 2_048);
   console.log(`typical incremental SSE frame measurement: ${Buffer.byteLength(frame)} bytes`);
 });
@@ -54,7 +51,7 @@ test('priority pour events are written before a pending display flush', () => {
     now: clock.now,
     setTimeoutFn: clock.setTimeout,
     clearTimeoutFn: clock.clearTimeout,
-    onFlush: payload => hub.publish('state_changed', payload)
+    onFlush: (payload) => hub.publish('state_changed', payload)
   });
 
   coalescer.enqueue({ tapId: 1, changes: { volumeOz: 99 }, timestamp: 0 });
@@ -87,7 +84,7 @@ test('a real HTTP SSE client remains registered for live events and is removed o
     hub.addClient(req, res, { schemaVersion: 2 });
     setTimeout(() => hub.publishImmediate('probe', { ok: true }), 20);
   });
-  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
 
   try {
     const { port } = server.address();
@@ -101,11 +98,11 @@ test('a real HTTP SSE client remains registered for live events and is removed o
     }
     assert.match(received, /event: probe\ndata: {"ok":true}/);
     await reader.cancel();
-    await new Promise(resolve => setTimeout(resolve, 20));
+    await new Promise((resolve) => setTimeout(resolve, 20));
     assert.equal(hub.clients.size, 0);
   } finally {
     hub.close();
-    await new Promise(resolve => server.close(resolve));
+    await new Promise((resolve) => server.close(resolve));
   }
 });
 

@@ -13,17 +13,38 @@ test('migrates legacy pour rows without changing IDs, volumes, or timestamps', (
     migrateDatabase(db);
     assert.equal(db.pragma('user_version', { simple: true }), SCHEMA_VERSION);
     assert.equal(db.pragma('foreign_keys', { simple: true }), 1);
-    assert.deepEqual(db.prepare('SELECT id, volume_poured_oz, timestamp, lifecycle_id, timestamp_epoch FROM pour_logs').get(),
-      { id: 1, volume_poured_oz: 7.5, timestamp: '2026-08-01 01:02:03', lifecycle_id: null, timestamp_epoch: 1785546123 });
-    assert.equal(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'pour_logs_lifecycle_epoch'").get()['1'], 1);
+    assert.deepEqual(
+      db.prepare('SELECT id, volume_poured_oz, timestamp, lifecycle_id, timestamp_epoch FROM pour_logs').get(),
+      {
+        id: 1,
+        volume_poured_oz: 7.5,
+        timestamp: '2026-08-01 01:02:03',
+        lifecycle_id: null,
+        timestamp_epoch: 1785546123
+      }
+    );
+    assert.equal(
+      db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'pour_logs_lifecycle_epoch'").get()['1'],
+      1
+    );
     assert.deepEqual(db.prepare('SELECT version, name FROM schema_migrations ORDER BY version').all(), [
       { version: 1, name: 'canonical-base-schema' },
       { version: 2, name: 'immutable-keg-lifecycles' }
     ]);
-    assert.throws(() => db.prepare(`INSERT INTO pour_logs
-      (tap_id, volume_poured_oz, timestamp, timestamp_epoch) VALUES (99, 1, '2026-08-01 00:00:00', 1785542400)`).run(), /FOREIGN KEY/);
+    assert.throws(
+      () =>
+        db
+          .prepare(
+            `INSERT INTO pour_logs
+      (tap_id, volume_poured_oz, timestamp, timestamp_epoch) VALUES (99, 1, '2026-08-01 00:00:00', 1785542400)`
+          )
+          .run(),
+      /FOREIGN KEY/
+    );
     migrateDatabase(db);
-  } finally { db.close(); }
+  } finally {
+    db.close();
+  }
 });
 
 test('an invalid legacy timestamp aborts the complete migration transaction', () => {
@@ -35,9 +56,11 @@ test('an invalid legacy timestamp aborts the complete migration transaction', ()
       INSERT INTO pour_logs VALUES (1, 1, 4, 'not-a-timestamp')`);
     assert.throws(() => migrateDatabase(db), /normalize 1 pour timestamp/);
     assert.equal(db.pragma('user_version', { simple: true }), 0);
-    assert.equal(db.prepare("SELECT COUNT(*) count FROM pour_logs").get().count, 1);
+    assert.equal(db.prepare('SELECT COUNT(*) count FROM pour_logs').get().count, 1);
     assert.equal(db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'keg_lifecycles'").get(), undefined);
-  } finally { db.close(); }
+  } finally {
+    db.close();
+  }
 });
 
 test('rejects future versions and orphaned legacy pours without partial migration', () => {
@@ -51,5 +74,8 @@ test('rejects future versions and orphaned legacy pours without partial migratio
       INSERT INTO pour_logs VALUES (1, 99, 1, '2026-08-01 00:00:00')`);
     assert.throws(() => migrateDatabase(orphan), /missing tap/);
     assert.equal(orphan.pragma('user_version', { simple: true }), 0);
-  } finally { future.close(); orphan.close(); }
+  } finally {
+    future.close();
+    orphan.close();
+  }
 });

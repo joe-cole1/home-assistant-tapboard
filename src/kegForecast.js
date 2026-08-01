@@ -1,22 +1,30 @@
 const DAY_MS = 86_400_000;
 const FORECAST_WINDOW_DAYS = 14;
 
-const roundTenths = value => Math.round(value * 10) / 10;
+const roundTenths = (value) => Math.round(value * 10) / 10;
 
 export function calculateKegKickForecast({ db, tapId, currentOz, nowMs = Date.now() }) {
-  const lifecycle = db.prepare(`SELECT lifecycle_id FROM keg_lifecycles
-    WHERE tap_id = ? AND closed_at IS NULL`).get(tapId);
+  const lifecycle = db
+    .prepare(
+      `SELECT lifecycle_id FROM keg_lifecycles
+    WHERE tap_id = ? AND closed_at IS NULL`
+    )
+    .get(tapId);
   if (!lifecycle) {
     return { avgDailyOz: null, estimatedDaysRemaining: null, hasUsageData: false };
   }
   const cutoffEpoch = Math.floor((nowMs - FORECAST_WINDOW_DAYS * DAY_MS) / 1000);
-  const stats = db.prepare(`
+  const stats = db
+    .prepare(
+      `
     SELECT
       SUM(volume_poured_oz) AS total_oz,
       MIN(timestamp_epoch) AS first_pour_epoch
     FROM pour_logs
     WHERE lifecycle_id = ? AND timestamp_epoch >= ?
-  `).get(lifecycle.lifecycle_id, cutoffEpoch);
+  `
+    )
+    .get(lifecycle.lifecycle_id, cutoffEpoch);
 
   const totalOz = Number(stats?.total_oz);
   const firstPourEpoch = Number(stats?.first_pour_epoch);

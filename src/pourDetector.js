@@ -28,15 +28,29 @@ export const DEFAULT_DETECTOR_CONFIG = Object.freeze({
 });
 
 const UNIT_TO_OZ = new Map([
-  ['oz', 1], ['fl oz', 1], ['fl. oz', 1], ['fl. oz.', 1], ['fl oz.', 1], ['fl_oz', 1], ['floz', 1], ['fluid ounce', 1], ['fluid ounces', 1],
-  ['ml', 1 / 29.5735295625], ['milliliter', 1 / 29.5735295625], ['milliliters', 1 / 29.5735295625],
-  ['millilitre', 1 / 29.5735295625], ['millilitres', 1 / 29.5735295625]
+  ['oz', 1],
+  ['fl oz', 1],
+  ['fl. oz', 1],
+  ['fl. oz.', 1],
+  ['fl oz.', 1],
+  ['fl_oz', 1],
+  ['floz', 1],
+  ['fluid ounce', 1],
+  ['fluid ounces', 1],
+  ['ml', 1 / 29.5735295625],
+  ['milliliter', 1 / 29.5735295625],
+  ['milliliters', 1 / 29.5735295625],
+  ['millilitre', 1 / 29.5735295625],
+  ['millilitres', 1 / 29.5735295625]
 ]);
 
 export function normalizeVolumeToOz(value, unit) {
-  const number = typeof value === 'number'
-    ? value
-    : (typeof value === 'string' && /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(value.trim()) ? Number(value) : NaN);
+  const number =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' && /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(value.trim())
+        ? Number(value)
+        : NaN;
   if (!Number.isFinite(number) || typeof unit !== 'string') return null;
   const factor = UNIT_TO_OZ.get(unit.trim().toLowerCase());
   return factor === undefined ? null : number * factor;
@@ -55,7 +69,13 @@ function median(values) {
  * normal trace replay independent of wall-clock time.
  */
 export class PourDetector {
-  constructor({ now = () => Date.now(), setTimeout: schedule = setTimeout, clearTimeout: cancel = clearTimeout, onEvent = () => {}, config = {} } = {}) {
+  constructor({
+    now = () => Date.now(),
+    setTimeout: schedule = setTimeout,
+    clearTimeout: cancel = clearTimeout,
+    onEvent = () => {},
+    config = {}
+  } = {}) {
     this.now = now;
     this.setTimeout = schedule;
     this.clearTimeout = cancel;
@@ -69,7 +89,16 @@ export class PourDetector {
 
   stateFor(tapId) {
     if (!this.taps.has(tapId)) {
-      this.taps.set(tapId, { samples: [], baseline: null, baselineAt: 0, candidate: null, active: null, cooldownUntil: 0, needsRebaseline: false, largeChange: null });
+      this.taps.set(tapId, {
+        samples: [],
+        baseline: null,
+        baselineAt: 0,
+        candidate: null,
+        active: null,
+        cooldownUntil: 0,
+        needsRebaseline: false,
+        largeChange: null
+      });
     }
     return this.taps.get(tapId);
   }
@@ -100,7 +129,7 @@ export class PourDetector {
     const delta = volumeOz - last.volumeOz;
     this.advance(timestamp);
     state.samples.push({ volumeOz, timestamp });
-    state.samples = state.samples.filter(sample => sample.timestamp >= timestamp - this.config.historyMs);
+    state.samples = state.samples.filter((sample) => sample.timestamp >= timestamp - this.config.historyMs);
 
     if (Math.abs(delta) > this.config.spikeOz) {
       this.trackLargeChange(tapId, volumeOz, timestamp);
@@ -112,7 +141,7 @@ export class PourDetector {
     }
 
     if (state.active) {
-      const robustVolume = median(state.samples.slice(-3).map(sample => sample.volumeOz));
+      const robustVolume = median(state.samples.slice(-3).map((sample) => sample.volumeOz));
       if (robustVolume <= state.active.lowestFlowVolume - this.config.meaningfulFlowOz) {
         state.active.lowestFlowVolume = robustVolume;
         state.active.lastMeaningfulFlowAt = timestamp;
@@ -132,15 +161,21 @@ export class PourDetector {
   }
 
   // Aliases keep callers/tests readable without coupling them to HA naming.
-  addSample(tapId, volumeOz, timestamp) { return this.ingest(tapId, volumeOz, timestamp); }
-  ingestSample(tapId, volumeOz, timestamp) { return this.ingest(tapId, volumeOz, timestamp); }
+  addSample(tapId, volumeOz, timestamp) {
+    return this.ingest(tapId, volumeOz, timestamp);
+  }
+  ingestSample(tapId, volumeOz, timestamp) {
+    return this.ingest(tapId, volumeOz, timestamp);
+  }
 
   advance(timestamp = this.now()) {
     for (const [tapId, state] of this.taps) {
       if (state.active) {
         // A quiet completed pour wins over hard cancellation at a shared deadline.
-        if (timestamp >= state.active.lastMeaningfulFlowAt + this.config.quietPeriodMs) this.finishActive(tapId, timestamp);
-        if (state.active && timestamp >= state.active.startedAt + this.config.hardSessionMs) this.cancelActive(tapId, 'timeout', timestamp);
+        if (timestamp >= state.active.lastMeaningfulFlowAt + this.config.quietPeriodMs)
+          this.finishActive(tapId, timestamp);
+        if (state.active && timestamp >= state.active.startedAt + this.config.hardSessionMs)
+          this.cancelActive(tapId, 'timeout', timestamp);
       }
     }
     this.resolveArbitration(timestamp);
@@ -165,7 +200,7 @@ export class PourDetector {
     const quiet = state.samples.slice(-this.config.baselineSamples);
     if (quiet.length !== this.config.baselineSamples) return;
     if (quiet.at(-1).timestamp - quiet[0].timestamp < this.config.baselineSpanMs) return;
-    const values = quiet.map(sample => sample.volumeOz);
+    const values = quiet.map((sample) => sample.volumeOz);
     if (Math.max(...values) - Math.min(...values) > this.config.baselineBandOz) return;
     state.baseline = median(values);
     state.baselineAt = timestamp;
@@ -173,9 +208,16 @@ export class PourDetector {
 
   considerCandidate(tapId, timestamp) {
     const state = this.stateFor(tapId);
-    const recent = state.samples.filter(sample => sample.timestamp >= timestamp - this.config.candidateSampleWindowMs);
-    if (recent.length < this.config.candidateSamples || state.baseline === null || timestamp - state.baselineAt > this.config.candidateLookbackMs) return;
-    const sustained = median(recent.map(sample => sample.volumeOz));
+    const recent = state.samples.filter(
+      (sample) => sample.timestamp >= timestamp - this.config.candidateSampleWindowMs
+    );
+    if (
+      recent.length < this.config.candidateSamples ||
+      state.baseline === null ||
+      timestamp - state.baselineAt > this.config.candidateLookbackMs
+    )
+      return;
+    const sustained = median(recent.map((sample) => sample.volumeOz));
     const loss = state.baseline - sustained;
     if (loss < this.config.candidateLossOz) return;
     state.candidate = { baseline: state.baseline, loss, at: timestamp };
@@ -189,9 +231,15 @@ export class PourDetector {
     if (this.arbitrationDeadline !== null && timestamp < this.arbitrationDeadline) return;
     const candidates = [];
     for (const [tapId, state] of this.taps) {
-      if (state.candidate && timestamp - state.candidate.at <= this.config.arbitrationMs + this.config.candidateSampleWindowMs) {
+      if (
+        state.candidate &&
+        timestamp - state.candidate.at <= this.config.arbitrationMs + this.config.candidateSampleWindowMs
+      ) {
         candidates.push({ tapId, ...state.candidate });
-      } else if (state.candidate && timestamp - state.candidate.at > this.config.arbitrationMs + this.config.candidateSampleWindowMs) {
+      } else if (
+        state.candidate &&
+        timestamp - state.candidate.at > this.config.arbitrationMs + this.config.candidateSampleWindowMs
+      ) {
         state.candidate = null;
       }
     }
@@ -205,7 +253,12 @@ export class PourDetector {
     candidates.sort((a, b) => b.loss - a.loss);
     const winner = candidates[0];
     const runner = candidates[1];
-    if (winner.loss < this.config.arbitrationMinimumOz || (runner && (winner.loss - runner.loss < this.config.arbitrationMinimumOz || winner.loss < runner.loss * this.config.arbitrationDominanceRatio))) {
+    if (
+      winner.loss < this.config.arbitrationMinimumOz ||
+      (runner &&
+        (winner.loss - runner.loss < this.config.arbitrationMinimumOz ||
+          winner.loss < runner.loss * this.config.arbitrationDominanceRatio))
+    ) {
       for (const candidate of candidates) this.suppressCandidate(candidate.tapId, timestamp);
       this.arbitrationTimer = null;
       this.arbitrationDeadline = null;
@@ -227,7 +280,14 @@ export class PourDetector {
   startActive(tapId, candidate, timestamp) {
     const state = this.stateFor(tapId);
     state.candidate = null;
-    state.active = { startedAt: timestamp, lastMeaningfulFlowAt: timestamp, startBaseline: candidate.baseline, lowestFlowVolume: median(state.samples.slice(-3).map(sample => sample.volumeOz)), quietTimer: null, hardTimer: null };
+    state.active = {
+      startedAt: timestamp,
+      lastMeaningfulFlowAt: timestamp,
+      startBaseline: candidate.baseline,
+      lowestFlowVolume: median(state.samples.slice(-3).map((sample) => sample.volumeOz)),
+      quietTimer: null,
+      hardTimer: null
+    };
     this.activeTapId = tapId;
     this.emit({ type: 'start', tapId, startVolume: candidate.baseline, timestamp });
     this.scheduleActiveTimers(tapId, state.active);
@@ -237,8 +297,14 @@ export class PourDetector {
     if (active.quietTimer) this.clearTimeout(active.quietTimer);
     if (active.hardTimer) this.clearTimeout(active.hardTimer);
     const now = this.now();
-    active.quietTimer = this.setTimeout(() => this.advance(this.now()), Math.max(0, active.lastMeaningfulFlowAt + this.config.quietPeriodMs - now));
-    active.hardTimer = this.setTimeout(() => this.advance(this.now()), Math.max(0, active.startedAt + this.config.hardSessionMs - now));
+    active.quietTimer = this.setTimeout(
+      () => this.advance(this.now()),
+      Math.max(0, active.lastMeaningfulFlowAt + this.config.quietPeriodMs - now)
+    );
+    active.hardTimer = this.setTimeout(
+      () => this.advance(this.now()),
+      Math.max(0, active.startedAt + this.config.hardSessionMs - now)
+    );
   }
 
   finishActive(tapId, timestamp) {
@@ -246,14 +312,17 @@ export class PourDetector {
     const active = state.active;
     if (!active) return;
     const endSamples = state.samples.slice(-this.config.settledSamples);
-    const settledEnough = endSamples.length === this.config.settledSamples
-      && endSamples.at(-1).timestamp - endSamples[0].timestamp >= this.config.settledSpanMs
-      && Math.max(...endSamples.map(sample => sample.volumeOz)) - Math.min(...endSamples.map(sample => sample.volumeOz)) <= this.config.settledBandOz;
+    const settledEnough =
+      endSamples.length === this.config.settledSamples &&
+      endSamples.at(-1).timestamp - endSamples[0].timestamp >= this.config.settledSpanMs &&
+      Math.max(...endSamples.map((sample) => sample.volumeOz)) -
+        Math.min(...endSamples.map((sample) => sample.volumeOz)) <=
+        this.config.settledBandOz;
     if (!settledEnough) {
       active.quietTimer = this.setTimeout(() => this.advance(this.now()), 200);
       return;
     }
-    const settled = median(endSamples.map(sample => sample.volumeOz));
+    const settled = median(endSamples.map((sample) => sample.volumeOz));
     const volumePouredOz = Math.max(0, Math.round((active.startBaseline - settled) * 10) / 10);
     this.clearActive(state);
     if (volumePouredOz < this.config.minimumPourOz) {
@@ -262,7 +331,14 @@ export class PourDetector {
       return;
     }
     this.requireRebaselineForAll(timestamp);
-    this.emit({ type: 'complete', tapId, startVolume: active.startBaseline, endVolume: settled, volumePouredOz, timestamp });
+    this.emit({
+      type: 'complete',
+      tapId,
+      startVolume: active.startBaseline,
+      endVolume: settled,
+      volumePouredOz,
+      timestamp
+    });
   }
 
   cancelActive(tapId, reason, timestamp = this.now()) {
@@ -290,17 +366,19 @@ export class PourDetector {
     }
 
     let change = state.largeChange || { samples: [] };
-    const priorValues = change.samples.map(sample => sample.volumeOz);
+    const priorValues = change.samples.map((sample) => sample.volumeOz);
     if (priorValues.length && Math.abs(volumeOz - median(priorValues)) > this.config.largeChangeBandOz) {
       change = { samples: [] };
     }
     change.samples.push({ volumeOz, timestamp });
     state.largeChange = change;
-    const values = change.samples.map(sample => sample.volumeOz);
+    const values = change.samples.map((sample) => sample.volumeOz);
     const stableSpan = timestamp - change.samples[0].timestamp;
-    if (change.samples.length >= this.config.largeChangeStableSamples
-      && stableSpan >= this.config.largeChangeStableSpanMs
-      && Math.max(...values) - Math.min(...values) <= this.config.largeChangeBandOz) {
+    if (
+      change.samples.length >= this.config.largeChangeStableSamples &&
+      stableSpan >= this.config.largeChangeStableSpanMs &&
+      Math.max(...values) - Math.min(...values) <= this.config.largeChangeBandOz
+    ) {
       // `ingest` has already recorded this sample, so do the silent hydration
       // inline rather than rejecting it as an out-of-order duplicate.
       const baseline = median(values);
@@ -326,7 +404,7 @@ export class PourDetector {
     const samples = state.samples.slice(-this.config.baselineSamples);
     if (samples.length !== this.config.baselineSamples) return false;
     if (samples.at(-1).timestamp - samples[0].timestamp < this.config.baselineSpanMs) return false;
-    const values = samples.map(sample => sample.volumeOz);
+    const values = samples.map((sample) => sample.volumeOz);
     if (Math.max(...values) - Math.min(...values) > this.config.baselineBandOz) return false;
     state.baseline = median(values);
     state.baselineAt = timestamp;
@@ -334,5 +412,7 @@ export class PourDetector {
     return true;
   }
 
-  emit(event) { this.onEvent(event); }
+  emit(event) {
+    this.onEvent(event);
+  }
 }

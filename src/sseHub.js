@@ -84,7 +84,7 @@ export class SSEHub {
         let drainRecord;
         const onDrain = () => {
           if (client.closed) return;
-          client.listeners = client.listeners.filter(record => record !== drainRecord);
+          client.listeners = client.listeners.filter((record) => record !== drainRecord);
           client.blocked = false;
           client.blockedAt = null;
         };

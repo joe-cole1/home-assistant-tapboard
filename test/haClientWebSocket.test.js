@@ -19,10 +19,21 @@ class FakeWebSocket extends EventEmitter {
     this.terminated = false;
     FakeWebSocket.instances.push(this);
   }
-  send(payload, callback) { this.sent.push(JSON.parse(payload)); callback?.(); }
-  close() { this.readyState = 3; this.emit('close', 1000); }
-  terminate() { this.terminated = true; this.readyState = 3; }
-  message(payload) { this.emit('message', Buffer.from(JSON.stringify(payload))); }
+  send(payload, callback) {
+    this.sent.push(JSON.parse(payload));
+    callback?.();
+  }
+  close() {
+    this.readyState = 3;
+    this.emit('close', 1000);
+  }
+  terminate() {
+    this.terminated = true;
+    this.readyState = 3;
+  }
+  message(payload) {
+    this.emit('message', Buffer.from(JSON.stringify(payload)));
+  }
 }
 
 function fakeTimers() {
@@ -30,9 +41,18 @@ function fakeTimers() {
   const pending = new Map();
   return {
     pending,
-    setTimeout(fn, delay) { pending.set(++id, { fn, delay }); return id; },
-    clearTimeout(timer) { pending.delete(timer); },
-    runNext() { const [timer, task] = pending.entries().next().value; pending.delete(timer); task.fn(); }
+    setTimeout(fn, delay) {
+      pending.set(++id, { fn, delay });
+      return id;
+    },
+    clearTimeout(timer) {
+      pending.delete(timer);
+    },
+    runNext() {
+      const [timer, task] = pending.entries().next().value;
+      pending.delete(timer);
+      task.fn();
+    }
   };
 }
 
@@ -66,7 +86,7 @@ test('close rejects outstanding work and owns one reconnect timer', async () => 
   const timers = fakeTimers();
   const client = clientWith(timers);
   const changes = [];
-  client.on('connection_change', value => changes.push(value));
+  client.on('connection_change', (value) => changes.push(value));
   client.connect();
   const socket = FakeWebSocket.instances.at(-1);
   socket.message({ type: 'auth_ok' });
@@ -144,23 +164,75 @@ test('an authentication handshake timeout closes the socket and backs off', () =
 
 test('hydration accepts only its subscription, applies queued state without detector replay', async () => {
   const timers = fakeTimers();
-  const detector = { onEvent: null, ingests: 0, hydrates: 0, reset() {}, ingest() { this.ingests += 1; }, hydrate() { this.hydrates += 1; } };
+  const detector = {
+    onEvent: null,
+    ingests: 0,
+    hydrates: 0,
+    reset() {},
+    ingest() {
+      this.ingests += 1;
+    },
+    hydrate() {
+      this.hydrates += 1;
+    }
+  };
   const client = clientWith(timers, detector);
   const changes = [];
-  client.on('connection_change', connected => changes.push(connected));
+  client.on('connection_change', (connected) => changes.push(connected));
   client.connect();
   const socket = FakeWebSocket.instances.at(-1);
   socket.message({ type: 'auth_ok' });
-  await new Promise(resolve => setImmediate(resolve));
-  const subscription = socket.sent.find(message => message.type === 'subscribe_events');
+  await new Promise((resolve) => setImmediate(resolve));
+  const subscription = socket.sent.find((message) => message.type === 'subscribe_events');
   socket.message({ id: subscription.id, success: true, result: null });
-  await new Promise(resolve => setImmediate(resolve));
-  const snapshot = socket.sent.find(message => message.type === 'get_states');
+  await new Promise((resolve) => setImmediate(resolve));
+  const snapshot = socket.sent.find((message) => message.type === 'get_states');
   const entity = 'sensor.tap_1_fl_oz';
-  socket.message({ type: 'event', id: subscription.id + 99, event: { event_type: 'state_changed', data: { entity_id: entity, new_state: { entity_id: entity, state: '1', attributes: { unit_of_measurement: 'fl oz' }, last_updated: new Date(1000).toISOString() } } } });
-  socket.message({ type: 'event', id: subscription.id, event: { event_type: 'state_changed', data: { entity_id: entity, new_state: { entity_id: entity, state: '2', attributes: { unit_of_measurement: 'fl oz' }, last_updated: new Date(2000).toISOString() } } } });
-  socket.message({ id: snapshot.id, success: true, result: [{ entity_id: entity, state: '0', attributes: { unit_of_measurement: 'fl oz' }, last_updated: new Date(0).toISOString() }] });
-  await new Promise(resolve => setImmediate(resolve));
+  socket.message({
+    type: 'event',
+    id: subscription.id + 99,
+    event: {
+      event_type: 'state_changed',
+      data: {
+        entity_id: entity,
+        new_state: {
+          entity_id: entity,
+          state: '1',
+          attributes: { unit_of_measurement: 'fl oz' },
+          last_updated: new Date(1000).toISOString()
+        }
+      }
+    }
+  });
+  socket.message({
+    type: 'event',
+    id: subscription.id,
+    event: {
+      event_type: 'state_changed',
+      data: {
+        entity_id: entity,
+        new_state: {
+          entity_id: entity,
+          state: '2',
+          attributes: { unit_of_measurement: 'fl oz' },
+          last_updated: new Date(2000).toISOString()
+        }
+      }
+    }
+  });
+  socket.message({
+    id: snapshot.id,
+    success: true,
+    result: [
+      {
+        entity_id: entity,
+        state: '0',
+        attributes: { unit_of_measurement: 'fl oz' },
+        last_updated: new Date(0).toISOString()
+      }
+    ]
+  });
+  await new Promise((resolve) => setImmediate(resolve));
 
   assert.equal(client.isHydrated, true);
   assert.equal(client.statesMap.get(entity).state, '2');
@@ -177,12 +249,22 @@ test('hydration overflow discards the generation and schedules a fresh connectio
   client.connect();
   const socket = FakeWebSocket.instances.at(-1);
   socket.message({ type: 'auth_ok' });
-  await new Promise(resolve => setImmediate(resolve));
-  const subscription = socket.sent.find(message => message.type === 'subscribe_events');
+  await new Promise((resolve) => setImmediate(resolve));
+  const subscription = socket.sent.find((message) => message.type === 'subscribe_events');
   socket.message({ id: subscription.id, success: true, result: null });
-  await new Promise(resolve => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
   for (let i = 0; i < 513; i++) {
-    socket.message({ type: 'event', id: subscription.id, event: { event_type: 'state_changed', data: { entity_id: `sensor.x_${i}`, new_state: { entity_id: `sensor.x_${i}`, state: '1', attributes: {}, last_updated: new Date(i).toISOString() } } } });
+    socket.message({
+      type: 'event',
+      id: subscription.id,
+      event: {
+        event_type: 'state_changed',
+        data: {
+          entity_id: `sensor.x_${i}`,
+          new_state: { entity_id: `sensor.x_${i}`, state: '1', attributes: {}, last_updated: new Date(i).toISOString() }
+        }
+      }
+    });
   }
   assert.equal(client.isHydrated, false);
   assert.equal(client.eventQueue.length, 0);

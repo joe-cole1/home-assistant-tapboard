@@ -1,5 +1,11 @@
 export class DisplayUpdateCoalescer {
-  constructor({ delayMs = 250, now = Date.now, setTimeoutFn = setTimeout, clearTimeoutFn = clearTimeout, onFlush } = {}) {
+  constructor({
+    delayMs = 250,
+    now = Date.now,
+    setTimeoutFn = setTimeout,
+    clearTimeoutFn = clearTimeout,
+    onFlush
+  } = {}) {
     this.delayMs = delayMs;
     this.now = now;
     this.setTimeoutFn = setTimeoutFn;
@@ -15,7 +21,10 @@ export class DisplayUpdateCoalescer {
     const pending = this.pendingByTap.get(tapId) || {};
     Object.assign(pending, changes);
     this.pendingByTap.set(tapId, pending);
-    this.latestTimestamp = Math.max(this.latestTimestamp ?? -Infinity, Number.isFinite(timestamp) ? timestamp : this.now());
+    this.latestTimestamp = Math.max(
+      this.latestTimestamp ?? -Infinity,
+      Number.isFinite(timestamp) ? timestamp : this.now()
+    );
     if (this.timer === null) this.timer = this.setTimeoutFn(() => this.flush(), this.delayMs);
     return true;
   }

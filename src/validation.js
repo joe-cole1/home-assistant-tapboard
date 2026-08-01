@@ -1,9 +1,18 @@
 const THEMES = new Set(['modern_dark', 'warm_pub', 'cyberpunk', 'light_minimal']);
-const TITLE_FONTS = new Set(['Outfit', 'Roboto', 'Carter One', 'Balsamiq Sans', 'Fredoka', 'Permanent Marker', 'Montserrat']);
+const TITLE_FONTS = new Set([
+  'Outfit',
+  'Roboto',
+  'Carter One',
+  'Balsamiq Sans',
+  'Fredoka',
+  'Permanent Marker',
+  'Montserrat'
+]);
 const BODY_FONTS = new Set(['Inter', 'Roboto', 'Balsamiq Sans', 'Outfit', 'Fredoka', 'Montserrat']);
 const GRAPHICS = new Set(['corny_keg', 'pint_glass', 'tulip_glass', 'wheat_glass', 'mug', 'stout_glass', 'snifter']);
 const DISPLAY_UNITS = new Set(['percent', 'pints', 'oz', 'pours_12', 'pours_custom']);
 const VOLUME_FORMATS = new Set(['oz', 'pints']);
+// eslint-disable-next-line no-control-regex -- Reject control characters from untrusted request text.
 const DISALLOWED_CONTROLS = /[\u0000-\u0009\u000B\u000C\u000E-\u001F\u007F]/;
 const CANONICAL_NUMBER = /^(?:0|[1-9]\d*)(?:\.\d+)?$/;
 
@@ -50,7 +59,8 @@ function numeric(value, min, max, { integer = false, allowEmpty = false } = {}) 
   if (typeof value === 'number') parsed = value;
   else if (typeof value === 'string' && CANONICAL_NUMBER.test(value.trim())) parsed = Number(value.trim());
   else throw new ValidationError();
-  if (!Number.isFinite(parsed) || parsed < min || parsed > max || (integer && !Number.isInteger(parsed))) throw new ValidationError();
+  if (!Number.isFinite(parsed) || parsed < min || parsed > max || (integer && !Number.isInteger(parsed)))
+    throw new ValidationError();
   return parsed;
 }
 
@@ -74,7 +84,19 @@ export function validateAuth(body) {
 
 export function validateSettings(body) {
   assertObject(body);
-  rejectUnknown(body, new Set(['theme', 'volume_format', 'title', 'font_title', 'font_body', 'show_ondeck', 'tap_visibilities', 'new_pin']));
+  rejectUnknown(
+    body,
+    new Set([
+      'theme',
+      'volume_format',
+      'title',
+      'font_title',
+      'font_body',
+      'show_ondeck',
+      'tap_visibilities',
+      'new_pin'
+    ])
+  );
   const output = {};
   assignIfDefined(output, 'theme', choice(body.theme, THEMES));
   assignIfDefined(output, 'volume_format', choice(body.volume_format, VOLUME_FORMATS));
@@ -100,7 +122,24 @@ export function validateSettings(body) {
 }
 
 export function validateTap(body) {
-  const allowed = new Set(['enabled', 'batch_option', 'graphic', 'override_enabled', 'override_name', 'override_style', 'override_abv', 'override_ibu', 'override_og', 'override_fg', 'override_srm', 'override_description', 'badge_low_keg', 'badge_fresh', 'display_unit', 'custom_pour_size']);
+  const allowed = new Set([
+    'enabled',
+    'batch_option',
+    'graphic',
+    'override_enabled',
+    'override_name',
+    'override_style',
+    'override_abv',
+    'override_ibu',
+    'override_og',
+    'override_fg',
+    'override_srm',
+    'override_description',
+    'badge_low_keg',
+    'badge_fresh',
+    'display_unit',
+    'custom_pour_size'
+  ]);
   assertObject(body);
   rejectUnknown(body, allowed);
   const output = {};

@@ -8,11 +8,17 @@ import { captureActiveLifecycle, recordPour } from './kegLifecycle.js';
 
 export class HAClient extends EventEmitter {
   constructor({
-    detector, detectorOptions, displayUpdateCoalescer, displayCoalescerOptions,
-    WebSocketImpl = WebSocket, setTimeout: schedule = setTimeout, clearTimeout: cancel = clearTimeout,
-    now = () => Date.now(), requestTimeoutMs = 10_000,
-    captureLifecycle = tapId => captureActiveLifecycle(db, tapId),
-    recordPourFn = pour => recordPour(db, pour)
+    detector,
+    detectorOptions,
+    displayUpdateCoalescer,
+    displayCoalescerOptions,
+    WebSocketImpl = WebSocket,
+    setTimeout: schedule = setTimeout,
+    clearTimeout: cancel = clearTimeout,
+    now = () => Date.now(),
+    requestTimeoutMs = 10_000,
+    captureLifecycle = (tapId) => captureActiveLifecycle(db, tapId),
+    recordPourFn = (pour) => recordPour(db, pour)
   } = {}) {
     super();
     this.WebSocket = WebSocketImpl;
@@ -44,18 +50,20 @@ export class HAClient extends EventEmitter {
     this.primaryTapSensors = new Map();
     this.unitWarnings = new Map();
     this.activePourContexts = new Map();
-    this.displayUpdateCoalescer = displayUpdateCoalescer || new DisplayUpdateCoalescer({
-      ...displayCoalescerOptions,
-      onFlush: payload => this.emit('state_changed', payload)
-    });
+    this.displayUpdateCoalescer =
+      displayUpdateCoalescer ||
+      new DisplayUpdateCoalescer({
+        ...displayCoalescerOptions,
+        onFlush: (payload) => this.emit('state_changed', payload)
+      });
 
-    const handleDetectorEvent = event => this.handleDetectorEvent(event);
+    const handleDetectorEvent = (event) => this.handleDetectorEvent(event);
     if (detector) {
       this.detector = detector;
       // Keep an injected test detector observable while still adapting its
       // lifecycle to HAClient's public EventEmitter events.
       const priorHandler = detector.onEvent;
-      detector.onEvent = event => {
+      detector.onEvent = (event) => {
         priorHandler?.(event);
         handleDetectorEvent(event);
       };
@@ -63,7 +71,7 @@ export class HAClient extends EventEmitter {
       const priorHandler = detectorOptions?.onEvent;
       this.detector = new PourDetector({
         ...detectorOptions,
-        onEvent: event => {
+        onEvent: (event) => {
           priorHandler?.(event);
           handleDetectorEvent(event);
         }
@@ -143,7 +151,8 @@ export class HAClient extends EventEmitter {
   armAuthenticationTimeout(socket) {
     this.clearAuthenticationTimeout();
     this.authenticationTimeout = this.setTimeout(() => {
-      if (socket === this.ws) this.failSocket(socket, new Error('Home Assistant authentication timed out'), 'auth_timeout');
+      if (socket === this.ws)
+        this.failSocket(socket, new Error('Home Assistant authentication timed out'), 'auth_timeout');
     }, this.requestTimeoutMs);
   }
 
@@ -184,7 +193,7 @@ export class HAClient extends EventEmitter {
     this.clearAuthenticationTimeout();
     this.rejectPending(error);
     this.detector.reset(reason);
-    this.setConnectionState(this.stopped ? 'stopped' : (this.authInvalid ? 'auth_invalid' : 'disconnected'));
+    this.setConnectionState(this.stopped ? 'stopped' : this.authInvalid ? 'auth_invalid' : 'disconnected');
     this.closeSocket(socket);
     if (reconnect && !this.stopped && !this.authInvalid) this.scheduleReconnect();
   }
@@ -194,7 +203,9 @@ export class HAClient extends EventEmitter {
     try {
       if (typeof socket.terminate === 'function') socket.terminate();
       else if (typeof socket.close === 'function') socket.close();
-    } catch (_) {}
+    } catch (_err) {
+      // A closing socket can reject termination after its transport is gone.
+    }
   }
 
   restart() {
@@ -221,11 +232,14 @@ export class HAClient extends EventEmitter {
       }
       const id = ++this.messageId;
       const payload = { ...msg, id };
-      const timeout = this.setTimeout(() => this.settleRequest(id, new Error(`HA WebSocket request ${id} timed out`)), this.requestTimeoutMs);
+      const timeout = this.setTimeout(
+        () => this.settleRequest(id, new Error(`HA WebSocket request ${id} timed out`)),
+        this.requestTimeoutMs
+      );
       this.pendingRequests.set(id, { resolve, reject, timeout });
       onId?.(id);
       try {
-        socket.send(JSON.stringify(payload), err => {
+        socket.send(JSON.stringify(payload), (err) => {
           if (err) {
             this.settleRequest(id, err);
             this.failSocket(socket, err, 'disconnect');
@@ -245,10 +259,12 @@ export class HAClient extends EventEmitter {
       this.setConnectionState('authenticating');
       this.armAuthenticationTimeout(socket);
       try {
-        socket.send(JSON.stringify({ type: 'auth', access_token: this.haToken }), err => {
+        socket.send(JSON.stringify({ type: 'auth', access_token: this.haToken }), (err) => {
           if (err) this.failSocket(socket, err, 'disconnect');
         });
-      } catch (err) { this.failSocket(socket, err, 'disconnect'); }
+      } catch (err) {
+        this.failSocket(socket, err, 'disconnect');
+      }
       return;
     }
 
@@ -265,12 +281,18 @@ export class HAClient extends EventEmitter {
       this.clearAuthenticationTimeout();
       this.authInvalid = true;
       this.clearReconnectTimer();
-      this.failSocket(socket, new Error(msg.message || 'Home Assistant authentication failed'), 'auth_invalid', { reconnect: false });
+      this.failSocket(socket, new Error(msg.message || 'Home Assistant authentication failed'), 'auth_invalid', {
+        reconnect: false
+      });
       return;
     }
 
     if (msg.type !== 'event' && msg.id && this.pendingRequests.has(msg.id)) {
-      this.settleRequest(msg.id, msg.success ? null : new Error(msg.error ? msg.error.message : 'Unknown HA WS error'), msg.result);
+      this.settleRequest(
+        msg.id,
+        msg.success ? null : new Error(msg.error ? msg.error.message : 'Unknown HA WS error'),
+        msg.result
+      );
       return;
     }
 
@@ -304,10 +326,17 @@ export class HAClient extends EventEmitter {
       this.subscribedEventId = null;
 
       console.log('[HAClient] Step 1: Subscribing to state_changed event stream...');
-      await this.send({
-        type: 'subscribe_events',
-        event_type: 'state_changed'
-      }, { onId: id => { this.subscribedEventId = id; } });
+      await this.send(
+        {
+          type: 'subscribe_events',
+          event_type: 'state_changed'
+        },
+        {
+          onId: (id) => {
+            this.subscribedEventId = id;
+          }
+        }
+      );
       if (token !== this.hydrationToken || socket !== this.ws) return;
 
       console.log('[HAClient] Step 2: Requesting initial get_states snapshot...');
@@ -327,9 +356,13 @@ export class HAClient extends EventEmitter {
         for (const t of activeTaps) {
           this.callHAService('input_boolean', 'turn_on', {
             entity_id: `input_boolean.tap_${t.tap_id}_enabled`
-          }).catch(err => {});
+          }).catch((_err) => {
+            // Hydration continues when a best-effort HA enable call fails.
+          });
         }
-      } catch (e) {}
+      } catch (_err) {
+        // Database reads are best-effort while HA hydration is in progress.
+      }
 
       console.log(`[HAClient] Step 3: Replaying ${this.eventQueue.length} buffered queue events...`);
       this.eventQueue.sort((a, b) => this.stateTimestamp(a.new_state || {}) - this.stateTimestamp(b.new_state || {}));
@@ -351,7 +384,6 @@ export class HAClient extends EventEmitter {
 
       console.log('[HAClient] Sync complete! Live stream active.');
       this.emit('hydrated', this.getFormattedState());
-
     } catch (err) {
       console.error('[HAClient] Failed to complete sync sequence:', err.message);
       if (token === this.hydrationToken && socket === this.ws) {
@@ -472,7 +504,9 @@ export class HAClient extends EventEmitter {
     const fillState = this.statesMap.get(`sensor.tap_${tapId}_fill`)?.state;
     const currentPercent = fillState ? parseFloat(fillState).toFixed(1) : 'N/A';
 
-    console.log(`[POUR EVENT] ✅ Tap ${tapId} POUR FINALIZED! Total Dispensed: ${finalPouredOz} oz. Remaining Keg Fill: ${currentPercent}%`);
+    console.log(
+      `[POUR EVENT] ✅ Tap ${tapId} POUR FINALIZED! Total Dispensed: ${finalPouredOz} oz. Remaining Keg Fill: ${currentPercent}%`
+    );
 
     if (finalPouredOz >= 1.0) {
       const context = this.activePourContexts.get(tapId) || { lifecycleId: null, beerName: `Tap ${tapId}` };
@@ -502,7 +536,9 @@ export class HAClient extends EventEmitter {
 
     const currentPercent = parseFloat(fillState.state);
     if (!isNaN(currentPercent) && currentPercent <= tapRow.badge_low_keg) {
-      console.log(`[Alert] Tap ${tapId} volume (${currentPercent}%) dipped below threshold (${tapRow.badge_low_keg}%).`);
+      console.log(
+        `[Alert] Tap ${tapId} volume (${currentPercent}%) dipped below threshold (${tapRow.badge_low_keg}%).`
+      );
       this.emit('low_keg_alert', { tapId, currentPercent, threshold: tapRow.badge_low_keg });
     }
   }
@@ -524,7 +560,8 @@ export class HAClient extends EventEmitter {
     const status = attr.status || 'Active';
 
     try {
-      db.prepare(`
+      db.prepare(
+        `
         INSERT INTO batches (batch_id, recipe_name, style, brew_date, og, fg, abv, ibu, srm, status, last_synced_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
         ON CONFLICT(batch_id) DO UPDATE SET
@@ -538,8 +575,11 @@ export class HAClient extends EventEmitter {
           srm = excluded.srm,
           status = excluded.status,
           last_synced_at = datetime('now')
-      `).run(batchId, recipeName, style, brewDate, og, fg, abv, ibu, srm, status);
-    } catch (e) {}
+      `
+      ).run(batchId, recipeName, style, brewDate, og, fg, abv, ibu, srm, status);
+    } catch (_err) {
+      // A malformed optional Brewfather record must not interrupt HA sync.
+    }
   }
 
   getFormattedState() {

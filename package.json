@@ -4,10 +4,20 @@
   "description": "Containerized Home Assistant Tapboard with real-time WebSocket sync and SQLite analytics",
   "main": "src/server.js",
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "test": "node --test test/*.test.js",
+    "lint:fix": "eslint src scripts public test eslint.config.js --fix",
+    "format": "prettier src scripts public test .github package.json package-lock.json eslint.config.js .prettierrc.json README.md architecture.md docs/SECURITY.md docs/DATABASE-OPERATIONS.md --write --ignore-unknown",
+    "format:check": "prettier src scripts public test .github package.json package-lock.json eslint.config.js .prettierrc.json README.md architecture.md docs/SECURITY.md docs/DATABASE-OPERATIONS.md --check --ignore-unknown",
+    "lint": "npm run lint:fix && npm run format",
+    "lint:check": "eslint src scripts public test eslint.config.js --max-warnings=0 && npm run format:check",
+    "check": "npm run lint:check && npm test",
+    "check:fix": "npm run lint && npm test",
     "db:backup": "node scripts/db-maintenance.js backup",
     "db:verify": "node scripts/db-maintenance.js verify",
     "db:restore": "node scripts/db-maintenance.js restore",
@@ -20,6 +30,10 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "linkedom": "^0.18.13"
+    "@eslint/js": "10.0.1",
+    "eslint": "10.8.0",
+    "globals": "17.8.0",
+    "linkedom": "^0.18.13",
+    "prettier": "3.9.6"
   }
 }
