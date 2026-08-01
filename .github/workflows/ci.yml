@@ -92,6 +92,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          if [ ! -s formatting.patch ]; then
+            git diff --quiet
+            exit 0
+          fi
           git apply --check formatting.patch
           git apply formatting.patch
           git diff --binary --no-ext-diff > applied.patch
@@ -122,6 +126,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          if [ ! -s formatting.patch ]; then
+            git diff --quiet
+            exit 0
+          fi
           git apply --check formatting.patch
           git apply formatting.patch
           git diff --binary --no-ext-diff > applied.patch
