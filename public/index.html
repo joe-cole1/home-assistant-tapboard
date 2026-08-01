@@ -20,7 +20,7 @@
       <h1 class="header-title" id="headerTitle">Hazardous Brews</h1>
     </div>
     <div class="header-right">
-      <div class="header-info-badge" title="Connection Status">
+      <div class="header-info-badge" id="liveStatusBadge" title="Connection Status">
         <span style="font-size:1.1rem;">⚡</span>
         <span id="headerClock">Live</span>
       </div>
@@ -225,11 +225,11 @@
             <label class="form-label">Override Beer Name</label>
             <input type="text" class="form-control" id="overrideName" placeholder="Fallback to Brewfather name" />
           </div>
-          <div style="display:grid; grid-template-columns:2fr 1fr 1fr; gap:0.75rem;">
-            <div class="form-group">
-              <label class="form-label">Style</label>
-              <input type="text" class="form-control" id="overrideStyle" placeholder="Style" />
-            </div>
+          <div class="form-group">
+            <label class="form-label">Style</label>
+            <input type="text" class="form-control" id="overrideStyle" placeholder="Style" />
+          </div>
+          <div class="tap-override-number-grid">
             <div class="form-group">
               <label class="form-label">ABV (%)</label>
               <input type="number" step="0.1" class="form-control" id="overrideAbv" placeholder="e.g. 6.5" />
@@ -238,8 +238,6 @@
               <label class="form-label">SRM Color</label>
               <input type="number" class="form-control" id="overrideSrm" placeholder="1-40" />
             </div>
-          </div>
-          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:0.75rem;">
             <div class="form-group">
               <label class="form-label">IBU</label>
               <input type="number" class="form-control" id="overrideIbu" placeholder="IBU" />
@@ -266,7 +264,7 @@
           <input type="checkbox" id="badgeLowKegToggle" checked /> Show Low Keg Badge
         </label>
         <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.9rem;">
-          <input type="checkbox" id="badgeFreshToggle" checked /> Show Fresh! Badge
+          <input type="checkbox" id="badgeFreshToggle" checked /> Show New Badge (First 7 Days)
         </label>
       </div>
 

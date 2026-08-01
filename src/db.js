@@ -62,6 +62,7 @@ db.exec(`
     override_description TEXT,
     badge_low_keg REAL DEFAULT 20.0,
     badge_fresh INTEGER DEFAULT 1,
+    on_tap_at TEXT,
     display_unit TEXT DEFAULT 'percent',
     custom_pour_size REAL DEFAULT 12.0
   )
@@ -71,6 +72,11 @@ db.exec(`
 try { db.exec(`ALTER TABLE taps ADD COLUMN batch_id TEXT;`); } catch (e) {}
 try { db.exec(`ALTER TABLE taps ADD COLUMN display_unit TEXT DEFAULT 'percent';`); } catch (e) {}
 try { db.exec(`ALTER TABLE taps ADD COLUMN custom_pour_size REAL DEFAULT 12.0;`); } catch (e) {}
+try { db.exec(`ALTER TABLE taps ADD COLUMN on_tap_at TEXT;`); } catch (e) {}
+db.prepare(`
+  UPDATE taps SET on_tap_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+  WHERE on_tap_at IS NULL AND batch_id IS NOT NULL AND trim(batch_id) <> ''
+`).run();
 
 // 3. Batches Table (Brewfather & Recipe Details)
 db.exec(`

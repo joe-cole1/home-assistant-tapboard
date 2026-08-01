@@ -2,6 +2,7 @@
 import { renderTapGraphic, srmToHex } from './graphics.js';
 import { createLiveUpdateController, updateGraphicFill } from './liveUpdates.js';
 import { buildOnDeckItems, buildRecipeModalContent, buildTapCardContent, createSelectOption, createToast } from './domBuilders.js';
+import { shouldShowNewBadge } from './freshness.js';
 
 let appState = {
   settings: {},
@@ -16,6 +17,9 @@ let appState = {
 let editingTapId = null;
 let authToken = sessionStorage.getItem('tapboard_token') || null;
 let liveUpdates;
+const simulatedPourTimers = new Map();
+const LONG_PRESS_MS = 600;
+const SIMULATED_POUR_MS = 8000;
 
 function getTapState(tapId) {
   return appState.tapStates[String(tapId)] || {};
@@ -103,6 +107,7 @@ function initSSE() {
   eventSource.addEventListener('snapshot', (e) => {
     liveUpdates.replaceSnapshot(JSON.parse(e.data));
     updateClockStatus(appState.haConnected ? 'Live' : 'Disconnected');
+    pulseLiveIndicator();
     renderApp();
   });
 
@@ -111,16 +116,19 @@ function initSSE() {
     const { isConnected } = JSON.parse(e.data);
     appState.haConnected = isConnected;
     updateClockStatus(isConnected ? 'Live' : 'Disconnected');
+    pulseLiveIndicator();
   });
 
   // 3. HA State Changed
   eventSource.addEventListener('state_changed', (e) => {
     liveUpdates.applyStateChanged(JSON.parse(e.data));
+    pulseLiveIndicator();
   });
 
   // 4. Instant Pour Animation Start
   eventSource.addEventListener('pour_start', (e) => {
     const { tapId } = JSON.parse(e.data);
+    pulseLiveIndicator();
     console.log(`[Pour Start] Animating Tap ${tapId}`);
     setTapPouringAnimation(tapId, true);
   });
@@ -128,6 +136,7 @@ function initSSE() {
   // 5. Pour Complete Summary & Toast Notification
   eventSource.addEventListener('pour_complete', (e) => {
     const { tapId, volumePouredOz, beerName, kegKickForecast } = JSON.parse(e.data);
+    pulseLiveIndicator();
     showToast(`🍺 Poured ${volumePouredOz} oz of ${beerName}!`);
     setTapPouringAnimation(tapId, false);
     if (kegKickForecast) {
@@ -145,20 +154,33 @@ function initSSE() {
   // 6. Canceled Pour (rebound, disconnect, large change, or safety timeout)
   eventSource.addEventListener('pour_cancel', (e) => {
     const { tapId } = JSON.parse(e.data);
+    pulseLiveIndicator();
     setTapPouringAnimation(tapId, false);
   });
 
   // 7. Low Keg Alert
   eventSource.addEventListener('low_keg_alert', (e) => {
     const { tapId, currentPercent } = JSON.parse(e.data);
+    pulseLiveIndicator();
     showToast(`⚠️ Low Keg Warning: Tap ${tapId} at ${currentPercent}%!`);
   });
 
   // 8. Settings Updated
   eventSource.addEventListener('settings_updated', (e) => {
     liveUpdates.replaceSnapshot(JSON.parse(e.data));
+    pulseLiveIndicator();
     renderApp();
   });
+}
+
+function pulseLiveIndicator() {
+  if (!appState.haConnected) return;
+  const badge = document.getElementById('liveStatusBadge');
+  if (!badge) return;
+
+  badge.classList.remove('is-updating');
+  void badge.offsetWidth;
+  badge.classList.add('is-updating');
 }
 
 function updateClockStatus(text) {
@@ -269,6 +291,58 @@ function setTapPouringAnimation(tapId, isPouring) {
       card.classList.remove('is-settling');
     }, 2000);
   }
+}
+
+function simulatePour(tapId) {
+  if (!authToken) return;
+
+  const existingTimer = simulatedPourTimers.get(tapId);
+  if (existingTimer) clearTimeout(existingTimer);
+
+  setTapPouringAnimation(tapId, true);
+  showToast(`🍺 Simulating a pour on Tap ${tapId}`);
+
+  const timer = setTimeout(() => {
+    setTapPouringAnimation(tapId, false);
+    simulatedPourTimers.delete(tapId);
+  }, SIMULATED_POUR_MS);
+  simulatedPourTimers.set(tapId, timer);
+}
+
+function addAdminLongPress(card, tapId) {
+  let timer = null;
+  let startX = 0;
+  let startY = 0;
+  let suppressClickUntil = 0;
+
+  const cancel = () => {
+    if (timer) clearTimeout(timer);
+    timer = null;
+  };
+
+  card.addEventListener('pointerdown', event => {
+    if (!authToken || (event.button !== undefined && event.button !== 0) || event.target.closest('button, input, select, textarea, label')) return;
+    startX = event.clientX;
+    startY = event.clientY;
+    cancel();
+    timer = setTimeout(() => {
+      timer = null;
+      suppressClickUntil = Date.now() + 1000;
+      simulatePour(tapId);
+    }, LONG_PRESS_MS);
+  });
+
+  card.addEventListener('pointermove', event => {
+    if (Math.hypot(event.clientX - startX, event.clientY - startY) > 10) cancel();
+  });
+  card.addEventListener('pointerup', cancel);
+  card.addEventListener('pointercancel', cancel);
+  card.addEventListener('pointerleave', cancel);
+  card.addEventListener('contextmenu', event => {
+    if (authToken) event.preventDefault();
+  });
+
+  return () => Date.now() < suppressClickUntil;
 }
 
 // Helper: Format Volume Readout based on Per-Tap Display Setting
@@ -409,7 +483,7 @@ function createTapCard(tap) {
   card.setAttribute('data-color-hex', beerColorHex);
 
   card.replaceChildren(buildTapCardContent({
-    tapId, fillPercent, fresh: tap.badge_fresh === 1, lowThreshold: tap.badge_low_keg || 20,
+    tapId, fillPercent, fresh: shouldShowNewBadge(tap), lowThreshold: tap.badge_low_keg || 20,
     beerName, style, description, abv, ibu, og, fg, volumeReadoutText, forecastText
   }));
 
@@ -428,13 +502,21 @@ function createTapCard(tap) {
         openTapSettings(tapId);
       } else {
         editingTapId = tapId;
-        document.getElementById('pinModal').style.display = 'flex';
+        openPinModal();
       }
     });
   }
 
+  const wasLongPress = addAdminLongPress(card, tapId);
+
   // Card Body Click: Open Recipe Detail Modal
-  card.addEventListener('click', () => openRecipeModal(tapId));
+  card.addEventListener('click', event => {
+    if (wasLongPress()) {
+      event.preventDefault();
+      return;
+    }
+    openRecipeModal(tapId);
+  });
 
   return card;
 }
@@ -515,6 +597,17 @@ function updateTapCard(card, tap) {
       badges.prepend(lowBadge);
     } else if (!isLow && lowBadge) {
       lowBadge.remove();
+    }
+
+    let newBadge = badges.querySelector('.badge-fresh');
+    const isNew = shouldShowNewBadge(tap);
+    if (isNew && !newBadge) {
+      newBadge = document.createElement('span');
+      newBadge.className = 'badge badge-fresh';
+      newBadge.textContent = 'NEW';
+      badges.querySelector('.tap-cog-btn')?.before(newBadge);
+    } else if (!isNew && newBadge) {
+      newBadge.remove();
     }
   }
 
@@ -693,6 +786,14 @@ function openTapSettings(tapId) {
   document.getElementById('tapSettingsModal').style.display = 'flex';
 }
 
+function openPinModal() {
+  const modal = document.getElementById('pinModal');
+  const input = document.getElementById('pinInput');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  requestAnimationFrame(() => input?.focus());
+}
+
 function toggleCustomPourSizeUI(unitValue) {
   const container = document.getElementById('customPourSizeGroup');
   if (!container) return;
@@ -767,42 +868,53 @@ function initModalListeners() {
         openGlobalSettingsModal();
       } else {
         editingTapId = null;
-        document.getElementById('pinModal').style.display = 'flex';
+        openPinModal();
       }
     });
   }
 
   // PIN Submit
   const pinSubmitBtn = document.getElementById('pinSubmitBtn');
-  if (pinSubmitBtn) {
-    pinSubmitBtn.addEventListener('click', async () => {
+  const submitPin = async () => {
+    if (!pinSubmitBtn || pinSubmitBtn.disabled) return;
+    pinSubmitBtn.disabled = true;
+    try {
       const pin = document.getElementById('pinInput').value;
-      try {
-        const res = await fetch('/api/auth', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pin })
-        });
-        const data = await res.json();
-        if (res.ok && data.token) {
-          authToken = data.token;
-          sessionStorage.setItem('tapboard_token', authToken);
-          updateAuthUI();
-          document.getElementById('pinModal').style.display = 'none';
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin })
+      });
+      const data = await res.json();
+      if (res.ok && data.token) {
+        authToken = data.token;
+        sessionStorage.setItem('tapboard_token', authToken);
+        updateAuthUI();
+        document.getElementById('pinModal').style.display = 'none';
+        document.getElementById('pinInput').value = '';
 
-          if (editingTapId) {
-            openTapSettings(editingTapId);
-          } else {
-            openGlobalSettingsModal();
-          }
+        if (editingTapId) {
+          openTapSettings(editingTapId);
         } else {
-          alert(data.error || 'Invalid PIN');
+          openGlobalSettingsModal();
         }
-      } catch (err) {
-        alert('Authentication request failed');
+      } else {
+        alert(data.error || 'Invalid PIN');
       }
-    });
+    } catch (err) {
+      alert('Authentication request failed');
+    } finally {
+      pinSubmitBtn.disabled = false;
+    }
+  };
+  if (pinSubmitBtn) {
+    pinSubmitBtn.addEventListener('click', submitPin);
   }
+  document.getElementById('pinInput')?.addEventListener('keydown', event => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    submitPin();
+  });
 
   // Display Unit Selector Change Listener
   document.getElementById('tapSettingsDisplayUnitSelect')?.addEventListener('change', (e) => {
@@ -823,6 +935,13 @@ function initModalListeners() {
   });
   document.getElementById('closeTapSettingsBtn')?.addEventListener('click', () => {
     document.getElementById('tapSettingsModal').style.display = 'none';
+  });
+
+  ['recipeModal', 'pinModal', 'globalSettingsModal', 'tapSettingsModal'].forEach(id => {
+    const modal = document.getElementById(id);
+    modal?.addEventListener('click', event => {
+      if (event.target === modal) modal.style.display = 'none';
+    });
   });
 
   // Save Global Settings

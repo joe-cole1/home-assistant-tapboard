@@ -199,6 +199,33 @@ test('tokens are stored as digests, expired sessions are pruned, and PIN change 
   }
 });
 
+test('on-tap timestamp starts on assignment, survives re-save, and clears with the batch', async () => {
+  const instance = await startServer();
+  const database = new Database(path.join(instance.dataDir, 'tapboard.db'));
+  try {
+    const { token } = await authenticate(instance.baseUrl);
+    const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+    const body = JSON.stringify({ batch_option: 'custom:topo_chico | Topo Chico 0%' });
+
+    assert.equal((await fetch(`${instance.baseUrl}/api/taps/1`, { method: 'POST', headers, body })).status, 200);
+    const assigned = database.prepare('SELECT batch_id, on_tap_at FROM taps WHERE tap_id = 1').get();
+    assert.equal(assigned.batch_id, 'custom:topo_chico');
+    assert.ok(Number.isFinite(Date.parse(assigned.on_tap_at)));
+
+    database.prepare("UPDATE taps SET on_tap_at = '2026-01-02T03:04:05.000Z' WHERE tap_id = 1").run();
+    assert.equal((await fetch(`${instance.baseUrl}/api/taps/1`, { method: 'POST', headers, body })).status, 200);
+    assert.equal(database.prepare('SELECT on_tap_at FROM taps WHERE tap_id = 1').get().on_tap_at, '2026-01-02T03:04:05.000Z');
+
+    assert.equal((await fetch(`${instance.baseUrl}/api/taps/1`, {
+      method: 'POST', headers, body: JSON.stringify({ batch_option: '' })
+    })).status, 200);
+    assert.deepEqual(database.prepare('SELECT batch_id, on_tap_at FROM taps WHERE tap_id = 1').get(), { batch_id: '', on_tap_at: null });
+  } finally {
+    database.close();
+    await stopServer(instance.child);
+  }
+});
+
 test('simulation is absent and traversal variants cannot escape public', async () => {
   const instance = await startServer();
   const database = new Database(path.join(instance.dataDir, 'tapboard.db'));

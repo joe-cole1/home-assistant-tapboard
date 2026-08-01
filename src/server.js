@@ -186,7 +186,7 @@ function getFullStateSnapshot() {
     SELECT tap_id, enabled, batch_id, graphic, override_enabled, override_name,
       override_style, override_abv, override_ibu, override_og, override_fg,
       override_srm, override_description, badge_low_keg, badge_fresh,
-      display_unit, custom_pour_size
+      on_tap_at, display_unit, custom_pour_size
     FROM taps ORDER BY tap_id ASC
   `).all();
   const batches = db.prepare(`
@@ -398,12 +398,16 @@ const server = http.createServer(async (req, res) => {
       // Auto-enable tap if a batch is assigned
       let shouldEnable = body.enabled !== undefined ? (body.enabled ? 1 : 0) : null;
       let extractedBatchId = null;
+      const currentTap = db.prepare('SELECT batch_id, on_tap_at FROM taps WHERE tap_id = ?').get(tapId);
+      let onTapAt = currentTap.on_tap_at;
       if (body.batch_option !== undefined) {
         if (body.batch_option !== '') {
           shouldEnable = 1;
           extractedBatchId = body.batch_option.split('|')[0].trim();
+          if (extractedBatchId !== currentTap.batch_id || !onTapAt) onTapAt = new Date().toISOString();
         } else {
           extractedBatchId = '';
+          onTapAt = null;
         }
       }
       
@@ -411,6 +415,7 @@ const server = http.createServer(async (req, res) => {
         UPDATE taps SET
           enabled = COALESCE(?, enabled),
           batch_id = COALESCE(?, batch_id),
+          on_tap_at = ?,
           graphic = COALESCE(?, graphic),
           override_enabled = COALESCE(?, override_enabled),
           override_name = COALESCE(?, override_name),
@@ -429,6 +434,7 @@ const server = http.createServer(async (req, res) => {
       `).run(
         shouldEnable,
         extractedBatchId,
+        onTapAt,
         body.graphic,
         body.override_enabled !== undefined ? (body.override_enabled ? 1 : 0) : null,
         body.override_name !== undefined ? body.override_name : null,
@@ -495,6 +501,7 @@ const server = http.createServer(async (req, res) => {
       db.prepare(`
         UPDATE taps SET
           batch_id = NULL,
+          on_tap_at = NULL,
           override_enabled = 0,
           override_name = NULL,
           override_style = NULL,
@@ -535,6 +542,7 @@ const server = http.createServer(async (req, res) => {
       db.prepare(`
         UPDATE taps SET
           batch_id = NULL,
+          on_tap_at = NULL,
           override_enabled = 0,
           override_name = NULL,
           override_style = NULL,

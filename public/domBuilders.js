@@ -29,7 +29,7 @@ export function buildTapCardContent({ tapId, fillPercent, fresh, lowThreshold, b
   const actions = element('div', 'tap-card-actions');
   header.appendChild(element('div', 'tap-number-badge', tapId));
   if (fillPercent <= lowThreshold) actions.appendChild(element('span', 'badge badge-low', 'LOW KEG!'));
-  if (fresh) actions.appendChild(element('span', 'badge badge-fresh', 'FRESH!'));
+  if (fresh) actions.appendChild(element('span', 'badge badge-fresh', 'NEW'));
   const cog = element('button', 'btn-icon tap-cog-btn', '⚙️');
   cog.type = 'button';
   cog.title = `Tap ${tapId} Settings`;

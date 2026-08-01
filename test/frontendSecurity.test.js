@@ -49,6 +49,17 @@ test('hostile graphic style, color, and instance id cannot enter SVG markup', ()
   assert.match(svg, /(?:id|url\(#)[a-zA-Z0-9_-]+/);
 });
 
+test('opted-in fresh badge is rendered with its new label', () => withDocument(document => {
+  const card = document.createElement('div');
+  card.replaceChildren(buildTapCardContent({
+    tapId: 1, fillPercent: 50, fresh: true, lowThreshold: 20,
+    beerName: 'Test Beer', style: 'Test Style', description: '', abv: '5%', ibu: 20, og: 1.05, fg: 1.01,
+    volumeReadoutText: '50% Remaining', forecastText: 'Calculating'
+  }));
+  assert.equal(card.querySelector('.badge-fresh')?.textContent, 'NEW');
+  assert.equal(card.textContent.includes('FRESH!'), false);
+}));
+
 test('app only parses trusted renderTapGraphic output', async () => {
   const source = await import('node:fs/promises').then(fs => fs.readFile(new URL('../public/app.js', import.meta.url), 'utf8'));
   const assignments = [...source.matchAll(/\.innerHTML\s*=\s*([^;]+);/g)].map(match => match[1]);
