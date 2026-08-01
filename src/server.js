@@ -6,6 +6,7 @@ import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
 import db from './db.js';
 import { HAClient } from './haClient.js';
+import { SSEHub } from './sseHub.js';
 
 dotenv.config();
 
@@ -16,8 +17,7 @@ const PUBLIC_DIR = path.join(process.cwd(), 'public');
 const haClient = new HAClient();
 haClient.connect();
 
-// SSE Connected Clients Set
-const sseClients = new Set();
+const sseHub = new SSEHub();
 
 // Failed Auth Rate Limiter (IP -> { count, lockUntil })
 const authAttempts = new Map();
@@ -107,58 +107,62 @@ function calculateKegKickForecast(tapId) {
   };
 }
 
-// Broadcast SSE Event
-function broadcastSSE(event, data) {
-  const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-  for (const res of sseClients) {
-    res.write(payload);
-  }
-}
-
-// 15s Heartbeat Ping
-setInterval(() => {
-  for (const res of sseClients) {
-    res.write(': ping\n\n');
-  }
-}, 15000);
-
 // HA Event Listeners
 haClient.on('connection_change', isConnected => {
   console.log(`[HAClient Connection Change] HA isConnected: ${isConnected}`);
-  broadcastSSE('ha_connection_status', { isConnected });
+  sseHub.publishImmediate('ha_connection_status', {
+    isConnected,
+    timestamp: new Date().toISOString()
+  });
 });
 
 haClient.on('state_changed', data => {
-  broadcastSSE('state_changed', data);
+  sseHub.publish('state_changed', data);
 });
 
 haClient.on('pour_start', data => {
   console.log(`[SSE Broadcast] pour_start on Tap ${data.tapId}`);
-  broadcastSSE('pour_start', data);
+  sseHub.publishImmediate('pour_start', data);
 });
 
 haClient.on('pour_complete', data => {
   console.log(`[SSE Broadcast] pour_complete on Tap ${data.tapId}: ${data.volumePouredOz} oz`);
-  broadcastSSE('pour_complete', data);
-  broadcastSSE('settings_updated', getFullStateSnapshot());
+  sseHub.publishImmediate('pour_complete', {
+    ...data,
+    kegKickForecast: calculateKegKickForecast(data.tapId)
+  });
 });
 
 haClient.on('pour_cancel', data => {
   console.log(`[SSE Broadcast] pour_cancel on Tap ${data.tapId}: ${data.reason}`);
-  broadcastSSE('pour_cancel', data);
+  sseHub.publishImmediate('pour_cancel', data);
 });
 
 haClient.on('low_keg_alert', data => {
-  broadcastSSE('low_keg_alert', data);
+  sseHub.publishImmediate('low_keg_alert', data);
 });
 
 // Construct Full Application State Snapshot
 function getFullStateSnapshot() {
   const settings = db.prepare('SELECT id, theme, volume_format, title, font_title, font_body, show_ondeck FROM settings WHERE id = 1').get();
-  const taps = db.prepare('SELECT * FROM taps ORDER BY tap_id ASC').all();
-  const batches = db.prepare('SELECT * FROM batches ORDER BY last_synced_at DESC').all();
-  const catalog = db.prepare('SELECT * FROM beverage_catalog ORDER BY id DESC').all();
-  const haStates = haClient.getFormattedState();
+  const taps = db.prepare(`
+    SELECT tap_id, enabled, batch_id, graphic, override_enabled, override_name,
+      override_style, override_abv, override_ibu, override_og, override_fg,
+      override_srm, override_description, badge_low_keg, badge_fresh,
+      display_unit, custom_pour_size
+    FROM taps ORDER BY tap_id ASC
+  `).all();
+  const batches = db.prepare(`
+    SELECT batch_id, recipe_name, style, brew_date, og, fg, abv, ibu, srm,
+      status, last_synced_at
+    FROM batches ORDER BY last_synced_at DESC
+  `).all();
+  const catalog = db.prepare(`
+    SELECT id, name, style, abv, ibu, srm_color, description, on_deck,
+      target_tap_id
+    FROM beverage_catalog ORDER BY id DESC
+  `).all();
+  const tapStates = haClient.getPublicTapStates();
 
   const kegKickForecasts = {};
   for (let i = 1; i <= 6; i++) {
@@ -166,11 +170,12 @@ function getFullStateSnapshot() {
   }
 
   return {
+    schemaVersion: 2,
     settings,
     taps,
     batches,
     catalog,
-    haStates,
+    tapStates,
     haConnected: haClient.isConnected,
     kegKickForecasts,
     timestamp: new Date().toISOString()
@@ -201,14 +206,17 @@ const server = http.createServer(async (req, res) => {
       'X-Accel-Buffering': 'no'
     });
 
-    res.write(': connected\n\n');
-    sseClients.add(res);
+    res.flushHeaders?.();
+    sseHub.addClient(req, res, getFullStateSnapshot());
+    return;
+  }
 
-    res.write(`event: snapshot\ndata: ${JSON.stringify(getFullStateSnapshot())}\n\n`);
-
-    req.on('close', () => {
-      sseClients.delete(res);
+  if (url.pathname === '/healthz' && req.method === 'GET') {
+    res.writeHead(200, {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-store'
     });
+    res.end(JSON.stringify({ status: 'ok' }));
     return;
   }
 
@@ -314,7 +322,7 @@ const server = http.createServer(async (req, res) => {
 
       console.log(`[SETTINGS ACTION] 🎨 Global Studio Settings updated from IP ${clientIp}: theme="${theme || 'unchanged'}", title="${title || 'unchanged'}", fonts="${font_title || 'def'}/${font_body || 'def'}"`);
 
-      broadcastSSE('settings_updated', getFullStateSnapshot());
+      sseHub.publishImmediate('settings_updated', getFullStateSnapshot());
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: true }));
 
@@ -418,7 +426,7 @@ const server = http.createServer(async (req, res) => {
         }
       }
 
-      broadcastSSE('settings_updated', getFullStateSnapshot());
+      sseHub.publishImmediate('settings_updated', getFullStateSnapshot());
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: true }));
 
@@ -457,7 +465,7 @@ const server = http.createServer(async (req, res) => {
         WHERE tap_id = ?
       `).run(tapId);
 
-      broadcastSSE('settings_updated', getFullStateSnapshot());
+      sseHub.publishImmediate('settings_updated', getFullStateSnapshot());
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: true, message: `Batch completed and tap ${tapId} cleared.` }));
     } catch (err) {
@@ -497,7 +505,7 @@ const server = http.createServer(async (req, res) => {
         option: ''
       }).catch(err => console.warn(`[HA Call Warning] Clear tap batch select failed:`, err.message));
 
-      broadcastSSE('settings_updated', getFullStateSnapshot());
+      sseHub.publishImmediate('settings_updated', getFullStateSnapshot());
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: true, message: `Tap ${tapId} unassigned / off-tap.` }));
     } catch (err) {
@@ -515,7 +523,7 @@ const server = http.createServer(async (req, res) => {
       const beerName = tapInfo?.override_name || `Tap ${tapId}`;
 
       console.log(`[Simulate Pour] Starting test pour on Tap ${tapId}...`);
-      broadcastSSE('pour_start', { tapId, startVolume: 50 });
+      sseHub.publishImmediate('pour_start', { tapId, startVolume: 50 });
 
       setTimeout(() => {
         const simulatedPouredOz = parseFloat((Math.random() * 6 + 6).toFixed(1)); // 6.0 - 12.0 oz
@@ -524,14 +532,13 @@ const server = http.createServer(async (req, res) => {
         `).run(tapId, simulatedPouredOz);
 
         console.log(`[Simulate Pour] Finalized test pour on Tap ${tapId}: ${simulatedPouredOz} oz`);
-        broadcastSSE('pour_complete', {
+        sseHub.publishImmediate('pour_complete', {
           tapId,
           volumePouredOz: simulatedPouredOz,
           beerName,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          kegKickForecast: calculateKegKickForecast(tapId)
         });
-
-        broadcastSSE('settings_updated', getFullStateSnapshot());
       }, 10000);
 
       res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -568,7 +575,7 @@ const server = http.createServer(async (req, res) => {
         body.target_tap_id || null
       );
 
-      broadcastSSE('settings_updated', getFullStateSnapshot());
+      sseHub.publishImmediate('settings_updated', getFullStateSnapshot());
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: true }));
     } catch (err) {

@@ -2,9 +2,11 @@ import WebSocket from 'ws';
 import EventEmitter from 'events';
 import db from './db.js';
 import { PourDetector, normalizeVolumeToOz } from './pourDetector.js';
+import { DisplayUpdateCoalescer } from './displayUpdateCoalescer.js';
+import { createTapStatesProjection, projectTapStateChange } from './tapboardProjection.js';
 
 export class HAClient extends EventEmitter {
-  constructor({ detector, detectorOptions } = {}) {
+  constructor({ detector, detectorOptions, displayUpdateCoalescer, displayCoalescerOptions } = {}) {
     super();
     this.haUrl = process.env.HA_URL || 'http://192.168.0.35:8123';
     this.haToken = process.env.HA_TOKEN || '';
@@ -20,6 +22,10 @@ export class HAClient extends EventEmitter {
     this.reconnectDelay = 1000;
     this.primaryTapSensors = new Map();
     this.unitWarnings = new Map();
+    this.displayUpdateCoalescer = displayUpdateCoalescer || new DisplayUpdateCoalescer({
+      ...displayCoalescerOptions,
+      onFlush: payload => this.emit('state_changed', payload)
+    });
 
     const handleDetectorEvent = event => this.handleDetectorEvent(event);
     if (detector) {
@@ -252,7 +258,14 @@ export class HAClient extends EventEmitter {
       }
     }
 
-    this.emit('state_changed', { entity_id, state: new_state, fullState: this.getFormattedState() });
+    // Detector ingestion remains synchronous above; browser telemetry is only queued afterwards.
+    const displayChange = projectTapStateChange(entity_id, new_state);
+    if (displayChange) {
+      this.displayUpdateCoalescer.enqueue({
+        ...displayChange,
+        timestamp: this.stateTimestamp(new_state)
+      });
+    }
   }
 
   stateTimestamp(stateObj) {
@@ -377,14 +390,11 @@ export class HAClient extends EventEmitter {
   }
 
   getFormattedState() {
-    const formatted = {};
-    for (const [entityId, entityObj] of this.statesMap.entries()) {
-      formatted[entityId] = {
-        state: entityObj.state,
-        attributes: entityObj.attributes
-      };
-    }
-    return formatted;
+    return this.getPublicTapStates();
+  }
+
+  getPublicTapStates() {
+    return createTapStatesProjection(this.statesMap);
   }
 
   async callHAService(domain, service, serviceData = {}) {
