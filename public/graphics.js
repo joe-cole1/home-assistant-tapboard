@@ -1,5 +1,5 @@
 /**
- * TAP BOARD GRAPHICS ENGINE (graphics.js) - v3.7
+ * TAP BOARD GRAPHICS ENGINE (graphics.js)
  * Dynamic SVG vector renderer for Corny Kegs & 6 Beer Glassware styles.
  * Features:
  * - Full 1-50 SRM color palette interpolation (Stouts, Porters, Dark Ales, Lagers)

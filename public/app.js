@@ -1,4 +1,3 @@
-// Tapboard v3.8.2 Client Engine
 import { renderTapGraphic, srmToHex } from './graphics.js';
 import { createLiveUpdateController, updateGraphicFill } from './liveUpdates.js';
 import {

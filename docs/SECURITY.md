@@ -1,11 +1,8 @@
-# Tapboard Security Operations
+# Tapboard security operations
 
-## Admin PIN initialization
+## Administrator initialization and sessions
 
-Tapboard does not provide a usable default administrator PIN. New databases
-and databases that still contain the legacy default remain publicly viewable,
-but administrative authentication fails closed until a deliberate PIN is
-provided.
+Tapboard has no usable default administrator PIN. Public dashboard reads remain available, but administrator actions fail closed until a deliberate PIN is initialized.
 
 1. Add a temporary, non-default four-digit value to the ignored `.env` file:
 
@@ -13,75 +10,45 @@ provided.
    TAPBOARD_INITIAL_ADMIN_PIN=<choose-four-digits>
    ```
 
-2. Rebuild and start Tapboard.
-3. Confirm that the new PIN authenticates successfully.
-4. Remove `TAPBOARD_INITIAL_ADMIN_PIN` from `.env`.
-5. Recreate the container so the plaintext is no longer present in its
-   environment.
+2. Start or recreate Tapboard and confirm that the PIN authenticates.
+3. Remove `TAPBOARD_INITIAL_ADMIN_PIN` from `.env`.
+4. Recreate the service so plaintext is no longer in the container environment.
 
-The value is consumed only while `admin_pin_initialized` is false. It is never
-logged or returned by the API. Changing the PIN or completing legacy
-initialization revokes every prior administrator session.
+The PIN is consumed only while `admin_pin_initialized` is false and is stored as a bcrypt hash. It is never returned by the API. Changing a PIN or finishing legacy initialization deletes every administrator session.
 
-Before migrating an existing installation, create a consistent SQLite backup.
-Do not copy only the main database file while WAL writes may be active; use the
-SQLite backup API or stop Tapboard before copying the database and WAL state.
+Successful authentication returns an opaque random bearer value, not a JWT. Tapboard stores only a `sha256:` digest of that value and an expiry timestamp in SQLite. Sessions expire after 24 hours; a valid `Authorization: Bearer <token>` is required for administrator mutations.
+
+## HTTP boundary
+
+- API JSON responses are `Cache-Control: no-store`.
+- JSON request bodies are limited to 16 KiB and require `application/json`.
+- Unknown mutation fields and invalid/out-of-range values are rejected before database or Home Assistant mutation.
+- Browser requests with an `Origin` header must match `TAPBOARD_PUBLIC_ORIGIN`, or the request host for direct loopback access.
+- The service sends a restrictive CSP, frame-embedding denial, `nosniff`, no-referrer, restrictive permissions policy, and same-origin opener/resource policies.
+- Static files are resolved beneath the public directory after realpath containment checks.
+
+Tapboard does not log PINs, bearer values, token digests, Authorization headers, or complete request bodies. The four-digit PIN and process-local login rate limit are suitable only for a private household service; they do not replace a correctly configured private network and reverse proxy.
 
 ## Reverse proxy
 
-Tapboard permits browser requests only from its own origin. Direct HTTP access
-derives that origin from the request Host. When TLS terminates at a reverse
-proxy, configure the exact externally visible origin:
+The supported Compose deployment is loopback-only. To put an HTTPS reverse proxy in front of it, set the exact external origin:
 
 ```env
 TAPBOARD_PUBLIC_ORIGIN=https://tapboard.example.com
 ```
 
-The reverse proxy must preserve the original Host, support long-lived SSE
-responses without buffering, redirect HTTP to HTTPS, and add:
+The proxy must preserve the original Host, avoid buffering long-lived SSE responses, and redirect HTTP to HTTPS. It may add HSTS after all affected names are confirmed permanently HTTPS. Tapboard intentionally does not emit HSTS from its direct HTTP listener.
 
-```text
-Strict-Transport-Security: max-age=31536000
-```
+Tapboard denies iframe embedding. Do not weaken `frame-ancestors` or substitute a wildcard if an embedding integration is later needed; design a narrow trusted-origin policy first.
 
-Only add `includeSubDomains` or HSTS preload after confirming every affected
-hostname is permanently HTTPS. Tapboard intentionally does not emit HSTS over
-its direct HTTP listener.
+## Container and secrets
 
-Tapboard denies iframe embedding. If Home Assistant iframe embedding is ever
-required, the CSP `frame-ancestors` policy must be redesigned around an exact
-trusted origin; do not replace it with a wildcard.
+Compose binds only `127.0.0.1:3005`; the application listens on container port `3000`. The service runs as non-root, has a read-only root filesystem, uses a bounded writable `/tmp` tmpfs, drops all capabilities, sets `no-new-privileges`, and uses Docker init. Only the independent `tapboard_data` and `tapboard_backups` named volumes are persistent and writable.
 
-## Request and session behavior
+`HA_TOKEN` remains environment-injected for local deployment compatibility. Docker metadata access can reveal environment variables, so Docker access is administrator-level access. Do not print, read back, commit, or include the token in diagnostics.
 
-- JSON request bodies are limited to 16 KiB and must use `application/json`.
-- Unknown mutation fields and out-of-range values are rejected before any
-  database or Home Assistant mutation.
-- Administrator bearer tokens expire after 24 hours and are stored only as
-  SHA-256 digests.
-- A PIN change revokes all sessions, including the session making the change.
-- Tapboard never logs PINs, hashes, bearer tokens, Authorization headers, or
-  complete request bodies.
+Token rotation is an operator-owned deferred action: revoke the old token in Home Assistant, create and privately place a replacement in the ignored environment file, recreate Tapboard, and verify HA hydration without exposing values or authorization data.
 
-The four-digit PIN and process-local login rate limit are suitable for a
-private household service but are not a replacement for authentication and
-network controls at an Internet-facing reverse proxy.
+## Database safety
 
-## Container boundary
-
-The supported Compose deployment binds only to `127.0.0.1:3005`, runs as the
-non-root `node` UID/GID, uses a read-only root filesystem and a bounded `/tmp`
-tmpfs, drops all Linux capabilities, enables `no-new-privileges`, and uses
-Docker init for signal forwarding. Only the independent data and backup named
-volumes are persistent and writable.
-
-Production startup expects an existing database and refuses an empty named
-volume. An older schema is migrated only after the database has been restored
-and verified by the maintenance command, which writes a one-time approval
-marker tied to the pre-migration schema version, table counts, and database
-SHA-256.
-
-`HA_TOKEN` remains an environment variable for local deployment compatibility.
-Users with permission to inspect Docker container metadata may therefore read
-it. Docker access must be treated as administrator-level access, and diagnostic
-reports must include environment variable names only, never their values.
+Production expects existing data and refuses an empty named volume. An older schema is accepted only after a verified restore has written the one-time migration approval marker tied to the source schema, table counts, and database digest. Use the supported maintenance commands described in [Database operations](DATABASE-OPERATIONS.md); never copy only a live SQLite main database file while WAL writes may be active.

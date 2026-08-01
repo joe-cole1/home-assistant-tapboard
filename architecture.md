@@ -1,128 +1,91 @@
-# Tapboard Architecture & Technical Specifications
+# Tapboard architecture
 
-**Version**: 3.7.2  
-**Repository**: `joe-cole1/home-assistant-tapboard`  
-**Host & Local Path**: `C:\Users\Joe\OneDrive\Antigravity\home-assistant\tapboard`  
-**Docker Deployment**: Containerized on loopback port `127.0.0.1:3005:3000` (`http://localhost:3005`) connected to Home Assistant (`http://192.168.0.35:8123`).
-
----
-
-## 1. System Overview & Technology Stack
-
-Tapboard is a real-time, low-latency homebrew taproom dashboard application built to monitor keg volumes, pour analytics, Brewfather batch data, and glassware graphics.
-
-### Core Stack:
-- **Runtime & Server**: Node.js (ES Modules, native `http` module, no heavy web frameworks).
-- **Database**: SQLite via `better-sqlite3` with Write-Ahead Logging (`WAL` mode) for non-blocking concurrent reads/writes.
-- **Home Assistant Sync**: Real-time WebSocket client (`ws://192.168.0.35:8123/api/websocket`) with 4-stage noise filtering and event queue buffering.
-- **Client Push**: Server-Sent Events (SSE) live stream (`/events`) with automatic fallback reconnection and initial snapshot hydration.
-- **Frontend Architecture**: Single-page application (`public/app.js`, `public/graphics.js`, `public/styles.css`) using native DOM manipulation, in-place element diffing, and dynamic vector SVG graphics.
-
----
-
-## 2. Core Codebase Directory Structure
+Tapboard is a Node.js ES-module service and single-page dashboard for six Home Assistant taps. The application serves its own static frontend, stores durable configuration and pour history in SQLite, consumes Home Assistant state through a persistent WebSocket, and publishes live browser updates through Server-Sent Events (SSE).
 
 ```
-tapboard/
-├── docker-compose.yml        # Loopback port plus independent data/backup named volumes
-├── Dockerfile                # Pinned, non-root Node 22 Alpine production image
-├── package.json              # Dependencies: better-sqlite3, bcryptjs, dotenv, ws
-├── .env                      # Target HA URL (http://192.168.0.35:8123) and long-lived access token
-├── architecture.md           # Authoritative system architecture baseline specification
-├── src/
-│   ├── db.js                 # SQLite connection, explicit pragmas, seeding
-│   ├── dbMigrations.js       # Transactional schema versions and lifecycle migration
-│   ├── kegLifecycle.js       # Immutable assignment ownership and pour attribution
-│   ├── haClient.js           # Bounded HA WebSocket lifecycle and pour detector adapter
-│   └── server.js             # HTTP server, SSE broadcast bus, REST endpoints & forecast engine
-└── public/
-    ├── app.js                # Client dashboard controller, SSE listener, in-place DOM engine
-    ├── graphics.js           # SVG glassware renderer, 1-50 SRM interpolation, carbonation generator
-    ├── styles.css            # Reference-matched visual styles, themes, responsive tap grid
-    └── index.html            # Main HTML layout, PIN verification & settings modals
+Home Assistant -- WebSocket --> Tapboard (Node.js + SQLite) -- SSE /events --> browser
 ```
 
----
+## Runtime and deployment
 
-## 3. Database Schema (`src/db.js`)
+- The production image is a pinned Node 22 Alpine image. `better-sqlite3` is built in the image’s builder stage.
+- Compose binds the service exactly to `127.0.0.1:3005`, while the container listens on port `3000`.
+- The service runs as the non-root `node` user with a read-only root filesystem, `/tmp` tmpfs, all Linux capabilities dropped, `no-new-privileges`, Docker init, and a 15-second shutdown grace period.
+- `tapboard_data` is the writable named volume for the live SQLite database and WAL files. `tapboard_backups` is a separate writable named volume for verified backups. Neither is the container writable layer.
+- Direct access is suitable for the loopback deployment. An optional reverse proxy must set the exact `TAPBOARD_PUBLIC_ORIGIN` and support unbuffered long-lived SSE responses.
 
-SQLite database file path: `/app/data/tapboard.db`.
+## Main components
 
-### 1. `taps` (Taps 1–6 Configuration)
-- `tap_id` (INTEGER PRIMARY KEY 1-6)
-- `enabled` (INTEGER 0/1) - Dashboard grid visibility flag
-- `graphic` (TEXT) - Glassware style (`corny_keg`, `pint_glass`, `tulip_glass`, `wheat_glass`, `mug`, `stout_glass`, `snifter`)
-- `display_unit` (TEXT) - Readout format (`percent`, `pints`, `oz`, `pours_12`, `pours_custom`)
-- `custom_pour_size` (REAL) - Custom pour volume in fl. oz. (e.g., 5.0 oz for stouts)
-- `override_enabled` (INTEGER 0/1) - Manual field override toggle
-- `override_name`, `override_style`, `override_abv`, `override_ibu`, `override_og`, `override_fg`, `override_srm`, `override_description` - Field-level manual overrides
-- `badge_low_keg` (REAL DEFAULT 20.0), `badge_fresh` (INTEGER DEFAULT 1)
+```
+src/
+  server.js               HTTP API, session checks, SSE wiring, snapshots
+  haClient.js             HA WebSocket, bounded hydration, detector adapter
+  pourDetector.js         deterministic timestamp-driven single-pour detector
+  tapboardProjection.js   allowlisted Home Assistant state projection
+  displayUpdateCoalescer.js compact browser state-change batching
+  sseHub.js               SSE framing, heartbeat, slow-client bounds
+  db.js / dbMigrations.js SQLite startup and schema-v2 migrations
+  kegLifecycle.js         immutable lifecycle assignment and attribution
+  kegForecast.js          active-lifecycle forecast calculation
+  databaseMaintenance.js  verified backup, restore, rotation, and retention
+public/
+  app.js                  SSE client and targeted DOM updates
+  graphics.js             SVG glassware and SRM colour rendering
+  styles.css              dashboard styles
+```
 
-### 2. `settings` (Global Studio Settings)
-- `id` (INTEGER PRIMARY KEY 1)
-- `theme` (TEXT) - Active theme preset (`modern_dark`, `warm_pub`, `cyberpunk`, `light_minimal`)
-- `title` (TEXT) - Dashboard header title
-- `font_title`, `font_body` (TEXT) - Custom Google Font selections
-- `admin_pin_hash` (TEXT) - Bcrypt hashed 4-digit PIN (default: `0000`)
+## Home Assistant state and pour detection
 
-### 3. `batches` (Brewfather & Recipe Sync Cache)
-- `batch_id` (TEXT PRIMARY KEY)
-- `recipe_name`, `style`, `brew_date`, `og`, `fg`, `abv`, `ibu`, `srm`, `status`, `last_synced_at`
+The HA client authenticates over `/api/websocket`, subscribes to `state_changed` before requesting `get_states`, then applies the snapshot plus a bounded queue of intervening events. The queue is limited to 512 events or 1 MiB; overflow discards the partial generation and reconnects. The detector is hydrated once from the final state and buffered telemetry is never replayed into it, preventing reconnect data from synthesizing pours.
 
-### 4. `keg_lifecycles` and `pour_logs` (Keg Identity and Durable History)
-- Each explicit batch, custom, or override-only assignment receives an immutable internal lifecycle ID; only one lifecycle may be open per tap.
-- Reusing a Brewfather batch ID after ending a keg creates a distinct lifecycle.
-- `pour_logs` retains its original timestamp string and a normalized integer epoch, and references the lifecycle captured at pour start.
-- Legacy and unassigned pours retain a nullable lifecycle and never contribute to an active forecast.
-- Lifecycle/tap and pour/tap relationships use restrictive SQLite foreign keys enabled explicitly on every application connection.
-- Schema changes use ordered transactional migrations and explicit schema versions; unexpected migration failures abort startup.
+Only each tap’s designated primary volume sensor is used for pour detection. Values must declare a supported unit and are converted explicitly to fluid ounces; missing or unsupported units are ignored. The detector rejects stale/duplicate timestamps and implausible jumps, establishes settled baselines, arbitrates simultaneous candidates, permits only one active tap, and finalizes after a quiet period or cancels a hard-timeout session. It emits `pour_start`, `pour_complete`, or `pour_cancel`; completion records only qualifying pours.
 
----
+The public projection exposes only the required tap fields: fill percentage, volume in ounces, pints remaining, batch metadata, and batch-selection value/options. It does not relay arbitrary Home Assistant state or attributes.
 
-## 4. Key Subsystems & Algorithms
+## SQLite schema and lifecycle ownership
 
-### A. 4-Stage Load-Cell Scale Noise Filtering (`src/haClient.js`)
-Scale sensors from Home Assistant (`sensor.tap_N_fl_oz`) exhibit continuous micro-weight jitter. The `apply4StageNoiseFilter` prevents false pour alerts:
-1. **Outlier Suppression**: Rejects `NaN`, `unavailable`, `unknown`, or instantaneous volume jumps $> 50\text{ oz}$.
-2. **Noise Floor Hysteresis**: Ignores volume fluctuations $|\Delta V| < 0.5\text{ oz}$ when no active pour session is underway.
-3. **Pour Trigger Window**: Triggers an active pour session (`pour_start`) when volume drops $\ge 0.8\text{ oz}$ within 3 seconds. Strictly evaluates `sensor.tap_N_fl_oz` (never fill percentage) to avoid unit conflict spikes.
-4. **Settling & Session Finalization**: Wait for a 5-second quiet period after liquid flow stops, then finalize total poured volume (`pour_complete`), log to `pour_logs`, and check low-keg alert threshold (`badge_low_keg`).
+Startup enforces `foreign_keys=ON`, validates the database, and migrates ordered schema versions transactionally. The current schema is version 2.
 
-### B. 14-Day Rolling Keg Kick Forecast Engine (`src/server.js`)
-Calculates estimated days remaining for each active tap:
-- Queries only the open lifecycle through the `(lifecycle_id, timestamp_epoch)` index for up to the last 14 elapsed days.
-- Changing, clearing, or ending a keg closes its lifecycle without deleting durable pour history.
-- If no logged pours exist for the active tap, the forecast is omitted instead of inventing a baseline rate.
-- Output format: `⌛ 16.3 days remaining` or `🔴 Kicking soon`.
+- A tap assignment opens one immutable keg lifecycle; reassignment or an end action closes the existing lifecycle.
+- A pour captures the open lifecycle at pour start. Historical and unassigned pours may have no lifecycle and cannot affect an active keg forecast.
+- Foreign keys restrict invalid tap/lifecycle relationships. `pour_logs_lifecycle_epoch` supports forecast queries by lifecycle and timestamp.
+- The forecast uses at most 14 elapsed days of pours for the currently open lifecycle. It returns no estimated remaining time when that lifecycle has no qualifying usage.
 
-### C. In-Place Targeted DOM Preservation Engine (`public/app.js`)
-- **Problem**: Rebuilding card HTML on every 2-second scale update destroys `<svg>` DOM nodes, resetting CSS animation timers to 0s and preventing bubbles from rising past 10% height.
-- **Solution**: `renderApp()` and `updateTapCard()` update text nodes and attributes in-place. The `<svg>` element and its internal `<circle>` carbonation bubbles remain continuously attached to the document, allowing bubbles to float smoothly all the way to the liquid surface line uninterrupted.
+## Browser delivery
 
-### D. Full 1–50 SRM Color Interpolation (`public/graphics.js`)
-- `srmToHex(srmVal)` provides exact hex color shades across the full 1–50 SRM spectrum for Porters, Stouts, IPAs, Wheat beers, and Lagers.
-- Nearest-neighbor interpolation ensures unmapped decimal or integer values map to their correct dark/light beer shade.
-- Topo Chico / Sparkling Water / Seltzer automatically set SRM 0 / `WATER` for transparent liquid rendering with white carbonation bubbles.
+`GET /events` starts an SSE stream with an initial `snapshot`, a retry directive, and heartbeats. `SSEHub` drops stalled clients when buffered output exceeds 64 KiB or remains blocked past its heartbeat deadline. Normal HA display changes are compacted/coalesced before the `state_changed` event; detector and operational events are delivered immediately.
 
----
+The application publishes these SSE events:
 
-## 5. API Endpoints & Live Events
+- `snapshot`
+- `state_changed`
+- `ha_connection_status`
+- `pour_start`, `pour_complete`, `pour_cancel`
+- `low_keg_alert`
+- `settings_updated`
 
-- `GET /events`: SSE stream emitting `snapshot`, `state_changed`, `pour_start`, `pour_complete`, `low_keg_alert`, and `settings_updated`.
-- `POST /api/auth`: PIN authentication endpoint returning JSON Web Token.
-- `GET /api/state`: Returns complete formatted application state snapshot.
-- `POST /api/settings`: Save global studio settings (Theme, Title, Fonts, Active Taps visibilities 1–6, PIN update).
-- `POST /api/taps/:id`: Save per-tap settings (Batch assignment, Glassware style, Volume display unit, Custom pour size, Overrides). Automatically sets `enabled = 1` when a batch is assigned.
-- `POST /api/taps/:id/end-batch`: Complete Brewfather batch call via `script.end_tap_batch`.
-- `POST /api/taps/:id/end-keg`: Unassign tap / set off-tap.
+The dashboard applies targeted updates so SVG glassware remains attached rather than being recreated for each telemetry update.
 
----
+## HTTP API and access control
 
-## 6. Development Guidelines & Learned Invariants
+All API JSON responses are `no-store`. Mutation bodies must be JSON and are limited to 16 KiB; validation rejects unknown fields and invalid values before database or Home Assistant mutation. Origin checks allow the configured public origin or, for direct access, the request host.
 
-1. **ES Module HTML Invariant**: When loading JavaScript files containing ES module syntax (`export`, `import`), never add duplicate classic `<script src="file.js"></script>` tags in `index.html` unless explicitly declared with `type="module"`, or rely solely on ES module imports inside `app.js`.
-2. **Live Telemetry DOM Element Preservation**: In real-time WebSocket/SSE dashboard interfaces featuring CSS keyframe animations, implement in-place element diffing (`updateTapCard()`). Update text nodes and numerical attributes directly without recreating or tearing down SVG/DOM wrapper elements.
-3. **Telemetry Unit Isolation Invariant**: Never pass entities measuring different physical units (e.g., fluid ounces vs. fill percentages) into a single volume tracking or noise filtering state machine. Isolate noise filtering strictly to dedicated single-unit telemetry entities (`sensor.tap_N_fl_oz`).
-4. **Reconnect Safety Invariant**: Hydration events are bounded and merged into a fresh snapshot without detector replay. The detector hydrates once from the final state so stale reconnect telemetry cannot synthesize a pour.
-5. **Lifecycle Attribution Invariant**: Capture the immutable keg lifecycle synchronously at pour start. Reassignment before completion must not move the pour to the new keg.
-6. **Persistence Invariant**: The live SQLite database and WAL reside in a Docker named volume, while verified backups use an independent named volume and a rehearsed restore path.
+| Endpoint                  | Method | Purpose                                            |
+| ------------------------- | ------ | -------------------------------------------------- |
+| `/healthz`                | `GET`  | Health response for the container health check.    |
+| `/events`                 | `GET`  | Public live SSE stream.                            |
+| `/api/state`              | `GET`  | Public formatted snapshot.                         |
+| `/api/auth`               | `POST` | Administrator PIN authentication.                  |
+| `/api/settings`           | `POST` | Administrator settings update.                     |
+| `/api/taps/:id`           | `POST` | Administrator tap configuration/assignment update. |
+| `/api/taps/:id/end-batch` | `POST` | Administrator batch end and lifecycle close.       |
+| `/api/taps/:id/end-keg`   | `POST` | Administrator keg end and lifecycle close.         |
+| `/api/catalog`            | `POST` | Administrator catalog/on-deck addition.            |
+
+`POST /api/auth` returns an opaque random bearer token. The database stores only `sha256:` token digests and expiry timestamps; it does not use JWTs. Sessions expire after 24 hours, expired sessions are pruned, and a PIN change revokes all existing sessions. A newly initialized database fails closed for administrator actions until a deliberate non-default PIN has been configured.
+
+## Operations boundaries
+
+Use `scripts/db-maintenance.js` only through the supported npm commands: `db:backup`, `db:verify`, `db:restore`, and `db:prune-pours`. Backup and restore preconditions are documented in [Database operations](docs/DATABASE-OPERATIONS.md). The repository installs no scheduler; daily backups are operator-owned.
+
+The legacy `config/www/tapboard` frontend is removed. Any Home Assistant writer/configuration cleanup remains explicitly deferred. HA-token rotation is also operator-owned and deferred; never expose token values in logs, documentation, or diagnostics. Batch 4’s physical/mechanical inspection remains open.
