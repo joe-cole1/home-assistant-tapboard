@@ -134,6 +134,19 @@ export class HAClient extends EventEmitter {
     }
   }
 
+  getPrimaryTapSensor(tapId) {
+    const candidates = [
+      `sensor.brewery_brewery_taps_tap_${tapId}_fast`,
+      `sensor.brewery_taps_tap_${tapId}_fast`,
+      `sensor.tap_${tapId}_fast`,
+      `sensor.tap_${tapId}_fl_oz`
+    ];
+    for (const id of candidates) {
+      if (this.statesMap.has(id)) return id;
+    }
+    return `sensor.tap_${tapId}_fl_oz`;
+  }
+
   async initiateSync() {
     try {
       this.isHydrated = false;
@@ -154,14 +167,22 @@ export class HAClient extends EventEmitter {
         this.syncBrewfatherBatchData(entity);
       }
 
-      // Initialize pour trackers from snapshot states to prevent initial volume deltas
+      // Initialize pour trackers from each tap's designated primary scale sensor
       for (let tapId = 1; tapId <= 6; tapId++) {
-        const ozState = this.statesMap.get(`sensor.tap_${tapId}_fl_oz`)?.state;
-        const parsedOz = parseFloat(ozState);
-        if (!isNaN(parsedOz) && parsedOz > 0) {
-          const tracker = this.pourTracker.get(tapId);
-          tracker.lastVolume = parsedOz;
-          tracker.currentVolume = parsedOz;
+        const primaryId = this.getPrimaryTapSensor(tapId);
+        const stateObj = this.statesMap.get(primaryId);
+        if (stateObj && stateObj.state !== 'unavailable' && stateObj.state !== 'unknown') {
+          const rawNum = parseFloat(stateObj.state);
+          if (!isNaN(rawNum) && rawNum > 0) {
+            const unit = (stateObj.attributes?.unit_of_measurement || '').toLowerCase();
+            const isMl = unit.includes('ml') || rawNum > 350;
+            const ozValue = isMl ? (rawNum / 29.5735) : rawNum;
+
+            const tracker = this.pourTracker.get(tapId);
+            tracker.lastVolume = ozValue;
+            tracker.currentVolume = ozValue;
+            console.log(`[HAClient] Tap ${tapId} tracker initialized with primary sensor ${primaryId} = ${ozValue.toFixed(1)} oz`);
+          }
         }
       }
 
@@ -207,15 +228,10 @@ export class HAClient extends EventEmitter {
     this.statesMap.set(entity_id, new_state);
     this.syncBrewfatherBatchData(new_state);
 
-    // Apply 4-Stage Noise Filtering to sensor.tap_N_fl_oz or any fast scale sensor
+    // Apply 4-Stage Noise Filtering strictly to each tap's designated primary scale sensor
     for (let tapId = 1; tapId <= 6; tapId++) {
-      if (
-        entity_id === `sensor.tap_${tapId}_fl_oz` ||
-        entity_id === `sensor.brewery_brewery_taps_tap_${tapId}_fast` ||
-        entity_id === `sensor.brewery_taps_tap_${tapId}_fast` ||
-        entity_id === `sensor.tap_${tapId}_fast` ||
-        (entity_id.includes(`tap_${tapId}`) && entity_id.endsWith('_fast'))
-      ) {
+      const primaryId = this.getPrimaryTapSensor(tapId);
+      if (entity_id === primaryId) {
         this.apply4StageNoiseFilter(tapId, new_state);
       }
     }
