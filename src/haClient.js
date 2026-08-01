@@ -276,7 +276,7 @@ export class HAClient extends EventEmitter {
       tracker.isPouring = true;
       tracker.startVolume = tracker.lastVolume;
       tracker.totalPoured = 0;
-      console.log(`[Tap ${tapId}] Pour started! Initial volume: ${tracker.startVolume.toFixed(1)} oz`);
+      console.log(`[POUR EVENT] 🍺 Tap ${tapId} POUR STARTED! Sensor: "${stateObj.entity_id}", Initial Baseline: ${tracker.startVolume.toFixed(1)} oz (${rawNum.toFixed(1)} ${unit || 'oz'})`);
 
       this.emit('pour_start', { tapId, startVolume: tracker.startVolume });
     }
@@ -285,6 +285,7 @@ export class HAClient extends EventEmitter {
       if (delta < 0) {
         tracker.totalPoured += Math.abs(delta);
         tracker.lastDropTime = Date.now();
+        console.log(`[POUR EVENT] 💧 Tap ${tapId} Dispensing: delta=-${Math.abs(delta).toFixed(2)} oz, totalPoured=${tracker.totalPoured.toFixed(1)} oz, currentVal=${ozValue.toFixed(1)} oz`);
       }
 
       if (tracker.settleTimer) clearTimeout(tracker.settleTimer);
@@ -304,7 +305,10 @@ export class HAClient extends EventEmitter {
     tracker.isPouring = false;
     const finalPouredOz = Math.round(tracker.totalPoured * 10) / 10;
 
-    console.log(`[Tap ${tapId}] Pour finalized: ${finalPouredOz} oz poured.`);
+    const fillState = this.statesMap.get(`sensor.tap_${tapId}_fill`)?.state;
+    const currentPercent = fillState ? parseFloat(fillState).toFixed(1) : 'N/A';
+
+    console.log(`[POUR EVENT] ✅ Tap ${tapId} POUR FINALIZED! Total Dispensed: ${finalPouredOz} oz. Remaining Keg Fill: ${currentPercent}%`);
 
     if (finalPouredOz >= 1.0) {
       db.prepare(`

@@ -227,6 +227,9 @@ const server = http.createServer(async (req, res) => {
         attempt.count += 1;
         if (attempt.count >= 5) {
           attempt.lockUntil = now + 15 * 60 * 1000;
+          console.warn(`[AUTH SECURITY] 🔒 IP ${clientIp} locked out for 15m after 5 failed PIN attempts.`);
+        } else {
+          console.warn(`[AUTH ACTION] ❌ Failed admin PIN attempt from IP ${clientIp} (${attempt.count}/5 attempts).`);
         }
         authAttempts.set(clientIp, attempt);
 
@@ -244,6 +247,7 @@ const server = http.createServer(async (req, res) => {
         INSERT INTO admin_sessions (token, expires_at) VALUES (?, ?)
       `).run(token, expiresAt);
 
+      console.log(`[AUTH ACTION] 🔓 Successful admin PIN authentication from IP ${clientIp}.`);
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ token, expiresAt }));
 
@@ -300,13 +304,17 @@ const server = http.createServer(async (req, res) => {
       if (new_pin && String(new_pin).trim().length === 4) {
         const pinHash = bcrypt.hashSync(String(new_pin).trim(), 10);
         db.prepare('UPDATE settings SET admin_pin_hash = ? WHERE id = 1').run(pinHash);
+        console.log(`[SETTINGS ACTION] 🔑 Admin PIN updated from IP ${clientIp}`);
       }
+
+      console.log(`[SETTINGS ACTION] 🎨 Global Studio Settings updated from IP ${clientIp}: theme="${theme || 'unchanged'}", title="${title || 'unchanged'}", fonts="${font_title || 'def'}/${font_body || 'def'}"`);
 
       broadcastSSE('settings_updated', getFullStateSnapshot());
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: true }));
 
     } catch (err) {
+      console.error(`[SETTINGS ERROR] Error updating global settings:`, err.message);
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: err.message }));
     }
@@ -381,6 +389,8 @@ const server = http.createServer(async (req, res) => {
         body.custom_pour_size !== undefined ? (body.custom_pour_size !== '' ? parseFloat(body.custom_pour_size) : null) : null,
         tapId
       );
+
+      console.log(`[TAP ACTION] ⚙️ Tap ${tapId} settings updated from IP ${clientIp}: graphic="${body.graphic}", batch="${extractedBatchId || 'none'}", overrideEnabled=${body.override_enabled ? 'YES' : 'NO'}`);
 
       // Sync Home Assistant input_boolean.tap_N_enabled
       const haEnabledService = (shouldEnable === 1 || shouldEnable === null) ? 'turn_on' : 'turn_off';
