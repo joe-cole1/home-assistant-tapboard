@@ -14,6 +14,20 @@ let appState = {
 let editingTapId = null;
 let authToken = sessionStorage.getItem('tapboard_token') || null;
 
+function updateAuthUI() {
+  if (authToken) {
+    document.body.classList.add('is-authenticated');
+  } else {
+    document.body.classList.remove('is-authenticated');
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', updateAuthUI);
+} else {
+  updateAuthUI();
+}
+
 // Intelligent Beer Style Parser Fallback
 function deriveBeerStyle(beerName, rawStyle) {
   if (rawStyle && rawStyle !== 'Craft Beer' && rawStyle.trim() !== '') {
@@ -44,18 +58,18 @@ function initSSE() {
 
   eventSource.onopen = () => {
     console.log('[SSE] Live stream connected.');
-    updateClockStatus(appState.haConnected ? 'Live Stream Connected' : 'HA Disconnected (Cached Data)');
+    updateClockStatus(appState.haConnected ? 'Live' : 'Disconnected');
   };
 
   eventSource.onerror = (err) => {
     console.warn('[SSE] Connection error/reconnecting...', err);
-    updateClockStatus('Reconnecting...');
+    updateClockStatus('Disconnected');
   };
 
   // 1. Initial Snapshot
   eventSource.addEventListener('snapshot', (e) => {
     appState = JSON.parse(e.data);
-    updateClockStatus(appState.haConnected ? 'Live Stream Connected' : 'HA Disconnected (Cached Data)');
+    updateClockStatus(appState.haConnected ? 'Live' : 'Disconnected');
     renderApp();
   });
 
@@ -63,7 +77,7 @@ function initSSE() {
   eventSource.addEventListener('ha_connection_status', (e) => {
     const { isConnected } = JSON.parse(e.data);
     appState.haConnected = isConnected;
-    updateClockStatus(isConnected ? 'Live Stream Connected' : 'HA Disconnected (Cached Data)');
+    updateClockStatus(isConnected ? 'Live' : 'Disconnected');
   });
 
   // 3. HA State Changed
@@ -83,9 +97,8 @@ function initSSE() {
   // 5. Pour Complete Summary & Toast Notification
   eventSource.addEventListener('pour_complete', (e) => {
     const { tapId, volumePouredOz, beerName } = JSON.parse(e.data);
-    console.log(`[Pour Complete] Tap ${tapId}: ${volumePouredOz} oz`);
-    setTapPouringAnimation(tapId, false);
     showToast(`🍺 Poured ${volumePouredOz} oz of ${beerName}!`);
+    setTapPouringAnimation(tapId, false);
   });
 
   // 6. Low Keg Alert
@@ -104,10 +117,11 @@ function initSSE() {
 function updateClockStatus(text) {
   const clockEl = document.getElementById('headerClock');
   if (clockEl) {
-    clockEl.textContent = text;
-    if (text.includes('Disconnected') || text.includes('Reconnecting')) {
+    if (text.includes('Disconnected') || text.includes('Reconnecting') || text.includes('Offline')) {
+      clockEl.textContent = 'Disconnected';
       clockEl.style.color = '#ffa726';
     } else {
+      clockEl.textContent = 'Live';
       clockEl.style.color = '';
     }
   }
@@ -774,6 +788,7 @@ function initModalListeners() {
         if (res.ok && data.token) {
           authToken = data.token;
           sessionStorage.setItem('tapboard_token', authToken);
+          updateAuthUI();
           document.getElementById('pinModal').style.display = 'none';
 
           if (editingTapId) {

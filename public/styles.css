@@ -379,6 +379,15 @@ body {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
 }
 
+/* Individual Tap Settings Cog Button - Hidden until authenticated */
+.tap-cog-btn {
+  display: none !important;
+}
+
+body.is-authenticated .tap-cog-btn {
+  display: inline-flex !important;
+}
+
 .badge {
   font-size: 0.75rem;
   font-weight: 800;
