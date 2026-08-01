@@ -84,8 +84,9 @@ Scale sensors from Home Assistant (`sensor.tap_N_fl_oz`) exhibit continuous micr
 
 ### B. 14-Day Rolling Keg Kick Forecast Engine (`src/server.js`)
 Calculates estimated days remaining for each active tap:
-- Queries `pour_logs` for total volume poured over the last 14 days divided by active days.
-- **Fallback**: If no logged pours exist yet, applies a baseline taproom consumption rate of 16.0 oz / 1 pint per day.
+- Queries lifecycle-scoped `pour_logs` for total volume poured over up to the last 14 elapsed days.
+- Changing or clearing a batch, ending a batch, or ending a keg clears that tap's usage history.
+- If no logged pours exist for the active tap, the forecast is omitted instead of inventing a baseline rate.
 - Output format: `⌛ 16.3 days remaining` or `🔴 Kicking soon`.
 
 ### C. In-Place Targeted DOM Preservation Engine (`public/app.js`)

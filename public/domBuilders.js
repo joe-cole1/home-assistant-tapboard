@@ -49,7 +49,9 @@ export function buildTapCardContent({ tapId, fillPercent, fresh, lowThreshold, b
   graphicWrapper.id = `graphic-tap-${tapId}`;
   graphic.append(graphicWrapper, element('div', 'floating-pour-badge', '🍺 NOW POURING'), element('div', 'volume-readout', volumeReadoutText));
   fragment.appendChild(graphic);
-  fragment.appendChild(element('div', 'forecast-readout', forecastText));
+  const forecast = element('div', 'forecast-readout', forecastText);
+  forecast.hidden = !forecastText;
+  fragment.appendChild(forecast);
   return fragment;
 }
 

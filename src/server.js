@@ -7,6 +7,7 @@ import dotenv from 'dotenv';
 import db from './db.js';
 import { HAClient } from './haClient.js';
 import { SSEHub } from './sseHub.js';
+import { calculateKegKickForecast as calculateForecast } from './kegForecast.js';
 import {
   HttpError,
   applySecurityHeaders,
@@ -89,21 +90,8 @@ function allowedMethodsForApiPath(pathname) {
   return null;
 }
 
-// Helper: Calculate 14-Day Rolling Keg Kick Forecast with Multi-Sensor Lookup
+// Calculate a 14-day forecast from the current tap's lifecycle-scoped usage history.
 function calculateKegKickForecast(tapId) {
-  const fourteenDaysAgo = new Date(Date.now() - 14 * 86400 * 1000).toISOString();
-  
-  const stats = db.prepare(`
-    SELECT 
-      SUM(volume_poured_oz) as total_oz,
-      COUNT(DISTINCT DATE(timestamp)) as active_days,
-      MIN(timestamp) as first_pour_time
-    FROM pour_logs
-    WHERE tap_id = ? AND timestamp >= ?
-  `).get(tapId, fourteenDaysAgo);
-
-  const totalOz = stats?.total_oz || 0;
-
   let currentOz = 0;
   const ozState = haClient.statesMap.get(`sensor.tap_${tapId}_fl_oz`)?.state;
   const fillState = haClient.statesMap.get(`sensor.tap_${tapId}_fill`)?.state;
@@ -117,31 +105,11 @@ function calculateKegKickForecast(tapId) {
     currentOz = (parseFloat(fillState) / 100.0) * 640.0;
   }
 
-  let avgDailyOz = 0;
-  let isEstimatedBaseline = false;
+  return calculateForecast({ db, tapId, currentOz });
+}
 
-  if (totalOz > 0 && stats?.first_pour_time) {
-    const daysSpan = Math.max(1, (Date.now() - new Date(stats.first_pour_time).getTime()) / (86400 * 1000));
-    avgDailyOz = totalOz / Math.min(14, daysSpan);
-  } else {
-    avgDailyOz = 16.0;
-    isEstimatedBaseline = true;
-  }
-
-  if (currentOz <= 0) {
-    return { 
-      avgDailyOz: Math.round(avgDailyOz * 10) / 10,
-      estimatedDaysRemaining: null,
-      isEstimatedBaseline: true
-    };
-  }
-
-  const daysRemaining = Math.round((currentOz / avgDailyOz) * 10) / 10;
-  return { 
-    avgDailyOz: Math.round(avgDailyOz * 10) / 10,
-    estimatedDaysRemaining: daysRemaining,
-    isEstimatedBaseline
-  };
+function clearTapUsageHistory(tapId) {
+  db.prepare('DELETE FROM pour_logs WHERE tap_id = ?').run(tapId);
 }
 
 // HA Event Listeners
@@ -410,8 +378,9 @@ const server = http.createServer(async (req, res) => {
           onTapAt = null;
         }
       }
-      
-      db.prepare(`
+
+      const batchChanged = body.batch_option !== undefined && extractedBatchId !== currentTap.batch_id;
+      const updateTap = db.prepare(`
         UPDATE taps SET
           enabled = COALESCE(?, enabled),
           batch_id = COALESCE(?, batch_id),
@@ -431,26 +400,30 @@ const server = http.createServer(async (req, res) => {
           display_unit = COALESCE(?, display_unit),
           custom_pour_size = COALESCE(?, custom_pour_size)
         WHERE tap_id = ?
-      `).run(
-        shouldEnable,
-        extractedBatchId,
-        onTapAt,
-        body.graphic,
-        body.override_enabled !== undefined ? (body.override_enabled ? 1 : 0) : null,
-        body.override_name !== undefined ? body.override_name : null,
-        body.override_style !== undefined ? body.override_style : null,
-        body.override_abv !== undefined ? (body.override_abv !== '' ? parseFloat(body.override_abv) : null) : null,
-        body.override_ibu !== undefined ? (body.override_ibu !== '' ? parseInt(body.override_ibu) : null) : null,
-        body.override_og !== undefined ? (body.override_og !== '' ? parseFloat(body.override_og) : null) : null,
-        body.override_fg !== undefined ? (body.override_fg !== '' ? parseFloat(body.override_fg) : null) : null,
-        body.override_srm !== undefined ? (body.override_srm !== '' ? parseInt(body.override_srm) : null) : null,
-        body.override_description !== undefined ? body.override_description : null,
-        body.badge_low_keg !== undefined ? parseFloat(body.badge_low_keg) : null,
-        body.badge_fresh !== undefined ? (body.badge_fresh ? 1 : 0) : null,
-        body.display_unit !== undefined ? body.display_unit : null,
-        body.custom_pour_size !== undefined ? (body.custom_pour_size !== '' ? parseFloat(body.custom_pour_size) : null) : null,
-        tapId
-      );
+      `);
+      db.transaction(() => {
+        updateTap.run(
+          shouldEnable,
+          extractedBatchId,
+          onTapAt,
+          body.graphic,
+          body.override_enabled !== undefined ? (body.override_enabled ? 1 : 0) : null,
+          body.override_name !== undefined ? body.override_name : null,
+          body.override_style !== undefined ? body.override_style : null,
+          body.override_abv !== undefined ? (body.override_abv !== '' ? parseFloat(body.override_abv) : null) : null,
+          body.override_ibu !== undefined ? (body.override_ibu !== '' ? parseInt(body.override_ibu) : null) : null,
+          body.override_og !== undefined ? (body.override_og !== '' ? parseFloat(body.override_og) : null) : null,
+          body.override_fg !== undefined ? (body.override_fg !== '' ? parseFloat(body.override_fg) : null) : null,
+          body.override_srm !== undefined ? (body.override_srm !== '' ? parseInt(body.override_srm) : null) : null,
+          body.override_description !== undefined ? body.override_description : null,
+          body.badge_low_keg !== undefined ? parseFloat(body.badge_low_keg) : null,
+          body.badge_fresh !== undefined ? (body.badge_fresh ? 1 : 0) : null,
+          body.display_unit !== undefined ? body.display_unit : null,
+          body.custom_pour_size !== undefined ? (body.custom_pour_size !== '' ? parseFloat(body.custom_pour_size) : null) : null,
+          tapId
+        );
+        if (batchChanged) clearTapUsageHistory(tapId);
+      })();
 
       console.log(`[TAP ACTION] Tap settings updated request_id=${requestId} tap_id=${tapId} client=${clientIp}`);
 
@@ -498,7 +471,7 @@ const server = http.createServer(async (req, res) => {
         throw new HttpError(502, 'Home Assistant request failed');
       }
 
-      db.prepare(`
+      const clearBatch = db.prepare(`
         UPDATE taps SET
           batch_id = NULL,
           on_tap_at = NULL,
@@ -512,7 +485,11 @@ const server = http.createServer(async (req, res) => {
           override_srm = NULL,
           override_description = NULL
         WHERE tap_id = ?
-      `).run(tapId);
+      `);
+      db.transaction(() => {
+        clearBatch.run(tapId);
+        clearTapUsageHistory(tapId);
+      })();
 
       sseHub.publishImmediate('settings_updated', getFullStateSnapshot());
       sendJson(res, 200, { success: true, message: `Batch completed and tap ${tapId} cleared.` });
@@ -539,7 +516,7 @@ const server = http.createServer(async (req, res) => {
         throw new HttpError(502, 'Home Assistant request failed');
       }
 
-      db.prepare(`
+      const clearKeg = db.prepare(`
         UPDATE taps SET
           batch_id = NULL,
           on_tap_at = NULL,
@@ -553,7 +530,11 @@ const server = http.createServer(async (req, res) => {
           override_srm = NULL,
           override_description = NULL
         WHERE tap_id = ?
-      `).run(tapId);
+      `);
+      db.transaction(() => {
+        clearKeg.run(tapId);
+        clearTapUsageHistory(tapId);
+      })();
 
       sseHub.publishImmediate('settings_updated', getFullStateSnapshot());
       sendJson(res, 200, { success: true, message: `Tap ${tapId} unassigned / off-tap.` });

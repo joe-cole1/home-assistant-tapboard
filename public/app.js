@@ -368,15 +368,11 @@ function formatVolumeReadout(tap, fillPercent, currentOz, pintsRemaining) {
 // Helper: Clean Format Forecast Readout
 function formatForecastText(forecast) {
   if (forecast.estimatedDaysRemaining === null || forecast.estimatedDaysRemaining === undefined) {
-    return `⌛ Forecast calculating...`;
+    return '';
   }
 
   if (forecast.estimatedDaysRemaining < 1.0) {
     return `🔴 Kicking soon`;
-  }
-
-  if (forecast.isEstimatedBaseline) {
-    return `⌛ ${forecast.estimatedDaysRemaining} days remaining`;
   }
 
   return `⌛ ${forecast.estimatedDaysRemaining} days remaining (${forecast.avgDailyOz} oz/day avg)`;
@@ -625,8 +621,9 @@ function updateTapCard(card, tap) {
   }
 
   const forecastEl = card.querySelector('.forecast-readout');
-  if (forecastEl && forecastEl.textContent !== forecastText) {
-    forecastEl.textContent = forecastText;
+  if (forecastEl) {
+    if (forecastEl.textContent !== forecastText) forecastEl.textContent = forecastText;
+    forecastEl.hidden = !forecastText;
   }
 
   // Numeric telemetry mutates the existing SVG so carbonation nodes keep animating.

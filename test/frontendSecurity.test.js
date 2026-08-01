@@ -60,6 +60,16 @@ test('opted-in fresh badge is rendered with its new label', () => withDocument(d
   assert.equal(card.textContent.includes('FRESH!'), false);
 }));
 
+test('forecast block is hidden when no usage forecast is available', () => withDocument(document => {
+  const card = document.createElement('div');
+  card.replaceChildren(buildTapCardContent({
+    tapId: 3, fillPercent: 100, fresh: false, lowThreshold: 20,
+    beerName: 'Topo Chico', style: 'Sparkling Water', description: '', abv: '0%', ibu: '-', og: '-', fg: '-',
+    volumeReadoutText: '100% Remaining', forecastText: ''
+  }));
+  assert.equal(card.querySelector('.forecast-readout')?.hidden, true);
+}));
+
 test('app only parses trusted renderTapGraphic output', async () => {
   const source = await import('node:fs/promises').then(fs => fs.readFile(new URL('../public/app.js', import.meta.url), 'utf8'));
   const assignments = [...source.matchAll(/\.innerHTML\s*=\s*([^;]+);/g)].map(match => match[1]);

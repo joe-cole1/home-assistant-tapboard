@@ -12,7 +12,7 @@ A lightweight, high-performance brewery tap dashboard for Home Assistant, hosted
 - **Pangolin Proxy Bypass Headers**: Declares `Cache-Control: no-cache, no-transform` and `X-Accel-Buffering: no` for smooth SSE streaming.
 - **SQLite WAL Mode**: Persistent SQLite storage running in Write-Ahead Logging mode for non-blocking concurrent reads.
 - **Recipe Detail Modals**: Click any beer card to view full Brewfather recipe specs, OG/FG, ABV, IBU, SRM color, and tasting notes.
-- **Keg Kick Forecast**: Automatically calculates estimated days remaining per tap based on rolling 7-day average pour logs.
+- **Keg Kick Forecast**: Automatically calculates estimated days remaining per tap from up to 14 days of lifecycle-scoped pour logs and stays hidden until usage data exists.
 - **On-Deck Sidebar Widget**: Displays upcoming brews currently conditioning in the fermentation pipeline.
 
 ---

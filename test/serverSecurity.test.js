@@ -207,19 +207,24 @@ test('on-tap timestamp starts on assignment, survives re-save, and clears with t
     const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
     const body = JSON.stringify({ batch_option: 'custom:topo_chico | Topo Chico 0%' });
 
+    database.prepare('INSERT INTO pour_logs (tap_id, volume_poured_oz) VALUES (1, 12)').run();
     assert.equal((await fetch(`${instance.baseUrl}/api/taps/1`, { method: 'POST', headers, body })).status, 200);
     const assigned = database.prepare('SELECT batch_id, on_tap_at FROM taps WHERE tap_id = 1').get();
     assert.equal(assigned.batch_id, 'custom:topo_chico');
     assert.ok(Number.isFinite(Date.parse(assigned.on_tap_at)));
+    assert.equal(database.prepare('SELECT COUNT(*) count FROM pour_logs WHERE tap_id = 1').get().count, 0);
 
+    database.prepare('INSERT INTO pour_logs (tap_id, volume_poured_oz) VALUES (1, 8)').run();
     database.prepare("UPDATE taps SET on_tap_at = '2026-01-02T03:04:05.000Z' WHERE tap_id = 1").run();
     assert.equal((await fetch(`${instance.baseUrl}/api/taps/1`, { method: 'POST', headers, body })).status, 200);
     assert.equal(database.prepare('SELECT on_tap_at FROM taps WHERE tap_id = 1').get().on_tap_at, '2026-01-02T03:04:05.000Z');
+    assert.equal(database.prepare('SELECT COUNT(*) count FROM pour_logs WHERE tap_id = 1').get().count, 1);
 
     assert.equal((await fetch(`${instance.baseUrl}/api/taps/1`, {
       method: 'POST', headers, body: JSON.stringify({ batch_option: '' })
     })).status, 200);
     assert.deepEqual(database.prepare('SELECT batch_id, on_tap_at FROM taps WHERE tap_id = 1').get(), { batch_id: '', on_tap_at: null });
+    assert.equal(database.prepare('SELECT COUNT(*) count FROM pour_logs WHERE tap_id = 1').get().count, 0);
   } finally {
     database.close();
     await stopServer(instance.child);
