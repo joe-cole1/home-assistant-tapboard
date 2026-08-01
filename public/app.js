@@ -409,28 +409,12 @@ function createTapCard(tap) {
     <div class="forecast-readout" style="font-size:0.8rem; color:var(--accent-color); margin-top:0.6rem; font-weight:600; text-align:center;">
       ${forecastText}
     </div>
-
-    <button class="btn-simulate-pour" title="Simulate Pour on Tap ${tapId}">🍺 Simulate Pour</button>
   `;
 
   // Render SVG Graphic initially
   const graphicContainer = card.querySelector(`#graphic-tap-${tapId}`);
   if (graphicContainer && typeof renderTapGraphic === 'function') {
     graphicContainer.innerHTML = renderTapGraphic(tap.graphic || 'corny_keg', fillPercent, beerColorHex, false, `tap_${tapId}`);
-  }
-
-  // Simulate Pour Button Click
-  const simBtn = card.querySelector('.btn-simulate-pour');
-  if (simBtn) {
-    simBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      fetch(`/api/taps/${tapId}/simulate-pour`, { method: 'POST' })
-        .then(res => res.json())
-        .then(data => {
-          showToast(`⚡ Triggering test pour on Tap ${tapId}...`);
-        })
-        .catch(err => console.error('[Simulate Pour Error]', err));
-    });
   }
 
   // Cog Button Click: Open Per-Tap Settings
