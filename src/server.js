@@ -143,6 +143,11 @@ haClient.on('pour_complete', data => {
   broadcastSSE('settings_updated', getFullStateSnapshot());
 });
 
+haClient.on('pour_cancel', data => {
+  console.log(`[SSE Broadcast] pour_cancel on Tap ${data.tapId}: ${data.reason}`);
+  broadcastSSE('pour_cancel', data);
+});
+
 haClient.on('low_keg_alert', data => {
   broadcastSSE('low_keg_alert', data);
 });

@@ -101,13 +101,19 @@ function initSSE() {
     setTapPouringAnimation(tapId, false);
   });
 
-  // 6. Low Keg Alert
+  // 6. Canceled Pour (rebound, disconnect, large change, or safety timeout)
+  eventSource.addEventListener('pour_cancel', (e) => {
+    const { tapId } = JSON.parse(e.data);
+    setTapPouringAnimation(tapId, false);
+  });
+
+  // 7. Low Keg Alert
   eventSource.addEventListener('low_keg_alert', (e) => {
     const { tapId, currentPercent } = JSON.parse(e.data);
     showToast(`⚠️ Low Keg Warning: Tap ${tapId} at ${currentPercent}%!`);
   });
 
-  // 7. Settings Updated
+  // 8. Settings Updated
   eventSource.addEventListener('settings_updated', (e) => {
     appState = JSON.parse(e.data);
     renderApp();

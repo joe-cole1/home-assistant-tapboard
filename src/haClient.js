@@ -1,9 +1,10 @@
 import WebSocket from 'ws';
 import EventEmitter from 'events';
 import db from './db.js';
+import { PourDetector, normalizeVolumeToOz } from './pourDetector.js';
 
 export class HAClient extends EventEmitter {
-  constructor() {
+  constructor({ detector, detectorOptions } = {}) {
     super();
     this.haUrl = process.env.HA_URL || 'http://192.168.0.35:8123';
     this.haToken = process.env.HA_TOKEN || '';
@@ -17,18 +18,27 @@ export class HAClient extends EventEmitter {
     this.isConnected = false;
     this.reconnectTimeout = null;
     this.reconnectDelay = 1000;
+    this.primaryTapSensors = new Map();
+    this.unitWarnings = new Map();
 
-    // Per-tap pour session tracker
-    this.pourTracker = new Map();
-    for (let i = 1; i <= 6; i++) {
-      this.pourTracker.set(i, {
-        isPouring: false,
-        startVolume: 0,
-        currentVolume: 0,
-        lastVolume: 0,
-        totalPoured: 0,
-        lastDropTime: 0,
-        settleTimer: null
+    const handleDetectorEvent = event => this.handleDetectorEvent(event);
+    if (detector) {
+      this.detector = detector;
+      // Keep an injected test detector observable while still adapting its
+      // lifecycle to HAClient's public EventEmitter events.
+      const priorHandler = detector.onEvent;
+      detector.onEvent = event => {
+        priorHandler?.(event);
+        handleDetectorEvent(event);
+      };
+    } else {
+      const priorHandler = detectorOptions?.onEvent;
+      this.detector = new PourDetector({
+        ...detectorOptions,
+        onEvent: event => {
+          priorHandler?.(event);
+          handleDetectorEvent(event);
+        }
       });
     }
   }
@@ -61,6 +71,7 @@ export class HAClient extends EventEmitter {
       console.warn(`[HAClient] WebSocket closed (code: ${code}). Reconnecting...`);
       this.isHydrated = false;
       this.isConnected = false;
+      this.detector.reset('disconnect');
       this.emit('connection_change', false);
       this.scheduleReconnect();
     });
@@ -68,6 +79,7 @@ export class HAClient extends EventEmitter {
     this.ws.on('error', (err) => {
       console.error('[HAClient] WebSocket socket error:', err.message);
       this.isConnected = false;
+      this.detector.reset('disconnect');
       this.emit('connection_change', false);
     });
   }
@@ -167,21 +179,18 @@ export class HAClient extends EventEmitter {
         this.syncBrewfatherBatchData(entity);
       }
 
-      // Initialize pour trackers from each tap's designated primary scale sensor
+      // Seed the pure detector from the snapshot. Hydration never produces pour events.
       for (let tapId = 1; tapId <= 6; tapId++) {
         const primaryId = this.getPrimaryTapSensor(tapId);
+        this.primaryTapSensors.set(tapId, primaryId);
         const stateObj = this.statesMap.get(primaryId);
         if (stateObj && stateObj.state !== 'unavailable' && stateObj.state !== 'unknown') {
-          const rawNum = parseFloat(stateObj.state);
-          if (!isNaN(rawNum) && rawNum > 0) {
-            const unit = (stateObj.attributes?.unit_of_measurement || '').toLowerCase();
-            const isMl = unit.includes('ml') || rawNum > 350;
-            const ozValue = isMl ? (rawNum / 29.5735) : rawNum;
-
-            const tracker = this.pourTracker.get(tapId);
-            tracker.lastVolume = ozValue;
-            tracker.currentVolume = ozValue;
-            console.log(`[HAClient] Tap ${tapId} tracker initialized with primary sensor ${primaryId} = ${ozValue.toFixed(1)} oz`);
+          const ozValue = normalizeVolumeToOz(stateObj.state, stateObj.attributes?.unit_of_measurement);
+          if (ozValue !== null) {
+            this.detector.hydrate(tapId, ozValue, this.stateTimestamp(stateObj));
+            console.log(`[HAClient] Tap ${tapId} detector hydrated from ${primaryId} = ${ozValue.toFixed(1)} oz`);
+          } else {
+            console.warn(`[HAClient] Tap ${tapId} primary sensor ${primaryId} has no supported declared volume unit; detector left unseeded.`);
           }
         }
       }
@@ -199,6 +208,7 @@ export class HAClient extends EventEmitter {
       console.log(`[HAClient] Hydrated ${this.statesMap.size} entities from snapshot.`);
 
       console.log(`[HAClient] Step 3: Replaying ${this.eventQueue.length} buffered queue events...`);
+      this.eventQueue.sort((a, b) => this.stateTimestamp(a.new_state || {}) - this.stateTimestamp(b.new_state || {}));
       for (const eventData of this.eventQueue) {
         this.processStateUpdate(eventData);
       }
@@ -231,6 +241,12 @@ export class HAClient extends EventEmitter {
     // Apply 4-Stage Noise Filtering strictly to each tap's designated primary scale sensor
     for (let tapId = 1; tapId <= 6; tapId++) {
       const primaryId = this.getPrimaryTapSensor(tapId);
+      const previousPrimaryId = this.primaryTapSensors.get(tapId);
+      if (previousPrimaryId && previousPrimaryId !== primaryId) {
+        this.rehydrateDetectorFromCurrentPrimaries('source_change');
+        break;
+      }
+      this.primaryTapSensors.set(tapId, primaryId);
       if (entity_id === primaryId) {
         this.apply4StageNoiseFilter(tapId, new_state);
       }
@@ -239,71 +255,55 @@ export class HAClient extends EventEmitter {
     this.emit('state_changed', { entity_id, state: new_state, fullState: this.getFormattedState() });
   }
 
-  // 4-Stage Noise Filtering & Pour Session Tracking Algorithm
-  apply4StageNoiseFilter(tapId, stateObj) {
-    const rawNum = parseFloat(stateObj.state);
-    if (isNaN(rawNum) || stateObj.state === 'unavailable' || stateObj.state === 'unknown') {
-      return;
-    }
-
-    const unit = (stateObj.attributes?.unit_of_measurement || '').toLowerCase();
-    // Convert ml to fl_oz so thresholds are unified regardless of scale sensor unit
-    const isMl = unit.includes('ml') || rawNum > 350;
-    const ozValue = isMl ? (rawNum / 29.5735) : rawNum;
-
-    const tracker = this.pourTracker.get(tapId);
-
-    if (tracker.lastVolume === 0) {
-      tracker.lastVolume = ozValue;
-      tracker.currentVolume = ozValue;
-      return;
-    }
-
-    const delta = ozValue - tracker.lastVolume;
-
-    // Ignore single-frame telemetry spikes (> 30 oz / 887 ml)
-    if (Math.abs(delta) > 30) {
-      return;
-    }
-
-    // Ignore idle scale jitter (< 0.15 oz / ~4 ml)
-    if (Math.abs(delta) < 0.15 && !tracker.isPouring) {
-      return;
-    }
-
-    // Trigger pour start if weight drops by > 0.3 oz (~9 ml)
-    if (delta <= -0.3 && !tracker.isPouring) {
-      tracker.isPouring = true;
-      tracker.startVolume = tracker.lastVolume;
-      tracker.totalPoured = 0;
-      console.log(`[POUR EVENT] 🍺 Tap ${tapId} POUR STARTED! Sensor: "${stateObj.entity_id}", Initial Baseline: ${tracker.startVolume.toFixed(1)} oz (${rawNum.toFixed(1)} ${unit || 'oz'})`);
-
-      this.emit('pour_start', { tapId, startVolume: tracker.startVolume });
-    }
-
-    if (tracker.isPouring) {
-      if (delta < 0) {
-        tracker.totalPoured += Math.abs(delta);
-        tracker.lastDropTime = Date.now();
-        console.log(`[POUR EVENT] 💧 Tap ${tapId} Dispensing: delta=-${Math.abs(delta).toFixed(2)} oz, totalPoured=${tracker.totalPoured.toFixed(1)} oz, currentVal=${ozValue.toFixed(1)} oz`);
-      }
-
-      if (tracker.settleTimer) clearTimeout(tracker.settleTimer);
-      tracker.settleTimer = setTimeout(() => {
-        this.finalizePourSession(tapId);
-      }, 1500);
-    }
-
-    tracker.lastVolume = ozValue;
-    tracker.currentVolume = ozValue;
+  stateTimestamp(stateObj) {
+    const timestamp = Date.parse(stateObj.last_updated || stateObj.last_changed || '');
+    return Number.isFinite(timestamp) ? timestamp : Date.now();
   }
 
-  finalizePourSession(tapId) {
-    const tracker = this.pourTracker.get(tapId);
-    if (!tracker.isPouring) return;
+  rehydrateDetectorFromCurrentPrimaries(reason) {
+    this.detector.reset(reason);
+    for (let tapId = 1; tapId <= 6; tapId++) {
+      const primaryId = this.getPrimaryTapSensor(tapId);
+      this.primaryTapSensors.set(tapId, primaryId);
+      const stateObj = this.statesMap.get(primaryId);
+      if (!stateObj || stateObj.state === 'unavailable' || stateObj.state === 'unknown') continue;
+      const ozValue = normalizeVolumeToOz(stateObj.state, stateObj.attributes?.unit_of_measurement);
+      if (ozValue !== null) this.detector.hydrate(tapId, ozValue, this.stateTimestamp(stateObj));
+    }
+  }
 
-    tracker.isPouring = false;
-    const finalPouredOz = Math.round(tracker.totalPoured * 10) / 10;
+  // HA adapter for the independently testable detector. No magnitude-based unit inference.
+  apply4StageNoiseFilter(tapId, stateObj) {
+    if (stateObj.state === 'unavailable' || stateObj.state === 'unknown') {
+      return;
+    }
+    const ozValue = normalizeVolumeToOz(stateObj.state, stateObj.attributes?.unit_of_measurement);
+    if (ozValue === null) {
+      const unit = stateObj.attributes?.unit_of_measurement || '';
+      if (this.unitWarnings.get(stateObj.entity_id) !== unit) {
+        console.warn(`[HAClient] Ignoring ${stateObj.entity_id}: unsupported or missing declared unit "${unit}".`);
+        this.unitWarnings.set(stateObj.entity_id, unit);
+      }
+      return;
+    }
+    this.unitWarnings.delete(stateObj.entity_id);
+    this.detector.ingest(tapId, ozValue, this.stateTimestamp(stateObj));
+  }
+
+  handleDetectorEvent(event) {
+    if (event.type === 'start') {
+      console.log(`[POUR EVENT] 🍺 Tap ${event.tapId} POUR STARTED! Baseline: ${event.startVolume.toFixed(1)} oz`);
+      this.emit('pour_start', { tapId: event.tapId, startVolume: event.startVolume });
+      return;
+    }
+    if (event.type === 'cancel') {
+      console.log(`[POUR EVENT] 🚫 Tap ${event.tapId} pour cancelled: ${event.reason}`);
+      this.emit('pour_cancel', event);
+      return;
+    }
+    if (event.type !== 'complete') return;
+
+    const { tapId, volumePouredOz: finalPouredOz } = event;
 
     const fillState = this.statesMap.get(`sensor.tap_${tapId}_fill`)?.state;
     const currentPercent = fillState ? parseFloat(fillState).toFixed(1) : 'N/A';
@@ -322,7 +322,7 @@ export class HAClient extends EventEmitter {
         tapId,
         volumePouredOz: finalPouredOz,
         beerName,
-        timestamp: new Date().toISOString()
+        timestamp: new Date(event.timestamp).toISOString()
       });
 
       this.checkLowKegAlert(tapId);
