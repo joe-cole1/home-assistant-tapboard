@@ -207,12 +207,14 @@ export class HAClient extends EventEmitter {
     this.statesMap.set(entity_id, new_state);
     this.syncBrewfatherBatchData(new_state);
 
-    // Apply 4-Stage Noise Filtering to sensor.tap_N_fl_oz or sensor.brewery_taps_tap_N_fast
+    // Apply 4-Stage Noise Filtering to sensor.tap_N_fl_oz or any fast scale sensor
     for (let tapId = 1; tapId <= 6; tapId++) {
       if (
         entity_id === `sensor.tap_${tapId}_fl_oz` ||
+        entity_id === `sensor.brewery_brewery_taps_tap_${tapId}_fast` ||
         entity_id === `sensor.brewery_taps_tap_${tapId}_fast` ||
-        entity_id === `sensor.tap_${tapId}_fast`
+        entity_id === `sensor.tap_${tapId}_fast` ||
+        (entity_id.includes(`tap_${tapId}`) && entity_id.endsWith('_fast'))
       ) {
         this.apply4StageNoiseFilter(tapId, new_state);
       }
