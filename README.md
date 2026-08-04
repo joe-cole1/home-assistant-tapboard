@@ -9,6 +9,7 @@ Tapboard is a containerized dashboard for six Home Assistant-connected beer taps
 - Immediate SSE notifications for pour starts, completions, cancellations, low-keg alerts, HA connection status, and settings changes.
 - Immutable keg lifecycles: a pour is attributed to the lifecycle active at its start, even if the tap is reassigned before completion.
 - Lifecycle-scoped 14-day usage forecast; no forecast is shown without usage for the currently open lifecycle.
+- Canonical, capacity-aware keg measurements sourced from Home Assistant scales; the browser never estimates volume from a percentage.
 - Hardened Docker Compose deployment with loopback-only access and independent named data and backup volumes.
 
 ## Quick start
@@ -50,6 +51,19 @@ Tapboard is a containerized dashboard for six Home Assistant-connected beer taps
 For an HTTPS reverse proxy, configure the exact public origin, for example `TAPBOARD_PUBLIC_ORIGIN=https://tapboard.example.com`. Reverse-proxy operation is optional; the supported Compose deployment is loopback-only. Read [Security operations](docs/SECURITY.md) before exposing the service beyond the local network.
 
 ## Operations and maintenance
+
+## Home Assistant keg-measurement contract
+
+For each tap `N` (1–6), Tapboard reads exactly these entities:
+
+- `sensor.tap_N_fl_oz`: remaining measured volume in fluid ounces.
+- `input_number.tap_N_keg_capacity_oz`: authoritative per-tap capacity, an integer from 16 through 2048 fluid ounces.
+
+Tapboard publishes the coherent measurement tuple `volumeOz`, `capacityOz`, `fillPercent`, `pintsRemaining`, and `volumeStatus` in snapshot schema version 3 and in incremental SSE updates. It does not consume `sensor.tap_N_fill` or `sensor.tap_N_pints_remaining`.
+
+`volumeStatus` is `measured` for a fresh valid scale reading, `stale` when the last valid in-process reading is retained after an existing source becomes unavailable, `assumed_full` only when the exact volume entity is absent and a batch is assigned, or `unavailable` on a cold start without a valid measurement (and for unassigned/sensor-unavailable taps). Low-keg alerts and low-keg badges are limited to fresh `measured` readings. Forecasts use the same server-derived tuple.
+
+Administrators can update a capacity with `POST /api/taps/:id` using an integer `capacity_oz`. Tapboard writes that value to the matching HA `input_number` helper; if HA rejects the authoritative write, the request fails and the settings UI shows the returned error.
 
 The supported database interface is the maintenance CLI exposed through npm:
 

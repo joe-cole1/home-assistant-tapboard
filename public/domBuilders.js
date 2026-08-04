@@ -26,6 +26,7 @@ export function createSelectOption(value, label, selected = false) {
 export function buildTapCardContent({
   tapId,
   fillPercent,
+  volumeStatus = 'unavailable',
   fresh,
   lowThreshold,
   beerName,
@@ -42,7 +43,9 @@ export function buildTapCardContent({
   const header = element('div', 'tap-card-header');
   const actions = element('div', 'tap-card-actions');
   header.appendChild(element('div', 'tap-number-badge', tapId));
-  if (fillPercent <= lowThreshold) actions.appendChild(element('span', 'badge badge-low', 'LOW KEG!'));
+  if (lowThreshold !== null && lowThreshold !== undefined && fillPercent <= lowThreshold) {
+    actions.appendChild(element('span', 'badge badge-low', 'LOW KEG!'));
+  }
   if (fresh) actions.appendChild(element('span', 'badge badge-fresh', 'NEW'));
   const cog = element('button', 'btn-icon tap-cog-btn', '⚙️');
   cog.type = 'button';
@@ -66,6 +69,17 @@ export function buildTapCardContent({
     element('div', 'floating-pour-badge', '🍺 NOW POURING'),
     element('div', 'volume-readout', volumeReadoutText)
   );
+  const statusText =
+    volumeStatus === 'stale'
+      ? 'Stale measurement'
+      : volumeStatus === 'assumed_full'
+        ? 'Assumed full — not measured'
+        : volumeStatus === 'unavailable'
+          ? 'Unavailable'
+          : '';
+  const status = element('div', `volume-status volume-status-${volumeStatus}`, statusText);
+  status.hidden = !statusText;
+  graphic.appendChild(status);
   fragment.appendChild(graphic);
   const forecast = element('div', 'forecast-readout', forecastText);
   forecast.hidden = !forecastText;

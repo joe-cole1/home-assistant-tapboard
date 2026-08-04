@@ -138,7 +138,8 @@ export function validateTap(body) {
     'badge_low_keg',
     'badge_fresh',
     'display_unit',
-    'custom_pour_size'
+    'custom_pour_size',
+    'capacity_oz'
   ]);
   assertObject(body);
   rejectUnknown(body, allowed);
@@ -159,6 +160,7 @@ export function validateTap(body) {
   assignIfDefined(output, 'override_srm', numeric(body.override_srm, 0, 50, { integer: true, allowEmpty: true }));
   assignIfDefined(output, 'badge_low_keg', numeric(body.badge_low_keg, 0, 100));
   assignIfDefined(output, 'custom_pour_size', numeric(body.custom_pour_size, 0.5, 128));
+  assignIfDefined(output, 'capacity_oz', numeric(body.capacity_oz, 16, 2048, { integer: true }));
   return output;
 }
 

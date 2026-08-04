@@ -75,6 +75,34 @@ test('every fast detector sample is ingested while none is sent to the display c
   assert.equal(displayUpdates, 0);
 });
 
+test('canonical volume and capacity events publish a coherent tuple while obsolete fill events publish nothing', () => {
+  const updates = [];
+  const detector = { onEvent: null, ingest() {}, hydrate() {}, reset() {} };
+  const client = new HAClient({
+    detector,
+    isTapAssigned: (tapId) => tapId === 1,
+    displayUpdateCoalescer: { enqueue: (change) => updates.push(change) }
+  });
+  const capacityId = 'input_number.tap_1_keg_capacity_oz';
+  const volumeId = 'sensor.tap_1_fl_oz';
+  client.processStateUpdate({ entity_id: capacityId, new_state: state(capacityId, 640, 1_000) });
+  client.processStateUpdate({ entity_id: volumeId, new_state: state(volumeId, 216.63, 2_000) });
+  client.processStateUpdate({ entity_id: 'sensor.tap_1_fill', new_state: state('sensor.tap_1_fill', 99, 3_000) });
+
+  assert.equal(updates.length, 2);
+  assert.deepEqual(updates[1], {
+    tapId: 1,
+    changes: {
+      volumeOz: 216.63,
+      capacityOz: 640,
+      fillPercent: 33.8,
+      pintsRemaining: 13.539375,
+      volumeStatus: 'measured'
+    },
+    timestamp: 2_000
+  });
+});
+
 test('a sensitive unrelated HA entity is absent from HTTP and SSE public serialization', () => {
   let displayUpdates = 0;
   const detector = { onEvent: null, ingest() {}, hydrate() {}, reset() {} };
@@ -98,7 +126,7 @@ test('a sensitive unrelated HA entity is absent from HTTP and SSE public seriali
   };
   client.processStateUpdate({ entity_id: privateEntity.entity_id, new_state: privateEntity });
 
-  const snapshot = { schemaVersion: 2, tapStates: client.getPublicTapStates() };
+  const snapshot = { schemaVersion: 3, tapStates: client.getPublicTapStates() };
   const httpJson = JSON.stringify(snapshot);
   const sseFrame = formatSSEFrame('snapshot', snapshot);
   for (const output of [httpJson, sseFrame]) {

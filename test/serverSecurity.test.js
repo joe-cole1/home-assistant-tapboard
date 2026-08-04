@@ -212,6 +212,18 @@ test('route validation rejects invalid IDs, fields, ranges, and bodyless action 
         .status,
       400
     );
+    for (const capacity of [15, 2049, 640.5, '640.5']) {
+      assert.equal(
+        (
+          await fetch(`${instance.baseUrl}/api/taps/1`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ capacity_oz: capacity })
+          })
+        ).status,
+        400
+      );
+    }
     assert.equal(
       (
         await fetch(`${instance.baseUrl}/api/taps/1`, {
@@ -251,6 +263,34 @@ test('route validation rejects invalid IDs, fields, ranges, and bodyless action 
       502
     );
     assert.deepEqual(database.prepare('SELECT graphic, batch_id FROM taps WHERE tap_id = 1').get(), before);
+  } finally {
+    database.close();
+    await stopServer(instance.child);
+  }
+});
+
+test('capacity writes require authorization and fail without a local tap mutation when HA rejects them', async () => {
+  const instance = await startServer();
+  const database = new Database(path.join(instance.dataDir, 'tapboard.db'));
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    const payload = JSON.stringify({ capacity_oz: 768, graphic: 'mug' });
+    assert.equal(
+      (await fetch(`${instance.baseUrl}/api/taps/1`, { method: 'POST', headers, body: payload })).status,
+      401
+    );
+
+    const { token } = await authenticate(instance.baseUrl);
+    const authorized = { ...headers, Authorization: `Bearer ${token}` };
+    const before = database.prepare('SELECT graphic FROM taps WHERE tap_id = 1').get();
+    const response = await fetch(`${instance.baseUrl}/api/taps/1`, {
+      method: 'POST',
+      headers: authorized,
+      body: payload
+    });
+    assert.equal(response.status, 502);
+    assert.deepEqual(await response.json(), { error: 'Home Assistant capacity update failed' });
+    assert.deepEqual(database.prepare('SELECT graphic FROM taps WHERE tap_id = 1').get(), before);
   } finally {
     database.close();
     await stopServer(instance.child);

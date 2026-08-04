@@ -357,22 +357,49 @@ function addAdminLongPress(card, tapId) {
 }
 
 // Helper: Format Volume Readout based on Per-Tap Display Setting
-function formatVolumeReadout(tap, fillPercent, currentOz) {
+function getMeasurementView(tapState) {
+  const volumeStatus = tapState.volumeStatus || 'unavailable';
+  const volumeOz = Number(tapState.volumeOz);
+  const fillPercent = Number(tapState.fillPercent);
+  const pintsRemaining = Number(tapState.pintsRemaining);
+  const available = volumeStatus !== 'unavailable' && Number.isFinite(volumeOz) && Number.isFinite(fillPercent);
+
+  return {
+    volumeStatus,
+    volumeOz,
+    fillPercent,
+    pintsRemaining,
+    available,
+    graphicFillPercent: available ? Math.min(100, Math.max(0, fillPercent)) : 0
+  };
+}
+
+function volumeStatusText(status) {
+  if (status === 'stale') return 'Stale measurement';
+  if (status === 'assumed_full') return 'Assumed full — not measured';
+  if (status === 'unavailable') return 'Unavailable';
+  return '';
+}
+
+function formatVolumeReadout(tap, measurement) {
+  if (!measurement.available) return 'Unavailable';
   const unit = tap.display_unit || 'percent';
   const customSize = Math.max(0.5, parseFloat(tap.custom_pour_size) || 12.0);
 
   switch (unit) {
     case 'pints':
-      return `${(currentOz / 16.0).toFixed(1)} Pints Remaining`;
+      return Number.isFinite(measurement.pintsRemaining)
+        ? `${measurement.pintsRemaining.toFixed(1)} Pints Remaining`
+        : 'Unavailable';
     case 'oz':
-      return `${currentOz.toFixed(0)} oz Remaining`;
+      return `${measurement.volumeOz.toFixed(0)} oz Remaining`;
     case 'pours_12':
-      return `${(currentOz / 12.0).toFixed(1)} Pours (12oz)`;
+      return `${(measurement.volumeOz / 12.0).toFixed(1)} Pours (12oz)`;
     case 'pours_custom':
-      return `${(currentOz / customSize).toFixed(1)} Pours (${customSize}oz)`;
+      return `${(measurement.volumeOz / customSize).toFixed(1)} Pours (${customSize}oz)`;
     case 'percent':
     default:
-      return `${fillPercent.toFixed(1)}% Remaining`;
+      return `${measurement.fillPercent.toFixed(1)}% Remaining`;
   }
 }
 
@@ -446,8 +473,8 @@ function createTapCard(tap) {
   const cachedBatch =
     tap.batch_id && appState.batches ? appState.batches.find((b) => b.batch_id === tap.batch_id) : null;
 
-  const fillPercent = Math.min(100, Math.max(0, parseFloat(tapState.fillPercent) || 0));
-  const currentOz = parseFloat(tapState.volumeOz) > 0 ? parseFloat(tapState.volumeOz) : (fillPercent / 100.0) * 640.0;
+  const measurement = getMeasurementView(tapState);
+  const fillPercent = measurement.graphicFillPercent;
 
   const bfName = batchAttr.recipeName || (cachedBatch ? cachedBatch.recipe_name : null) || `Tap ${tapId}`;
   const rawStyle = batchAttr.style || (cachedBatch ? cachedBatch.style : null) || 'Craft Beer';
@@ -507,7 +534,7 @@ function createTapCard(tap) {
 
   const forecast = appState.kegKickForecasts[tapId] || {};
   const forecastText = formatForecastText(forecast);
-  const volumeReadoutText = formatVolumeReadout(tap, fillPercent, currentOz);
+  const volumeReadoutText = formatVolumeReadout(tap, measurement);
 
   const card = document.createElement('div');
   card.className = 'tap-card';
@@ -519,8 +546,9 @@ function createTapCard(tap) {
     buildTapCardContent({
       tapId,
       fillPercent,
+      volumeStatus: measurement.volumeStatus,
       fresh: shouldShowNewBadge(tap),
-      lowThreshold: tap.badge_low_keg || 20,
+      lowThreshold: measurement.volumeStatus === 'measured' && tap.badge_low_keg > 0 ? tap.badge_low_keg : null,
       beerName,
       style,
       description,
@@ -583,8 +611,8 @@ function updateTapCard(card, tap) {
   const cachedBatch =
     tap.batch_id && appState.batches ? appState.batches.find((b) => b.batch_id === tap.batch_id) : null;
 
-  const fillPercent = Math.min(100, Math.max(0, parseFloat(tapState.fillPercent) || 0));
-  const currentOz = parseFloat(tapState.volumeOz) > 0 ? parseFloat(tapState.volumeOz) : (fillPercent / 100.0) * 640.0;
+  const measurement = getMeasurementView(tapState);
+  const fillPercent = measurement.graphicFillPercent;
 
   const bfName = batchAttr.recipeName || (cachedBatch ? cachedBatch.recipe_name : null) || `Tap ${tapId}`;
   const rawStyle = batchAttr.style || (cachedBatch ? cachedBatch.style : null) || 'Craft Beer';
@@ -638,7 +666,7 @@ function updateTapCard(card, tap) {
 
   const forecast = appState.kegKickForecasts[tapId] || {};
   const forecastText = formatForecastText(forecast);
-  const newVolText = formatVolumeReadout(tap, fillPercent, currentOz);
+  const newVolText = formatVolumeReadout(tap, measurement);
 
   // Update text content in-place
   const titleEl = card.querySelector('.beer-title');
@@ -665,7 +693,7 @@ function updateTapCard(card, tap) {
   const badges = card.querySelector('.tap-card-header > div:last-child');
   if (badges) {
     let lowBadge = badges.querySelector('.badge-low');
-    const isLow = fillPercent <= (tap.badge_low_keg || 20);
+    const isLow = measurement.volumeStatus === 'measured' && tap.badge_low_keg > 0 && fillPercent <= tap.badge_low_keg;
     if (isLow && !lowBadge) {
       lowBadge = document.createElement('span');
       lowBadge.className = 'badge badge-low';
@@ -698,6 +726,14 @@ function updateTapCard(card, tap) {
   const volReadout = card.querySelector('.volume-readout');
   if (volReadout && volReadout.textContent !== newVolText) {
     volReadout.textContent = newVolText;
+  }
+
+  const volumeStatusEl = card.querySelector('.volume-status');
+  const statusText = volumeStatusText(measurement.volumeStatus);
+  if (volumeStatusEl) {
+    volumeStatusEl.textContent = statusText;
+    volumeStatusEl.hidden = !statusText;
+    volumeStatusEl.className = `volume-status volume-status-${measurement.volumeStatus}`;
   }
 
   const forecastEl = card.querySelector('.forecast-readout');
@@ -819,6 +855,7 @@ function openGlobalSettingsModal() {
 function openTapSettings(tapId) {
   editingTapId = tapId;
   const tap = appState.taps.find((t) => t.tap_id === tapId) || {};
+  const tapState = getTapState(tapId);
   const batchAttr = getBatchState(tapId);
   const batchSelection = getBatchSelection(tapId);
   const rawOptions = batchSelection.options || [];
@@ -887,6 +924,14 @@ function openTapSettings(tapId) {
 
   const customInput = document.getElementById('tapSettingsCustomPourInput');
   customInput.value = tap.custom_pour_size || 12.0;
+
+  const capacityInput = document.getElementById('tapSettingsCapacityInput');
+  if (capacityInput) {
+    capacityInput.value =
+      tapState.capacityOz !== null && tapState.capacityOz !== undefined && Number.isFinite(Number(tapState.capacityOz))
+        ? String(tapState.capacityOz)
+        : '';
+  }
 
   toggleCustomPourSizeUI(unitSelect.value);
 
@@ -1128,6 +1173,13 @@ function initModalListeners() {
     const enabled = document.getElementById('tapSettingsEnabledCheckbox').checked;
     const display_unit = document.getElementById('tapSettingsDisplayUnitSelect').value;
     const custom_pour_size = document.getElementById('tapSettingsCustomPourInput').value;
+    const capacityInput = document.getElementById('tapSettingsCapacityInput');
+    const capacity_oz = Number(capacityInput?.value);
+    if (!Number.isInteger(capacity_oz) || capacity_oz < 16 || capacity_oz > 2048) {
+      alert('Keg capacity must be a whole number from 16 to 2048 fl oz.');
+      capacityInput?.focus();
+      return;
+    }
 
     const override_enabled = document.getElementById('tapSettingsOverrideToggle').checked;
     const override_name = document.getElementById('overrideName').value;
@@ -1155,6 +1207,7 @@ function initModalListeners() {
           enabled,
           display_unit,
           custom_pour_size,
+          capacity_oz,
           override_enabled,
           override_name,
           override_style,
@@ -1174,7 +1227,8 @@ function initModalListeners() {
         document.getElementById('tapSettingsModal').style.display = 'none';
         showToast(`✨ Tap ${editingTapId} settings saved!`);
       } else {
-        alert('Failed to save tap settings');
+        const result = await res.json().catch(() => ({}));
+        alert(result.error || 'Failed to save tap settings');
       }
     } catch (err) {
       alert('Error saving tap settings');

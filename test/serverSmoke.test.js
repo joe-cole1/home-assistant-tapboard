@@ -31,7 +31,7 @@ async function waitForServer(url, child) {
   throw new Error('server did not become ready');
 }
 
-test('healthcheck is lightweight and public HTTP/SSE snapshots use only schema v2', async () => {
+test('healthcheck is lightweight and public HTTP/SSE snapshots use only schema v3', async () => {
   const port = await reservePort();
   const dataDir = mkdtempSync(path.join(os.tmpdir(), 'tapboard-server-smoke-'));
   const child = spawn(process.execPath, ['src/server.js'], {
@@ -59,7 +59,7 @@ test('healthcheck is lightweight and public HTTP/SSE snapshots use only schema v
     const stateResponse = await fetch(`${baseUrl}/api/state`);
     const stateText = await stateResponse.text();
     const snapshot = JSON.parse(stateText);
-    assert.equal(snapshot.schemaVersion, 2);
+    assert.equal(snapshot.schemaVersion, 3);
     assert.deepEqual(Object.keys(snapshot.tapStates), ['1', '2', '3', '4', '5', '6']);
     assert.equal(Object.hasOwn(snapshot, 'haStates'), false);
     assert.equal(stateText.includes('person.'), false);

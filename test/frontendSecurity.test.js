@@ -130,6 +130,53 @@ test('forecast block is hidden when no usage forecast is available', () =>
     assert.equal(card.querySelector('.forecast-readout')?.hidden, true);
   }));
 
+test('unavailable and assumed-full states are explicit, and low-keg is fresh-measured only', () =>
+  withDocument((document) => {
+    const unavailable = document.createElement('div');
+    unavailable.replaceChildren(
+      buildTapCardContent({
+        tapId: 1,
+        fillPercent: 0,
+        volumeStatus: 'unavailable',
+        fresh: false,
+        lowThreshold: null,
+        beerName: 'Test Beer',
+        style: 'Style',
+        description: '',
+        abv: '5%',
+        ibu: 20,
+        og: 1.05,
+        fg: 1.01,
+        volumeReadoutText: 'Unavailable',
+        forecastText: ''
+      })
+    );
+    assert.equal(unavailable.querySelector('.volume-status')?.textContent, 'Unavailable');
+    assert.equal(unavailable.querySelector('.badge-low'), null);
+
+    const assumed = document.createElement('div');
+    assumed.replaceChildren(
+      buildTapCardContent({
+        tapId: 3,
+        fillPercent: 100,
+        volumeStatus: 'assumed_full',
+        fresh: false,
+        lowThreshold: null,
+        beerName: 'Water',
+        style: 'Water',
+        description: '',
+        abv: '0%',
+        ibu: '-',
+        og: '-',
+        fg: '-',
+        volumeReadoutText: '100.0% Remaining',
+        forecastText: ''
+      })
+    );
+    assert.equal(assumed.querySelector('.volume-status')?.textContent, 'Assumed full — not measured');
+    assert.equal(assumed.querySelector('.badge-low'), null);
+  }));
+
 test('app only parses trusted renderTapGraphic output', async () => {
   const source = await import('node:fs/promises').then((fs) =>
     fs.readFile(new URL('../public/app.js', import.meta.url), 'utf8')

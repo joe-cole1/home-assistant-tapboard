@@ -663,6 +663,25 @@ body.is-authenticated .tap-cog-btn {
   text-align: center;
 }
 
+.volume-status {
+  margin-top: 0.3rem;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.volume-status-stale {
+  color: #ffa726;
+}
+
+.volume-status-assumed_full {
+  color: #8ab4f8;
+}
+
+.volume-status-unavailable {
+  color: #ffa726;
+}
+
 .recipe-metrics-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

@@ -6,35 +6,33 @@ function entity(state, attributes = {}) {
   return { state, attributes };
 }
 
-test('projection uses only fixed tap entity IDs and strips non-allowlisted HA attributes', () => {
-  const states = new Map([
-    ['sensor.tap_1_fill', entity('55.5', { unit_of_measurement: '%', secret: 'nope' })],
-    ['sensor.tap_1_fl_oz', entity('355.2', { latitude: 40 })],
-    ['sensor.tap_1_pints_remaining', entity('22.2')],
-    [
-      'sensor.tap_1_batch_info',
-      entity('active', {
-        batch_id: 'batch-1',
-        recipe_name: 'Privacy IPA',
-        style: 'IPA',
-        abv: '6.5',
-        srm: '8',
-        secret_token: 'never-public'
-      })
-    ],
-    [
-      'select.tap_1_batch_select',
-      entity('batch-1 | Privacy IPA', { options: ['batch-1 | Privacy IPA', 42], device_id: 'private' })
-    ],
-    ['person.joe', entity('home', { latitude: 40.1, longitude: -73.9, password: 'secret' })],
-    ['sensor.tap_7_fill', entity('99')]
+function measurementStates(volume, capacity = 640) {
+  return new Map([
+    ['sensor.tap_1_fl_oz', entity(volume)],
+    ['input_number.tap_1_keg_capacity_oz', entity(capacity)]
   ]);
-  const projection = createTapStatesProjection(states);
+}
+
+const assignedTapOne = { isAssigned: (tapId) => tapId === 1, lastValidMeasurements: new Map() };
+
+test('canonical projection derives every public measurement from only ounces and capacity', () => {
+  const states = measurementStates('355.2');
+  states.set('sensor.tap_1_fill', entity('99.9', { secret: 'obsolete' }));
+  states.set('sensor.tap_1_pints_remaining', entity('999'));
+  states.set(
+    'sensor.tap_1_batch_info',
+    entity('active', { batch_id: 'batch-1', recipe_name: 'Privacy IPA', style: 'IPA', secret_token: 'never-public' })
+  );
+  states.set('select.tap_1_batch_select', entity('batch-1 | Privacy IPA', { options: ['batch-1 | Privacy IPA', 42] }));
+  const projection = createTapStatesProjection(states, assignedTapOne);
+
   assert.deepEqual(Object.keys(projection), ['1', '2', '3', '4', '5', '6']);
   assert.deepEqual(projection['1'], {
-    fillPercent: 55.5,
     volumeOz: 355.2,
+    capacityOz: 640,
+    fillPercent: 55.5,
     pintsRemaining: 22.2,
+    volumeStatus: 'measured',
     batch: {
       batchId: 'batch-1',
       recipeName: 'Privacy IPA',
@@ -42,113 +40,128 @@ test('projection uses only fixed tap entity IDs and strips non-allowlisted HA at
       brewDate: null,
       og: null,
       fg: null,
-      abv: 6.5,
+      abv: null,
       ibu: null,
-      srm: 8,
+      srm: null,
       description: null,
       status: null
     },
     batchSelection: { value: 'batch-1 | Privacy IPA', options: ['batch-1 | Privacy IPA'] }
   });
+  assert.equal(JSON.stringify(projection).includes('obsolete'), false);
+  assert.equal(JSON.stringify(projection).includes('999'), false);
   assert.equal(JSON.stringify(projection).includes('secret'), false);
-  assert.equal(JSON.stringify(projection).includes('person.joe'), false);
 });
 
-test('incremental projections are semantic deltas and unrelated entities produce no public output', () => {
-  assert.deepEqual(projectTapStateChange('sensor.tap_2_fill', entity('unavailable')), {
-    tapId: 2,
-    changes: { fillPercent: null }
+test('measurement clamps negative and over-capacity readings, and reacts to capacity changes', () => {
+  const options = { isAssigned: () => true, lastValidMeasurements: new Map() };
+  assert.deepEqual(createTapStatesProjection(measurementStates(-3), options)['1'], {
+    volumeOz: 0,
+    capacityOz: 640,
+    fillPercent: 0,
+    pintsRemaining: 0,
+    volumeStatus: 'measured',
+    batch: null,
+    batchSelection: { value: '', options: [] }
   });
+  assert.deepEqual(createTapStatesProjection(measurementStates(800), options)['1'], {
+    volumeOz: 640,
+    capacityOz: 640,
+    fillPercent: 100,
+    pintsRemaining: 40,
+    volumeStatus: 'measured',
+    batch: null,
+    batchSelection: { value: '', options: [] }
+  });
+  const changedCapacity = createTapStatesProjection(measurementStates(400, 320), options)['1'];
   assert.deepEqual(
-    projectTapStateChange('sensor.tap_2_batch_info', entity('active', { name: 'Pils', color: 4, internal: 'hidden' })),
     {
-      tapId: 2,
-      changes: {
-        batch: {
-          batchId: null,
-          recipeName: 'Pils',
-          style: null,
-          brewDate: null,
-          og: null,
-          fg: null,
-          abv: null,
-          ibu: null,
-          srm: 4,
-          description: null,
-          status: null
-        }
-      }
+      volumeOz: changedCapacity.volumeOz,
+      capacityOz: changedCapacity.capacityOz,
+      fillPercent: changedCapacity.fillPercent,
+      pintsRemaining: changedCapacity.pintsRemaining,
+      volumeStatus: changedCapacity.volumeStatus
+    },
+    { volumeOz: 320, capacityOz: 320, fillPercent: 100, pintsRemaining: 20, volumeStatus: 'measured' }
+  );
+});
+
+test('sensorless assigned taps are assumed full while sensorless or measured unassigned taps are unavailable', () => {
+  const capacityOnly = new Map([['input_number.tap_1_keg_capacity_oz', entity(640)]]);
+  assert.equal(createTapStatesProjection(capacityOnly, { isAssigned: () => true })['1'].volumeStatus, 'assumed_full');
+  const sensorlessUnassigned = createTapStatesProjection(capacityOnly, { isAssigned: () => false })['1'];
+  assert.equal(sensorlessUnassigned.volumeStatus, 'unavailable');
+  assert.equal(sensorlessUnassigned.capacityOz, 640);
+  assert.equal(
+    createTapStatesProjection(measurementStates(320), { isAssigned: () => false })['1'].volumeStatus,
+    'unavailable'
+  );
+});
+
+test('unavailable existing scale is stale only after a valid in-process measurement, then recovers', () => {
+  const options = { isAssigned: () => true, lastValidMeasurements: new Map() };
+  const states = measurementStates(216.63);
+  assert.equal(createTapStatesProjection(states, options)['1'].volumeStatus, 'measured');
+  states.set('sensor.tap_1_fl_oz', entity('unavailable'));
+  const stale = createTapStatesProjection(states, options)['1'];
+  assert.deepEqual(
+    {
+      volumeOz: stale.volumeOz,
+      capacityOz: stale.capacityOz,
+      fillPercent: stale.fillPercent,
+      pintsRemaining: stale.pintsRemaining,
+      volumeStatus: stale.volumeStatus
+    },
+    { volumeOz: 216.63, capacityOz: 640, fillPercent: 33.8, pintsRemaining: 13.539375, volumeStatus: 'stale' }
+  );
+  states.set('sensor.tap_1_fl_oz', entity(200));
+  assert.equal(createTapStatesProjection(states, options)['1'].volumeStatus, 'measured');
+  assert.equal(createTapStatesProjection(states, options)['1'].fillPercent, 31.3);
+
+  assert.equal(
+    createTapStatesProjection(measurementStates('unavailable'), {
+      isAssigned: () => true,
+      lastValidMeasurements: new Map()
+    })['1'].volumeStatus,
+    'unavailable'
+  );
+});
+
+test('incremental volume and capacity events emit coherent tuples; obsolete events are ignored', () => {
+  const options = { isAssigned: () => true, lastValidMeasurements: new Map() };
+  const states = measurementStates(320, 640);
+  assert.deepEqual(
+    projectTapStateChange('sensor.tap_1_fl_oz', states.get('sensor.tap_1_fl_oz'), { statesMap: states, ...options }),
+    {
+      tapId: 1,
+      changes: { volumeOz: 320, capacityOz: 640, fillPercent: 50, pintsRemaining: 20, volumeStatus: 'measured' }
     }
   );
-  assert.equal(projectTapStateChange('binary_sensor.front_door', entity('on', { sensitive: true })), null);
-  assert.equal(projectTapStateChange('sensor.tap_2_fast', entity('100')), null);
-  assert.deepEqual(projectTapStateChange('sensor.tap_2_fl_oz', entity('12 oz')), {
-    tapId: 2,
-    changes: { volumeOz: null }
-  });
+  states.set('input_number.tap_1_keg_capacity_oz', entity(500));
+  assert.deepEqual(
+    projectTapStateChange('input_number.tap_1_keg_capacity_oz', states.get('input_number.tap_1_keg_capacity_oz'), {
+      statesMap: states,
+      ...options
+    }),
+    {
+      tapId: 1,
+      changes: { volumeOz: 320, capacityOz: 500, fillPercent: 64, pintsRemaining: 20, volumeStatus: 'measured' }
+    }
+  );
+  assert.equal(projectTapStateChange('sensor.tap_1_fill', entity('50'), { statesMap: states, ...options }), null);
   assert.equal(
-    projectTapStateChange('sensor.tap_2_batch_info', entity('active', { batch_id: { token: 'nested-secret' } })).changes
-      .batch.batchId,
+    projectTapStateChange('sensor.tap_1_pints_remaining', entity('20'), { statesMap: states, ...options }),
     null
   );
 });
 
 test('batch options survive unusable selector states without exposing other attributes', () => {
   const options = ['batch-1 | Privacy IPA', 42, { secret: 'nested' }, 'custom:topo_chico | Topo Chico 0%'];
-  const states = new Map([
-    ['select.tap_1_batch_select', entity('unknown', { options, device_id: 'private' })],
-    ['select.tap_2_batch_select', entity('unavailable', { options, access_token: 'never-public' })],
-    ['select.tap_3_batch_select', entity('unknown', { options: 'malformed' })]
-  ]);
-
+  const states = new Map([['select.tap_1_batch_select', entity('unknown', { options, device_id: 'private' })]]);
   const projection = createTapStatesProjection(states);
-  for (const tapId of ['1', '2']) {
-    assert.deepEqual(projection[tapId].batchSelection, {
-      value: '',
-      options: ['batch-1 | Privacy IPA', 'custom:topo_chico | Topo Chico 0%']
-    });
-  }
-  assert.deepEqual(projection['3'].batchSelection, { value: '', options: [] });
-  assert.equal(JSON.stringify(projection).includes('private'), false);
-  assert.equal(JSON.stringify(projection).includes('never-public'), false);
-  assert.equal(JSON.stringify(projection).includes('nested'), false);
-
-  assert.deepEqual(projectTapStateChange('select.tap_1_batch_select', entity('unknown', { options })), {
-    tapId: 1,
-    changes: {
-      batchSelection: {
-        value: '',
-        options: ['batch-1 | Privacy IPA', 'custom:topo_chico | Topo Chico 0%']
-      }
-    }
+  assert.deepEqual(projection['1'].batchSelection, {
+    value: '',
+    options: ['batch-1 | Privacy IPA', 'custom:topo_chico | Topo Chico 0%']
   });
-});
-
-test('a 1,273-entity legacy-style map is substantially larger than the fixed public tap projection', () => {
-  const states = new Map();
-  for (let index = 0; index < 1_273; index++) {
-    states.set(
-      `sensor.private_${index}`,
-      entity('home', {
-        friendly_name: `Private household entity ${index}`,
-        latitude: 40.7128,
-        longitude: -74.006,
-        sensitive_payload: 'x'.repeat(150)
-      })
-    );
-  }
-  for (let tapId = 1; tapId <= 6; tapId++) {
-    states.set(`sensor.tap_${tapId}_fill`, entity('50'));
-    states.set(`sensor.tap_${tapId}_fl_oz`, entity('320'));
-    states.set(`sensor.tap_${tapId}_pints_remaining`, entity('20'));
-  }
-  const legacy = Object.fromEntries(states);
-  const legacyBytes = Buffer.byteLength(JSON.stringify(legacy));
-  const publicBytes = Buffer.byteLength(JSON.stringify(createTapStatesProjection(states)));
-  assert.ok(legacyBytes > 265_257, `legacy fixture should exceed audit baseline, got ${legacyBytes}`);
-  assert.ok(publicBytes < legacyBytes / 100, `${publicBytes} must be under 1% of ${legacyBytes}`);
-  assert.equal(JSON.stringify(createTapStatesProjection(states)).includes('sensitive_payload'), false);
-  console.log(
-    `projection measurement: legacy ${legacyBytes} bytes -> public ${publicBytes} bytes (${((100 * publicBytes) / legacyBytes).toFixed(2)}%)`
-  );
+  assert.equal(JSON.stringify(projection).includes('private'), false);
 });

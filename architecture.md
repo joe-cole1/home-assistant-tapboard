@@ -21,7 +21,7 @@ src/
   server.js               HTTP API, session checks, SSE wiring, snapshots
   haClient.js             HA WebSocket, bounded hydration, detector adapter
   pourDetector.js         deterministic timestamp-driven single-pour detector
-  tapboardProjection.js   allowlisted Home Assistant state projection
+  tapboardProjection.js   allowlisted, capacity-aware Home Assistant projection
   displayUpdateCoalescer.js compact browser state-change batching
   sseHub.js               SSE framing, heartbeat, slow-client bounds
   db.js / dbMigrations.js SQLite startup and schema-v2 migrations
@@ -40,7 +40,9 @@ The HA client authenticates over `/api/websocket`, subscribes to `state_changed`
 
 Only each tap’s designated primary volume sensor is used for pour detection. Values must declare a supported unit and are converted explicitly to fluid ounces; missing or unsupported units are ignored. The detector rejects stale/duplicate timestamps and implausible jumps, establishes settled baselines, arbitrates simultaneous candidates, permits only one active tap, and finalizes after a quiet period or cancels a hard-timeout session. It emits `pour_start`, `pour_complete`, or `pour_cancel`; completion records only qualifying pours.
 
-The public projection exposes only the required tap fields: fill percentage, volume in ounces, pints remaining, batch metadata, and batch-selection value/options. It does not relay arbitrary Home Assistant state or attributes.
+The canonical measurement contract is `sensor.tap_N_fl_oz` plus `input_number.tap_N_keg_capacity_oz`. The public snapshot uses schema version 3 and exposes one coherent tuple per tap: `volumeOz`, `capacityOz`, `fillPercent`, `pintsRemaining`, and `volumeStatus`, plus batch metadata and batch-selection value/options. `sensor.tap_N_fill` and `sensor.tap_N_pints_remaining` are deliberately excluded.
+
+`volumeStatus` is `measured` for a fresh scale reading; `stale` when a previously valid in-process scale source becomes unavailable; `assumed_full` only when the exact volume entity is absent while the tap has an active assignment; or `unavailable` when there is no valid measurement to retain. Ounces are clamped to capacity and pints/percent are derived on the server. The browser renders this tuple directly and may draw an empty graphic for unavailable data, but does not fabricate a numeric readout. Low-keg alerts and badges require `measured`; forecasts use the same derived tuple.
 
 ## SQLite schema and lifecycle ownership
 
@@ -83,6 +85,8 @@ All API JSON responses are `no-store`. Mutation bodies must be JSON and are limi
 | `/api/catalog`            | `POST` | Administrator catalog/on-deck addition.            |
 
 `POST /api/auth` returns an opaque random bearer token. The database stores only `sha256:` token digests and expiry timestamps; it does not use JWTs. Sessions expire after 24 hours, expired sessions are pruned, and a PIN change revokes all existing sessions. A newly initialized database fails closed for administrator actions until a deliberate non-default PIN has been configured.
+
+`POST /api/taps/:id` accepts `capacity_oz` as an integer from 16 through 2048. The server must successfully call `input_number.set_value` for `input_number.tap_N_keg_capacity_oz` before treating that capacity update as saved; it returns a visible error if Home Assistant cannot accept it.
 
 ## Operations boundaries
 

@@ -2,8 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createLiveUpdateController, updateGraphicFill } from '../public/liveUpdates.js';
 
-test('merges semantic tap patches and coalesces affected cards into one frame', () => {
-  let state = { tapStates: { 1: { fillPercent: 80, volumeOz: 512 } } };
+test('merges coherent measurement tuples and coalesces affected cards into one frame', () => {
+  let state = {
+    tapStates: {
+      1: { volumeOz: 512, capacityOz: 640, fillPercent: 80, pintsRemaining: 32, volumeStatus: 'measured' }
+    }
+  };
   const frames = [];
   const dirtyCalls = [];
   const updates = createLiveUpdateController({
@@ -15,17 +19,26 @@ test('merges semantic tap patches and coalesces affected cards into one frame', 
     requestFrame: (callback) => frames.push(callback)
   });
 
-  updates.applyStateChanged({ taps: [{ tapId: 1, changes: { fillPercent: 79 } }] });
   updates.applyStateChanged({
     taps: [
-      { tapId: 1, changes: { volumeOz: 505 } },
-      { tapId: 2, changes: { pintsRemaining: 12 } }
+      {
+        tapId: 1,
+        changes: { volumeOz: 505, capacityOz: 640, fillPercent: 78.9, pintsRemaining: 31.6, volumeStatus: 'measured' }
+      }
+    ]
+  });
+  updates.applyStateChanged({
+    taps: [
+      {
+        tapId: 2,
+        changes: { volumeOz: 192, capacityOz: 640, fillPercent: 30, pintsRemaining: 12, volumeStatus: 'stale' }
+      }
     ]
   });
 
   assert.deepEqual(state.tapStates, {
-    1: { fillPercent: 79, volumeOz: 505 },
-    2: { pintsRemaining: 12 }
+    1: { volumeOz: 505, capacityOz: 640, fillPercent: 78.9, pintsRemaining: 31.6, volumeStatus: 'measured' },
+    2: { volumeOz: 192, capacityOz: 640, fillPercent: 30, pintsRemaining: 12, volumeStatus: 'stale' }
   });
   assert.equal(frames.length, 1);
   frames.shift()();
