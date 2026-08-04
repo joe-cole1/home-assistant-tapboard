@@ -18,6 +18,7 @@ export class HAClient extends EventEmitter {
     now = () => Date.now(),
     requestTimeoutMs = 10_000,
     captureLifecycle = (tapId) => captureActiveLifecycle(db, tapId),
+    isTapAssigned = (tapId) => Boolean(captureActiveLifecycle(db, tapId)),
     recordPourFn = (pour) => recordPour(db, pour)
   } = {}) {
     super();
@@ -27,6 +28,7 @@ export class HAClient extends EventEmitter {
     this.now = now;
     this.requestTimeoutMs = requestTimeoutMs;
     this.captureLifecycle = captureLifecycle;
+    this.isTapAssigned = isTapAssigned;
     this.recordPour = recordPourFn;
     this.haUrl = process.env.HA_URL || 'http://192.168.0.35:8123';
     this.haToken = process.env.HA_TOKEN || '';
@@ -35,6 +37,9 @@ export class HAClient extends EventEmitter {
     this.messageId = 1;
     this.pendingRequests = new Map();
     this.statesMap = new Map();
+    // Deliberately in-memory only. A restart with an unavailable scale must
+    // communicate unavailable rather than resurrecting an old keg reading.
+    this.lastValidMeasurements = new Map();
     this.eventQueue = [];
     this.isHydrated = false;
     this.isConnected = false;
@@ -415,7 +420,18 @@ export class HAClient extends EventEmitter {
 
   processStateUpdate(data, { ingestDetector = true, enqueueDisplay = true } = {}) {
     const { entity_id, new_state } = data;
-    if (!new_state) return;
+    if (!new_state) {
+      this.statesMap.delete(entity_id);
+      const displayChange = enqueueDisplay
+        ? projectTapStateChange(entity_id, null, {
+            statesMap: this.statesMap,
+            isAssigned: this.isTapAssigned,
+            lastValidMeasurements: this.lastValidMeasurements
+          })
+        : null;
+      if (displayChange) this.displayUpdateCoalescer.enqueue({ ...displayChange, timestamp: this.now() });
+      return;
+    }
 
     this.statesMap.set(entity_id, new_state);
     this.syncBrewfatherBatchData(new_state);
@@ -435,7 +451,13 @@ export class HAClient extends EventEmitter {
     }
 
     // Detector ingestion remains synchronous above; browser telemetry is only queued afterwards.
-    const displayChange = enqueueDisplay ? projectTapStateChange(entity_id, new_state) : null;
+    const displayChange = enqueueDisplay
+      ? projectTapStateChange(entity_id, new_state, {
+          statesMap: this.statesMap,
+          isAssigned: this.isTapAssigned,
+          lastValidMeasurements: this.lastValidMeasurements
+        })
+      : null;
     if (displayChange) {
       this.displayUpdateCoalescer.enqueue({
         ...displayChange,
@@ -501,8 +523,8 @@ export class HAClient extends EventEmitter {
 
     const { tapId, volumePouredOz: finalPouredOz } = event;
 
-    const fillState = this.statesMap.get(`sensor.tap_${tapId}_fill`)?.state;
-    const currentPercent = fillState ? parseFloat(fillState).toFixed(1) : 'N/A';
+    const measurement = this.getPublicTapStates()[String(tapId)];
+    const currentPercent = measurement?.fillPercent === null ? 'N/A' : measurement.fillPercent.toFixed(1);
 
     console.log(
       `[POUR EVENT] ✅ Tap ${tapId} POUR FINALIZED! Total Dispensed: ${finalPouredOz} oz. Remaining Keg Fill: ${currentPercent}%`
@@ -531,11 +553,17 @@ export class HAClient extends EventEmitter {
 
   checkLowKegAlert(tapId) {
     const tapRow = db.prepare('SELECT badge_low_keg FROM taps WHERE tap_id = ?').get(tapId);
-    const fillState = this.statesMap.get(`sensor.tap_${tapId}_fill`);
-    if (!tapRow || !fillState) return;
+    const measurement = this.getPublicTapStates()[String(tapId)];
+    if (
+      !tapRow ||
+      !(tapRow.badge_low_keg > 0) ||
+      measurement?.volumeStatus !== 'measured' ||
+      measurement.fillPercent === null
+    )
+      return;
 
-    const currentPercent = parseFloat(fillState.state);
-    if (!isNaN(currentPercent) && currentPercent <= tapRow.badge_low_keg) {
+    const currentPercent = measurement.fillPercent;
+    if (currentPercent <= tapRow.badge_low_keg) {
       console.log(
         `[Alert] Tap ${tapId} volume (${currentPercent}%) dipped below threshold (${tapRow.badge_low_keg}%).`
       );
@@ -587,7 +615,14 @@ export class HAClient extends EventEmitter {
   }
 
   getPublicTapStates() {
-    return createTapStatesProjection(this.statesMap);
+    return createTapStatesProjection(this.statesMap, {
+      isAssigned: this.isTapAssigned,
+      lastValidMeasurements: this.lastValidMeasurements
+    });
+  }
+
+  clearTapMeasurement(tapId) {
+    this.lastValidMeasurements.delete(tapId);
   }
 
   async callHAService(domain, service, serviceData = {}) {

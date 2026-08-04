@@ -113,20 +113,11 @@ function allowedMethodsForApiPath(pathname) {
 
 // Calculate a 14-day forecast from the current tap's lifecycle-scoped usage history.
 function calculateKegKickForecast(tapId) {
-  let currentOz = 0;
-  const ozState = haClient.statesMap.get(`sensor.tap_${tapId}_fl_oz`)?.state;
-  const fillState = haClient.statesMap.get(`sensor.tap_${tapId}_fill`)?.state;
-  const pintsState = haClient.statesMap.get(`sensor.tap_${tapId}_pints_remaining`)?.state;
-
-  if (ozState && !isNaN(parseFloat(ozState)) && parseFloat(ozState) > 0) {
-    currentOz = parseFloat(ozState);
-  } else if (pintsState && !isNaN(parseFloat(pintsState)) && parseFloat(pintsState) > 0) {
-    currentOz = parseFloat(pintsState) * 16.0;
-  } else if (fillState && !isNaN(parseFloat(fillState)) && parseFloat(fillState) > 0) {
-    currentOz = (parseFloat(fillState) / 100.0) * 640.0;
+  const measurement = haClient.getPublicTapStates()?.[String(tapId)];
+  if (!measurement || !['measured', 'stale'].includes(measurement.volumeStatus)) {
+    return { avgDailyOz: null, estimatedDaysRemaining: null, hasUsageData: false };
   }
-
-  return calculateForecast({ db, tapId, currentOz });
+  return calculateForecast({ db, tapId, currentOz: measurement.volumeOz });
 }
 
 function assignmentIdentity({ batchId, overrideEnabled, overrideName }) {
@@ -233,7 +224,7 @@ function getFullStateSnapshot() {
   }
 
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     settings,
     taps,
     batches,
@@ -510,6 +501,22 @@ const server = http.createServer(async (req, res) => {
       if (!desiredAssignment) onTapAt = null;
       else if (lifecycleChanges || !onTapAt) onTapAt = new Date().toISOString();
 
+      // Capacity is authoritative in Home Assistant. Complete request
+      // validation first, but write HA before touching SQLite so a rejected
+      // capacity can never leave the local tap settings partially saved.
+      if (body.capacity_oz !== undefined) {
+        try {
+          await haClient.callHAService('input_number', 'set_value', {
+            entity_id: `input_number.tap_${tapId}_keg_capacity_oz`,
+            value: body.capacity_oz
+          });
+        } catch (error) {
+          console.error(`[HA ERROR] Capacity update failed for Tap ${tapId}:`, error);
+          throw new HttpError(502, 'Home Assistant capacity update failed');
+        }
+        ensureServing();
+      }
+
       const updateTap = db.prepare(`
         UPDATE taps SET
           enabled = COALESCE(?, enabled),
@@ -575,6 +582,7 @@ const server = http.createServer(async (req, res) => {
       } else {
         db.transaction(applyTapUpdate)();
       }
+      if (lifecycleChanges) haClient.clearTapMeasurement(tapId);
 
       console.log(`[TAP ACTION] Tap settings updated request_id=${requestId} tap_id=${tapId} client=${clientIp}`);
 
@@ -656,6 +664,7 @@ const server = http.createServer(async (req, res) => {
         closeReason: 'end_batch',
         updateTap: () => clearBatch.run(tapId)
       });
+      haClient.clearTapMeasurement(tapId);
 
       sseHub.publishImmediate('settings_updated', getFullStateSnapshot());
       sendJson(res, 200, { success: true, message: `Batch completed and tap ${tapId} cleared.` });
@@ -711,6 +720,7 @@ const server = http.createServer(async (req, res) => {
         closeReason: 'end_keg',
         updateTap: () => clearKeg.run(tapId)
       });
+      haClient.clearTapMeasurement(tapId);
 
       sseHub.publishImmediate('settings_updated', getFullStateSnapshot());
       sendJson(res, 200, { success: true, message: `Tap ${tapId} unassigned / off-tap.` });
