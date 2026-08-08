@@ -43,10 +43,9 @@ export function buildTapCardContent({
   const header = element('div', 'tap-card-header');
   const actions = element('div', 'tap-card-actions');
   header.appendChild(element('div', 'tap-number-badge', tapId));
-  if (lowThreshold !== null && lowThreshold !== undefined && fillPercent <= lowThreshold) {
-    actions.appendChild(element('span', 'badge badge-low', 'LOW KEG!'));
-  }
-  if (fresh) actions.appendChild(element('span', 'badge badge-fresh', 'NEW'));
+  const title = element('h2', 'beer-title', beerName);
+  title.title = String(beerName || '');
+  header.appendChild(title);
   const cog = element('button', 'btn-icon tap-cog-btn', '⚙️');
   cog.type = 'button';
   cog.title = `Tap ${tapId} Settings`;
@@ -54,15 +53,23 @@ export function buildTapCardContent({
   header.appendChild(actions);
   fragment.appendChild(header);
 
-  const title = element('h2', 'beer-title', beerName);
-  title.title = String(beerName || '');
-  fragment.append(title, element('div', 'beer-style', style));
-  if (description) fragment.appendChild(element('p', 'beer-description', description));
-
+  const details = element('div', 'tap-card-content');
+  details.appendChild(element('div', 'beer-style', style));
+  if (description) details.appendChild(element('p', 'beer-description', description));
   const metrics = element('div', 'metrics-row');
   metrics.append(metric('ABV', abv), metric('IBU', ibu), metric('OG', og), metric('FG', fg));
-  fragment.appendChild(metrics);
+  details.appendChild(metrics);
+  const forecast = element('div', 'forecast-readout', forecastText);
+  forecast.hidden = !forecastText;
+  details.appendChild(forecast);
 
+  const graphicColumn = element('div', 'tap-card-graphic-column');
+  const badges = element('div', 'tap-card-badges');
+  if (lowThreshold !== null && lowThreshold !== undefined && fillPercent <= lowThreshold) {
+    badges.appendChild(element('span', 'badge badge-low', 'LOW KEG!'));
+  }
+  if (fresh) badges.appendChild(element('span', 'badge badge-fresh', 'NEW'));
+  graphicColumn.appendChild(badges);
   const graphic = element('div', 'graphic-container');
   const graphicWrapper = element('div', 'tap-graphic-wrapper');
   graphicWrapper.id = `graphic-tap-${tapId}`;
@@ -82,10 +89,8 @@ export function buildTapCardContent({
   const status = element('div', `volume-status volume-status-${volumeStatus}`, statusText);
   status.hidden = !statusText;
   graphic.appendChild(status);
-  fragment.appendChild(graphic);
-  const forecast = element('div', 'forecast-readout', forecastText);
-  forecast.hidden = !forecastText;
-  fragment.appendChild(forecast);
+  graphicColumn.appendChild(graphic);
+  fragment.append(graphicColumn, details);
   return fragment;
 }
 

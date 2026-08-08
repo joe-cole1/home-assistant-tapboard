@@ -108,6 +108,64 @@ test('opted-in fresh badge is rendered with its new label', () =>
     assert.equal(card.textContent.includes('FRESH!'), false);
   }));
 
+test('compact-card semantics keep the header, graphic badges, and right-side details distinct', () =>
+  withDocument((document) => {
+    const directChild = (parent, selector) =>
+      [...(parent?.children || [])].find((child) => child.matches(selector)) || null;
+    const card = document.createElement('article');
+    card.replaceChildren(
+      buildTapCardContent({
+        tapId: 4,
+        fillPercent: 10,
+        volumeStatus: 'measured',
+        fresh: true,
+        lowThreshold: 20,
+        beerName: 'Compact Header Beer',
+        style: 'Right-side Style',
+        description: 'Right-side details remain inert.',
+        abv: '6.2%',
+        ibu: 42,
+        og: 1.06,
+        fg: 1.012,
+        volumeReadoutText: '10% Remaining',
+        forecastText: '2 days remaining'
+      })
+    );
+
+    const header = card.querySelector('.tap-card-header');
+    const graphicColumn = card.querySelector('.tap-card-graphic-column');
+    const graphic = directChild(graphicColumn, '.graphic-container');
+    const details = card.querySelector('.tap-card-content');
+    const badges = directChild(graphicColumn, '.tap-card-badges');
+
+    assert.ok(header);
+    assert.equal(directChild(header, '.tap-number-badge')?.textContent, '4');
+    assert.equal(directChild(header, '.beer-title')?.textContent, 'Compact Header Beer');
+    assert.equal(card.querySelectorAll('.beer-title').length, 1);
+
+    assert.ok(graphicColumn);
+    assert.equal(directChild(card, '.tap-card-graphic-column'), graphicColumn);
+    assert.ok(graphic);
+    assert.ok(badges);
+    assert.equal(badges.querySelector('.badge-low')?.textContent, 'LOW KEG!');
+    assert.equal(badges.querySelector('.badge-fresh')?.textContent, 'NEW');
+    assert.equal(header.querySelector('.badge'), null);
+    assert.ok(directChild(graphic, '.tap-graphic-wrapper'));
+
+    assert.ok(details);
+    assert.equal(directChild(card, '.tap-card-content'), details);
+    assert.equal(directChild(details, '.beer-style')?.textContent, 'Right-side Style');
+    assert.equal(directChild(details, '.beer-description')?.textContent, 'Right-side details remain inert.');
+    assert.ok(directChild(details, '.metrics-row'));
+    assert.equal(directChild(details, '.forecast-readout')?.textContent, '2 days remaining');
+    assert.equal(details.querySelector('.graphic-container'), null);
+
+    // Existing app live-update selectors remain meaningful after the restructuring.
+    assert.ok(card.querySelector('.tap-card-actions .tap-cog-btn'));
+    assert.ok(card.querySelector('.metrics-row .metric-value'));
+    assert.equal(card.querySelector('.forecast-readout')?.hidden, false);
+  }));
+
 test('forecast block is hidden when no usage forecast is available', () =>
   withDocument((document) => {
     const card = document.createElement('div');

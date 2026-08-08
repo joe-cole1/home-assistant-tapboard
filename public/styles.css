@@ -450,9 +450,43 @@ body {
 /* Tap Card Header & Badges */
 .tap-card-header {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.25rem;
+  margin-bottom: 0;
+}
+
+.tap-card-header .tap-number-badge {
+  order: 0;
+}
+
+.tap-card-header .tap-card-actions {
+  order: 1;
+  margin-left: auto;
+}
+
+.tap-card-header .beer-title {
+  order: 2;
+  flex: 0 0 100%;
+  margin: 1.25rem 0 0.25rem;
+}
+
+.tap-card-content {
+  order: 1;
+}
+
+.tap-card-graphic-column {
+  order: 2;
+}
+
+.tap-card-badges {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+  position: absolute;
+  top: 1.85rem;
+  right: 5rem;
 }
 
 .tap-number-badge {
@@ -763,34 +797,36 @@ body.is-authenticated .ondeck-cog-btn {
   font-weight: 700;
 }
 
-@media (min-width: 900px) and (orientation: landscape) and (max-height: 800px) {
-  body {
-    overflow: hidden;
-  }
+@media (min-width: 900px) and (orientation: landscape) {
+  @media (max-height: 800px) {
+    body {
+      overflow: hidden;
+    }
 
-  .app-header {
-    flex: 0 0 auto;
-    padding: 0.55rem 1.25rem;
-  }
+    .app-header {
+      flex: 0 0 auto;
+      padding: 0.55rem 1.25rem;
+    }
 
-  .header-title {
-    font-size: 1.45rem;
-  }
+    .header-title {
+      font-size: 1.45rem;
+    }
 
-  .header-right {
-    gap: 0.65rem;
-  }
+    .header-right {
+      gap: 0.65rem;
+    }
 
-  .main-content {
-    min-height: 0;
-    padding: 0.55rem 1rem;
-    overflow: hidden;
-  }
+    .main-content {
+      min-height: 0;
+      padding: 0.55rem 1rem;
+      overflow: hidden;
+    }
 
-  .ondeck-ticker-container {
-    flex: 0 0 auto;
-    min-height: 2.8rem;
-    padding: 0.5rem 1rem;
+    .ondeck-ticker-container {
+      flex: 0 0 auto;
+      min-height: 2.8rem;
+      padding: 0.5rem 1rem;
+    }
   }
 
   body[data-layout-mode='compact'] .tap-grid {
@@ -803,32 +839,63 @@ body.is-authenticated .ondeck-cog-btn {
     padding: 0.55rem 0.7rem;
     display: grid;
     grid-template-columns: minmax(85px, 30%) minmax(0, 1fr);
-    grid-template-rows: auto auto 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
     column-gap: 0.55rem;
-    align-items: center;
+    align-items: start;
   }
 
   body[data-layout-mode='compact'] .tap-card-header {
     grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: min-content minmax(0, 1fr) min-content;
+    gap: 0.45rem;
+    align-items: center;
     margin-bottom: 0.2rem;
   }
 
-  body[data-layout-mode='compact'] .beer-title,
-  body[data-layout-mode='compact'] .beer-style,
-  body[data-layout-mode='compact'] .metrics-row {
-    grid-column: 2;
+  body[data-layout-mode='compact'] .tap-card-header .beer-title {
+    order: initial;
+    flex: initial;
+    margin: 0;
+  }
+
+  body[data-layout-mode='compact'] .tap-card-graphic-column {
+    grid-column: 1;
+    grid-row: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 0;
   }
 
   body[data-layout-mode='compact'] .beer-title {
     font-size: 1rem;
+    min-width: 0;
+    margin: 0;
   }
+
+  body[data-layout-mode='compact'] .tap-card-content {
+    grid-column: 2;
+    grid-row: 2;
+    min-width: 0;
+    align-self: start;
+  }
+
   body[data-layout-mode='compact'] .beer-style {
     font-size: 0.72rem;
     margin-bottom: 0.25rem;
   }
+
   body[data-layout-mode='compact'] .beer-description {
-    display: none !important;
+    display: -webkit-box;
+    margin: 0 0 0.3rem;
+    overflow: hidden;
+    font-size: 0.6rem;
+    line-height: 1.25;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
   }
+
   body[data-layout-mode='compact'] .metrics-row {
     padding: 0.28rem 0;
     margin-bottom: 0;
@@ -840,10 +907,16 @@ body.is-authenticated .ondeck-cog-btn {
     font-size: 0.72rem;
   }
   body[data-layout-mode='compact'] .graphic-container {
-    grid-column: 1;
-    grid-row: 2 / 4;
     padding: 0;
   }
+
+  body[data-layout-mode='compact'] .tap-card-badges {
+    min-height: 1rem;
+    gap: 0.25rem;
+    margin-bottom: 0.1rem;
+    position: static;
+  }
+
   body[data-layout-mode='compact'] .tap-graphic-wrapper {
     width: 78px;
     height: 112px;
@@ -857,7 +930,6 @@ body.is-authenticated .ondeck-cog-btn {
     text-align: center;
   }
   body[data-layout-mode='compact'] .forecast-readout {
-    grid-column: 2;
     margin-top: 0;
     font-size: 0.62rem;
     text-align: left;
