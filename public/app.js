@@ -23,6 +23,7 @@ let appState = {
 let editingTapId = null;
 let authToken = sessionStorage.getItem('tapboard_token') || null;
 let liveUpdates;
+let hasRenderedSnapshot = false;
 const simulatedPourTimers = new Map();
 const LONG_PRESS_MS = 600;
 const SIMULATED_POUR_MS = 8000;
@@ -58,6 +59,24 @@ liveUpdates = createLiveUpdateController({
   onDirty: scheduleTapUpdates,
   requestFrame: (callback) => requestAnimationFrame(callback)
 });
+
+function applyFullSnapshot(snapshot) {
+  liveUpdates.replaceSnapshot(snapshot);
+  hasRenderedSnapshot = true;
+  updateClockStatus(appState.haConnected ? 'Live' : 'Disconnected');
+  renderApp();
+}
+
+async function loadInitialSnapshot() {
+  try {
+    const response = await fetch('/api/state');
+    if (!response.ok) throw new Error('Unable to load Tapboard state');
+    const snapshot = await response.json();
+    if (!hasRenderedSnapshot) applyFullSnapshot(snapshot);
+  } catch (error) {
+    console.warn('[State] Initial snapshot fallback failed:', error);
+  }
+}
 
 function updateAuthUI() {
   if (authToken) {
@@ -126,9 +145,7 @@ function initSSE() {
 
   // 1. Initial Snapshot
   eventSource.addEventListener('snapshot', (e) => {
-    liveUpdates.replaceSnapshot(JSON.parse(e.data));
-    updateClockStatus(appState.haConnected ? 'Live' : 'Disconnected');
-    renderApp();
+    applyFullSnapshot(JSON.parse(e.data));
   });
 
   // 2. HA Connection Status Change
@@ -181,13 +198,11 @@ function initSSE() {
 
   // 8. Settings Updated
   eventSource.addEventListener('settings_updated', (e) => {
-    liveUpdates.replaceSnapshot(JSON.parse(e.data));
-    renderApp();
+    applyFullSnapshot(JSON.parse(e.data));
   });
 
   eventSource.addEventListener('brewfather_batches_changed', (e) => {
-    liveUpdates.replaceSnapshot(JSON.parse(e.data));
-    renderApp();
+    applyFullSnapshot(JSON.parse(e.data));
   });
 }
 
@@ -1019,6 +1034,7 @@ function renderOnDeckTicker() {
 
   const showOnDeck = appState.settings.show_ondeck !== false && appState.settings.show_ondeck !== 0;
   ticker.hidden = !showOnDeck;
+  itemsContainer.replaceChildren();
   if (!showOnDeck) return;
 
   const onDeckBrews = Array.isArray(appState.onDeckBatches) ? appState.onDeckBatches : [];
@@ -1090,8 +1106,12 @@ async function openOnDeckModal() {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || 'Unable to load On Deck batches');
     const batches = Array.isArray(data) ? data : data.batches || [];
+    const showOnDeck = data.show_ondeck ?? appState.settings.show_ondeck;
+    document.getElementById('onDeckFooterEnabledCheckbox').checked = showOnDeck === true || showOnDeck === 1;
     renderOnDeckManager(batches);
-    status.textContent = `${batches.length} eligible batch${batches.length === 1 ? '' : 'es'}`;
+    status.textContent = `${batches.length} eligible batch${batches.length === 1 ? '' : 'es'}${
+      showOnDeck === true || showOnDeck === 1 ? '' : ' · footer currently hidden'
+    }`;
   } catch (error) {
     status.textContent = error.message || 'Unable to load On Deck batches.';
   }
@@ -1241,6 +1261,17 @@ function initModalListeners() {
       });
       if (res.ok) {
         const result = await res.json();
+        appState.settings = {
+          ...appState.settings,
+          theme,
+          title,
+          font_title,
+          font_body,
+          layout_mode,
+          show_ondeck: show_ondeck ? 1 : 0,
+          ondeck_new_batch_default: ondeck_new_batch_default ? 1 : 0
+        };
+        renderApp();
         document.getElementById('globalSettingsModal').style.display = 'none';
         document.getElementById('pinInputSetting').value = '';
         if (result.sessionsRevoked) {
@@ -1309,14 +1340,19 @@ function initModalListeners() {
       batch_id: input.dataset.batchId,
       visible: input.checked
     }));
+    const show_ondeck = document.getElementById('onDeckFooterEnabledCheckbox').checked;
     try {
       const res = await fetch('/api/ondeck', {
         method: 'POST',
         headers: authHeaders(true),
-        body: JSON.stringify({ batches })
+        body: JSON.stringify({ batches, show_ondeck })
       });
       const result = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(result.error || 'Failed to save On Deck visibility');
+      const eligible = Array.isArray(result.batches) ? result.batches : [];
+      appState.settings = { ...appState.settings, show_ondeck: result.show_ondeck ? 1 : 0 };
+      appState.onDeckBatches = result.show_ondeck ? eligible.filter((batch) => batch.visible === true) : [];
+      renderOnDeckTicker();
       document.getElementById('onDeckModal').style.display = 'none';
       showToast('✨ On Deck visibility saved!');
     } catch (error) {
@@ -1447,6 +1483,7 @@ function initModalListeners() {
 
 // Initialize Client Engine
 window.addEventListener('DOMContentLoaded', () => {
+  loadInitialSnapshot();
   initSSE();
   initModalListeners();
 });

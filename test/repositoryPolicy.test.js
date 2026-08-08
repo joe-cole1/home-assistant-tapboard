@@ -104,3 +104,15 @@ test('unsafe direct database scripts have been retired', () => {
     assert.equal(fs.existsSync(path.join(repositoryRoot, relativePath)), false, `${relativePath} must be absent`);
   }
 });
+
+test('compact dashboard reserves the dynamic viewport for header, cards, and On Deck without scrolling', () => {
+  const styles = readRepositoryFile('public/styles.css');
+
+  assert.match(styles, /body\[data-layout-mode='compact'\]\s*\{[^}]*height:\s*100dvh;[^}]*overflow:\s*hidden;/s);
+  assert.match(
+    styles,
+    /body\[data-layout-mode='compact'\] \.main-content\s*\{[^}]*flex:\s*1 1 0;[^}]*min-height:\s*0;[^}]*overflow:\s*hidden;/s
+  );
+  assert.match(styles, /body\[data-layout-mode='compact'\] \.tap-grid\s*\{[^}]*height:\s*100%;[^}]*min-height:\s*0;/s);
+  assert.match(styles, /\.ondeck-ticker-container\[hidden\]\s*\{[^}]*display:\s*none;/s);
+});

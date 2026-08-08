@@ -133,7 +133,7 @@ export function validateSettings(body) {
 
 export function validateOndeck(body) {
   assertObject(body);
-  rejectUnknown(body, new Set(['batches']));
+  rejectUnknown(body, new Set(['batches', 'show_ondeck']));
   if (!Array.isArray(body.batches) || body.batches.length > 150) throw new ValidationError();
   const seen = new Set();
   const batches = body.batches.map((entry) => {
@@ -144,7 +144,10 @@ export function validateOndeck(body) {
     seen.add(batch_id);
     return { batch_id, visible: boolean(entry.visible) };
   });
-  return { batches };
+  return {
+    batches,
+    ...(body.show_ondeck === undefined ? {} : { show_ondeck: boolean(body.show_ondeck) })
+  };
 }
 
 export function validateCustomBeverage(body) {

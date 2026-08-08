@@ -490,18 +490,19 @@ test('On Deck and custom beverage APIs require authentication, validate strictly
     const headers = { ...json, Authorization: `Bearer ${token}` };
     const listed = await fetch(`${instance.baseUrl}/api/ondeck`, { headers });
     assert.equal(listed.status, 200);
-    assert.deepEqual(await listed.json(), { batches: [] });
+    assert.deepEqual(await listed.json(), { batches: [], show_ondeck: true });
 
-    assert.equal(
-      (
-        await fetch(`${instance.baseUrl}/api/ondeck`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ batches: [] })
-        })
-      ).status,
-      200
-    );
+    const hideOnDeck = await fetch(`${instance.baseUrl}/api/ondeck`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ batches: [], show_ondeck: false })
+    });
+    assert.equal(hideOnDeck.status, 200);
+    assert.deepEqual(await hideOnDeck.json(), { success: true, batches: [], show_ondeck: false });
+    assert.equal(database.prepare('SELECT show_ondeck FROM settings WHERE id = 1').get().show_ondeck, 0);
+    const hiddenSnapshot = await (await fetch(`${instance.baseUrl}/api/state`)).json();
+    assert.equal(hiddenSnapshot.settings.show_ondeck, 0);
+    assert.deepEqual(hiddenSnapshot.onDeckBatches, []);
     assert.equal(
       (
         await fetch(`${instance.baseUrl}/api/ondeck`, {

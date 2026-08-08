@@ -216,6 +216,10 @@ function eligibleOndeckBatches() {
   return batches.map((batch) => ({ ...batch, visible: preferences.get(batch.id) ?? Boolean(defaultVisible) }));
 }
 
+function isOndeckEnabled() {
+  return db.prepare('SELECT show_ondeck FROM settings WHERE id = 1').get()?.show_ondeck === 1;
+}
+
 function customBeverage() {
   const beverage = db
     .prepare('SELECT id, name, style, abv, ibu, og, fg, srm, description FROM custom_beverage WHERE id = ?')
@@ -785,7 +789,7 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === '/api/ondeck' && req.method === 'GET') {
     if (!requireAdmin(req, res)) return;
     try {
-      sendJson(res, 200, { batches: eligibleOndeckBatches() });
+      sendJson(res, 200, { batches: eligibleOndeckBatches(), show_ondeck: isOndeckEnabled() });
     } catch (err) {
       handleError(res, err, requestContext('read on deck'));
     }
@@ -805,9 +809,17 @@ const server = http.createServer(async (req, res) => {
         `UPDATE brewfather_ondeck_preferences
          SET visible = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE batch_id = ?`
       );
-      db.transaction(() => body.batches.forEach((batch) => update.run(batch.visible ? 1 : 0, batch.batch_id)))();
+      const updateEnabled = db.prepare('UPDATE settings SET show_ondeck = ? WHERE id = 1');
+      db.transaction(() => {
+        body.batches.forEach((batch) => update.run(batch.visible ? 1 : 0, batch.batch_id));
+        if (body.show_ondeck !== undefined) updateEnabled.run(body.show_ondeck ? 1 : 0);
+      })();
       sseHub.publishImmediate('settings_updated', getFullStateSnapshot());
-      sendJson(res, 200, { success: true, batches: eligibleOndeckBatches() });
+      sendJson(res, 200, {
+        success: true,
+        batches: eligibleOndeckBatches(),
+        show_ondeck: isOndeckEnabled()
+      });
     } catch (err) {
       handleError(res, err, requestContext('update on deck'));
     }
