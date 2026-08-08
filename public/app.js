@@ -696,7 +696,7 @@ function updateTapCard(card, tap) {
     descriptionEl.hidden = !description;
   }
 
-  const badges = card.querySelector('.tap-card-header > div:last-child');
+  const badges = card.querySelector('.tap-card-badges');
   if (badges) {
     let lowBadge = badges.querySelector('.badge-low');
     const isLow = measurement.volumeStatus === 'measured' && tap.badge_low_keg > 0 && fillPercent <= tap.badge_low_keg;
@@ -715,7 +715,7 @@ function updateTapCard(card, tap) {
       newBadge = document.createElement('span');
       newBadge.className = 'badge badge-fresh';
       newBadge.textContent = 'NEW';
-      badges.querySelector('.tap-cog-btn')?.before(newBadge);
+      badges.appendChild(newBadge);
     } else if (!isNew && newBadge) {
       newBadge.remove();
     }
