@@ -114,7 +114,7 @@ function allowedMethodsForApiPath(pathname) {
   return null;
 }
 
-// Calculate a 14-day forecast from the current tap's lifecycle-scoped usage history.
+// Forecast from the current tap's lifetime average usage on drinking days.
 function calculateKegKickForecast(tapId) {
   const measurement = haClient.getPublicTapStates()?.[String(tapId)];
   if (!measurement || !['measured', 'stale'].includes(measurement.volumeStatus)) {

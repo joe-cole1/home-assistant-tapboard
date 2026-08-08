@@ -51,7 +51,7 @@ Startup enforces `foreign_keys=ON`, validates the database, and migrates ordered
 - A tap assignment opens one immutable keg lifecycle; reassignment or an end action closes the existing lifecycle.
 - A pour captures the open lifecycle at pour start. Historical and unassigned pours may have no lifecycle and cannot affect an active keg forecast.
 - Foreign keys restrict invalid tap/lifecycle relationships. `pour_logs_lifecycle_epoch` supports forecast queries by lifecycle and timestamp.
-- The forecast uses at most 14 elapsed days of pours for the currently open lifecycle. It returns no estimated remaining time when that lifecycle has no qualifying usage.
+- The forecast uses all pours from the currently open lifecycle, averaging consumption across UTC calendar days with positive usage and the observed interval between those days. A single observed day uses the default four-day interval; an active lifecycle with no usage uses a clearly labeled default of 24 oz every four days. Unassigned taps still have no forecast.
 
 ## Browser delivery
 

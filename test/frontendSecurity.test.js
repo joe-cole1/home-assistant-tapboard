@@ -157,7 +157,12 @@ test('compact-card semantics keep the header, graphic badges, and right-side det
     assert.equal(directChild(details, '.beer-style')?.textContent, 'Right-side Style');
     assert.equal(directChild(details, '.beer-description')?.textContent, 'Right-side details remain inert.');
     assert.ok(directChild(details, '.metrics-row'));
-    assert.equal(directChild(details, '.forecast-readout')?.textContent, '2 days remaining');
+    const volumeReadout = directChild(graphic, '.volume-readout');
+    const forecastReadout = directChild(graphic, '.forecast-readout');
+    assert.equal(volumeReadout?.textContent, '10% Remaining');
+    assert.equal(forecastReadout?.textContent, '2 days remaining');
+    assert.equal(volumeReadout?.nextElementSibling, forecastReadout);
+    assert.equal(directChild(details, '.forecast-readout'), null);
     assert.equal(details.querySelector('.graphic-container'), null);
 
     // Existing app live-update selectors remain meaningful after the restructuring.

@@ -953,7 +953,7 @@ body.is-authenticated .ondeck-cog-btn {
   body[data-layout-mode='compact'] .forecast-readout {
     margin-top: 0.35rem;
     font-size: 0.62rem;
-    text-align: left;
+    text-align: center;
   }
   body[data-layout-mode='compact'] .floating-pour-badge {
     bottom: 0;

@@ -426,10 +426,14 @@ function formatForecastText(forecast) {
   }
 
   if (forecast.estimatedDaysRemaining < 1.0) {
-    return `🔴 Kicking soon`;
+    return forecast.isFallback ? `🔴 Kicking soon (default estimate)` : `🔴 Kicking soon`;
   }
 
-  return `⌛ ${forecast.estimatedDaysRemaining} days remaining (${forecast.avgDailyOz} oz/day avg)`;
+  if (forecast.isFallback) {
+    return `⌛ ${forecast.estimatedDaysRemaining} days remaining (24 oz every 4 days default)`;
+  }
+
+  return `⌛ ${forecast.estimatedDaysRemaining} days remaining (${forecast.avgDrinkingDayOz} oz/drinking day avg)`;
 }
 
 // Main Render Function with In-Place Targeted DOM Preservation
