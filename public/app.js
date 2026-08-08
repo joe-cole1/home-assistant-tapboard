@@ -13,7 +13,8 @@ let appState = {
   settings: {},
   taps: [],
   batches: [],
-  catalog: [],
+  onDeckBatches: [],
+  customBeverage: null,
   tapStates: {},
   haConnected: true,
   kegKickForecasts: {}
@@ -91,9 +92,22 @@ function deriveBeerStyle(beerName, rawStyle) {
   if (lower.includes('pilsner') || lower.includes('pils')) return 'Pilsner';
   if (lower.includes('pale ale')) return 'Pale Ale';
   if (lower.includes('cider')) return 'Hard Cider';
-  if (lower.includes('topo chico') || lower.includes('water') || lower.includes('seltzer')) return 'Sparkling Water';
+  if (lower.includes('water') || lower.includes('seltzer')) return 'Sparkling Water';
 
   return 'Craft Beer';
+}
+
+function customBeverageMatchesTap(tapId, tap) {
+  const custom = appState.customBeverage;
+  if (!custom) return false;
+  const selected = getBatchSelection(tapId).value || tap.batch_id || '';
+  const option = custom.assignmentOption || custom.assignment_option || custom.batch_option || '';
+  const identity = custom.batch_id || custom.id || '';
+  return Boolean(selected && (selected === option || selected === identity || selected.includes(identity)));
+}
+
+function customBeverageForTap(tapId, tap) {
+  return customBeverageMatchesTap(tapId, tap) ? appState.customBeverage : null;
 }
 
 // Connect to Server-Sent Events (SSE) Stream
@@ -114,7 +128,6 @@ function initSSE() {
   eventSource.addEventListener('snapshot', (e) => {
     liveUpdates.replaceSnapshot(JSON.parse(e.data));
     updateClockStatus(appState.haConnected ? 'Live' : 'Disconnected');
-    pulseLiveIndicator();
     renderApp();
   });
 
@@ -123,19 +136,16 @@ function initSSE() {
     const { isConnected } = JSON.parse(e.data);
     appState.haConnected = isConnected;
     updateClockStatus(isConnected ? 'Live' : 'Disconnected');
-    pulseLiveIndicator();
   });
 
   // 3. HA State Changed
   eventSource.addEventListener('state_changed', (e) => {
     liveUpdates.applyStateChanged(JSON.parse(e.data));
-    pulseLiveIndicator();
   });
 
   // 4. Instant Pour Animation Start
   eventSource.addEventListener('pour_start', (e) => {
     const { tapId } = JSON.parse(e.data);
-    pulseLiveIndicator();
     console.log(`[Pour Start] Animating Tap ${tapId}`);
     setTapPouringAnimation(tapId, true);
   });
@@ -143,7 +153,6 @@ function initSSE() {
   // 5. Pour Complete Summary & Toast Notification
   eventSource.addEventListener('pour_complete', (e) => {
     const { tapId, volumePouredOz, beerName, kegKickForecast } = JSON.parse(e.data);
-    pulseLiveIndicator();
     showToast(`🍺 Poured ${volumePouredOz} oz of ${beerName}!`);
     setTapPouringAnimation(tapId, false);
     if (kegKickForecast) {
@@ -161,33 +170,25 @@ function initSSE() {
   // 6. Canceled Pour (rebound, disconnect, large change, or safety timeout)
   eventSource.addEventListener('pour_cancel', (e) => {
     const { tapId } = JSON.parse(e.data);
-    pulseLiveIndicator();
     setTapPouringAnimation(tapId, false);
   });
 
   // 7. Low Keg Alert
   eventSource.addEventListener('low_keg_alert', (e) => {
     const { tapId, currentPercent } = JSON.parse(e.data);
-    pulseLiveIndicator();
     showToast(`⚠️ Low Keg Warning: Tap ${tapId} at ${currentPercent}%!`);
   });
 
   // 8. Settings Updated
   eventSource.addEventListener('settings_updated', (e) => {
     liveUpdates.replaceSnapshot(JSON.parse(e.data));
-    pulseLiveIndicator();
     renderApp();
   });
-}
 
-function pulseLiveIndicator() {
-  if (!appState.haConnected) return;
-  const badge = document.getElementById('liveStatusBadge');
-  if (!badge) return;
-
-  badge.classList.remove('is-updating');
-  void badge.offsetWidth;
-  badge.classList.add('is-updating');
+  eventSource.addEventListener('brewfather_batches_changed', (e) => {
+    liveUpdates.replaceSnapshot(JSON.parse(e.data));
+    renderApp();
+  });
 }
 
 function updateClockStatus(text) {
@@ -432,6 +433,7 @@ function renderApp() {
   if (settings.font_body) {
     document.documentElement.style.setProperty('--font-body', `'${settings.font_body}', sans-serif`);
   }
+  document.body.setAttribute('data-layout-mode', settings.layout_mode === 'compact' ? 'compact' : 'cozy');
 
   const tapGrid = document.getElementById('tapGrid');
   if (!tapGrid) return;
@@ -472,55 +474,57 @@ function createTapCard(tap) {
   // 3-Tier Recipe Lookup Hierarchy (Overrides -> HA Attributes -> Local Batches Cache)
   const cachedBatch =
     tap.batch_id && appState.batches ? appState.batches.find((b) => b.batch_id === tap.batch_id) : null;
+  const customBeverage = customBeverageForTap(tapId, tap);
 
   const measurement = getMeasurementView(tapState);
   const fillPercent = measurement.graphicFillPercent;
 
-  const bfName = batchAttr.recipeName || (cachedBatch ? cachedBatch.recipe_name : null) || `Tap ${tapId}`;
-  const rawStyle = batchAttr.style || (cachedBatch ? cachedBatch.style : null) || 'Craft Beer';
+  const bfName =
+    customBeverage?.name || batchAttr.recipeName || (cachedBatch ? cachedBatch.recipe_name : null) || `Tap ${tapId}`;
+  const rawStyle = customBeverage?.style || batchAttr.style || (cachedBatch ? cachedBatch.style : null) || 'Craft Beer';
   const bfStyle = deriveBeerStyle(bfName, rawStyle);
-  const bfAbv = batchAttr.abv ?? cachedBatch?.abv ?? '--';
-  const bfIbu = batchAttr.ibu ?? cachedBatch?.ibu ?? '--';
-  const bfOg = batchAttr.og ?? cachedBatch?.og ?? '--';
-  const bfFg = batchAttr.fg ?? cachedBatch?.fg ?? '--';
-  const bfSrm = batchAttr.srm ?? cachedBatch?.srm ?? 3;
-  const bfDesc = batchAttr.description || (cachedBatch ? cachedBatch.description : null) || '';
+  const bfAbv = customBeverage?.abv ?? batchAttr.abv ?? cachedBatch?.abv ?? '--';
+  const bfIbu = customBeverage?.ibu ?? batchAttr.ibu ?? cachedBatch?.ibu ?? '--';
+  const bfOg = customBeverage?.og ?? batchAttr.og ?? cachedBatch?.og ?? '--';
+  const bfFg = customBeverage?.fg ?? batchAttr.fg ?? cachedBatch?.fg ?? '--';
+  const bfSrm = customBeverage?.srm ?? batchAttr.srm ?? cachedBatch?.srm ?? 3;
+  const bfDesc =
+    customBeverage?.description || batchAttr.description || (cachedBatch ? cachedBatch.description : null) || '';
 
   const hasOverride = tap.override_enabled === 1;
   const beerName = hasOverride && tap.override_name && tap.override_name.trim() !== '' ? tap.override_name : bfName;
   const style = hasOverride && tap.override_style && tap.override_style.trim() !== '' ? tap.override_style : bfStyle;
 
-  const isWaterOrTopo =
-    beerName.toLowerCase().includes('topo chico') ||
+  const isWaterOrSeltzer =
     beerName.toLowerCase().includes('water') ||
     style.toLowerCase().includes('water') ||
     style.toLowerCase().includes('seltzer') ||
     bfSrm === 0 ||
     (hasOverride && tap.override_srm === 0);
 
-  const abv = isWaterOrTopo
+  const abv = isWaterOrSeltzer
     ? '0.0%'
     : hasOverride && tap.override_abv !== null && tap.override_abv !== undefined && tap.override_abv !== ''
       ? `${tap.override_abv}%`
       : bfAbv !== '--'
         ? `${bfAbv}%`
         : '--';
-  const ibu = isWaterOrTopo
+  const ibu = isWaterOrSeltzer
     ? '-'
     : hasOverride && tap.override_ibu !== null && tap.override_ibu !== undefined && tap.override_ibu !== ''
       ? tap.override_ibu
       : bfIbu;
-  const og = isWaterOrTopo
+  const og = isWaterOrSeltzer
     ? '-'
     : hasOverride && tap.override_og !== null && tap.override_og !== undefined && tap.override_og !== ''
       ? tap.override_og
       : bfOg;
-  const fg = isWaterOrTopo
+  const fg = isWaterOrSeltzer
     ? '-'
     : hasOverride && tap.override_fg !== null && tap.override_fg !== undefined && tap.override_fg !== ''
       ? tap.override_fg
       : bfFg;
-  const srm = isWaterOrTopo
+  const srm = isWaterOrSeltzer
     ? 0
     : hasOverride && tap.override_srm !== null && tap.override_srm !== undefined && tap.override_srm !== ''
       ? tap.override_srm
@@ -530,7 +534,7 @@ function createTapCard(tap) {
       ? tap.override_description
       : bfDesc;
 
-  const beerColorHex = isWaterOrTopo ? 'WATER' : srmToHex(srm);
+  const beerColorHex = isWaterOrSeltzer ? 'WATER' : srmToHex(srm);
 
   const forecast = appState.kegKickForecasts[tapId] || {};
   const forecastText = formatForecastText(forecast);
@@ -610,59 +614,60 @@ function updateTapCard(card, tap) {
   // 3-Tier Recipe Lookup Hierarchy (Overrides -> HA Attributes -> Local Batches Cache)
   const cachedBatch =
     tap.batch_id && appState.batches ? appState.batches.find((b) => b.batch_id === tap.batch_id) : null;
+  const customBeverage = customBeverageForTap(tapId, tap);
 
   const measurement = getMeasurementView(tapState);
   const fillPercent = measurement.graphicFillPercent;
 
-  const bfName = batchAttr.recipeName || (cachedBatch ? cachedBatch.recipe_name : null) || `Tap ${tapId}`;
-  const rawStyle = batchAttr.style || (cachedBatch ? cachedBatch.style : null) || 'Craft Beer';
+  const bfName =
+    customBeverage?.name || batchAttr.recipeName || (cachedBatch ? cachedBatch.recipe_name : null) || `Tap ${tapId}`;
+  const rawStyle = customBeverage?.style || batchAttr.style || (cachedBatch ? cachedBatch.style : null) || 'Craft Beer';
   const bfStyle = deriveBeerStyle(bfName, rawStyle);
-  const bfAbv = batchAttr.abv ?? cachedBatch?.abv ?? '--';
-  const bfIbu = batchAttr.ibu ?? cachedBatch?.ibu ?? '--';
-  const bfOg = batchAttr.og ?? cachedBatch?.og ?? '--';
-  const bfFg = batchAttr.fg ?? cachedBatch?.fg ?? '--';
-  const bfSrm = batchAttr.srm ?? cachedBatch?.srm ?? 3;
+  const bfAbv = customBeverage?.abv ?? batchAttr.abv ?? cachedBatch?.abv ?? '--';
+  const bfIbu = customBeverage?.ibu ?? batchAttr.ibu ?? cachedBatch?.ibu ?? '--';
+  const bfOg = customBeverage?.og ?? batchAttr.og ?? cachedBatch?.og ?? '--';
+  const bfFg = customBeverage?.fg ?? batchAttr.fg ?? cachedBatch?.fg ?? '--';
+  const bfSrm = customBeverage?.srm ?? batchAttr.srm ?? cachedBatch?.srm ?? 3;
 
   const hasOverride = tap.override_enabled === 1;
   const beerName = hasOverride && tap.override_name && tap.override_name.trim() !== '' ? tap.override_name : bfName;
   const style = hasOverride && tap.override_style && tap.override_style.trim() !== '' ? tap.override_style : bfStyle;
 
-  const isWaterOrTopo =
-    beerName.toLowerCase().includes('topo chico') ||
+  const isWaterOrSeltzer =
     beerName.toLowerCase().includes('water') ||
     style.toLowerCase().includes('water') ||
     style.toLowerCase().includes('seltzer') ||
     bfSrm === 0 ||
     (hasOverride && tap.override_srm === 0);
 
-  const abv = isWaterOrTopo
+  const abv = isWaterOrSeltzer
     ? '0.0%'
     : hasOverride && tap.override_abv !== null && tap.override_abv !== undefined && tap.override_abv !== ''
       ? `${tap.override_abv}%`
       : bfAbv !== '--'
         ? `${bfAbv}%`
         : '--';
-  const ibu = isWaterOrTopo
+  const ibu = isWaterOrSeltzer
     ? '-'
     : hasOverride && tap.override_ibu !== null && tap.override_ibu !== undefined && tap.override_ibu !== ''
       ? tap.override_ibu
       : bfIbu;
-  const og = isWaterOrTopo
+  const og = isWaterOrSeltzer
     ? '-'
     : hasOverride && tap.override_og !== null && tap.override_og !== undefined && tap.override_og !== ''
       ? tap.override_og
       : bfOg;
-  const fg = isWaterOrTopo
+  const fg = isWaterOrSeltzer
     ? '-'
     : hasOverride && tap.override_fg !== null && tap.override_fg !== undefined && tap.override_fg !== ''
       ? tap.override_fg
       : bfFg;
-  const srm = isWaterOrTopo
+  const srm = isWaterOrSeltzer
     ? 0
     : hasOverride && tap.override_srm !== null && tap.override_srm !== undefined && tap.override_srm !== ''
       ? tap.override_srm
       : bfSrm;
-  const beerColorHex = isWaterOrTopo ? 'WATER' : srmToHex(srm);
+  const beerColorHex = isWaterOrSeltzer ? 'WATER' : srmToHex(srm);
 
   const forecast = appState.kegKickForecasts[tapId] || {};
   const forecastText = formatForecastText(forecast);
@@ -671,6 +676,7 @@ function updateTapCard(card, tap) {
   // Update text content in-place
   const titleEl = card.querySelector('.beer-title');
   if (titleEl && titleEl.textContent !== beerName) titleEl.textContent = beerName;
+  if (titleEl) titleEl.title = beerName;
 
   const styleEl = card.querySelector('.beer-style');
   if (styleEl && styleEl.textContent !== style) styleEl.textContent = style;
@@ -679,7 +685,7 @@ function updateTapCard(card, tap) {
   const description =
     hasOverride && tap.override_description && tap.override_description.trim() !== ''
       ? tap.override_description
-      : batchAttr.description || (cachedBatch ? cachedBatch.description : null) || '';
+      : customBeverage?.description || batchAttr.description || (cachedBatch ? cachedBatch.description : null) || '';
   if (description && !descriptionEl) {
     descriptionEl = document.createElement('p');
     descriptionEl.className = 'beer-description';
@@ -777,21 +783,25 @@ function openRecipeModal(tapId) {
   const tap = appState.taps.find((item) => item.tap_id === tapId) || {};
   const batchAttr = getBatchState(tapId);
   const cachedBatch = tap.batch_id ? appState.batches.find((batch) => batch.batch_id === tap.batch_id) : null;
+  const customBeverage = customBeverageForTap(tapId, tap);
   const hasOverride = tap.override_enabled === 1;
   const beerName =
-    (hasOverride && tap.override_name) || batchAttr.recipeName || cachedBatch?.recipe_name || `Tap ${tapId}`;
+    (hasOverride && tap.override_name) ||
+    customBeverage?.name ||
+    batchAttr.recipeName ||
+    cachedBatch?.recipe_name ||
+    `Tap ${tapId}`;
   const style =
     (hasOverride && tap.override_style) ||
-    deriveBeerStyle(beerName, batchAttr.style || cachedBatch?.style || 'Craft Beer');
-  const projectedSrm = batchAttr.srm ?? cachedBatch?.srm ?? 3;
+    deriveBeerStyle(beerName, customBeverage?.style || batchAttr.style || cachedBatch?.style || 'Craft Beer');
+  const projectedSrm = customBeverage?.srm ?? batchAttr.srm ?? cachedBatch?.srm ?? 3;
   const isWater =
     beerName.toLowerCase().includes('water') ||
-    beerName.toLowerCase().includes('topo chico') ||
     style.toLowerCase().includes('water') ||
     style.toLowerCase().includes('seltzer') ||
     projectedSrm === 0 ||
     (hasOverride && tap.override_srm === 0);
-  const batchAbv = batchAttr.abv ?? cachedBatch?.abv;
+  const batchAbv = customBeverage?.abv ?? batchAttr.abv ?? cachedBatch?.abv;
   const abv = isWater
     ? '0.0%'
     : hasOverride && tap.override_abv !== '' && tap.override_abv !== null && tap.override_abv !== undefined
@@ -803,24 +813,28 @@ function openRecipeModal(tapId) {
     ? '-'
     : hasOverride && tap.override_ibu !== '' && tap.override_ibu !== null && tap.override_ibu !== undefined
       ? tap.override_ibu
-      : (batchAttr.ibu ?? cachedBatch?.ibu ?? '--');
+      : (customBeverage?.ibu ?? batchAttr.ibu ?? cachedBatch?.ibu ?? '--');
   const og = isWater
     ? '-'
     : hasOverride && tap.override_og !== '' && tap.override_og !== null && tap.override_og !== undefined
       ? tap.override_og
-      : (batchAttr.og ?? cachedBatch?.og ?? '--');
+      : (customBeverage?.og ?? batchAttr.og ?? cachedBatch?.og ?? '--');
   const fg = isWater
     ? '-'
     : hasOverride && tap.override_fg !== '' && tap.override_fg !== null && tap.override_fg !== undefined
       ? tap.override_fg
-      : (batchAttr.fg ?? cachedBatch?.fg ?? '--');
+      : (customBeverage?.fg ?? batchAttr.fg ?? cachedBatch?.fg ?? '--');
   const srm = isWater
     ? 0
     : hasOverride && tap.override_srm !== '' && tap.override_srm !== null && tap.override_srm !== undefined
       ? tap.override_srm
       : projectedSrm;
   const description =
-    (hasOverride && tap.override_description) || batchAttr.description || cachedBatch?.description || '';
+    (hasOverride && tap.override_description) ||
+    customBeverage?.description ||
+    batchAttr.description ||
+    cachedBatch?.description ||
+    '';
 
   title.textContent = `${beerName}`;
   body.replaceChildren(
@@ -838,6 +852,17 @@ function openGlobalSettingsModal() {
   if (settings.title) document.getElementById('headerTitleInput').value = settings.title;
   if (settings.font_title) document.getElementById('titleFontSelect').value = settings.font_title;
   if (settings.font_body) document.getElementById('bodyFontSelect').value = settings.font_body;
+  document.getElementById('layoutModeSelect').value = settings.layout_mode === 'compact' ? 'compact' : 'cozy';
+  document.getElementById('showOnDeckCheckbox').checked = settings.show_ondeck !== false && settings.show_ondeck !== 0;
+  document.getElementById('onDeckNewBatchDefaultCheckbox').checked =
+    settings.ondeck_new_batch_default === true || settings.ondeck_new_batch_default === 1;
+
+  const custom = appState.customBeverage || {};
+  const customFields = ['name', 'style', 'abv', 'ibu', 'og', 'fg', 'srm', 'description'];
+  customFields.forEach((field) => {
+    const input = document.getElementById(`customBeverage${field[0].toUpperCase()}${field.slice(1)}`);
+    if (input) input.value = custom[field] ?? '';
+  });
 
   for (let i = 1; i <= 6; i++) {
     const check = document.getElementById(`globalTapCheck_${i}`);
@@ -869,22 +894,16 @@ function openTapSettings(tapId) {
   const offTapOpt = createSelectOption('', '-- Empty / Off Tap --');
   batchSelect.appendChild(offTapOpt);
 
-  const conditioningBatches = [];
-  let topoChicoOption = null;
-
+  const customOption = appState.customBeverage?.assignmentOption || appState.customBeverage?.assignment_option;
   rawOptions.forEach((optStr) => {
     if (!optStr || optStr.trim() === '') return;
-
-    if (optStr.toLowerCase().includes('topo_chico') || optStr.toLowerCase().includes('topo chico')) {
-      topoChicoOption = optStr;
-    } else if (optStr.includes('(Conditioning)') || optStr.includes('Conditioning')) {
-      conditioningBatches.push(optStr);
-    }
-  });
-
-  conditioningBatches.forEach((optStr) => {
     const parts = optStr.split('|');
-    const label = parts.length > 1 ? parts[1].trim() : optStr;
+    const label =
+      customOption && optStr === customOption
+        ? appState.customBeverage?.name || 'Custom beverage'
+        : parts.length > 1
+          ? parts[1].trim()
+          : optStr;
     const opt = createSelectOption(
       optStr,
       label,
@@ -895,15 +914,15 @@ function openTapSettings(tapId) {
     batchSelect.appendChild(opt);
   });
 
-  const topoVal = topoChicoOption || 'custom:topo_chico | Topo Chico 0%';
-  const topoOpt = createSelectOption(
-    topoVal,
-    'Topo Chico 0%',
-    selectedBatch === topoVal ||
-      selectedBatch === 'custom:topo_chico' ||
-      (batchAttr.recipeName && batchAttr.recipeName.toLowerCase().includes('topo chico'))
-  );
-  batchSelect.appendChild(topoOpt);
+  if (customOption && !rawOptions.includes(customOption)) {
+    batchSelect.appendChild(
+      createSelectOption(
+        customOption,
+        appState.customBeverage?.name || 'Custom beverage',
+        selectedBatch === customOption
+      )
+    );
+  }
 
   // Auto-check "Show Tap on Dashboard" whenever a non-empty brew batch is chosen
   batchSelect.onchange = () => {
@@ -994,15 +1013,15 @@ function toggleOverrideFieldsUI(enabled) {
 
 // Render On-Deck Ticker
 function renderOnDeckTicker() {
+  const ticker = document.getElementById('onDeckTicker');
   const itemsContainer = document.getElementById('onDeckItems');
-  if (!itemsContainer) return;
+  if (!ticker || !itemsContainer) return;
 
-  const onDeckBrews = appState.catalog.filter((c) => c.on_deck === 1);
-  if (onDeckBrews.length === 0) {
-    itemsContainer.replaceChildren(buildOnDeckItems(onDeckBrews));
-    return;
-  }
+  const showOnDeck = appState.settings.show_ondeck !== false && appState.settings.show_ondeck !== 0;
+  ticker.hidden = !showOnDeck;
+  if (!showOnDeck) return;
 
+  const onDeckBrews = Array.isArray(appState.onDeckBatches) ? appState.onDeckBatches : [];
   itemsContainer.replaceChildren(buildOnDeckItems(onDeckBrews));
 }
 
@@ -1018,6 +1037,63 @@ function updateFontPreviews() {
   }
   if (bodySelect && bodyPreview) {
     bodyPreview.style.fontFamily = `'${bodySelect.value}', sans-serif`;
+  }
+}
+
+function authHeaders(json = false) {
+  return {
+    ...(json ? { 'Content-Type': 'application/json' } : {}),
+    Authorization: `Bearer ${authToken}`
+  };
+}
+
+function renderOnDeckManager(batches) {
+  const list = document.getElementById('onDeckBatchList');
+  if (!list) return;
+  list.replaceChildren();
+  if (batches.length === 0) {
+    list.textContent = 'No eligible batches are currently available.';
+    return;
+  }
+  batches.forEach((batch) => {
+    const row = document.createElement('label');
+    row.className = 'ondeck-batch-row';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = batch.visible === true;
+    checkbox.dataset.batchId = batch.batch_id || batch.id || '';
+    const details = document.createElement('span');
+    details.className = 'ondeck-batch-details';
+    const name = document.createElement('strong');
+    name.textContent = batch.name || batch.recipe_name || 'Untitled batch';
+    name.title = name.textContent;
+    const meta = document.createElement('span');
+    meta.textContent = [batch.status, batch.style].filter(Boolean).join(' · ') || 'Brewfather batch';
+    details.append(name, meta);
+    row.append(checkbox, details);
+    list.appendChild(row);
+  });
+}
+
+async function openOnDeckModal() {
+  if (!authToken) {
+    editingTapId = null;
+    openPinModal();
+    return;
+  }
+  const modal = document.getElementById('onDeckModal');
+  const status = document.getElementById('onDeckRefreshStatus');
+  modal.style.display = 'flex';
+  status.textContent = 'Loading eligible Brewfather batches…';
+  try {
+    const res = await fetch('/api/ondeck', { headers: authHeaders() });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Unable to load On Deck batches');
+    const batches = Array.isArray(data) ? data : data.batches || [];
+    renderOnDeckManager(batches);
+    status.textContent = `${batches.length} eligible batch${batches.length === 1 ? '' : 'es'}`;
+  } catch (error) {
+    status.textContent = error.message || 'Unable to load On Deck batches.';
   }
 }
 
@@ -1048,6 +1124,11 @@ function initModalListeners() {
       }
     });
   }
+
+  document.getElementById('onDeckSettingsBtn')?.addEventListener('click', openOnDeckModal);
+  document.getElementById('closeOnDeckBtn')?.addEventListener('click', () => {
+    document.getElementById('onDeckModal').style.display = 'none';
+  });
 
   // PIN Submit
   const pinSubmitBtn = document.getElementById('pinSubmitBtn');
@@ -1113,7 +1194,7 @@ function initModalListeners() {
     document.getElementById('tapSettingsModal').style.display = 'none';
   });
 
-  ['recipeModal', 'pinModal', 'globalSettingsModal', 'tapSettingsModal'].forEach((id) => {
+  ['recipeModal', 'pinModal', 'globalSettingsModal', 'tapSettingsModal', 'onDeckModal'].forEach((id) => {
     const modal = document.getElementById(id);
     modal?.addEventListener('click', (event) => {
       if (event.target === modal) modal.style.display = 'none';
@@ -1126,6 +1207,9 @@ function initModalListeners() {
     const title = document.getElementById('headerTitleInput').value;
     const font_title = document.getElementById('titleFontSelect').value;
     const font_body = document.getElementById('bodyFontSelect').value;
+    const layout_mode = document.getElementById('layoutModeSelect').value;
+    const show_ondeck = document.getElementById('showOnDeckCheckbox').checked;
+    const ondeck_new_batch_default = document.getElementById('onDeckNewBatchDefaultCheckbox').checked;
     const new_pin = document.getElementById('pinInputSetting').value;
 
     const tap_visibilities = {};
@@ -1143,7 +1227,17 @@ function initModalListeners() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${authToken}`
         },
-        body: JSON.stringify({ theme, title, font_title, font_body, tap_visibilities, new_pin: new_pin || undefined })
+        body: JSON.stringify({
+          theme,
+          title,
+          font_title,
+          font_body,
+          layout_mode,
+          show_ondeck,
+          ondeck_new_batch_default,
+          tap_visibilities,
+          new_pin: new_pin || undefined
+        })
       });
       if (res.ok) {
         const result = await res.json();
@@ -1162,6 +1256,71 @@ function initModalListeners() {
       }
     } catch (err) {
       alert('Error saving settings');
+    }
+  });
+
+  document.getElementById('saveCustomBeverageBtn')?.addEventListener('click', async () => {
+    const fields = ['name', 'style', 'abv', 'ibu', 'og', 'fg', 'srm', 'description'];
+    const requiredFields = ['name', 'style', 'abv', 'ibu', 'srm'].map((field) =>
+      document.getElementById(`customBeverage${field[0].toUpperCase()}${field.slice(1)}`)
+    );
+    if (!requiredFields.every((input) => input.reportValidity())) return;
+    const payload = Object.fromEntries(
+      fields.map((field) => [
+        field,
+        document.getElementById(`customBeverage${field[0].toUpperCase()}${field.slice(1)}`).value
+      ])
+    );
+    ['abv', 'ibu', 'og', 'fg', 'srm'].forEach((field) => {
+      payload[field] = payload[field] === '' ? null : Number(payload[field]);
+    });
+    try {
+      const res = await fetch('/api/custom-beverage', {
+        method: 'POST',
+        headers: authHeaders(true),
+        body: JSON.stringify(payload)
+      });
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(result.error || 'Failed to save custom beverage');
+      if (result.customBeverage) appState.customBeverage = result.customBeverage;
+      showToast('✨ Custom beverage saved!');
+    } catch (error) {
+      alert(error.message || 'Error saving custom beverage');
+    }
+  });
+
+  document.getElementById('refreshOnDeckBtn')?.addEventListener('click', async () => {
+    const status = document.getElementById('onDeckRefreshStatus');
+    status.textContent = 'Refreshing Brewfather…';
+    try {
+      const res = await fetch('/api/brewfather/refresh', { method: 'POST', headers: authHeaders() });
+      if (!res.ok) {
+        const result = await res.json().catch(() => ({}));
+        throw new Error(result.error || 'Brewfather refresh failed');
+      }
+      status.textContent = 'Refresh requested. Waiting for Home Assistant…';
+    } catch (error) {
+      status.textContent = error.message || 'Brewfather refresh failed.';
+    }
+  });
+
+  document.getElementById('saveOnDeckBtn')?.addEventListener('click', async () => {
+    const batches = Array.from(document.querySelectorAll('#onDeckBatchList input[data-batch-id]')).map((input) => ({
+      batch_id: input.dataset.batchId,
+      visible: input.checked
+    }));
+    try {
+      const res = await fetch('/api/ondeck', {
+        method: 'POST',
+        headers: authHeaders(true),
+        body: JSON.stringify({ batches })
+      });
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(result.error || 'Failed to save On Deck visibility');
+      document.getElementById('onDeckModal').style.display = 'none';
+      showToast('✨ On Deck visibility saved!');
+    } catch (error) {
+      alert(error.message || 'Error saving On Deck visibility');
     }
   });
 

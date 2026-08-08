@@ -70,6 +70,7 @@ test('stored-XSS values stay inert text in cards, recipe, catalog, options, and 
       const option = createSelectOption(payload, payload, true);
 
       [card, modal, ticker, toast, option].forEach((node) => assertInertText(node, payload));
+      assert.equal(card.querySelector('.beer-title')?.title, payload);
       assert.equal(option.value, payload);
       assert.equal(option.textContent, payload);
     });

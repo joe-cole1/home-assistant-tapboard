@@ -23,7 +23,8 @@ import {
   ValidationError,
   tapId as validateTapId,
   validateAuth,
-  validateCatalog,
+  validateCustomBeverage,
+  validateOndeck,
   validateSettings,
   validateTap
 } from './validation.js';
@@ -106,7 +107,9 @@ function handleError(res, error, context = 'request') {
 
 function allowedMethodsForApiPath(pathname) {
   if (pathname === '/api/state') return ['GET'];
-  if (['/api/auth', '/api/settings', '/api/catalog'].includes(pathname)) return ['POST'];
+  if (pathname === '/api/ondeck') return ['GET', 'POST'];
+  if (['/api/auth', '/api/settings', '/api/brewfather/refresh', '/api/custom-beverage'].includes(pathname))
+    return ['POST'];
   if (/^\/api\/taps\/[1-6](?:\/(?:end-batch|end-keg))?$/.test(pathname)) return ['POST'];
   return null;
 }
@@ -179,13 +182,53 @@ haClient.on('low_keg_alert', (data) => {
 });
 
 haClient.on('hydrated', () => {
+  observeBrewfatherBatches(haClient.getBrewfatherBatches());
   sseHub.publishImmediate('snapshot', getFullStateSnapshot());
 });
+
+haClient.on('brewfather_batches_changed', (batches) => {
+  observeBrewfatherBatches(batches);
+  sseHub.publishImmediate('brewfather_batches_changed', getFullStateSnapshot());
+});
+
+function observeBrewfatherBatches(batches) {
+  const defaultVisible = db.prepare('SELECT ondeck_new_batch_default FROM settings WHERE id = 1').get()
+    ?.ondeck_new_batch_default
+    ? 1
+    : 0;
+  const insert = db.prepare(`INSERT OR IGNORE INTO brewfather_ondeck_preferences (batch_id, visible) VALUES (?, ?)`);
+  db.transaction(() => {
+    for (const batch of batches) insert.run(batch.id, defaultVisible);
+  })();
+}
+
+function eligibleOndeckBatches() {
+  const batches = haClient.getBrewfatherBatches();
+  const preferences = new Map(
+    db
+      .prepare('SELECT batch_id, visible FROM brewfather_ondeck_preferences')
+      .all()
+      .map((row) => [row.batch_id, row.visible === 1])
+  );
+  const defaultVisible = db
+    .prepare('SELECT ondeck_new_batch_default FROM settings WHERE id = 1')
+    .get()?.ondeck_new_batch_default;
+  return batches.map((batch) => ({ ...batch, visible: preferences.get(batch.id) ?? Boolean(defaultVisible) }));
+}
+
+function customBeverage() {
+  const beverage = db
+    .prepare('SELECT id, name, style, abv, ibu, og, fg, srm, description FROM custom_beverage WHERE id = ?')
+    .get('custom:topo_chico');
+  return beverage ? { ...beverage, assignmentOption: 'custom:topo_chico | Tapboard Custom Beverage' } : null;
+}
 
 // Construct Full Application State Snapshot
 function getFullStateSnapshot() {
   const settings = db
-    .prepare('SELECT id, theme, volume_format, title, font_title, font_body, show_ondeck FROM settings WHERE id = 1')
+    .prepare(
+      'SELECT id, theme, volume_format, title, font_title, font_body, show_ondeck, layout_mode, ondeck_new_batch_default FROM settings WHERE id = 1'
+    )
     .get();
   const taps = db
     .prepare(
@@ -207,15 +250,7 @@ function getFullStateSnapshot() {
   `
     )
     .all();
-  const catalog = db
-    .prepare(
-      `
-    SELECT id, name, style, abv, ibu, srm_color, description, on_deck,
-      target_tap_id
-    FROM beverage_catalog ORDER BY id DESC
-  `
-    )
-    .all();
+  const onDeckBatches = settings.show_ondeck ? eligibleOndeckBatches().filter((batch) => batch.visible) : [];
   const tapStates = haClient.getPublicTapStates();
 
   const kegKickForecasts = {};
@@ -224,11 +259,12 @@ function getFullStateSnapshot() {
   }
 
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     settings,
     taps,
     batches,
-    catalog,
+    onDeckBatches,
+    customBeverage: customBeverage(),
     tapStates,
     haConnected: haClient.isConnected,
     kegKickForecasts,
@@ -382,7 +418,18 @@ const server = http.createServer(async (req, res) => {
     try {
       const body = validateSettings(await readJsonBody(req));
       ensureServing();
-      const { theme, volume_format, title, font_title, font_body, show_ondeck, tap_visibilities, new_pin } = body;
+      const {
+        theme,
+        volume_format,
+        title,
+        font_title,
+        font_body,
+        show_ondeck,
+        layout_mode,
+        ondeck_new_batch_default,
+        tap_visibilities,
+        new_pin
+      } = body;
 
       db.prepare(
         `
@@ -392,7 +439,9 @@ const server = http.createServer(async (req, res) => {
           title = COALESCE(?, title),
           font_title = COALESCE(?, font_title),
           font_body = COALESCE(?, font_body),
-          show_ondeck = COALESCE(?, show_ondeck)
+          show_ondeck = COALESCE(?, show_ondeck),
+          layout_mode = COALESCE(?, layout_mode),
+          ondeck_new_batch_default = COALESCE(?, ondeck_new_batch_default)
         WHERE id = 1
       `
       ).run(
@@ -401,7 +450,9 @@ const server = http.createServer(async (req, res) => {
         title,
         font_title,
         font_body,
-        show_ondeck !== undefined ? (show_ondeck ? 1 : 0) : null
+        show_ondeck !== undefined ? (show_ondeck ? 1 : 0) : null,
+        layout_mode,
+        ondeck_new_batch_default !== undefined ? (ondeck_new_batch_default ? 1 : 0) : null
       );
 
       if (tap_visibilities && typeof tap_visibilities === 'object') {
@@ -459,7 +510,7 @@ const server = http.createServer(async (req, res) => {
       if (
         body.batch_option !== undefined &&
         body.batch_option !== '' &&
-        body.batch_option !== 'custom:topo_chico | Topo Chico 0%'
+        body.batch_option !== customBeverage()?.assignmentOption
       ) {
         const options = haClient.getPublicTapStates()?.[String(tapId)]?.batchSelection?.options;
         if (!Array.isArray(options) || !options.includes(body.batch_option))
@@ -730,32 +781,71 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // 8. Manage Catalog & On-Deck (/api/catalog)
-  if (url.pathname === '/api/catalog' && req.method === 'POST') {
+  // 8. Manage Brewfather-powered On Deck preferences.
+  if (url.pathname === '/api/ondeck' && req.method === 'GET') {
     if (!requireAdmin(req, res)) return;
-
     try {
-      const body = validateCatalog(await readJsonBody(req));
-      ensureServing();
-      const stmt = db.prepare(`
-        INSERT INTO beverage_catalog (name, style, abv, ibu, srm_color, description, on_deck, target_tap_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-      stmt.run(
-        body.name,
-        body.style || '',
-        body.abv || 0,
-        body.ibu || 0,
-        body.srm_color || 0,
-        body.description || '',
-        body.on_deck ? 1 : 0,
-        body.target_tap_id || null
-      );
+      sendJson(res, 200, { batches: eligibleOndeckBatches() });
+    } catch (err) {
+      handleError(res, err, requestContext('read on deck'));
+    }
+    return;
+  }
 
+  if (url.pathname === '/api/ondeck' && req.method === 'POST') {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const body = validateOndeck(await readJsonBody(req));
+      ensureServing();
+      const eligible = eligibleOndeckBatches();
+      const known = new Set(eligible.map((batch) => batch.id));
+      if (body.batches.some((batch) => !known.has(batch.batch_id)))
+        throw new ValidationError('Invalid Brewfather batch');
+      const update = db.prepare(
+        `UPDATE brewfather_ondeck_preferences
+         SET visible = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE batch_id = ?`
+      );
+      db.transaction(() => body.batches.forEach((batch) => update.run(batch.visible ? 1 : 0, batch.batch_id)))();
       sseHub.publishImmediate('settings_updated', getFullStateSnapshot());
+      sendJson(res, 200, { success: true, batches: eligibleOndeckBatches() });
+    } catch (err) {
+      handleError(res, err, requestContext('update on deck'));
+    }
+    return;
+  }
+
+  if (url.pathname === '/api/brewfather/refresh' && req.method === 'POST') {
+    if (!requireAdmin(req, res)) return;
+    try {
+      await readEmptyJsonBody(req);
+      ensureServing();
+      try {
+        await haClient.callHAService('input_button', 'press', { entity_id: 'input_button.brewery_brewfather_refresh' });
+      } catch (error) {
+        console.error('[HA ERROR] Brewfather refresh failed:', error);
+        throw new HttpError(502, 'Home Assistant Brewfather refresh failed');
+      }
+      ensureServing();
       sendJson(res, 200, { success: true });
     } catch (err) {
-      handleError(res, err, requestContext('update catalog'));
+      handleError(res, err, requestContext('refresh Brewfather'));
+    }
+    return;
+  }
+
+  if (url.pathname === '/api/custom-beverage' && req.method === 'POST') {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const body = validateCustomBeverage(await readJsonBody(req));
+      ensureServing();
+      db.prepare(
+        `UPDATE custom_beverage SET name = ?, style = ?, abv = ?, ibu = ?, og = ?, fg = ?, srm = ?, description = ?,
+           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = 'custom:topo_chico'`
+      ).run(body.name, body.style, body.abv, body.ibu, body.og, body.fg, body.srm, body.description);
+      sseHub.publishImmediate('settings_updated', getFullStateSnapshot());
+      sendJson(res, 200, { success: true, customBeverage: customBeverage() });
+    } catch (err) {
+      handleError(res, err, requestContext('update custom beverage'));
     }
     return;
   }

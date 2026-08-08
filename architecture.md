@@ -24,7 +24,7 @@ src/
   tapboardProjection.js   allowlisted, capacity-aware Home Assistant projection
   displayUpdateCoalescer.js compact browser state-change batching
   sseHub.js               SSE framing, heartbeat, slow-client bounds
-  db.js / dbMigrations.js SQLite startup and schema-v2 migrations
+  db.js / dbMigrations.js SQLite startup and schema-v3 migrations
   kegLifecycle.js         immutable lifecycle assignment and attribution
   kegForecast.js          active-lifecycle forecast calculation
   databaseMaintenance.js  verified backup, restore, rotation, and retention
@@ -40,13 +40,13 @@ The HA client authenticates over `/api/websocket`, subscribes to `state_changed`
 
 Only each tap’s designated primary volume sensor is used for pour detection. Values must declare a supported unit and are converted explicitly to fluid ounces; missing or unsupported units are ignored. The detector rejects stale/duplicate timestamps and implausible jumps, establishes settled baselines, arbitrates simultaneous candidates, permits only one active tap, and finalizes after a quiet period or cancels a hard-timeout session. It emits `pour_start`, `pour_complete`, or `pour_cancel`; completion records only qualifying pours.
 
-The canonical measurement contract is `sensor.tap_N_fl_oz` plus `input_number.tap_N_keg_capacity_oz`. The public snapshot uses schema version 3 and exposes one coherent tuple per tap: `volumeOz`, `capacityOz`, `fillPercent`, `pintsRemaining`, and `volumeStatus`, plus batch metadata and batch-selection value/options. `sensor.tap_N_fill` and `sensor.tap_N_pints_remaining` are deliberately excluded.
+The canonical measurement contract is `sensor.tap_N_fl_oz` plus `input_number.tap_N_keg_capacity_oz`. The public snapshot uses schema version 4 and exposes one coherent tuple per tap: `volumeOz`, `capacityOz`, `fillPercent`, `pintsRemaining`, and `volumeStatus`, plus batch metadata and batch-selection value/options. `sensor.tap_N_fill` and `sensor.tap_N_pints_remaining` are deliberately excluded.
 
 `volumeStatus` is `measured` for a fresh scale reading; `stale` when a previously valid in-process scale source becomes unavailable; `assumed_full` only when the exact volume entity is absent while the tap has an active assignment; or `unavailable` when there is no valid measurement to retain. Ounces are clamped to capacity and pints/percent are derived on the server. The browser renders this tuple directly and may draw an empty graphic for unavailable data, but does not fabricate a numeric readout. Low-keg alerts and badges require `measured`; forecasts use the same derived tuple.
 
 ## SQLite schema and lifecycle ownership
 
-Startup enforces `foreign_keys=ON`, validates the database, and migrates ordered schema versions transactionally. The current schema is version 2.
+Startup enforces `foreign_keys=ON`, validates the database, and migrates ordered schema versions transactionally. The current schema is version 3. Version 3 adds the display-layout and On Deck defaults, per-Brewfather-batch visibility preferences, and the singleton custom-beverage record.
 
 - A tap assignment opens one immutable keg lifecycle; reassignment or an end action closes the existing lifecycle.
 - A pour captures the open lifecycle at pour start. Historical and unassigned pours may have no lifecycle and cannot affect an active keg forecast.
@@ -65,6 +65,7 @@ The application publishes these SSE events:
 - `pour_start`, `pour_complete`, `pour_cancel`
 - `low_keg_alert`
 - `settings_updated`
+- `brewfather_batches_changed`
 
 The dashboard applies targeted updates so SVG glassware remains attached rather than being recreated for each telemetry update.
 
@@ -82,7 +83,10 @@ All API JSON responses are `no-store`. Mutation bodies must be JSON and are limi
 | `/api/taps/:id`           | `POST` | Administrator tap configuration/assignment update. |
 | `/api/taps/:id/end-batch` | `POST` | Administrator batch end and lifecycle close.       |
 | `/api/taps/:id/end-keg`   | `POST` | Administrator keg end and lifecycle close.         |
-| `/api/catalog`            | `POST` | Administrator catalog/on-deck addition.            |
+| `/api/ondeck`             | `GET`  | Administrator Brewfather On Deck preferences.      |
+| `/api/ondeck`             | `POST` | Administrator Brewfather visibility update.        |
+| `/api/brewfather/refresh` | `POST` | Administrator-triggered Brewfather refresh in HA.  |
+| `/api/custom-beverage`    | `POST` | Administrator custom-beverage metadata update.     |
 
 `POST /api/auth` returns an opaque random bearer token. The database stores only `sha256:` token digests and expiry timestamps; it does not use JWTs. Sessions expire after 24 hours, expired sessions are pruned, and a PIN change revokes all existing sessions. A newly initialized database fails closed for administrator actions until a deliberate non-default PIN has been configured.
 
@@ -92,4 +96,4 @@ All API JSON responses are `no-store`. Mutation bodies must be JSON and are limi
 
 Use `scripts/db-maintenance.js` only through the supported npm commands: `db:backup`, `db:verify`, `db:restore`, and `db:prune-pours`. Backup and restore preconditions are documented in [Database operations](docs/DATABASE-OPERATIONS.md). The repository installs no scheduler; daily backups are operator-owned.
 
-The legacy `config/www/tapboard` frontend is removed. Any Home Assistant writer/configuration cleanup remains explicitly deferred. HA-token rotation is also operator-owned and deferred; never expose token values in logs, documentation, or diagnostics. Batch 4’s physical/mechanical inspection remains open.
+The legacy `config/www/tapboard` frontend, `write_tapboard_json` shell command, and orphaned writer script are removed. The accompanying Home Assistant packages still require an operator-run configuration check and controlled restart. HA-token rotation is operator-owned and deferred; never expose token values in logs, documentation, or diagnostics. Batch 4’s physical/mechanical inspection remains open.

@@ -1,0 +1,876 @@
+# =====================================================================
+# TAP BOARD HOME ASSISTANT PACKAGE (packages/tapboard.yaml)
+# Full 1-6 Tap template sensors and batch selectors.
+# Tap helpers are storage-managed on this Home Assistant instance.
+# =====================================================================
+
+script:
+  end_tap_batch:
+    alias: 'End Tap Batch & Complete in Brewfather'
+    mode: single
+    fields:
+      tap_number:
+        description: 'Tap number to end (1-6)'
+        example: 1
+    sequence:
+      - variables:
+          entity_id: 'input_text.tap_{{ tap_number }}_batch'
+          batch_id: '{{ states(entity_id) }}'
+      - if:
+          - condition: template
+            value_template: "{{ batch_id not in ['unknown', 'unavailable', ''] and not batch_id.startswith('custom:') }}"
+        then:
+          - action: rest_command.brewfather_complete_batch
+            data:
+              batch_id: '{{ batch_id }}'
+      - action: input_text.set_value
+        target:
+          entity_id: 'input_text.tap_{{ tap_number }}_batch'
+        data:
+          value: ''
+
+template:
+  # Explicit, non-numeric placeholders keep the six-tap entity contract
+  # discoverable without inventing telemetry for taps that have no scale.
+  - sensor:
+      - name: 'Tap 4 fl oz'
+        unique_id: tap_4_fl_oz_placeholder
+        unit_of_measurement: 'fl oz'
+        availability: '{{ false }}'
+        state: '{{ none }}'
+      - name: 'Tap 4 Weight'
+        unique_id: tap_4_weight_placeholder
+        unit_of_measurement: 'lb'
+        availability: '{{ false }}'
+        state: '{{ none }}'
+      - name: 'Tap 4 Raw Value'
+        unique_id: tap_4_raw_value_placeholder
+        availability: '{{ false }}'
+        state: '{{ none }}'
+      - name: 'Tap 5 fl oz'
+        unique_id: tap_5_fl_oz_placeholder
+        unit_of_measurement: 'fl oz'
+        availability: '{{ false }}'
+        state: '{{ none }}'
+      - name: 'Tap 5 Weight'
+        unique_id: tap_5_weight_placeholder
+        unit_of_measurement: 'lb'
+        availability: '{{ false }}'
+        state: '{{ none }}'
+      - name: 'Tap 5 Raw Value'
+        unique_id: tap_5_raw_value_placeholder
+        availability: '{{ false }}'
+        state: '{{ none }}'
+      - name: 'Tap 6 fl oz'
+        unique_id: tap_6_fl_oz_placeholder
+        unit_of_measurement: 'fl oz'
+        availability: '{{ false }}'
+        state: '{{ none }}'
+      - name: 'Tap 6 Weight'
+        unique_id: tap_6_weight_placeholder
+        unit_of_measurement: 'lb'
+        availability: '{{ false }}'
+        state: '{{ none }}'
+      - name: 'Tap 6 Raw Value'
+        unique_id: tap_6_raw_value_placeholder
+        availability: '{{ false }}'
+        state: '{{ none }}'
+
+  # Tap 1 Batch Info
+  - triggers:
+      - trigger: state
+        entity_id: input_text.tap_1_batch
+      - trigger: time_pattern
+        hours: '/6'
+      - trigger: homeassistant
+        event: start
+      - trigger: state
+        entity_id: input_button.brewery_brewfather_refresh
+    actions:
+      - if:
+          - condition: template
+            value_template: "{{ states('input_text.tap_1_batch') not in ['unknown', 'unavailable', ''] and not states('input_text.tap_1_batch').startswith('custom:') }}"
+        then:
+          - action: rest_command.brewfather_get_batch
+            data:
+              batch_id: "{{ states('input_text.tap_1_batch') }}"
+            response_variable: batch
+            continue_on_error: true
+    sensor:
+      - name: 'Tap 1 Batch Info'
+        unique_id: tap_1_batch_info
+        icon: mdi:beer
+        state: >-
+          {% set bid = states('input_text.tap_1_batch') %}
+          {% if bid in ['unknown', 'unavailable', ''] %}empty
+          {% elif bid.startswith('custom:') %}custom
+          {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.recipe.name }}
+          {% elif this.attributes.get('batch_id') == bid %}{{ this.state }}
+          {% else %}unavailable{% endif %}
+        attributes:
+          batch_id: "{{ states('input_text.tap_1_batch') }}"
+          name: >-
+            {% set bid = states('input_text.tap_1_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.recipe.name }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('name') }}
+            {% else %}{{ none }}{% endif %}
+          style: >-
+            {% set bid = states('input_text.tap_1_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.recipe.style.name if batch.content.recipe.style is defined else 'Craft Beer' }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('style') }}
+            {% else %}{{ none }}{% endif %}
+          abv: >-
+            {% set bid = states('input_text.tap_1_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.measuredAbv or batch.content.estimatedAbv }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('abv') }}
+            {% else %}{{ none }}{% endif %}
+          og: >-
+            {% set bid = states('input_text.tap_1_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.measuredOg or batch.content.estimatedOg }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('og') }}
+            {% else %}{{ none }}{% endif %}
+          fg: >-
+            {% set bid = states('input_text.tap_1_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.measuredFg or batch.content.estimatedFg }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('fg') }}
+            {% else %}{{ none }}{% endif %}
+          ibu: >-
+            {% set bid = states('input_text.tap_1_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.recipe.ibu }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('ibu') }}
+            {% else %}{{ none }}{% endif %}
+          srm: >-
+            {% set bid = states('input_text.tap_1_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.recipe.color }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('srm') }}
+            {% else %}{{ none }}{% endif %}
+          description: >-
+            {% set bid = states('input_text.tap_1_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.notes or batch.content.recipe.description or '' }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('description') }}
+            {% else %}{{ none }}{% endif %}
+  # Tap 2 Batch Info
+  - triggers:
+      - trigger: state
+        entity_id: input_text.tap_2_batch
+      - trigger: time_pattern
+        hours: '/6'
+      - trigger: homeassistant
+        event: start
+      - trigger: state
+        entity_id: input_button.brewery_brewfather_refresh
+    actions:
+      - if:
+          - condition: template
+            value_template: "{{ states('input_text.tap_2_batch') not in ['unknown', 'unavailable', ''] and not states('input_text.tap_2_batch').startswith('custom:') }}"
+        then:
+          - action: rest_command.brewfather_get_batch
+            data:
+              batch_id: "{{ states('input_text.tap_2_batch') }}"
+            response_variable: batch
+            continue_on_error: true
+    sensor:
+      - name: 'Tap 2 Batch Info'
+        unique_id: tap_2_batch_info
+        icon: mdi:beer
+        state: >-
+          {% set bid = states('input_text.tap_2_batch') %}
+          {% if bid in ['unknown', 'unavailable', ''] %}empty
+          {% elif bid.startswith('custom:') %}custom
+          {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.recipe.name }}
+          {% elif this.attributes.get('batch_id') == bid %}{{ this.state }}
+          {% else %}unavailable{% endif %}
+        attributes:
+          batch_id: "{{ states('input_text.tap_2_batch') }}"
+          name: >-
+            {% set bid = states('input_text.tap_2_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.recipe.name }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('name') }}
+            {% else %}{{ none }}{% endif %}
+          style: >-
+            {% set bid = states('input_text.tap_2_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.recipe.style.name if batch.content.recipe.style is defined else 'Craft Beer' }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('style') }}
+            {% else %}{{ none }}{% endif %}
+          abv: >-
+            {% set bid = states('input_text.tap_2_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.measuredAbv or batch.content.estimatedAbv }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('abv') }}
+            {% else %}{{ none }}{% endif %}
+          og: >-
+            {% set bid = states('input_text.tap_2_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.measuredOg or batch.content.estimatedOg }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('og') }}
+            {% else %}{{ none }}{% endif %}
+          fg: >-
+            {% set bid = states('input_text.tap_2_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.measuredFg or batch.content.estimatedFg }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('fg') }}
+            {% else %}{{ none }}{% endif %}
+          ibu: >-
+            {% set bid = states('input_text.tap_2_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.recipe.ibu }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('ibu') }}
+            {% else %}{{ none }}{% endif %}
+          srm: >-
+            {% set bid = states('input_text.tap_2_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.recipe.color }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('srm') }}
+            {% else %}{{ none }}{% endif %}
+          description: >-
+            {% set bid = states('input_text.tap_2_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.notes or batch.content.recipe.description or '' }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('description') }}
+            {% else %}{{ none }}{% endif %}
+  # Tap 3 Batch Info
+  - triggers:
+      - trigger: state
+        entity_id: input_text.tap_3_batch
+      - trigger: time_pattern
+        hours: '/6'
+      - trigger: homeassistant
+        event: start
+      - trigger: state
+        entity_id: input_button.brewery_brewfather_refresh
+    actions:
+      - if:
+          - condition: template
+            value_template: "{{ states('input_text.tap_3_batch') not in ['unknown', 'unavailable', ''] and not states('input_text.tap_3_batch').startswith('custom:') }}"
+        then:
+          - action: rest_command.brewfather_get_batch
+            data:
+              batch_id: "{{ states('input_text.tap_3_batch') }}"
+            response_variable: batch
+            continue_on_error: true
+    sensor:
+      - name: 'Tap 3 Batch Info'
+        unique_id: tap_3_batch_info
+        icon: mdi:beer
+        state: >-
+          {% set bid = states('input_text.tap_3_batch') %}
+          {% if bid in ['unknown', 'unavailable', ''] %}empty
+          {% elif bid.startswith('custom:') %}custom
+          {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.recipe.name }}
+          {% elif this.attributes.get('batch_id') == bid %}{{ this.state }}
+          {% else %}unavailable{% endif %}
+        attributes:
+          batch_id: "{{ states('input_text.tap_3_batch') }}"
+          name: >-
+            {% set bid = states('input_text.tap_3_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.recipe.name }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('name') }}
+            {% else %}{{ none }}{% endif %}
+          style: >-
+            {% set bid = states('input_text.tap_3_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.recipe.style.name if batch.content.recipe.style is defined else 'Craft Beer' }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('style') }}
+            {% else %}{{ none }}{% endif %}
+          abv: >-
+            {% set bid = states('input_text.tap_3_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.measuredAbv or batch.content.estimatedAbv }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('abv') }}
+            {% else %}{{ none }}{% endif %}
+          og: >-
+            {% set bid = states('input_text.tap_3_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.measuredOg or batch.content.estimatedOg }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('og') }}
+            {% else %}{{ none }}{% endif %}
+          fg: >-
+            {% set bid = states('input_text.tap_3_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.measuredFg or batch.content.estimatedFg }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('fg') }}
+            {% else %}{{ none }}{% endif %}
+          ibu: >-
+            {% set bid = states('input_text.tap_3_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.recipe.ibu }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('ibu') }}
+            {% else %}{{ none }}{% endif %}
+          srm: >-
+            {% set bid = states('input_text.tap_3_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.recipe.color }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('srm') }}
+            {% else %}{{ none }}{% endif %}
+          description: >-
+            {% set bid = states('input_text.tap_3_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.notes or batch.content.recipe.description or '' }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('description') }}
+            {% else %}{{ none }}{% endif %}
+  # Tap 4 Batch Info
+  - triggers:
+      - trigger: state
+        entity_id: input_text.tap_4_batch
+      - trigger: time_pattern
+        hours: '/6'
+      - trigger: homeassistant
+        event: start
+      - trigger: state
+        entity_id: input_button.brewery_brewfather_refresh
+    actions:
+      - if:
+          - condition: template
+            value_template: "{{ states('input_text.tap_4_batch') not in ['unknown', 'unavailable', ''] and not states('input_text.tap_4_batch').startswith('custom:') }}"
+        then:
+          - action: rest_command.brewfather_get_batch
+            data:
+              batch_id: "{{ states('input_text.tap_4_batch') }}"
+            response_variable: batch
+            continue_on_error: true
+    sensor:
+      - name: 'Tap 4 Batch Info'
+        unique_id: tap_4_batch_info
+        icon: mdi:beer
+        state: >-
+          {% set bid = states('input_text.tap_4_batch') %}
+          {% if bid in ['unknown', 'unavailable', ''] %}empty
+          {% elif bid.startswith('custom:') %}custom
+          {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.recipe.name }}
+          {% elif this.attributes.get('batch_id') == bid %}{{ this.state }}
+          {% else %}unavailable{% endif %}
+        attributes:
+          batch_id: "{{ states('input_text.tap_4_batch') }}"
+          name: >-
+            {% set bid = states('input_text.tap_4_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.recipe.name }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('name') }}
+            {% else %}{{ none }}{% endif %}
+          style: >-
+            {% set bid = states('input_text.tap_4_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.recipe.style.name if batch.content.recipe.style is defined else 'Craft Beer' }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('style') }}
+            {% else %}{{ none }}{% endif %}
+          abv: >-
+            {% set bid = states('input_text.tap_4_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.measuredAbv or batch.content.estimatedAbv }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('abv') }}
+            {% else %}{{ none }}{% endif %}
+          og: >-
+            {% set bid = states('input_text.tap_4_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.measuredOg or batch.content.estimatedOg }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('og') }}
+            {% else %}{{ none }}{% endif %}
+          fg: >-
+            {% set bid = states('input_text.tap_4_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.measuredFg or batch.content.estimatedFg }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('fg') }}
+            {% else %}{{ none }}{% endif %}
+          ibu: >-
+            {% set bid = states('input_text.tap_4_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.recipe.ibu }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('ibu') }}
+            {% else %}{{ none }}{% endif %}
+          srm: >-
+            {% set bid = states('input_text.tap_4_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.recipe.color }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('srm') }}
+            {% else %}{{ none }}{% endif %}
+          description: >-
+            {% set bid = states('input_text.tap_4_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.notes or batch.content.recipe.description or '' }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('description') }}
+            {% else %}{{ none }}{% endif %}
+  # Tap 5 Batch Info
+  - triggers:
+      - trigger: state
+        entity_id: input_text.tap_5_batch
+      - trigger: time_pattern
+        hours: '/6'
+      - trigger: homeassistant
+        event: start
+      - trigger: state
+        entity_id: input_button.brewery_brewfather_refresh
+    actions:
+      - if:
+          - condition: template
+            value_template: "{{ states('input_text.tap_5_batch') not in ['unknown', 'unavailable', ''] and not states('input_text.tap_5_batch').startswith('custom:') }}"
+        then:
+          - action: rest_command.brewfather_get_batch
+            data:
+              batch_id: "{{ states('input_text.tap_5_batch') }}"
+            response_variable: batch
+            continue_on_error: true
+    sensor:
+      - name: 'Tap 5 Batch Info'
+        unique_id: tap_5_batch_info
+        icon: mdi:beer
+        state: >-
+          {% set bid = states('input_text.tap_5_batch') %}
+          {% if bid in ['unknown', 'unavailable', ''] %}empty
+          {% elif bid.startswith('custom:') %}custom
+          {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.recipe.name }}
+          {% elif this.attributes.get('batch_id') == bid %}{{ this.state }}
+          {% else %}unavailable{% endif %}
+        attributes:
+          batch_id: "{{ states('input_text.tap_5_batch') }}"
+          name: >-
+            {% set bid = states('input_text.tap_5_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.recipe.name }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('name') }}
+            {% else %}{{ none }}{% endif %}
+          style: >-
+            {% set bid = states('input_text.tap_5_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.recipe.style.name if batch.content.recipe.style is defined else 'Craft Beer' }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('style') }}
+            {% else %}{{ none }}{% endif %}
+          abv: >-
+            {% set bid = states('input_text.tap_5_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.measuredAbv or batch.content.estimatedAbv }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('abv') }}
+            {% else %}{{ none }}{% endif %}
+          og: >-
+            {% set bid = states('input_text.tap_5_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.measuredOg or batch.content.estimatedOg }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('og') }}
+            {% else %}{{ none }}{% endif %}
+          fg: >-
+            {% set bid = states('input_text.tap_5_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.measuredFg or batch.content.estimatedFg }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('fg') }}
+            {% else %}{{ none }}{% endif %}
+          ibu: >-
+            {% set bid = states('input_text.tap_5_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.recipe.ibu }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('ibu') }}
+            {% else %}{{ none }}{% endif %}
+          srm: >-
+            {% set bid = states('input_text.tap_5_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.recipe.color }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('srm') }}
+            {% else %}{{ none }}{% endif %}
+          description: >-
+            {% set bid = states('input_text.tap_5_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.notes or batch.content.recipe.description or '' }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('description') }}
+            {% else %}{{ none }}{% endif %}
+  # Tap 6 Batch Info
+  - triggers:
+      - trigger: state
+        entity_id: input_text.tap_6_batch
+      - trigger: time_pattern
+        hours: '/6'
+      - trigger: homeassistant
+        event: start
+      - trigger: state
+        entity_id: input_button.brewery_brewfather_refresh
+    actions:
+      - if:
+          - condition: template
+            value_template: "{{ states('input_text.tap_6_batch') not in ['unknown', 'unavailable', ''] and not states('input_text.tap_6_batch').startswith('custom:') }}"
+        then:
+          - action: rest_command.brewfather_get_batch
+            data:
+              batch_id: "{{ states('input_text.tap_6_batch') }}"
+            response_variable: batch
+            continue_on_error: true
+    sensor:
+      - name: 'Tap 6 Batch Info'
+        unique_id: tap_6_batch_info
+        icon: mdi:beer
+        state: >-
+          {% set bid = states('input_text.tap_6_batch') %}
+          {% if bid in ['unknown', 'unavailable', ''] %}empty
+          {% elif bid.startswith('custom:') %}custom
+          {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.recipe.name }}
+          {% elif this.attributes.get('batch_id') == bid %}{{ this.state }}
+          {% else %}unavailable{% endif %}
+        attributes:
+          batch_id: "{{ states('input_text.tap_6_batch') }}"
+          name: >-
+            {% set bid = states('input_text.tap_6_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.recipe.name }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('name') }}
+            {% else %}{{ none }}{% endif %}
+          style: >-
+            {% set bid = states('input_text.tap_6_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.recipe.style.name if batch.content.recipe.style is defined else 'Craft Beer' }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('style') }}
+            {% else %}{{ none }}{% endif %}
+          abv: >-
+            {% set bid = states('input_text.tap_6_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.measuredAbv or batch.content.estimatedAbv }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('abv') }}
+            {% else %}{{ none }}{% endif %}
+          og: >-
+            {% set bid = states('input_text.tap_6_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.measuredOg or batch.content.estimatedOg }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('og') }}
+            {% else %}{{ none }}{% endif %}
+          fg: >-
+            {% set bid = states('input_text.tap_6_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.measuredFg or batch.content.estimatedFg }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('fg') }}
+            {% else %}{{ none }}{% endif %}
+          ibu: >-
+            {% set bid = states('input_text.tap_6_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.recipe.ibu }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('ibu') }}
+            {% else %}{{ none }}{% endif %}
+          srm: >-
+            {% set bid = states('input_text.tap_6_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.recipe.color }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('srm') }}
+            {% else %}{{ none }}{% endif %}
+          description: >-
+            {% set bid = states('input_text.tap_6_batch') %}
+            {% if bid in ['unknown', 'unavailable', ''] %}{{ none }}
+            {% elif bid.startswith('custom:') %}
+              {{ none }}
+            {% elif batch is defined and batch.status | int(0) == 200 %}{{ batch.content.notes or batch.content.recipe.description or '' }}
+            {% elif this.attributes.get('batch_id') == bid %}{{ this.attributes.get('description') }}
+            {% else %}{{ none }}{% endif %}
+  # Tap Selectors
+  - select:
+      - name: 'Tap 1 Batch Select'
+        unique_id: tap_1_batch_select
+        state: >-
+          {% set current = states('input_text.tap_1_batch') %}
+          {% set batches = state_attr('sensor.brewfather_active_batches', 'batches') or [] %}
+          {% set ns = namespace(value='') %}
+          {% for item in batches if item.id == current %}
+            {% set ns.value = item.id + ' | ' + item.label %}
+          {% endfor %}
+          {% if current in ['unknown', 'unavailable', ''] %}
+            {{ '' }}
+          {% elif current == 'custom:topo_chico' %}
+            {{ 'custom:topo_chico | Tapboard Custom Beverage' }}
+          {% else %}
+            {{ ns.value or current + ' | Current assignment' }}
+          {% endif %}
+        options: >-
+          {% set current = states('input_text.tap_1_batch') %}
+          {% set batches = state_attr('sensor.brewfather_active_batches', 'batches') or [] %}
+          {% set ns = namespace(opts=[''], ids=[]) %}
+          {% for item in batches %}
+            {% set ns.opts = ns.opts + [item.id + ' | ' + item.label] %}
+            {% set ns.ids = ns.ids + [item.id] %}
+          {% endfor %}
+          {% set ns.opts = ns.opts + ['custom:topo_chico | Tapboard Custom Beverage'] %}
+          {% if current not in ['unknown', 'unavailable', '', 'custom:topo_chico'] and current not in ns.ids %}
+            {% set ns.opts = ns.opts + [current + ' | Current assignment'] %}
+          {% endif %}
+          {{ ns.opts }}
+        select_option:
+          - action: input_text.set_value
+            target:
+              entity_id: input_text.tap_1_batch
+            data:
+              value: "{{ option.split(' | ')[0] if ' | ' in option else option }}"
+
+      - name: 'Tap 2 Batch Select'
+        unique_id: tap_2_batch_select
+        state: >-
+          {% set current = states('input_text.tap_2_batch') %}
+          {% set batches = state_attr('sensor.brewfather_active_batches', 'batches') or [] %}
+          {% set ns = namespace(value='') %}
+          {% for item in batches if item.id == current %}
+            {% set ns.value = item.id + ' | ' + item.label %}
+          {% endfor %}
+          {% if current in ['unknown', 'unavailable', ''] %}
+            {{ '' }}
+          {% elif current == 'custom:topo_chico' %}
+            {{ 'custom:topo_chico | Tapboard Custom Beverage' }}
+          {% else %}
+            {{ ns.value or current + ' | Current assignment' }}
+          {% endif %}
+        options: >-
+          {% set current = states('input_text.tap_2_batch') %}
+          {% set batches = state_attr('sensor.brewfather_active_batches', 'batches') or [] %}
+          {% set ns = namespace(opts=[''], ids=[]) %}
+          {% for item in batches %}
+            {% set ns.opts = ns.opts + [item.id + ' | ' + item.label] %}
+            {% set ns.ids = ns.ids + [item.id] %}
+          {% endfor %}
+          {% set ns.opts = ns.opts + ['custom:topo_chico | Tapboard Custom Beverage'] %}
+          {% if current not in ['unknown', 'unavailable', '', 'custom:topo_chico'] and current not in ns.ids %}
+            {% set ns.opts = ns.opts + [current + ' | Current assignment'] %}
+          {% endif %}
+          {{ ns.opts }}
+        select_option:
+          - action: input_text.set_value
+            target:
+              entity_id: input_text.tap_2_batch
+            data:
+              value: "{{ option.split(' | ')[0] if ' | ' in option else option }}"
+
+      - name: 'Tap 3 Batch Select'
+        unique_id: tap_3_batch_select
+        state: >-
+          {% set current = states('input_text.tap_3_batch') %}
+          {% set batches = state_attr('sensor.brewfather_active_batches', 'batches') or [] %}
+          {% set ns = namespace(value='') %}
+          {% for item in batches if item.id == current %}
+            {% set ns.value = item.id + ' | ' + item.label %}
+          {% endfor %}
+          {% if current in ['unknown', 'unavailable', ''] %}
+            {{ '' }}
+          {% elif current == 'custom:topo_chico' %}
+            {{ 'custom:topo_chico | Tapboard Custom Beverage' }}
+          {% else %}
+            {{ ns.value or current + ' | Current assignment' }}
+          {% endif %}
+        options: >-
+          {% set current = states('input_text.tap_3_batch') %}
+          {% set batches = state_attr('sensor.brewfather_active_batches', 'batches') or [] %}
+          {% set ns = namespace(opts=[''], ids=[]) %}
+          {% for item in batches %}
+            {% set ns.opts = ns.opts + [item.id + ' | ' + item.label] %}
+            {% set ns.ids = ns.ids + [item.id] %}
+          {% endfor %}
+          {% set ns.opts = ns.opts + ['custom:topo_chico | Tapboard Custom Beverage'] %}
+          {% if current not in ['unknown', 'unavailable', '', 'custom:topo_chico'] and current not in ns.ids %}
+            {% set ns.opts = ns.opts + [current + ' | Current assignment'] %}
+          {% endif %}
+          {{ ns.opts }}
+        select_option:
+          - action: input_text.set_value
+            target:
+              entity_id: input_text.tap_3_batch
+            data:
+              value: "{{ option.split(' | ')[0] if ' | ' in option else option }}"
+      - name: 'Tap 4 Batch Select'
+        unique_id: tap_4_batch_select
+        state: >-
+          {% set current = states('input_text.tap_4_batch') %}
+          {% set batches = state_attr('sensor.brewfather_active_batches', 'batches') or [] %}
+          {% set ns = namespace(value='') %}
+          {% for item in batches if item.id == current %}
+            {% set ns.value = item.id + ' | ' + item.label %}
+          {% endfor %}
+          {% if current in ['unknown', 'unavailable', ''] %}
+            {{ '' }}
+          {% elif current == 'custom:topo_chico' %}
+            {{ 'custom:topo_chico | Tapboard Custom Beverage' }}
+          {% else %}
+            {{ ns.value or current + ' | Current assignment' }}
+          {% endif %}
+        options: >-
+          {% set current = states('input_text.tap_4_batch') %}
+          {% set batches = state_attr('sensor.brewfather_active_batches', 'batches') or [] %}
+          {% set ns = namespace(opts=[''], ids=[]) %}
+          {% for item in batches %}
+            {% set ns.opts = ns.opts + [item.id + ' | ' + item.label] %}
+            {% set ns.ids = ns.ids + [item.id] %}
+          {% endfor %}
+          {% set ns.opts = ns.opts + ['custom:topo_chico | Tapboard Custom Beverage'] %}
+          {% if current not in ['unknown', 'unavailable', '', 'custom:topo_chico'] and current not in ns.ids %}
+            {% set ns.opts = ns.opts + [current + ' | Current assignment'] %}
+          {% endif %}
+          {{ ns.opts }}
+        select_option:
+          - action: input_text.set_value
+            target:
+              entity_id: input_text.tap_4_batch
+            data:
+              value: "{{ option.split(' | ')[0] if ' | ' in option else option }}"
+
+      - name: 'Tap 5 Batch Select'
+        unique_id: tap_5_batch_select
+        state: >-
+          {% set current = states('input_text.tap_5_batch') %}
+          {% set batches = state_attr('sensor.brewfather_active_batches', 'batches') or [] %}
+          {% set ns = namespace(value='') %}
+          {% for item in batches if item.id == current %}
+            {% set ns.value = item.id + ' | ' + item.label %}
+          {% endfor %}
+          {% if current in ['unknown', 'unavailable', ''] %}
+            {{ '' }}
+          {% elif current == 'custom:topo_chico' %}
+            {{ 'custom:topo_chico | Tapboard Custom Beverage' }}
+          {% else %}
+            {{ ns.value or current + ' | Current assignment' }}
+          {% endif %}
+        options: >-
+          {% set current = states('input_text.tap_5_batch') %}
+          {% set batches = state_attr('sensor.brewfather_active_batches', 'batches') or [] %}
+          {% set ns = namespace(opts=[''], ids=[]) %}
+          {% for item in batches %}
+            {% set ns.opts = ns.opts + [item.id + ' | ' + item.label] %}
+            {% set ns.ids = ns.ids + [item.id] %}
+          {% endfor %}
+          {% set ns.opts = ns.opts + ['custom:topo_chico | Tapboard Custom Beverage'] %}
+          {% if current not in ['unknown', 'unavailable', '', 'custom:topo_chico'] and current not in ns.ids %}
+            {% set ns.opts = ns.opts + [current + ' | Current assignment'] %}
+          {% endif %}
+          {{ ns.opts }}
+        select_option:
+          - action: input_text.set_value
+            target:
+              entity_id: input_text.tap_5_batch
+            data:
+              value: "{{ option.split(' | ')[0] if ' | ' in option else option }}"
+
+      - name: 'Tap 6 Batch Select'
+        unique_id: tap_6_batch_select
+        state: >-
+          {% set current = states('input_text.tap_6_batch') %}
+          {% set batches = state_attr('sensor.brewfather_active_batches', 'batches') or [] %}
+          {% set ns = namespace(value='') %}
+          {% for item in batches if item.id == current %}
+            {% set ns.value = item.id + ' | ' + item.label %}
+          {% endfor %}
+          {% if current in ['unknown', 'unavailable', ''] %}
+            {{ '' }}
+          {% elif current == 'custom:topo_chico' %}
+            {{ 'custom:topo_chico | Tapboard Custom Beverage' }}
+          {% else %}
+            {{ ns.value or current + ' | Current assignment' }}
+          {% endif %}
+        options: >-
+          {% set current = states('input_text.tap_6_batch') %}
+          {% set batches = state_attr('sensor.brewfather_active_batches', 'batches') or [] %}
+          {% set ns = namespace(opts=[''], ids=[]) %}
+          {% for item in batches %}
+            {% set ns.opts = ns.opts + [item.id + ' | ' + item.label] %}
+            {% set ns.ids = ns.ids + [item.id] %}
+          {% endfor %}
+          {% set ns.opts = ns.opts + ['custom:topo_chico | Tapboard Custom Beverage'] %}
+          {% if current not in ['unknown', 'unavailable', '', 'custom:topo_chico'] and current not in ns.ids %}
+            {% set ns.opts = ns.opts + [current + ' | Current assignment'] %}
+          {% endif %}
+          {{ ns.opts }}
+        select_option:
+          - action: input_text.set_value
+            target:
+              entity_id: input_text.tap_6_batch
+            data:
+              value: "{{ option.split(' | ')[0] if ' | ' in option else option }}"

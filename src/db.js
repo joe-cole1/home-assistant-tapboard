@@ -85,8 +85,8 @@ const existingSettings = db.prepare('SELECT id FROM settings WHERE id = 1').get(
 if (!existingSettings) {
   db.prepare(
     `INSERT INTO settings
-    (id, theme, volume_format, title, font_title, font_body, show_ondeck, admin_pin_hash, admin_pin_initialized)
-    VALUES (1, 'modern_dark', 'oz', 'Hazardous Brews', 'Outfit', 'Inter', 1, ?, 0)`
+    (id, theme, volume_format, title, font_title, font_body, show_ondeck, layout_mode, ondeck_new_batch_default, admin_pin_hash, admin_pin_initialized)
+    VALUES (1, 'modern_dark', 'oz', 'Hazardous Brews', 'Outfit', 'Inter', 1, 'cozy', 1, ?, 0)`
   ).run(unusablePinHash);
 } else {
   const settings = db.prepare('SELECT admin_pin_hash, admin_pin_initialized FROM settings WHERE id = 1').get();
