@@ -1,0 +1,88 @@
+# =====================================================================
+# TAPBOARD HELPERS
+# Copy this package only when these helpers do not already exist.
+# Existing UI/storage helpers should be retained instead of duplicated.
+# =====================================================================
+
+input_button:
+  brewery_brewfather_refresh:
+    name: 'Refresh Brewfather Batches'
+    icon: mdi:refresh
+
+input_text:
+  tap_1_batch:
+    name: 'Tap 1 Batch ID'
+    max: 255
+  tap_2_batch:
+    name: 'Tap 2 Batch ID'
+    max: 255
+  tap_3_batch:
+    name: 'Tap 3 Batch ID'
+    max: 255
+  tap_4_batch:
+    name: 'Tap 4 Batch ID'
+    max: 255
+  tap_5_batch:
+    name: 'Tap 5 Batch ID'
+    max: 255
+  tap_6_batch:
+    name: 'Tap 6 Batch ID'
+    max: 255
+
+input_number:
+  tap_1_keg_capacity_oz:
+    name: 'Tap 1 Keg Capacity'
+    min: 16
+    max: 2048
+    step: 1
+    unit_of_measurement: 'fl oz'
+    mode: box
+  tap_2_keg_capacity_oz:
+    name: 'Tap 2 Keg Capacity'
+    min: 16
+    max: 2048
+    step: 1
+    unit_of_measurement: 'fl oz'
+    mode: box
+  tap_3_keg_capacity_oz:
+    name: 'Tap 3 Keg Capacity'
+    min: 16
+    max: 2048
+    step: 1
+    unit_of_measurement: 'fl oz'
+    mode: box
+  tap_4_keg_capacity_oz:
+    name: 'Tap 4 Keg Capacity'
+    min: 16
+    max: 2048
+    step: 1
+    unit_of_measurement: 'fl oz'
+    mode: box
+  tap_5_keg_capacity_oz:
+    name: 'Tap 5 Keg Capacity'
+    min: 16
+    max: 2048
+    step: 1
+    unit_of_measurement: 'fl oz'
+    mode: box
+  tap_6_keg_capacity_oz:
+    name: 'Tap 6 Keg Capacity'
+    min: 16
+    max: 2048
+    step: 1
+    unit_of_measurement: 'fl oz'
+    mode: box
+
+input_boolean:
+  tap_1_enabled:
+    name: 'Tap 1 Enabled'
+  tap_2_enabled:
+    name: 'Tap 2 Enabled'
+  tap_3_enabled:
+    name: 'Tap 3 Enabled'
+  tap_4_enabled:
+    name: 'Tap 4 Enabled'
+  tap_5_enabled:
+    name: 'Tap 5 Enabled'
+  tap_6_enabled:
+    name: 'Tap 6 Enabled'

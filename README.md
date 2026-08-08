@@ -17,6 +17,10 @@ Tapboard is a containerized dashboard for six Home Assistant-connected beer taps
 
 ## Quick start
 
+Install and validate the bundled [Home Assistant packages](home-assistant/README.md)
+before starting Tapboard. That guide covers clean installations, migration to
+the standalone Brewfather package, credentials, verification, and rollback.
+
 1. Clone the repository and create an ignored environment file:
 
    ```sh
@@ -56,6 +60,10 @@ For an HTTPS reverse proxy, configure the exact public origin, for example `TAPB
 ## Operations and maintenance
 
 ## Home Assistant keg-measurement contract
+
+The complete Home Assistant package bundle is maintained in
+[`home-assistant/`](home-assistant/README.md). The container and its HA-side
+configuration therefore version together in this repository.
 
 For each tap `N` (1–6), Tapboard reads exactly these entities:
 
