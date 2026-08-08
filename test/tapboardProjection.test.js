@@ -98,6 +98,26 @@ test('sensorless assigned taps are assumed full while sensorless or measured una
   );
 });
 
+test('placeholder telemetry for taps 4 through 6 remains unavailable instead of fabricating volume', () => {
+  const states = new Map();
+  for (let tapId = 4; tapId <= 6; tapId++) {
+    states.set(`sensor.tap_${tapId}_fl_oz`, entity('unavailable', { unit_of_measurement: 'fl oz' }));
+    states.set(`input_number.tap_${tapId}_keg_capacity_oz`, entity(640));
+  }
+  const projection = createTapStatesProjection(states, { isAssigned: () => true });
+  for (let tapId = 4; tapId <= 6; tapId++) {
+    assert.deepEqual(
+      {
+        volumeOz: projection[String(tapId)].volumeOz,
+        fillPercent: projection[String(tapId)].fillPercent,
+        pintsRemaining: projection[String(tapId)].pintsRemaining,
+        volumeStatus: projection[String(tapId)].volumeStatus
+      },
+      { volumeOz: null, fillPercent: null, pintsRemaining: null, volumeStatus: 'unavailable' }
+    );
+  }
+});
+
 test('unavailable existing scale is stale only after a valid in-process measurement, then recovers', () => {
   const options = { isAssigned: () => true, lastValidMeasurements: new Map() };
   const states = measurementStates(216.63);
@@ -156,12 +176,12 @@ test('incremental volume and capacity events emit coherent tuples; obsolete even
 });
 
 test('batch options survive unusable selector states without exposing other attributes', () => {
-  const options = ['batch-1 | Privacy IPA', 42, { secret: 'nested' }, 'custom:topo_chico | Topo Chico 0%'];
+  const options = ['batch-1 | Privacy IPA', 42, { secret: 'nested' }, 'custom:topo_chico | Tapboard Custom Beverage'];
   const states = new Map([['select.tap_1_batch_select', entity('unknown', { options, device_id: 'private' })]]);
   const projection = createTapStatesProjection(states);
   assert.deepEqual(projection['1'].batchSelection, {
     value: '',
-    options: ['batch-1 | Privacy IPA', 'custom:topo_chico | Topo Chico 0%']
+    options: ['batch-1 | Privacy IPA', 'custom:topo_chico | Tapboard Custom Beverage']
   });
   assert.equal(JSON.stringify(projection).includes('private'), false);
 });

@@ -251,7 +251,7 @@ test('route validation rejects invalid IDs, fields, ranges, and bodyless action 
           body: '{"name":"IPA","unknown":true}'
         })
       ).status,
-      400
+      404
     );
     assert.equal(database.prepare('SELECT COUNT(*) count FROM beverage_catalog').get().count, 0);
     assert.deepEqual(database.prepare('SELECT graphic, batch_id FROM taps WHERE tap_id = 1').get(), before);
@@ -358,7 +358,7 @@ test('assignment lifecycles preserve pour history and rotate after a clear', asy
   try {
     const { token } = await authenticate(instance.baseUrl);
     const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
-    const body = JSON.stringify({ batch_option: 'custom:topo_chico | Topo Chico 0%' });
+    const body = JSON.stringify({ batch_option: 'custom:topo_chico | Tapboard Custom Beverage' });
 
     database.prepare('INSERT INTO pour_logs (tap_id, volume_poured_oz) VALUES (1, 12)').run();
     assert.equal((await fetch(`${instance.baseUrl}/api/taps/1`, { method: 'POST', headers, body })).status, 200);
@@ -469,6 +469,129 @@ test('override-only beverages own one lifecycle until explicitly cleared', async
       database.prepare('SELECT COUNT(*) count FROM keg_lifecycles WHERE tap_id = 2 AND closed_at IS NULL').get().count,
       0
     );
+  } finally {
+    database.close();
+    await stopServer(instance.child);
+  }
+});
+
+test('On Deck and custom beverage APIs require authentication, validate strictly, and persist one canonical value', async () => {
+  const instance = await startServer();
+  const database = new Database(path.join(instance.dataDir, 'tapboard.db'));
+  try {
+    const json = { 'Content-Type': 'application/json' };
+    assert.equal((await fetch(`${instance.baseUrl}/api/ondeck`)).status, 401);
+    assert.equal(
+      (await fetch(`${instance.baseUrl}/api/custom-beverage`, { method: 'POST', headers: json, body: '{}' })).status,
+      401
+    );
+
+    const { token } = await authenticate(instance.baseUrl);
+    const headers = { ...json, Authorization: `Bearer ${token}` };
+    const listed = await fetch(`${instance.baseUrl}/api/ondeck`, { headers });
+    assert.equal(listed.status, 200);
+    assert.deepEqual(await listed.json(), { batches: [] });
+
+    assert.equal(
+      (
+        await fetch(`${instance.baseUrl}/api/ondeck`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ batches: [] })
+        })
+      ).status,
+      200
+    );
+    assert.equal(
+      (
+        await fetch(`${instance.baseUrl}/api/ondeck`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ batches: [{ batch_id: 'bf-planned-1', visible: 'yes' }] })
+        })
+      ).status,
+      400
+    );
+    assert.equal(
+      (await fetch(`${instance.baseUrl}/api/brewfather/refresh`, { method: 'POST', headers, body: '{}' })).status,
+      502
+    );
+    assert.equal(
+      (
+        await fetch(`${instance.baseUrl}/api/brewfather/refresh`, {
+          method: 'POST',
+          headers,
+          body: '{"unexpected":true}'
+        })
+      ).status,
+      400
+    );
+
+    const custom = {
+      name: 'Lime Soda',
+      style: 'Sparkling Water',
+      abv: 0,
+      ibu: 0,
+      og: 1,
+      fg: 1,
+      srm: 0,
+      description: 'House-made lime soda'
+    };
+    assert.equal(
+      (
+        await fetch(`${instance.baseUrl}/api/custom-beverage`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(custom)
+        })
+      ).status,
+      200
+    );
+    assert.deepEqual(
+      database
+        .prepare('SELECT name, style, abv, ibu, og, fg, srm, description FROM custom_beverage WHERE id = ?')
+        .get('custom:topo_chico'),
+      custom
+    );
+    assert.equal(
+      (
+        await fetch(`${instance.baseUrl}/api/custom-beverage`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ ...custom, abv: 101 })
+        })
+      ).status,
+      400
+    );
+    const withoutAbv = { ...custom };
+    delete withoutAbv.abv;
+    assert.equal(
+      (
+        await fetch(`${instance.baseUrl}/api/custom-beverage`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(withoutAbv)
+        })
+      ).status,
+      400
+    );
+    assert.equal(
+      (
+        await fetch(`${instance.baseUrl}/api/custom-beverage`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ ...custom, unexpected: true })
+        })
+      ).status,
+      400
+    );
+    const snapshot = await (await fetch(`${instance.baseUrl}/api/state`)).json();
+    assert.equal(snapshot.schemaVersion, 4);
+    assert.deepEqual(snapshot.customBeverage, {
+      id: 'custom:topo_chico',
+      ...custom,
+      assignmentOption: 'custom:topo_chico | Tapboard Custom Beverage'
+    });
   } finally {
     database.close();
     await stopServer(instance.child);

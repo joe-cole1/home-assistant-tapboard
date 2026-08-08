@@ -10,9 +10,16 @@ Tapboard is a containerized dashboard for six Home Assistant-connected beer taps
 - Immutable keg lifecycles: a pour is attributed to the lifecycle active at its start, even if the tap is reassigned before completion.
 - Lifecycle-scoped 14-day usage forecast; no forecast is shown without usage for the currently open lifecycle.
 - Canonical, capacity-aware keg measurements sourced from Home Assistant scales; the browser never estimates volume from a percentage.
+- Cozy horizontal-swipe and compact 3-by-2 layouts sized for a six-tap landscape display.
+- Brewfather-powered tap assignment and On Deck visibility for Planning, Fermenting, and Conditioning batches.
+- One Tapboard-owned custom beverage whose display metadata is editable without Home Assistant hard-coding.
 - Hardened Docker Compose deployment with loopback-only access and independent named data and backup volumes.
 
 ## Quick start
+
+Install and validate the bundled [Home Assistant packages](home-assistant/README.md)
+before starting Tapboard. That guide covers clean installations, migration to
+the standalone Brewfather package, credentials, verification, and rollback.
 
 1. Clone the repository and create an ignored environment file:
 
@@ -54,12 +61,16 @@ For an HTTPS reverse proxy, configure the exact public origin, for example `TAPB
 
 ## Home Assistant keg-measurement contract
 
+The complete Home Assistant package bundle is maintained in
+[`home-assistant/`](home-assistant/README.md). The container and its HA-side
+configuration therefore version together in this repository.
+
 For each tap `N` (1–6), Tapboard reads exactly these entities:
 
 - `sensor.tap_N_fl_oz`: remaining measured volume in fluid ounces.
 - `input_number.tap_N_keg_capacity_oz`: authoritative per-tap capacity, an integer from 16 through 2048 fluid ounces.
 
-Tapboard publishes the coherent measurement tuple `volumeOz`, `capacityOz`, `fillPercent`, `pintsRemaining`, and `volumeStatus` in snapshot schema version 3 and in incremental SSE updates. It does not consume `sensor.tap_N_fill` or `sensor.tap_N_pints_remaining`.
+Tapboard publishes the coherent measurement tuple `volumeOz`, `capacityOz`, `fillPercent`, `pintsRemaining`, and `volumeStatus` in snapshot schema version 4 and in incremental SSE updates. It does not consume `sensor.tap_N_fill` or `sensor.tap_N_pints_remaining`.
 
 `volumeStatus` is `measured` for a fresh valid scale reading, `stale` when the last valid in-process reading is retained after an existing source becomes unavailable, `assumed_full` only when the exact volume entity is absent and a batch is assigned, or `unavailable` on a cold start without a valid measurement (and for unassigned/sensor-unavailable taps). Low-keg alerts and low-keg badges are limited to fresh `measured` readings. Forecasts use the same server-derived tuple.
 
@@ -91,6 +102,6 @@ npm run check
 
 ## Current operational boundaries
 
-- Home Assistant and ESPHome configuration, including the physical/mechanical inspection tracked in Batch 4, remain outside this repository work and are still open.
+- Home Assistant and ESPHome deployment, including the physical/mechanical inspection tracked in Batch 4, remain operator-owned and are still open.
 - HA-token rotation is operator-owned and deliberately deferred. Replace it privately in the ignored environment file, recreate Tapboard, and verify hydration without displaying the token or authorization data.
-- The legacy `config/www/tapboard` frontend has been removed. Its separate Home Assistant writer/configuration cleanup is explicitly deferred and must be handled as a separately reviewed HA change.
+- The legacy `config/www/tapboard` frontend, its `write_tapboard_json` shell command, and the orphaned writer script have been removed. Apply and validate the accompanying Home Assistant packages before restarting Home Assistant.

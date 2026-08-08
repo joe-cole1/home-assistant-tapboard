@@ -12,6 +12,7 @@ const BODY_FONTS = new Set(['Inter', 'Roboto', 'Balsamiq Sans', 'Outfit', 'Fredo
 const GRAPHICS = new Set(['corny_keg', 'pint_glass', 'tulip_glass', 'wheat_glass', 'mug', 'stout_glass', 'snifter']);
 const DISPLAY_UNITS = new Set(['percent', 'pints', 'oz', 'pours_12', 'pours_custom']);
 const VOLUME_FORMATS = new Set(['oz', 'pints']);
+const LAYOUT_MODES = new Set(['cozy', 'compact']);
 // eslint-disable-next-line no-control-regex -- Reject control characters from untrusted request text.
 const DISALLOWED_CONTROLS = /[\u0000-\u0009\u000B\u000C\u000E-\u001F\u007F]/;
 const CANONICAL_NUMBER = /^(?:0|[1-9]\d*)(?:\.\d+)?$/;
@@ -52,8 +53,12 @@ function boolean(value) {
   return value;
 }
 
-function numeric(value, min, max, { integer = false, allowEmpty = false } = {}) {
-  if (value === undefined) return undefined;
+function numeric(value, min, max, { integer = false, allowEmpty = false, allowNull = false, required = false } = {}) {
+  if (value === undefined) {
+    if (required) throw new ValidationError();
+    return undefined;
+  }
+  if (allowNull && value === null) return null;
   if (allowEmpty && value === '') return '';
   let parsed;
   if (typeof value === 'number') parsed = value;
@@ -93,6 +98,8 @@ export function validateSettings(body) {
       'font_title',
       'font_body',
       'show_ondeck',
+      'layout_mode',
+      'ondeck_new_batch_default',
       'tap_visibilities',
       'new_pin'
     ])
@@ -104,6 +111,9 @@ export function validateSettings(body) {
   assignIfDefined(output, 'font_title', choice(body.font_title, TITLE_FONTS));
   assignIfDefined(output, 'font_body', choice(body.font_body, BODY_FONTS));
   if (body.show_ondeck !== undefined) output.show_ondeck = boolean(body.show_ondeck);
+  assignIfDefined(output, 'layout_mode', choice(body.layout_mode, LAYOUT_MODES));
+  if (body.ondeck_new_batch_default !== undefined)
+    output.ondeck_new_batch_default = boolean(body.ondeck_new_batch_default);
   if (body.new_pin !== undefined) {
     const pin = text(body.new_pin, 4, { allowEmpty: false });
     if (!/^\d{4}$/.test(pin) || pin === '0000') throw new ValidationError('Invalid PIN');
@@ -119,6 +129,37 @@ export function validateSettings(body) {
     output.tap_visibilities = visibilities;
   }
   return output;
+}
+
+export function validateOndeck(body) {
+  assertObject(body);
+  rejectUnknown(body, new Set(['batches']));
+  if (!Array.isArray(body.batches) || body.batches.length > 150) throw new ValidationError();
+  const seen = new Set();
+  const batches = body.batches.map((entry) => {
+    assertObject(entry);
+    rejectUnknown(entry, new Set(['batch_id', 'visible']));
+    const batch_id = text(entry.batch_id, 256, { required: true, allowEmpty: false });
+    if (seen.has(batch_id)) throw new ValidationError();
+    seen.add(batch_id);
+    return { batch_id, visible: boolean(entry.visible) };
+  });
+  return { batches };
+}
+
+export function validateCustomBeverage(body) {
+  assertObject(body);
+  rejectUnknown(body, new Set(['name', 'style', 'abv', 'ibu', 'og', 'fg', 'srm', 'description']));
+  return {
+    name: text(body.name, 120, { required: true, allowEmpty: false }),
+    style: text(body.style, 120, { required: true, allowEmpty: false }),
+    abv: numeric(body.abv, 0, 100, { required: true }),
+    ibu: numeric(body.ibu, 0, 1_000, { integer: true, required: true }),
+    og: numeric(body.og, 0.5, 2, { allowNull: true, required: true }),
+    fg: numeric(body.fg, 0.5, 2, { allowNull: true, required: true }),
+    srm: numeric(body.srm, 0, 50, { integer: true, required: true }),
+    description: text(body.description, 2_000, { required: true })
+  };
 }
 
 export function validateTap(body) {

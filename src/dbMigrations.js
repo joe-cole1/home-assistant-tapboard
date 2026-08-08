@@ -1,5 +1,5 @@
 const BASE_SCHEMA_VERSION = 1;
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 function tableExists(db, name) {
   return Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name));
@@ -215,6 +215,39 @@ function migrateLifecycleSchema(db) {
   `);
 }
 
+function migrateTapboardContentSchema(db) {
+  addColumnIfMissing(db, 'settings', 'layout_mode', "TEXT NOT NULL DEFAULT 'cozy'");
+  addColumnIfMissing(db, 'settings', 'ondeck_new_batch_default', 'INTEGER NOT NULL DEFAULT 1');
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS brewfather_ondeck_preferences (
+      batch_id TEXT PRIMARY KEY,
+      visible INTEGER NOT NULL CHECK(visible IN (0, 1)),
+      first_seen_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+      updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+    );
+    CREATE TABLE IF NOT EXISTS custom_beverage (
+      id TEXT PRIMARY KEY CHECK(id = 'custom:topo_chico'),
+      name TEXT NOT NULL,
+      style TEXT NOT NULL DEFAULT '',
+      abv REAL NOT NULL DEFAULT 0,
+      ibu INTEGER NOT NULL DEFAULT 0,
+      og REAL,
+      fg REAL,
+      srm INTEGER NOT NULL DEFAULT 0,
+      description TEXT NOT NULL DEFAULT '',
+      updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+    );
+  `);
+  db.prepare(
+    "UPDATE settings SET layout_mode = 'cozy' WHERE layout_mode NOT IN ('cozy', 'compact') OR layout_mode IS NULL"
+  ).run();
+  db.prepare('UPDATE settings SET ondeck_new_batch_default = 1 WHERE ondeck_new_batch_default IS NULL').run();
+  db.prepare(
+    `INSERT OR IGNORE INTO custom_beverage (id, name, style, abv, ibu, og, fg, srm, description)
+     VALUES ('custom:topo_chico', 'Topo Chico', 'Sparkling Water', 0, 0, 1, 1, 0, 'Sparkling mineral water')`
+  ).run();
+}
+
 function validateLatestSchema(db) {
   for (const [table, required] of Object.entries({
     settings: ['id', 'admin_pin_hash', 'admin_pin_initialized'],
@@ -230,11 +263,14 @@ function validateLatestSchema(db) {
       'closed_at',
       'close_reason'
     ],
+    brewfather_ondeck_preferences: ['batch_id', 'visible', 'first_seen_at', 'updated_at'],
+    custom_beverage: ['id', 'name', 'style', 'abv', 'ibu', 'og', 'fg', 'srm', 'description'],
     schema_migrations: ['version', 'name', 'applied_at']
   })) {
     if (!tableExists(db, table)) throw new Error(`Incompatible schema version ${SCHEMA_VERSION}: missing ${table}`);
     requireColumns(db, table, required);
   }
+  requireColumns(db, 'settings', ['layout_mode', 'ondeck_new_batch_default']);
   for (const index of ['keg_lifecycles_one_open_tap', 'pour_logs_lifecycle_epoch']) {
     if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ?").get(index)) {
       throw new Error(`Incompatible schema version ${SCHEMA_VERSION}: missing ${index}`);
@@ -288,13 +324,21 @@ export function migrateDatabase(db) {
         );
         db.pragma(`user_version = ${BASE_SCHEMA_VERSION}`);
       }
-      if (version < SCHEMA_VERSION) {
+      if (version < 2) {
         migrateLifecycleSchema(db);
         db.prepare('INSERT OR IGNORE INTO schema_migrations (version, name) VALUES (?, ?)').run(
-          SCHEMA_VERSION,
+          2,
           'immutable-keg-lifecycles'
         );
-        db.pragma(`user_version = ${SCHEMA_VERSION}`);
+        db.pragma('user_version = 2');
+      }
+      if (version < 3) {
+        migrateTapboardContentSchema(db);
+        db.prepare('INSERT OR IGNORE INTO schema_migrations (version, name) VALUES (?, ?)').run(
+          3,
+          'brewfather-ondeck-and-custom-beverage'
+        );
+        db.pragma('user_version = 3');
       }
     })();
   }

@@ -43,6 +43,7 @@
       <div class="ondeck-items" id="onDeckItems">
         <span class="ondeck-item">Loading upcoming brews...</span>
       </div>
+      <button class="btn-icon ondeck-cog-btn" id="onDeckSettingsBtn" type="button" title="Manage On Deck">⚙️</button>
     </footer>
 
     <!-- Toast Notification Container for Real-Time Pour Alerts -->
@@ -302,6 +303,63 @@
         </div>
 
         <div class="form-group">
+          <label class="form-label" for="layoutModeSelect">Dashboard Layout</label>
+          <select class="form-control" id="layoutModeSelect">
+            <option value="cozy">Cozy — scroll through tap cards</option>
+            <option value="compact">Compact — six taps at a glance</option>
+          </select>
+        </div>
+
+        <label class="settings-check-row">
+          <input type="checkbox" id="showOnDeckCheckbox" /> Show the On Deck footer
+        </label>
+        <label class="settings-check-row">
+          <input type="checkbox" id="onDeckNewBatchDefaultCheckbox" /> Show newly discovered batches on On Deck
+        </label>
+
+        <section class="settings-section" aria-labelledby="customBeverageHeading">
+          <h4 id="customBeverageHeading">Custom Beverage</h4>
+          <p class="settings-help">
+            This single beverage is available on every tap. Tap telemetry stays managed by the tap.
+          </p>
+          <div class="form-group">
+            <label class="form-label" for="customBeverageName">Name</label>
+            <input class="form-control" id="customBeverageName" maxlength="120" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="customBeverageStyle">Style</label>
+            <input class="form-control" id="customBeverageStyle" maxlength="120" required />
+          </div>
+          <div class="tap-override-number-grid">
+            <div class="form-group">
+              <label class="form-label" for="customBeverageAbv">ABV (%)</label
+              ><input class="form-control" id="customBeverageAbv" type="number" min="0" max="100" step="0.1" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="customBeverageIbu">IBU</label
+              ><input class="form-control" id="customBeverageIbu" type="number" min="0" max="1000" step="1" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="customBeverageSrm">SRM</label
+              ><input class="form-control" id="customBeverageSrm" type="number" min="0" max="50" step="1" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="customBeverageOg">OG (optional)</label
+              ><input class="form-control" id="customBeverageOg" type="number" min="0.5" max="2" step="0.001" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="customBeverageFg">FG (optional)</label
+              ><input class="form-control" id="customBeverageFg" type="number" min="0.5" max="2" step="0.001" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="customBeverageDescription">Description</label>
+            <textarea class="form-control" id="customBeverageDescription" rows="2" maxlength="1000"></textarea>
+          </div>
+          <button id="saveCustomBeverageBtn" class="btn-primary" type="button">Save Custom Beverage</button>
+        </section>
+
+        <div class="form-group">
           <label class="form-label">Update Admin PIN (4-Digits)</label>
           <input
             type="password"
@@ -313,6 +371,28 @@
         </div>
 
         <button id="saveGlobalSettingsBtn" class="btn-primary" style="margin-top: 1rem">Save Settings</button>
+      </div>
+    </div>
+
+    <div
+      id="onDeckModal"
+      class="app-modal"
+      style="display: none"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="onDeckModalTitle"
+    >
+      <div class="app-modal-panel">
+        <div class="app-modal-heading">
+          <h3 id="onDeckModalTitle">Manage On Deck</h3>
+          <button class="btn-icon" id="closeOnDeckBtn" type="button" title="Close">✕</button>
+        </div>
+        <p class="settings-help" id="onDeckRefreshStatus">Loading eligible Brewfather batches…</p>
+        <div id="onDeckBatchList" class="ondeck-batch-list"></div>
+        <div class="on-deck-actions">
+          <button id="refreshOnDeckBtn" class="btn-secondary" type="button">Refresh Brewfather</button>
+          <button id="saveOnDeckBtn" class="btn-primary" type="button">Save visibility</button>
+        </div>
       </div>
     </div>
 

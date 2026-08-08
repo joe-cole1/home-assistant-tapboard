@@ -7,7 +7,7 @@ import test from 'node:test';
 import bcrypt from 'bcryptjs';
 import Database from 'better-sqlite3';
 import { createOnlineBackup, MIGRATION_APPROVAL_FILE, restoreBackup } from '../src/databaseMaintenance.js';
-import { tapId, validateCatalog, validateSettings, validateTap } from '../src/validation.js';
+import { tapId, validateCatalog, validateCustomBeverage, validateSettings, validateTap } from '../src/validation.js';
 
 function initialize(dataDir, initialPin = '') {
   const result = spawnSync(
@@ -113,6 +113,23 @@ test('validation preserves client numeric strings while enforcing every approved
   for (const invalid of ['0', '01', '7', '-1', '1.0']) assert.throws(() => tapId(invalid));
 });
 
+test('custom beverage requires core display values while allowing unknown gravity readings', () => {
+  const beverage = validateCustomBeverage({
+    name: 'House Soda',
+    style: 'Soda',
+    abv: 0,
+    ibu: 0,
+    og: null,
+    fg: null,
+    srm: 0,
+    description: ''
+  });
+  assert.equal(beverage.og, null);
+  assert.equal(beverage.fg, null);
+  assert.throws(() => validateCustomBeverage({ ...beverage, abv: null }));
+  assert.throws(() => validateCustomBeverage({ ...beverage, srm: null }));
+});
+
 test('fresh databases fail closed and valid one-time initialization creates only a bcrypt hash', () => {
   const uninitializedDir = mkdtempSync(path.join(os.tmpdir(), 'tapboard-db-uninitialized-'));
   initialize(uninitializedDir);
@@ -176,9 +193,9 @@ test('verified restore marker permits migration, is consumed after success, and 
   });
   assert.equal(result.status, 0, result.stderr);
   assert.equal(existsSync(approvalFile), false);
-  assert.equal(existsSync(path.join(restoredDir, '.tapboard-migration-v2.json')), true);
+  assert.equal(existsSync(path.join(restoredDir, '.tapboard-migration-v3.json')), true);
   let migrated = open(restoredDir);
-  assert.equal(migrated.pragma('user_version', { simple: true }), 2);
+  assert.equal(migrated.pragma('user_version', { simple: true }), 3);
   assert.equal(migrated.prepare('SELECT COUNT(*) AS count FROM pour_logs').get().count, 1);
   migrated.close();
 

@@ -54,7 +54,9 @@ export function buildTapCardContent({
   header.appendChild(actions);
   fragment.appendChild(header);
 
-  fragment.append(element('h2', 'beer-title', beerName), element('div', 'beer-style', style));
+  const title = element('h2', 'beer-title', beerName);
+  title.title = String(beerName || '');
+  fragment.append(title, element('div', 'beer-style', style));
   if (description) fragment.appendChild(element('p', 'beer-description', description));
 
   const metrics = element('div', 'metrics-row');
@@ -123,10 +125,13 @@ export function buildOnDeckItems(onDeckBrews) {
   }
   onDeckBrews.forEach((brew) => {
     const item = element('span', 'ondeck-item');
+    const name = brew.name || brew.recipe_name || 'Untitled batch';
+    const style = brew.style || 'Craft';
+    const abv = brew.abv ?? '--';
     item.append(
       document.createTextNode('🍺 '),
-      element('strong', null, brew.name),
-      document.createTextNode(` (${brew.style || 'Craft'}) - ${brew.abv}% ABV`)
+      element('strong', null, name),
+      document.createTextNode(` (${style}) - ${abv}% ABV`)
     );
     fragment.appendChild(item);
   });

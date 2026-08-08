@@ -6,7 +6,7 @@ import test from 'node:test';
 import { formatSSEFrame } from '../src/sseHub.js';
 
 process.env.DATA_DIR = mkdtempSync(path.join(os.tmpdir(), 'tapboard-ha-client-test-'));
-const { HAClient } = await import('../src/haClient.js');
+const { HAClient, sanitizeBrewfatherActiveBatches } = await import('../src/haClient.js');
 
 function state(entityId, value, timestamp, unit = 'fl oz') {
   return {
@@ -126,7 +126,7 @@ test('a sensitive unrelated HA entity is absent from HTTP and SSE public seriali
   };
   client.processStateUpdate({ entity_id: privateEntity.entity_id, new_state: privateEntity });
 
-  const snapshot = { schemaVersion: 3, tapStates: client.getPublicTapStates() };
+  const snapshot = { schemaVersion: 4, tapStates: client.getPublicTapStates() };
   const httpJson = JSON.stringify(snapshot);
   const sseFrame = formatSSEFrame('snapshot', snapshot);
   for (const output of [httpJson, sseFrame]) {
@@ -135,6 +135,55 @@ test('a sensitive unrelated HA entity is absent from HTTP and SSE public seriali
     assert.equal(output.includes('latitude'), false);
   }
   assert.equal(displayUpdates, 0);
+});
+
+test('Brewfather projection keeps only bounded, unique, eligible batch metadata', () => {
+  const batches = sanitizeBrewfatherActiveBatches({
+    entity_id: 'sensor.brewfather_active_batches',
+    state: '2026-08-08T12:00:00Z',
+    attributes: {
+      batches: [
+        { id: 'planning-1', name: 'Plan <script>', status: 'Planning', style: 'IPA', abv: '5.2' },
+        { id: 'fermenting-1', recipe_name: 'Fermenting', status: 'Fermenting' },
+        { id: 'conditioning-1', name: 'Conditioning', status: 'Conditioning', abv: 4.8 },
+        { id: 'planning-1', name: 'Duplicate', status: 'Planning' },
+        { id: 'completed-1', name: 'Completed', status: 'Completed' },
+        { id: '', name: 'Missing identity', status: 'Planning' },
+        'invalid'
+      ]
+    }
+  });
+
+  assert.deepEqual(batches, [
+    { id: 'planning-1', name: 'Plan <script>', status: 'Planning', style: 'IPA', abv: 5.2 },
+    { id: 'fermenting-1', name: 'Fermenting', status: 'Fermenting', style: '', abv: null },
+    { id: 'conditioning-1', name: 'Conditioning', status: 'Conditioning', style: '', abv: 4.8 }
+  ]);
+  assert.deepEqual(
+    sanitizeBrewfatherActiveBatches({
+      entity_id: 'sensor.brewfather_active_batches',
+      state: 'ready',
+      attributes: { batches: { planning: [] } }
+    }),
+    []
+  );
+  assert.deepEqual(
+    sanitizeBrewfatherActiveBatches({
+      entity_id: 'sensor.brewfather_active_batches',
+      state: 'ready',
+      attributes: {
+        batches: [
+          ...Array.from({ length: 151 }, (_, index) => ({
+            id: `completed-${index}`,
+            name: 'Ineligible',
+            status: 'Completed'
+          })),
+          { id: 'late-valid', name: 'Still eligible', status: 'Planning' }
+        ]
+      }
+    }),
+    [{ id: 'late-valid', name: 'Still eligible', status: 'Planning', style: '', abv: null }]
+  );
 });
 
 test('pour completion uses the lifecycle captured synchronously at pour start', () => {
