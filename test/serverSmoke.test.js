@@ -31,7 +31,7 @@ async function waitForServer(url, child) {
   throw new Error('server did not become ready');
 }
 
-test('healthcheck is lightweight and public HTTP/SSE snapshots use only schema v3', async () => {
+test('healthcheck is lightweight and public HTTP/SSE snapshots use schema v4 content state', async () => {
   const port = await reservePort();
   const dataDir = mkdtempSync(path.join(os.tmpdir(), 'tapboard-server-smoke-'));
   const child = spawn(process.execPath, ['src/server.js'], {
@@ -59,7 +59,31 @@ test('healthcheck is lightweight and public HTTP/SSE snapshots use only schema v
     const stateResponse = await fetch(`${baseUrl}/api/state`);
     const stateText = await stateResponse.text();
     const snapshot = JSON.parse(stateText);
-    assert.equal(snapshot.schemaVersion, 3);
+    assert.equal(snapshot.schemaVersion, 4);
+    assert.deepEqual(snapshot.settings, {
+      id: 1,
+      theme: 'modern_dark',
+      volume_format: 'oz',
+      title: 'Hazardous Brews',
+      font_title: 'Outfit',
+      font_body: 'Inter',
+      show_ondeck: 1,
+      layout_mode: 'cozy',
+      ondeck_new_batch_default: 1
+    });
+    assert.deepEqual(snapshot.onDeckBatches, []);
+    assert.deepEqual(snapshot.customBeverage, {
+      id: 'custom:topo_chico',
+      name: 'Topo Chico',
+      style: 'Sparkling Water',
+      abv: 0,
+      ibu: 0,
+      og: 1,
+      fg: 1,
+      srm: 0,
+      description: 'Sparkling mineral water',
+      assignmentOption: 'custom:topo_chico | Tapboard Custom Beverage'
+    });
     assert.deepEqual(Object.keys(snapshot.tapStates), ['1', '2', '3', '4', '5', '6']);
     assert.equal(Object.hasOwn(snapshot, 'haStates'), false);
     assert.equal(stateText.includes('person.'), false);
@@ -79,6 +103,7 @@ test('healthcheck is lightweight and public HTTP/SSE snapshots use only schema v
     }
     controller.abort();
     assert.match(eventText, /event: snapshot\n/);
+    assert.match(eventText, /"schemaVersion":4/);
     assert.match(eventText, /"tapStates":/);
     assert.doesNotMatch(eventText, /"haStates":/);
 
