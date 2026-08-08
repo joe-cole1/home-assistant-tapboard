@@ -48,17 +48,56 @@ test('forecast is absent when the active tap has no usage data', () => {
   }
 });
 
-test('forecast uses at most 14 elapsed days and normalizes SQLite timestamps', () => {
+test('forecast averages the full lifecycle across drinking days only', () => {
   const database = databaseWithPours([
-    { tapId: 2, volumeOz: 100, timestamp: '2026-07-10 12:00:00' },
-    { tapId: 2, volumeOz: 28, timestamp: '2026-07-25 16:00:00' },
-    { tapId: 2, volumeOz: 14, timestamp: '2026-07-29T16:00:00.000Z' }
+    { tapId: 2, volumeOz: 10, timestamp: '2026-06-01 12:00:00' },
+    { tapId: 2, volumeOz: 14, timestamp: '2026-06-01T20:00:00.000Z' },
+    { tapId: 2, volumeOz: 36, timestamp: '2026-06-06T16:00:00.000Z' }
   ]);
   try {
     assert.deepEqual(calculateKegKickForecast({ db: database, tapId: 2, currentOz: 210, nowMs: NOW }), {
       avgDailyOz: 6,
+      avgDrinkingDayOz: 30,
+      avgDrinkingIntervalDays: 5,
       estimatedDaysRemaining: 35,
-      hasUsageData: true
+      hasUsageData: true,
+      isFallback: false
+    });
+  } finally {
+    database.close();
+  }
+});
+
+test('forecast ignores non-positive rows and empty elapsed days', () => {
+  const database = databaseWithPours([
+    { tapId: 1, volumeOz: 12, timestamp: '2026-01-01T12:00:00.000Z' },
+    { tapId: 1, volumeOz: 0, timestamp: '2026-02-01T12:00:00.000Z' },
+    { tapId: 1, volumeOz: -4, timestamp: '2026-03-01T12:00:00.000Z' }
+  ]);
+  try {
+    assert.deepEqual(calculateKegKickForecast({ db: database, tapId: 1, currentOz: 30 }), {
+      avgDailyOz: 3,
+      avgDrinkingDayOz: 12,
+      avgDrinkingIntervalDays: 4,
+      estimatedDaysRemaining: 10,
+      hasUsageData: true,
+      isFallback: false
+    });
+  } finally {
+    database.close();
+  }
+});
+
+test('active lifecycle without usage uses the labeled two-pours-every-four-days default', () => {
+  const database = databaseWithPours([{ tapId: 1, volumeOz: 0, timestamp: '2026-08-01T12:00:00.000Z' }]);
+  try {
+    assert.deepEqual(calculateKegKickForecast({ db: database, tapId: 1, currentOz: 120 }), {
+      avgDailyOz: 6,
+      avgDrinkingDayOz: 24,
+      avgDrinkingIntervalDays: 4,
+      estimatedDaysRemaining: 20,
+      hasUsageData: false,
+      isFallback: true
     });
   } finally {
     database.close();

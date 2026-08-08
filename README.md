@@ -8,7 +8,7 @@ Tapboard is a containerized dashboard for six Home Assistant-connected beer taps
 - Allowlisted public tap-state projection, bounded Home Assistant hydration, and compact/coalesced browser state updates.
 - Immediate SSE notifications for pour starts, completions, cancellations, low-keg alerts, HA connection status, and settings changes.
 - Immutable keg lifecycles: a pour is attributed to the lifecycle active at its start, even if the tap is reassigned before completion.
-- Lifecycle-scoped 14-day usage forecast; no forecast is shown without usage for the currently open lifecycle.
+- Lifecycle-scoped lifetime forecast based on average consumption and cadence on drinking days, with a clearly labeled 24 oz every 4 days default until usage is recorded.
 - Canonical, capacity-aware keg measurements sourced from Home Assistant scales; the browser never estimates volume from a percentage.
 - Cozy horizontal-swipe and compact 3-by-2 layouts sized for a six-tap landscape display.
 - Brewfather-powered tap assignment and On Deck visibility for Planning, Fermenting, and Conditioning batches.

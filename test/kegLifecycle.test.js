@@ -108,7 +108,14 @@ test('forecast includes only the open lifecycle, even for successive same-batch 
     });
     assert.deepEqual(
       calculateKegKickForecast({ db, tapId: 1, currentOz: 120, nowMs: Date.parse('2026-08-02T00:00:00.000Z') }),
-      { avgDailyOz: 12, estimatedDaysRemaining: 10, hasUsageData: true }
+      {
+        avgDailyOz: 3,
+        avgDrinkingDayOz: 12,
+        avgDrinkingIntervalDays: 4,
+        estimatedDaysRemaining: 40,
+        hasUsageData: true,
+        isFallback: false
+      }
     );
     assert.match(
       db

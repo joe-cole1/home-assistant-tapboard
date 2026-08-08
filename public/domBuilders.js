@@ -59,10 +59,6 @@ export function buildTapCardContent({
   const metrics = element('div', 'metrics-row');
   metrics.append(metric('ABV', abv), metric('IBU', ibu), metric('OG', og), metric('FG', fg));
   details.appendChild(metrics);
-  const forecast = element('div', 'forecast-readout', forecastText);
-  forecast.hidden = !forecastText;
-  details.appendChild(forecast);
-
   const graphicColumn = element('div', 'tap-card-graphic-column');
   const badges = element('div', 'tap-card-badges');
   if (lowThreshold !== null && lowThreshold !== undefined && fillPercent <= lowThreshold) {
@@ -73,11 +69,10 @@ export function buildTapCardContent({
   const graphic = element('div', 'graphic-container');
   const graphicWrapper = element('div', 'tap-graphic-wrapper');
   graphicWrapper.id = `graphic-tap-${tapId}`;
-  graphic.append(
-    graphicWrapper,
-    element('div', 'floating-pour-badge', '🍺 NOW POURING'),
-    element('div', 'volume-readout', volumeReadoutText)
-  );
+  const volumeReadout = element('div', 'volume-readout', volumeReadoutText);
+  const forecast = element('div', 'forecast-readout', forecastText);
+  forecast.hidden = !forecastText;
+  graphic.append(graphicWrapper, element('div', 'floating-pour-badge', '🍺 NOW POURING'), volumeReadout, forecast);
   const statusText =
     volumeStatus === 'stale'
       ? 'Stale measurement'
