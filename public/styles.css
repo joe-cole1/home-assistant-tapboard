@@ -91,6 +91,7 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* Header */
@@ -673,6 +674,10 @@ body.is-authenticated .tap-cog-btn {
   z-index: 10;
 }
 
+.ondeck-ticker-container[hidden] {
+  display: none;
+}
+
 .ondeck-cog-btn {
   display: none;
   margin-left: auto;
@@ -798,11 +803,25 @@ body.is-authenticated .ondeck-cog-btn {
 }
 
 @media (min-width: 900px) and (orientation: landscape) {
-  @media (max-height: 800px) {
-    body {
-      overflow: hidden;
-    }
+  body[data-layout-mode='compact'] {
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
 
+  body[data-layout-mode='compact'] .app-header,
+  body[data-layout-mode='compact'] .ondeck-ticker-container {
+    flex: 0 0 auto;
+  }
+
+  body[data-layout-mode='compact'] .main-content {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  @media (max-height: 800px) {
     .app-header {
       flex: 0 0 auto;
       padding: 0.55rem 1.25rem;
@@ -831,6 +850,7 @@ body.is-authenticated .ondeck-cog-btn {
 
   body[data-layout-mode='compact'] .tap-grid {
     height: 100%;
+    min-height: 0;
     gap: 0.65rem;
   }
 
@@ -841,6 +861,7 @@ body.is-authenticated .ondeck-cog-btn {
     grid-template-columns: minmax(85px, 30%) minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
     column-gap: 0.55rem;
+    row-gap: 0.35rem;
     align-items: start;
   }
 
@@ -883,12 +904,12 @@ body.is-authenticated .ondeck-cog-btn {
 
   body[data-layout-mode='compact'] .beer-style {
     font-size: 0.72rem;
-    margin-bottom: 0.25rem;
+    margin-bottom: 0.45rem;
   }
 
   body[data-layout-mode='compact'] .beer-description {
     display: -webkit-box;
-    margin: 0 0 0.3rem;
+    margin: 0 0 0.45rem;
     overflow: hidden;
     font-size: 0.6rem;
     line-height: 1.25;
@@ -897,7 +918,7 @@ body.is-authenticated .ondeck-cog-btn {
   }
 
   body[data-layout-mode='compact'] .metrics-row {
-    padding: 0.28rem 0;
+    padding: 0.4rem 0;
     margin-bottom: 0;
   }
   body[data-layout-mode='compact'] .metric-label {
@@ -913,7 +934,7 @@ body.is-authenticated .ondeck-cog-btn {
   body[data-layout-mode='compact'] .tap-card-badges {
     min-height: 1rem;
     gap: 0.25rem;
-    margin-bottom: 0.1rem;
+    margin-bottom: 0.4rem;
     position: static;
   }
 
@@ -930,7 +951,7 @@ body.is-authenticated .ondeck-cog-btn {
     text-align: center;
   }
   body[data-layout-mode='compact'] .forecast-readout {
-    margin-top: 0;
+    margin-top: 0.35rem;
     font-size: 0.62rem;
     text-align: left;
   }

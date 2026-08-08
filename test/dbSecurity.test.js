@@ -7,7 +7,14 @@ import test from 'node:test';
 import bcrypt from 'bcryptjs';
 import Database from 'better-sqlite3';
 import { createOnlineBackup, MIGRATION_APPROVAL_FILE, restoreBackup } from '../src/databaseMaintenance.js';
-import { tapId, validateCatalog, validateCustomBeverage, validateSettings, validateTap } from '../src/validation.js';
+import {
+  tapId,
+  validateCatalog,
+  validateCustomBeverage,
+  validateOndeck,
+  validateSettings,
+  validateTap
+} from '../src/validation.js';
 
 function initialize(dataDir, initialPin = '') {
   const result = spawnSync(
@@ -104,6 +111,8 @@ test('validation preserves client numeric strings while enforcing every approved
   assert.throws(() => validateSettings({ title: 'x'.repeat(81) }));
   assert.throws(() => validateSettings({ new_pin: '0000' }));
   assert.throws(() => validateSettings({ tap_visibilities: { '01': true } }));
+  assert.deepEqual(validateOndeck({ batches: [], show_ondeck: true }), { batches: [], show_ondeck: true });
+  assert.throws(() => validateOndeck({ batches: [], show_ondeck: 'yes' }));
   assert.doesNotThrow(() => validateCatalog({ name: 'IPA', abv: '100', ibu: '1000', target_tap_id: '2' }));
   assert.throws(() => validateCatalog({ name: '' }));
   assert.doesNotThrow(() => validateCatalog({ name: 'IPA', description: 'line one\nline two\r\nline three' }));
