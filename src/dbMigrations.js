@@ -1,5 +1,5 @@
 const BASE_SCHEMA_VERSION = 1;
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 function tableExists(db, name) {
   return Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name));
@@ -341,6 +341,38 @@ function migrateBrewfatherCacheSchema(db) {
   `);
 }
 
+function migrateBrewStorySchema(db) {
+  addColumnIfMissing(db, 'brewfather_batch_readings', 'ph', 'REAL');
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS brewfather_history_sync_state (
+      batch_id TEXT PRIMARY KEY,
+      last_attempt_at TEXT,
+      last_success_at TEXT,
+      error_category TEXT,
+      reading_count INTEGER NOT NULL DEFAULT 0 CHECK(reading_count >= 0),
+      updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+      FOREIGN KEY(batch_id) REFERENCES batches(batch_id) ON DELETE RESTRICT ON UPDATE RESTRICT
+    );
+    CREATE TABLE IF NOT EXISTS brewfather_sensory_overrides (
+      batch_id TEXT PRIMARY KEY,
+      hidden INTEGER NOT NULL DEFAULT 0 CHECK(hidden IN (0, 1)),
+      description_override TEXT CHECK(description_override IS NULL OR length(description_override) <= 2000),
+      malt REAL CHECK(malt IS NULL OR (malt >= 0 AND malt <= 5 AND malt * 2 = CAST(malt * 2 AS INTEGER))),
+      hops REAL CHECK(hops IS NULL OR (hops >= 0 AND hops <= 5 AND hops * 2 = CAST(hops * 2 AS INTEGER))),
+      bitterness REAL CHECK(bitterness IS NULL OR (bitterness >= 0 AND bitterness <= 5 AND bitterness * 2 = CAST(bitterness * 2 AS INTEGER))),
+      sweetness REAL CHECK(sweetness IS NULL OR (sweetness >= 0 AND sweetness <= 5 AND sweetness * 2 = CAST(sweetness * 2 AS INTEGER))),
+      roast REAL CHECK(roast IS NULL OR (roast >= 0 AND roast <= 5 AND roast * 2 = CAST(roast * 2 AS INTEGER))),
+      tartness REAL CHECK(tartness IS NULL OR (tartness >= 0 AND tartness <= 5 AND tartness * 2 = CAST(tartness * 2 AS INTEGER))),
+      body REAL CHECK(body IS NULL OR (body >= 0 AND body <= 5 AND body * 2 = CAST(body * 2 AS INTEGER))),
+      perceived_strength REAL CHECK(perceived_strength IS NULL OR (perceived_strength >= 0 AND perceived_strength <= 5 AND perceived_strength * 2 = CAST(perceived_strength * 2 AS INTEGER))),
+      updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+      FOREIGN KEY(batch_id) REFERENCES batches(batch_id) ON DELETE RESTRICT ON UPDATE RESTRICT
+    );
+    CREATE INDEX IF NOT EXISTS brewfather_history_sync_due
+      ON brewfather_history_sync_state(last_success_at, batch_id);
+  `);
+}
+
 function validateLatestSchema(db) {
   for (const [table, required] of Object.entries({
     settings: ['id', 'admin_pin_hash', 'admin_pin_initialized'],
@@ -360,6 +392,26 @@ function validateLatestSchema(db) {
     custom_beverage: ['id', 'name', 'style', 'abv', 'ibu', 'og', 'fg', 'srm', 'description'],
     brewfather_batch_details: ['batch_id', 'payload_json', 'fingerprint', 'fetched_at'],
     brewfather_batch_readings: ['batch_id', 'reading_key', 'recorded_at_ms', 'payload_json'],
+    brewfather_history_sync_state: [
+      'batch_id',
+      'last_attempt_at',
+      'last_success_at',
+      'error_category',
+      'reading_count'
+    ],
+    brewfather_sensory_overrides: [
+      'batch_id',
+      'hidden',
+      'description_override',
+      'malt',
+      'hops',
+      'bitterness',
+      'sweetness',
+      'roast',
+      'tartness',
+      'body',
+      'perceived_strength'
+    ],
     brewfather_sync_state: ['id', 'status', 'error_category', 'last_cycle_requests', 'last_cycle_batches'],
     schema_migrations: ['version', 'name', 'applied_at']
   })) {
@@ -379,12 +431,14 @@ function validateLatestSchema(db) {
     'error_category',
     'detail_fingerprint'
   ]);
+  requireColumns(db, 'brewfather_batch_readings', ['ph']);
   for (const index of [
     'keg_lifecycles_one_open_tap',
     'pour_logs_lifecycle_epoch',
     'batches_brewfather_present_status_date',
     'batches_brewfather_last_seen',
-    'brewfather_batch_readings_batch_time'
+    'brewfather_batch_readings_batch_time',
+    'brewfather_history_sync_due'
   ]) {
     if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ?").get(index)) {
       throw new Error(`Incompatible schema version ${SCHEMA_VERSION}: missing ${index}`);
@@ -466,6 +520,11 @@ export function migrateDatabase(db) {
         migrateBrewfatherCacheSchema(db);
         db.prepare('INSERT OR IGNORE INTO schema_migrations (version, name) VALUES (?, ?)').run(5, 'brewfather-cache');
         db.pragma('user_version = 5');
+      }
+      if (version < 6) {
+        migrateBrewStorySchema(db);
+        db.prepare('INSERT OR IGNORE INTO schema_migrations (version, name) VALUES (?, ?)').run(6, 'brew-story');
+        db.pragma('user_version = 6');
       }
       // Validation is part of the migration transaction. A malformed legacy
       // table or missing constraint must roll back schema changes, ledger rows,

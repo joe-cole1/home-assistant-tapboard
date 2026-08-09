@@ -66,6 +66,20 @@ function object(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 }
 
+function cleanTextList(value, { limit = 50, max = 160 } = {}) {
+  return (Array.isArray(value) ? value : [])
+    .slice(0, limit)
+    .map((item) => cleanText(typeof item === 'object' ? (item?.name ?? item?.label) : item, max, { allowNumber: true }))
+    .filter(Boolean);
+}
+
+function numericVector(value, keys, { min = 0, max = 100 } = {}) {
+  const source = object(value);
+  return Object.fromEntries(
+    keys.map((key) => [key, finiteNumber(source[key], min, max)]).filter(([, number]) => number !== null)
+  );
+}
+
 export function sanitizeSummary(source, { status: requestedStatus } = {}) {
   if (!source || typeof source !== 'object' || Array.isArray(source)) return null;
   const recipe = object(source.recipe);
@@ -116,12 +130,17 @@ function sanitizeIngredient(item) {
     origin: cleanText(item.origin, 120),
     type: cleanText(item.type, 80),
     use: cleanText(item.use, 80),
+    category: cleanText(item.category ?? item.subType ?? item.subtype, 80),
     amount: finiteNumber(item.amount),
     unit: cleanText(item.unit, 32),
+    percentage: finiteNumber(item.percentage ?? item.percent ?? item.pct, 0, 100),
     alpha: finiteNumber(item.alpha, 0, 100),
     color: finiteNumber(item.color, 0, 1_000),
     attenuation: finiteNumber(item.attenuation, 0, 100),
-    time: finiteNumber(item.time, 0, 1_000_000)
+    time: finiteNumber(item.time, 0, 1_000_000),
+    temperature_c: finiteNumber(item.temp ?? item.temperature, -100, 200),
+    aroma: cleanTextList(item.aroma ?? item.aromas, { limit: 24, max: 80 }),
+    oils: numericVector(item.oils, ['totalOil', 'myrcene', 'humulene', 'caryophyllene', 'farnesene'])
   };
 }
 
@@ -174,7 +193,20 @@ function sanitizeStyle(style) {
     flavor: cleanText(style.flavor, 4_000),
     mouthfeel: cleanText(style.mouthfeel, 4_000),
     characteristic_ingredients: cleanText(style.ingredients, 4_000),
-    examples: cleanText(style.examples, 4_000)
+    examples: cleanText(style.examples, 4_000),
+    ranges: {
+      og: [finiteNumber(style.ogMin ?? style.og?.min, 0.5, 2), finiteNumber(style.ogMax ?? style.og?.max, 0.5, 2)],
+      fg: [finiteNumber(style.fgMin ?? style.fg?.min, 0.5, 2), finiteNumber(style.fgMax ?? style.fg?.max, 0.5, 2)],
+      abv: [finiteNumber(style.abvMin ?? style.abv?.min, 0, 100), finiteNumber(style.abvMax ?? style.abv?.max, 0, 100)],
+      ibu: [
+        finiteNumber(style.ibuMin ?? style.ibu?.min, 0, 2_000),
+        finiteNumber(style.ibuMax ?? style.ibu?.max, 0, 2_000)
+      ],
+      color: [
+        finiteNumber(style.colorMin ?? style.srmMin ?? style.color?.min, 0, 100),
+        finiteNumber(style.colorMax ?? style.srmMax ?? style.color?.max, 0, 100)
+      ]
+    }
   };
 }
 
@@ -198,8 +230,40 @@ function sanitizeTaste(value) {
     flavor: cleanText(value.flavor, 2_000),
     mouthfeel: cleanText(value.mouthfeel, 2_000),
     overall: cleanText(value.overall ?? value.notes, 4_000),
-    recorded_at: isoDate(value.time ?? value.date ?? value.createdAt)
+    recorded_at: isoDate(value.time ?? value.date ?? value.createdAt),
+    ratings: numericVector(
+      value.ratings ?? value,
+      ['malt', 'hops', 'bitterness', 'sweetness', 'roast', 'tartness', 'body', 'alcohol', 'perceivedStrength'],
+      { min: 0, max: 100 }
+    )
   };
+}
+
+function sanitizeMeasurements(source, recipe) {
+  const values = {
+    target_og: finiteNumber(source.estimatedOg ?? recipe.og, 0.5, 2),
+    measured_og: finiteNumber(source.measuredOg, 0.5, 2),
+    target_fg: finiteNumber(source.estimatedFg ?? recipe.fg, 0.5, 2),
+    measured_fg: finiteNumber(source.measuredFg, 0.5, 2),
+    target_abv: finiteNumber(source.estimatedAbv ?? recipe.abv, 0, 100),
+    measured_abv: finiteNumber(source.measuredAbv, 0, 100),
+    target_attenuation: finiteNumber(source.estimatedAttenuation ?? recipe.attenuation, 0, 100),
+    measured_attenuation: finiteNumber(source.measuredAttenuation, 0, 100),
+    target_ibu: finiteNumber(source.estimatedIbu ?? recipe.ibu, 0, 2_000),
+    measured_ibu: finiteNumber(source.measuredIbu, 0, 2_000),
+    target_color_srm: finiteNumber(source.estimatedColor ?? recipe.color ?? recipe.srm, 0, 100),
+    measured_color_srm: finiteNumber(source.measuredColor, 0, 100),
+    target_batch_volume_l: finiteNumber(recipe.batchSize ?? source.batchSize, 0, 1_000_000),
+    measured_batch_volume_l: finiteNumber(source.measuredBatchSize, 0, 1_000_000),
+    target_boil_volume_l: finiteNumber(recipe.boilSize ?? source.boilSize, 0, 1_000_000),
+    measured_boil_volume_l: finiteNumber(source.measuredBoilSize, 0, 1_000_000),
+    target_efficiency: finiteNumber(recipe.efficiency, 0, 100),
+    measured_efficiency: finiteNumber(source.measuredEfficiency, 0, 100),
+    carbonation_volumes: finiteNumber(source.carbonation ?? recipe.carbonation, 0, 20),
+    carbonation_temp_c: finiteNumber(source.carbonationTemp, -50, 100),
+    measured_ph: finiteNumber(source.measuredPh ?? source.measuredFgPh, 0, 14)
+  };
+  return Object.fromEntries(Object.entries(values).filter(([, value]) => value !== null));
 }
 
 function sanitizeNutrition(value) {
@@ -247,12 +311,14 @@ export function sanitizeDetail(source) {
       status: STATUS_SET.has(source.status) ? source.status : null,
       notes: cleanText(source.notes, 8_000),
       brewer: cleanText(source.brewer?.name ?? source.brewer, 120),
+      tags: cleanTextList(source.tags, { limit: 50, max: 80 }),
       events: (Array.isArray(source.events) ? source.events : []).slice(0, 200).map(sanitizeEvent).filter(Boolean),
       taste_logs: (Array.isArray(source.tasteLogs ?? source.tastes) ? (source.tasteLogs ?? source.tastes) : [])
         .slice(0, 50)
         .map(sanitizeTaste)
         .filter(Boolean),
-      nutrition: sanitizeNutrition(source.nutrition)
+      nutrition: sanitizeNutrition(source.nutrition),
+      measurements: sanitizeMeasurements(source, recipe)
     },
     recipe: {
       id: cleanText(recipe._id ?? recipe.id, 256),
@@ -292,6 +358,7 @@ export function sanitizeReading(source) {
     sg: finiteNumber(source.sg ?? source.gravity, 0.5, 2),
     temp_c: finiteNumber(source.temp ?? source.temp_c ?? source.temperature, -100, 200),
     pressure: finiteNumber(source.pressure),
+    ph: finiteNumber(source.ph ?? source.pH, 0, 14),
     battery: finiteNumber(source.battery, 0, 100_000),
     rssi: finiteNumber(source.rssi, -1_000, 1_000)
   };
@@ -309,7 +376,8 @@ export function sanitizeReading(source) {
         reading.device_id,
         reading.sg,
         reading.temp_c,
-        reading.pressure
+        reading.pressure,
+        reading.ph
       ])
   };
 }
@@ -416,15 +484,16 @@ export function upsertReadings(db, batchId, readings, { maxPerWrite = MAX_HISTOR
   const upsert = db.prepare(`
     INSERT INTO brewfather_batch_readings (
       batch_id, reading_key, remote_id, recorded_at, recorded_at_ms, reading_type, device_id,
-      sg, temp_c, pressure, battery, rssi, payload_json
+      sg, temp_c, pressure, ph, battery, rssi, payload_json
     ) VALUES (
       @batchId, @reading_key, @remote_id, @recorded_at, @recorded_at_ms, @reading_type, @device_id,
-      @sg, @temp_c, @pressure, @battery, @rssi, @payload_json
+      @sg, @temp_c, @pressure, @ph, @battery, @rssi, @payload_json
     )
     ON CONFLICT(batch_id, reading_key) DO UPDATE SET
       remote_id=excluded.remote_id, recorded_at=excluded.recorded_at, recorded_at_ms=excluded.recorded_at_ms,
       reading_type=excluded.reading_type, device_id=excluded.device_id, sg=excluded.sg, temp_c=excluded.temp_c,
-      pressure=excluded.pressure, battery=excluded.battery, rssi=excluded.rssi, payload_json=excluded.payload_json
+      pressure=excluded.pressure, ph=excluded.ph, battery=excluded.battery, rssi=excluded.rssi,
+      payload_json=excluded.payload_json
     WHERE payload_json <> excluded.payload_json
   `);
   db.transaction(() => {
@@ -524,15 +593,68 @@ export function latestReadingCandidates(db, limit = 12) {
   return db
     .prepare(
       `
-      SELECT b.batch_id
+      SELECT b.batch_id, CASE WHEN COUNT(t.tap_id) > 0 THEN 1 ELSE 0 END AS assigned
       FROM batches b
-      JOIN brewfather_ondeck_preferences p ON p.batch_id=b.batch_id AND p.visible=1
+      LEFT JOIN taps t ON t.batch_id=b.batch_id
+      LEFT JOIN brewfather_ondeck_preferences p ON p.batch_id=b.batch_id
+      JOIN settings s ON s.id=1
       WHERE b.present=1 AND b.status IN ('Brewing', 'Fermenting', 'Conditioning')
-      ORDER BY b.last_seen_at DESC, b.batch_id LIMIT ?
+        AND (t.tap_id IS NOT NULL OR (p.visible=1 AND s.show_ondeck=1))
+      GROUP BY b.batch_id
+      ORDER BY assigned DESC, b.last_seen_at DESC, b.batch_id LIMIT ?
     `
     )
     .all(Math.min(Math.max(Number(limit) || 1, 1), 12))
     .map((row) => row.batch_id);
+}
+
+export function batchRecipeId(db, batchId) {
+  return db.prepare('SELECT recipe_id FROM batches WHERE batch_id=? AND present=1').get(batchId)?.recipe_id ?? null;
+}
+
+export function historyCandidates(db, { now = Date.now, intervalMs = 24 * 60 * 60 * 1_000, limit = 12 } = {}) {
+  const cutoff = new Date(now() - Math.max(60_000, intervalMs)).toISOString();
+  return db
+    .prepare(
+      `
+      SELECT b.batch_id, CASE WHEN COUNT(t.tap_id) > 0 THEN 1 ELSE 0 END AS assigned
+      FROM batches b
+      LEFT JOIN taps t ON t.batch_id=b.batch_id
+      LEFT JOIN brewfather_ondeck_preferences p ON p.batch_id=b.batch_id
+      JOIN settings s ON s.id=1
+      LEFT JOIN brewfather_history_sync_state h ON h.batch_id=b.batch_id
+      WHERE b.present=1 AND b.status IN ('Brewing', 'Fermenting', 'Conditioning')
+        AND (t.tap_id IS NOT NULL OR (p.visible=1 AND s.show_ondeck=1))
+        AND (h.batch_id IS NULL OR COALESCE(h.last_success_at, h.last_attempt_at) < ?)
+      GROUP BY b.batch_id
+      ORDER BY assigned DESC, CASE WHEN h.batch_id IS NULL THEN 0 ELSE 1 END,
+        COALESCE(h.last_success_at, h.last_attempt_at), b.last_seen_at DESC, b.batch_id
+      LIMIT ?
+    `
+    )
+    .all(cutoff, Math.min(Math.max(Number(limit) || 1, 1), 12))
+    .map((row) => row.batch_id);
+}
+
+export function updateHistorySyncState(db, batchId, fields = {}) {
+  const allowed = new Set(['last_attempt_at', 'last_success_at', 'error_category', 'reading_count']);
+  const entries = Object.entries(fields).filter(([key]) => allowed.has(key));
+  if (entries.length === 0) return;
+  const insert = {
+    last_attempt_at: null,
+    last_success_at: null,
+    error_category: null,
+    reading_count: 0,
+    ...Object.fromEntries(entries)
+  };
+  const updates = entries.map(([key]) => `${key}=excluded.${key}`).join(', ');
+  db.prepare(
+    `INSERT INTO brewfather_history_sync_state
+      (batch_id, last_attempt_at, last_success_at, error_category, reading_count)
+     VALUES (@batch_id, @last_attempt_at, @last_success_at, @error_category, @reading_count)
+     ON CONFLICT(batch_id) DO UPDATE SET ${updates},
+       updated_at=strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`
+  ).run({ batch_id: batchId, ...insert });
 }
 
 export function markBatchError(db, batchId, category, at) {

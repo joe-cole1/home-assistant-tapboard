@@ -7,6 +7,7 @@ import test from 'node:test';
 import bcrypt from 'bcryptjs';
 import Database from 'better-sqlite3';
 import { createOnlineBackup, MIGRATION_APPROVAL_FILE, restoreBackup } from '../src/databaseMaintenance.js';
+import { SCHEMA_VERSION } from '../src/dbMigrations.js';
 import {
   tapId,
   validateCatalog,
@@ -14,6 +15,7 @@ import {
   validateOndeck,
   validatePinChange,
   validateSettings,
+  validateSensoryOverride,
   validateTap
 } from '../src/validation.js';
 
@@ -132,6 +134,19 @@ test('validation preserves client numeric strings while enforcing every approved
   for (const partial of ['.5', '1.', '+1', '01', '1e2'])
     assert.throws(() => validateTap({ custom_pour_size: partial }));
   for (const invalid of ['0', '01', '7', '-1', '1.0']) assert.throws(() => tapId(invalid));
+  assert.deepEqual(validateSensoryOverride({ hidden: true, axis_overrides: { hops: 4.5, roast: null } }), {
+    hidden: true,
+    axis_overrides: { hops: 4.5, roast: null }
+  });
+  for (const invalid of [
+    {},
+    { hidden: 'yes' },
+    { axis_overrides: { hops: 4.3 } },
+    { axis_overrides: { unknown: 2 } },
+    { description_override: 'x'.repeat(2001) }
+  ]) {
+    assert.throws(() => validateSensoryOverride(invalid));
+  }
 });
 
 test('custom beverage requires core display values while allowing unknown gravity readings', () => {
@@ -214,9 +229,9 @@ test('verified restore marker permits migration, is consumed after success, and 
   });
   assert.equal(result.status, 0, result.stderr);
   assert.equal(existsSync(approvalFile), false);
-  assert.equal(existsSync(path.join(restoredDir, '.tapboard-migration-v5.json')), true);
+  assert.equal(existsSync(path.join(restoredDir, `.tapboard-migration-v${SCHEMA_VERSION}.json`)), true);
   let migrated = open(restoredDir);
-  assert.equal(migrated.pragma('user_version', { simple: true }), 5);
+  assert.equal(migrated.pragma('user_version', { simple: true }), SCHEMA_VERSION);
   assert.equal(migrated.prepare('SELECT COUNT(*) AS count FROM pour_logs').get().count, 1);
   migrated.close();
 

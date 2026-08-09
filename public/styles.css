@@ -581,6 +581,19 @@ body.is-authenticated .tap-cog-btn {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.tap-story-btn {
+  appearance: none;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.tap-story-btn:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 3px;
+}
 
 .beer-style {
   font-size: 1.15rem;
@@ -1090,6 +1103,280 @@ body.is-authenticated .ondeck-cog-btn {
   color: var(--text-muted);
   margin-top: 0.35rem;
   line-height: 1.4;
+}
+
+.brew-story-dialog {
+  width: 100vw;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  padding: 0;
+  border: 1px solid var(--border-color);
+  background: var(--bg-header);
+  color: var(--text-main);
+}
+.brew-story-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.82);
+  backdrop-filter: blur(8px);
+}
+.brew-story-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  padding: clamp(1rem, 3vw, 2rem);
+  box-sizing: border-box;
+}
+.brew-story-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 1rem;
+}
+.brew-story-header h2 {
+  margin: 0;
+  color: var(--accent-color);
+  font-family: var(--font-title);
+}
+.brew-story-windows {
+  display: flex;
+  gap: 0.5rem;
+  padding: 1rem 0;
+}
+.brew-story-windows button {
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  padding: 0.4rem 0.8rem;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.brew-story-windows button[aria-pressed='true'] {
+  color: #111;
+  background: var(--accent-color);
+  border-color: var(--accent-color);
+}
+.brew-story-status {
+  margin: 0 0 0.75rem;
+  color: var(--text-muted);
+}
+.brew-story-status.is-stale {
+  color: #ffa726;
+}
+.brew-story-body {
+  overflow: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  align-content: start;
+  gap: 1rem;
+  padding-right: 0.35rem;
+}
+.brew-story-section {
+  padding: 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.75rem;
+  background: var(--bg-card);
+}
+.brew-story-section h3 {
+  margin: 0 0 0.7rem;
+  color: var(--accent-color);
+}
+.brew-story-section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.7rem;
+}
+.brew-story-section-heading h3 {
+  margin: 0;
+}
+.brew-story-source-label,
+.brew-story-inline-source {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+.brew-story-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.35rem 0.75rem;
+  margin: 0;
+}
+.brew-story-facts dt {
+  color: var(--text-muted);
+}
+.brew-story-facts dd {
+  margin: 0;
+  font-weight: 600;
+}
+.brew-story-description,
+.brew-story-empty,
+.brew-story-freshness,
+.brew-story-text-block p {
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+.brew-story-text-block p {
+  margin: 0.35rem 0 0.8rem;
+  white-space: pre-wrap;
+}
+.brew-story-image {
+  width: min(100%, 320px);
+  max-height: 220px;
+  object-fit: contain;
+  border-radius: 0.65rem;
+  margin-bottom: 0.8rem;
+}
+.brew-story-tags {
+  color: var(--accent-color);
+  font-size: 0.82rem;
+}
+.brew-story-ingredients,
+.brew-story-timeline {
+  margin: 0.45rem 0 1rem;
+  padding-left: 1.25rem;
+  color: var(--text-muted);
+}
+.brew-story-chart {
+  display: block;
+  width: 100%;
+  min-height: 180px;
+  color: var(--accent-color);
+}
+.brew-story-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 1rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+.brew-story-chart-legend span::before {
+  content: '';
+  display: inline-block;
+  width: 0.75rem;
+  height: 0.18rem;
+  margin-right: 0.3rem;
+  vertical-align: middle;
+  background: var(--series-color);
+}
+.brew-story-radar {
+  width: 100%;
+  max-height: 300px;
+  overflow: visible;
+}
+.brew-story-radar-shape {
+  fill: color-mix(in srgb, var(--accent-color) 24%, transparent);
+  stroke: var(--accent-color);
+  stroke-width: 2;
+}
+.brew-story-radar-spoke {
+  stroke: var(--border-color);
+  stroke-width: 1;
+}
+.brew-story-radar-spoke.is-unknown {
+  stroke-dasharray: 4 4;
+  opacity: 0.65;
+}
+.brew-story-radar-marker {
+  fill: var(--accent-color);
+}
+.brew-story-radar text {
+  fill: currentColor;
+  font-size: 9px;
+}
+.brew-story-sensory-evidence {
+  display: grid;
+  grid-template-columns: minmax(8rem, auto) 1fr;
+  gap: 0.35rem 0.8rem;
+  font-size: 0.82rem;
+}
+.brew-story-sensory-evidence dt {
+  font-weight: 700;
+}
+.brew-story-sensory-evidence dd {
+  margin: 0;
+  color: var(--text-muted);
+}
+.brew-story-lifecycle {
+  border-top: 1px solid var(--border-color);
+  padding-top: 0.75rem;
+  margin-top: 0.75rem;
+}
+.brew-story-lifecycle h4 {
+  margin: 0 0 0.5rem;
+}
+.brew-story-admin {
+  grid-column: 1 / -1;
+}
+.brew-story-override-form,
+.brew-story-field {
+  display: grid;
+  gap: 0.45rem;
+}
+.brew-story-override-form {
+  gap: 1rem;
+}
+.brew-story-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.brew-story-axis-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+  gap: 0.75rem;
+}
+.brew-story-field textarea,
+.brew-story-field select {
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid var(--border-color);
+  border-radius: 0.45rem;
+  padding: 0.55rem;
+  background: var(--bg-header);
+  color: var(--text-main);
+  font: inherit;
+}
+.brew-story-override-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.ondeck-batch-selection {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  min-width: 0;
+  flex: 1;
+}
+.ondeck-manager-story {
+  flex: 0 0 auto;
+}
+.ondeck-story-button {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  text-align: inherit;
+  padding: 0;
+}
+.ondeck-story-button:focus-visible,
+.brew-story-windows button:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 2px;
+}
+@media (max-width: 600px) {
+  .brew-story-dialog {
+    width: 100vw;
+    height: 100vh;
+    border: 0;
+  }
+  .brew-story-body {
+    grid-template-columns: 1fr;
+  }
 }
 
 .toast-message {

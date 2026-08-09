@@ -13,6 +13,7 @@ Tapboard is a containerized dashboard for six Home Assistant-connected beer taps
 - Cozy horizontal-swipe and compact 3-by-2 layouts sized for a six-tap landscape display.
 - Per-browser display profiles for theme, title/body fonts, accent colours, and cozy/compact layout; shared SQLite settings remain the default for new or reset displays.
 - Native Brewfather v2 cache for Planning, Brewing, Fermenting, Conditioning, and Completed batches, with durable On Deck preferences and stale-cache operation.
+- Cache-only Brew Stories for assigned and visible On Deck batches, including recipe intent, planned-versus-actual measurements, bounded telemetry, keg chapters, and deterministic sensory guidance.
 - Versioned, allowlisted `tapboard_event` delivery to Home Assistant after durable Tapboard actions.
 - One Tapboard-owned custom beverage whose display metadata is editable without Home Assistant hard-coding.
 - Hardened Docker Compose deployment with loopback-only access and independent named data and backup volumes.
@@ -99,13 +100,15 @@ The repository does not install a backup scheduler. Run the supported backup com
 
 Tapboard refreshes at startup and every six hours, with bounded retry backoff after failures. An authenticated manual refresh uses the same coordinator and the same rolling request budget, so overlapping startup, scheduled, and manual refreshes coalesce into one cycle.
 
-The summary cycle reads `GET /v2/batches` for all five supported statuses using `limit=50` and `start_after` pagination. It fetches `GET /v2/batches/:id` only for new or changed batches, prioritizing assigned and visible On Deck batches, with at most 12 details per cycle. For visible active On Deck batches it reads at most 12 latest readings through `GET /v2/batches/:id/readings/last`. `GET /v2/recipes/:id` and full `GET /v2/batches/:id/readings` support bounded detail/history retrieval; full history is lazy and is not part of the background cycle.
+The summary cycle reads `GET /v2/batches` for all five supported statuses using `limit=50` and `start_after` pagination. It fetches `GET /v2/batches/:id` only for new or changed batches, prioritizing assigned and visible On Deck batches, with at most 12 details per cycle. Sparse embedded recipes are enriched through `GET /v2/recipes/:id`. For visible active batches it reads at most 12 latest readings through `GET /v2/batches/:id/readings/last`; a separate daily, bounded pass caches full history for at most 12 visible active candidates through `GET /v2/batches/:id/readings`. Browser story requests never call Brewfather.
 
 The default Tapboard budget is 100 requests in any rolling hour and cannot be configured above 200. A single-page no-change cycle normally costs five list calls; its bounded enrichment work adds at most 12 details and 12 latest readings. Pagination can use more list calls, but the same 100/hour ceiling applies to every scheduled, manual, detail, reading, and End Batch request. Together with the retained HA package's normal three list calls every six hours, the steady request rate is about 1.3 calls/hour and Tapboard always leaves at least 400 of the shared 500 calls/hour available to HA at the default limit.
 
 Failed pages or details never erase successful cached data. The administrator On Deck status distinguishes Brewfather configuration, last attempt/success, stale-cache state, safe error category, retry timing, request budget, and HA connectivity. Cached beer display remains available when either external service is down.
 
 End Batch validates the current non-custom assignment, sends exactly `PATCH /v2/batches/:id` with `{"status":"Completed"}`, and only then transactionally closes the lifecycle and clears the assignment. A failed PATCH leaves local state unchanged. End Keg only closes the local lifecycle and never contacts Brewfather.
+
+Selecting an assigned tap card or public On Deck item opens a full-screen Brew Story. Public access is limited to currently assigned batches and On Deck batches that are both visible and globally enabled. An authenticated administrator can open any present cached candidate and set per-axis half-step sensory overrides, replace the generated description, or hide sensory guidance from public viewers. Unknown traits remain unknown; the radar appears only when at least three axes have evidence.
 
 Home Assistant receives the versioned `tapboard_event` contract on a best-effort basis. See [Home Assistant event examples](docs/HOME-ASSISTANT-EVENTS.md). No HA configuration is created or changed automatically.
 

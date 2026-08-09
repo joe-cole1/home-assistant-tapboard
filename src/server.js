@@ -17,6 +17,15 @@ import {
   syncStatus as getBrewfatherSyncStatus
 } from './brewfatherCache.js';
 import { BrewfatherSyncCoordinator } from './brewfatherSync.js';
+import {
+  BREW_STORY_WINDOWS,
+  buildBrewStory,
+  saveSensoryOverride,
+  sensoryOverride,
+  storyIsPublic,
+  validBrewfatherBatchId
+} from './brewStory.js';
+import { fetchCachedImage } from './imageProxy.js';
 import { buildBrewfatherSyncFailureEvent, buildTapboardEvent } from './tapboardEvents.js';
 import { TapMutationCoordinator } from './tapActions.js';
 import {
@@ -37,6 +46,7 @@ import {
   validateOndeck,
   validatePinChange,
   validateSettings,
+  validateSensoryOverride,
   validateTap
 } from './validation.js';
 
@@ -131,6 +141,12 @@ function sendJson(res, status, payload) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
   res.end(JSON.stringify(payload));
 }
+function sendBoundedJson(res, status, payload, maxBytes = 512 * 1024) {
+  const body = JSON.stringify(payload);
+  if (Buffer.byteLength(body) > maxBytes) throw new HttpError(500, 'Brew story response exceeds size limit');
+  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+  res.end(body);
+}
 function sendError(res, status, error) {
   sendJson(res, status, { error });
 }
@@ -154,6 +170,9 @@ function allowedMethodsForApiPath(pathname) {
   )
     return ['POST'];
   if (/^\/api\/taps\/[1-6](?:\/(?:end-batch|end-keg))?$/.test(pathname)) return ['POST'];
+  if (/^\/api\/batches\/[A-Za-z0-9_-]{1,256}\/story$/.test(pathname)) return ['GET'];
+  if (/^\/api\/batches\/[A-Za-z0-9_-]{1,256}\/sensory$/.test(pathname)) return ['POST'];
+  if (/^\/api\/batches\/[A-Za-z0-9_-]{1,256}\/image$/.test(pathname)) return ['GET'];
   return null;
 }
 
@@ -564,6 +583,94 @@ const server = http.createServer(async (req, res) => {
       sendJson(res, 200, getFullStateSnapshot());
     } catch (error) {
       handleError(res, error, requestContext('create state snapshot'));
+    }
+    return;
+  }
+
+  const storyMatch = url.pathname.match(/^\/api\/batches\/([A-Za-z0-9_-]{1,256})\/story$/);
+  if (storyMatch && req.method === 'GET') {
+    const batchId = storyMatch[1];
+    try {
+      if (!validBrewfatherBatchId(batchId)) throw new ValidationError('Invalid Brewfather batch');
+      const queryKeys = [...new Set(url.searchParams.keys())];
+      if (queryKeys.some((key) => key !== 'window') || url.searchParams.getAll('window').length > 1) {
+        throw new ValidationError('Invalid story query');
+      }
+      const window = url.searchParams.get('window') || '7d';
+      if (!BREW_STORY_WINDOWS.includes(window)) throw new ValidationError('Invalid story window');
+      const authorized = isAuthorized(req);
+      if (!authorized && !storyIsPublic(db, batchId)) {
+        sendError(res, 404, 'Brew story not found');
+        return;
+      }
+      const story = buildBrewStory({
+        db,
+        batchId,
+        window,
+        tapStates: haClient.getPublicTapStates(),
+        forecastForTap: calculateKegKickForecast,
+        includeHiddenSensory: authorized
+      });
+      if (!story) sendError(res, 404, 'Brew story not found');
+      else sendBoundedJson(res, 200, story);
+    } catch (error) {
+      handleError(res, error, requestContext('read Brew Story'));
+    }
+    return;
+  }
+
+  const sensoryMatch = url.pathname.match(/^\/api\/batches\/([A-Za-z0-9_-]{1,256})\/sensory$/);
+  if (sensoryMatch && req.method === 'POST') {
+    if (!requireAdmin(req, res)) return;
+    const batchId = sensoryMatch[1];
+    try {
+      if (!db.prepare('SELECT 1 FROM batches WHERE batch_id=? AND present=1').get(batchId)) {
+        sendError(res, 404, 'Brew story not found');
+        return;
+      }
+      const body = validateSensoryOverride(await readJsonBody(req));
+      const current = sensoryOverride(db, batchId);
+      const merged = {
+        hidden: body.hidden ?? current.hidden,
+        description_override:
+          body.description_override === undefined ? current.description_override : body.description_override,
+        axis_overrides: {
+          ...current.axes,
+          ...(body.axis_overrides || {})
+        }
+      };
+      sendJson(res, 200, { success: true, sensory: saveSensoryOverride(db, batchId, merged) });
+    } catch (error) {
+      handleError(res, error, requestContext('update sensory override'));
+    }
+    return;
+  }
+
+  const imageMatch = url.pathname.match(/^\/api\/batches\/([A-Za-z0-9_-]{1,256})\/image$/);
+  if (imageMatch && req.method === 'GET') {
+    const batchId = imageMatch[1];
+    try {
+      if (!isAuthorized(req) && !storyIsPublic(db, batchId)) {
+        sendError(res, 404, 'Brew image not found');
+        return;
+      }
+      const imageUrl = db
+        .prepare('SELECT image_url FROM batches WHERE batch_id=? AND present=1')
+        .get(batchId)?.image_url;
+      if (!imageUrl) {
+        sendError(res, 404, 'Brew image not found');
+        return;
+      }
+      const image = await fetchCachedImage(imageUrl);
+      res.writeHead(200, {
+        'Content-Type': image.contentType,
+        'Content-Length': image.body.length,
+        'Cache-Control': 'no-store'
+      });
+      res.end(image.body);
+    } catch (error) {
+      if (!res.headersSent) sendError(res, 502, 'Brew image unavailable');
+      else res.destroy();
     }
     return;
   }

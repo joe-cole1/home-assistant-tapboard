@@ -1,12 +1,7 @@
 import { renderTapGraphic, srmToHex } from './graphics.js';
 import { createLiveUpdateController, updateGraphicFill } from './liveUpdates.js';
-import {
-  buildOnDeckItems,
-  buildRecipeModalContent,
-  buildTapCardContent,
-  createSelectOption,
-  createToast
-} from './domBuilders.js';
+import { buildOnDeckItems, buildTapCardContent, createSelectOption, createToast } from './domBuilders.js';
+import { createBrewStoryController } from './brewStory.js';
 import { shouldShowNewBadge } from './freshness.js';
 import { createAutosaveController } from './autosave.js';
 
@@ -26,6 +21,7 @@ let authToken = sessionStorage.getItem('tapboard_token') || null;
 let liveUpdates;
 let hasRenderedSnapshot = false;
 let brewfatherStatusRequestId = 0;
+let brewStory;
 const simulatedPourTimers = new Map();
 const LONG_PRESS_MS = 600;
 const SIMULATED_POUR_MS = 8000;
@@ -39,6 +35,29 @@ const displayPreferences = globalThis.TapboardDisplayPreferences;
 const autosaveTimers = new Map();
 const dirtyFields = new Set();
 const autosaves = createAutosaveController({ onStatus: updateSaveStatus });
+
+function getBrewStoryController() {
+  if (brewStory) return brewStory;
+  brewStory = createBrewStoryController({
+    dialog: document.getElementById('recipeModal'),
+    title: document.getElementById('recipeTitle'),
+    body: document.getElementById('recipeBody'),
+    status: document.getElementById('recipeStatus'),
+    canEdit: () => Boolean(authToken),
+    fetchStory: (id, windowName, signal) =>
+      fetch(`/api/batches/${encodeURIComponent(id)}/story?window=${encodeURIComponent(windowName)}`, {
+        signal,
+        ...(authToken ? { headers: authHeaders() } : {})
+      }),
+    saveSensory: (id, payload) =>
+      fetch(`/api/batches/${encodeURIComponent(id)}/sensory`, {
+        method: 'POST',
+        headers: authHeaders(true),
+        body: JSON.stringify(payload)
+      })
+  });
+  return brewStory;
+}
 
 function getTapState(tapId) {
   return appState.tapStates[String(tapId)] || {};
@@ -611,6 +630,11 @@ function createTapCard(tap) {
   }
 
   const wasLongPress = addAdminLongPress(card, tapId);
+  const storyBtn = card.querySelector('.tap-story-btn');
+  storyBtn?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    openRecipeModal(tapId);
+  });
 
   // Card Body Click: Open Recipe Detail Modal
   card.addEventListener('click', (event) => {
@@ -696,6 +720,7 @@ function updateTapCard(card, tap) {
   const titleEl = card.querySelector('.beer-title');
   if (titleEl && titleEl.textContent !== beerName) titleEl.textContent = beerName;
   if (titleEl) titleEl.title = beerName;
+  titleEl?.setAttribute('aria-label', `Open Brew Story for ${beerName}`);
 
   const styleEl = card.querySelector('.beer-style');
   if (styleEl && styleEl.textContent !== style) styleEl.textContent = style;
@@ -855,12 +880,10 @@ function openRecipeModal(tapId) {
     cachedBatch?.description ||
     '';
 
-  title.textContent = `${beerName}`;
-  body.replaceChildren(
-    buildRecipeModalContent({ style, abv, ibu, srm, og, fg, brewDate: batchAttr.brewDate, description })
-  );
-
-  modal.style.display = 'flex';
+  const batchId = customBeverage ? null : tap.batch_id || cachedBatch?.batch_id;
+  const fallback = { style, abv, ibu, srm, og, fg, description };
+  // Custom and local overrides have no authoritative Brewfather batch; keep their useful local detail.
+  getBrewStoryController().open({ batchId, title: beerName, fallback });
 }
 
 function syncDisplaySettingsControls() {
@@ -1391,8 +1414,10 @@ function renderOnDeckManager(batches) {
     return;
   }
   batches.forEach((batch) => {
-    const row = document.createElement('label');
+    const row = document.createElement('div');
     row.className = 'ondeck-batch-row';
+    const selection = document.createElement('label');
+    selection.className = 'ondeck-batch-selection';
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.checked = batch.visible === true;
@@ -1409,7 +1434,13 @@ function renderOnDeckManager(batches) {
     saveStatus.dataset.saveStatus = `ondeck-${checkbox.dataset.batchId}`;
     saveStatus.setAttribute('aria-live', 'polite');
     details.append(name, meta, saveStatus);
-    row.append(checkbox, details);
+    selection.append(checkbox, details);
+    const story = document.createElement('button');
+    story.type = 'button';
+    story.className = 'btn-secondary ondeck-manager-story';
+    story.dataset.openStory = checkbox.dataset.batchId;
+    story.textContent = 'Story';
+    row.append(selection, story);
     list.appendChild(row);
   });
 }
@@ -1775,9 +1806,17 @@ function initModalListeners() {
   const closeRecipeBtn = document.getElementById('closeRecipeBtn');
   if (closeRecipeBtn) {
     closeRecipeBtn.addEventListener('click', () => {
-      document.getElementById('recipeModal').style.display = 'none';
+      brewStory?.close();
     });
   }
+  document.querySelectorAll('[data-story-window]').forEach((button) => {
+    button.addEventListener('click', () => {
+      document
+        .querySelectorAll('[data-story-window]')
+        .forEach((item) => item.setAttribute('aria-pressed', String(item === button)));
+      brewStory?.load(button.dataset.storyWindow);
+    });
+  });
 
   // Open Global Settings Modal
   const settingsBtn = document.getElementById('settingsBtn');
@@ -1793,6 +1832,17 @@ function initModalListeners() {
   }
 
   document.getElementById('onDeckSettingsBtn')?.addEventListener('click', openOnDeckModal);
+  document.getElementById('onDeckItems')?.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-batch-id]');
+    if (!button) return;
+    getBrewStoryController().open({ batchId: button.dataset.batchId, title: button.textContent, fallback: {} });
+  });
+  document.getElementById('onDeckBatchList')?.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-open-story]');
+    if (!button) return;
+    const title = button.closest('.ondeck-batch-row')?.querySelector('strong')?.textContent || 'Brew Story';
+    getBrewStoryController().open({ batchId: button.dataset.openStory, title, fallback: {} });
+  });
   document.getElementById('closeOnDeckBtn')?.addEventListener('click', () => {
     document.getElementById('onDeckModal').style.display = 'none';
   });
@@ -1864,7 +1914,9 @@ function initModalListeners() {
   ['recipeModal', 'pinModal', 'globalSettingsModal', 'tapSettingsModal', 'onDeckModal'].forEach((id) => {
     const modal = document.getElementById(id);
     modal?.addEventListener('click', (event) => {
-      if (event.target === modal) hideModal(id);
+      if (event.target !== modal) return;
+      if (id === 'recipeModal') brewStory?.close();
+      else hideModal(id);
     });
   });
 

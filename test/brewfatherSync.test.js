@@ -314,7 +314,7 @@ test('a missing optional latest reading remains successful and emits no failure 
   }
 });
 
-test('latest readings are polled only for visible active On Deck batches and history is lazy', async () => {
+test('latest readings and bounded daily history are prefetched for public active batches', async () => {
   const db = database({ visible: 1 });
   const calls = [];
   const client = budgetClient({
@@ -338,11 +338,96 @@ test('latest readings are polled only for visible active On Deck batches and his
   try {
     const sync = new BrewfatherSync({ db, client, now: () => 1_700_000_000_000 });
     await sync.refresh().promise;
-    assert.deepEqual(calls, ['latest:one']);
-    assert.equal(db.prepare('SELECT COUNT(*) AS count FROM brewfather_batch_readings').get().count, 1);
-    assert.deepEqual(await sync.loadHistory('one'), { outcome: 'succeeded', errorCategory: null, readings: 2 });
     assert.deepEqual(calls, ['latest:one', 'history:one']);
     assert.equal(db.prepare('SELECT COUNT(*) AS count FROM brewfather_batch_readings').get().count, 2);
+    assert.equal(
+      db.prepare("SELECT error_category FROM brewfather_history_sync_state WHERE batch_id='one'").get().error_category,
+      null
+    );
+    assert.deepEqual(await sync.loadHistory('one'), { outcome: 'succeeded', errorCategory: null, readings: 2 });
+    assert.deepEqual(calls, ['latest:one', 'history:one', 'history:one']);
+    assert.equal(db.prepare('SELECT COUNT(*) AS count FROM brewfather_batch_readings').get().count, 2);
+    calls.length = 0;
+    await sync.refresh().promise;
+    assert.deepEqual(calls, ['latest:one']);
+  } finally {
+    db.close();
+  }
+});
+
+test('assigned active batches receive telemetry prefetch even when On Deck is hidden', async () => {
+  const db = database({ visible: 0 });
+  const calls = [];
+  const client = budgetClient({
+    listBatchesByStatuses: async () => ({
+      batches: [{ id: 'one', status: 'Fermenting', name: 'One' }],
+      failures: []
+    }),
+    getBatch: async () => ({ id: 'one', status: 'Fermenting', recipe: { name: 'One' } }),
+    getLatestReading: async (id) => {
+      calls.push(`latest:${id}`);
+      return null;
+    },
+    getReadings: async (id) => {
+      calls.push(`history:${id}`);
+      return [];
+    }
+  });
+  try {
+    db.prepare("UPDATE taps SET batch_id='one' WHERE tap_id=1").run();
+    const sync = new BrewfatherSync({ db, client, now: () => 1_700_000_000_000 });
+    await sync.refresh().promise;
+    assert.deepEqual(calls, ['latest:one', 'history:one']);
+  } finally {
+    db.close();
+  }
+});
+
+test('sparse batch detail uses a validated recipe fallback before becoming current', async () => {
+  const db = database();
+  const client = budgetClient({
+    listBatchesByStatuses: async () => ({
+      batches: [{ id: 'one', status: 'Planning', name: 'One', recipe: { _id: 'recipe-one', name: 'Summary recipe' } }],
+      failures: []
+    }),
+    getBatch: async () => ({ id: 'one', status: 'Planning', recipe: { _id: 'recipe-one' } }),
+    getRecipe: async () => ({ _id: 'recipe-one', name: 'Complete recipe', fermentables: [{ name: 'Pale malt' }] })
+  });
+  try {
+    const sync = new BrewfatherSync({ db, client, now: () => 1_700_000_000_000 });
+    assert.equal((await sync.refresh().promise).outcome, 'succeeded');
+    const detail = JSON.parse(
+      db.prepare("SELECT payload_json FROM brewfather_batch_details WHERE batch_id='one'").get().payload_json
+    );
+    assert.equal(detail.recipe.name, 'Complete recipe');
+    assert.equal(
+      db.prepare("SELECT detail_fingerprint FROM batches WHERE batch_id='one'").get().detail_fingerprint,
+      db.prepare("SELECT summary_fingerprint FROM batches WHERE batch_id='one'").get().summary_fingerprint
+    );
+  } finally {
+    db.close();
+  }
+});
+
+test('invalid history payloads remain due and are recorded as safe failures', async () => {
+  const db = database();
+  db.prepare("INSERT INTO batches(batch_id, recipe_name, status) VALUES('one', 'One', 'Fermenting')").run();
+  const sync = new BrewfatherSync({
+    db,
+    client: budgetClient({ getReadings: async () => ({ unexpected: true }) }),
+    now: () => 1_700_000_000_000
+  });
+  try {
+    await assert.rejects(
+      () => sync.loadHistory('one'),
+      (error) => error.category === 'invalid_response'
+    );
+    assert.deepEqual(
+      db
+        .prepare("SELECT last_success_at, error_category FROM brewfather_history_sync_state WHERE batch_id='one'")
+        .get(),
+      { last_success_at: null, error_category: 'invalid_response' }
+    );
   } finally {
     db.close();
   }
