@@ -50,56 +50,24 @@
     <!-- Toast Notification Container for Real-Time Pour Alerts -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <!-- Recipe Detail Modal -->
-    <div
-      id="recipeModal"
-      style="
-        display: none;
-        position: fixed;
-        inset: 0;
-        background: rgba(0, 0, 0, 0.85);
-        z-index: 400;
-        align-items: center;
-        justify-content: center;
-        backdrop-filter: blur(8px);
-        padding: 1.5rem;
-      "
-    >
-      <div
-        style="
-          background: var(--bg-header);
-          border: 1px solid var(--border-color);
-          padding: 2rem;
-          border-radius: 1.25rem;
-          width: 100%;
-          max-width: 550px;
-          box-shadow: 0 25px 50px rgba(0, 0, 0, 0.7);
-          color: var(--text-main);
-        "
-      >
-        <div
-          style="
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid var(--border-color);
-            padding-bottom: 1rem;
-            margin-bottom: 1.25rem;
-          "
-        >
-          <h2
-            id="recipeTitle"
-            style="font-family: var(--font-title); color: var(--accent-color); margin: 0; font-size: 1.6rem"
-          >
-            Beer Name
-          </h2>
-          <button class="btn-icon" id="closeRecipeBtn" style="font-size: 1.4rem">✕</button>
-        </div>
-        <div id="recipeBody" style="display: flex; flex-direction: column; gap: 1rem; font-size: 0.95rem">
-          <!-- Recipe specs dynamically injected -->
-        </div>
+    <dialog id="recipeModal" class="brew-story-dialog" aria-labelledby="recipeTitle">
+      <div class="brew-story-shell">
+        <header class="brew-story-header">
+          <div>
+            <p class="settings-kicker">Brewfather batch</p>
+            <h2 id="recipeTitle">Brew Story</h2>
+          </div>
+          <button class="btn-icon" id="closeRecipeBtn" type="button" aria-label="Close Brew Story">✕</button>
+        </header>
+        <nav class="brew-story-windows" aria-label="Telemetry range">
+          <button type="button" data-story-window="24h">24h</button
+          ><button type="button" data-story-window="7d" aria-pressed="true">7d</button
+          ><button type="button" data-story-window="all">All</button>
+        </nav>
+        <p id="recipeStatus" class="brew-story-status" aria-live="polite" hidden></p>
+        <div id="recipeBody" class="brew-story-body"></div>
       </div>
-    </div>
+    </dialog>
 
     <!-- PIN Verification Modal -->
     <div

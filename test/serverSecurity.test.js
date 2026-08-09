@@ -120,6 +120,78 @@ test('server applies exact headers, strict origin checks, and OPTIONS behavior',
   }
 });
 
+test('Brew Story routes enforce public visibility and authenticated sensory overrides', async () => {
+  const instance = await startServer();
+  const database = new Database(path.join(instance.dataDir, 'tapboard.db'));
+  try {
+    database
+      .prepare(
+        `INSERT INTO batches
+        (batch_id, recipe_name, style, status, present, summary_fingerprint, detail_fingerprint, detail_fetched_at)
+       VALUES ('story-a', 'Private Story', 'IPA', 'Planning', 1, 'v1', 'v1', '2026-08-09T00:00:00.000Z')`
+      )
+      .run();
+    database.prepare(`INSERT INTO brewfather_ondeck_preferences (batch_id, visible) VALUES ('story-a', 0)`).run();
+    database
+      .prepare(
+        `INSERT INTO brewfather_batch_details (batch_id, payload_json, fingerprint, fetched_at)
+       VALUES ('story-a', '{"batch":{},"recipe":{}}', 'v1', '2026-08-09T00:00:00.000Z')`
+      )
+      .run();
+
+    assert.equal((await fetch(`${instance.baseUrl}/api/batches/story-a/story`)).status, 404);
+    const { token } = await authenticate(instance.baseUrl);
+    const auth = { Authorization: `Bearer ${token}` };
+    assert.equal((await fetch(`${instance.baseUrl}/api/batches/story-a/story`, { headers: auth })).status, 200);
+
+    database.prepare("UPDATE brewfather_ondeck_preferences SET visible=1 WHERE batch_id='story-a'").run();
+    const publicStory = await fetch(`${instance.baseUrl}/api/batches/story-a/story?window=7d`);
+    assert.equal(publicStory.status, 200);
+    const storyText = await publicStory.text();
+    assert.ok(Buffer.byteLength(storyText) < 512 * 1024);
+    const publicPayload = JSON.parse(storyText);
+    assert.equal(publicPayload.schema_version, 1);
+    assert.equal('override' in publicPayload.sensory, false);
+
+    const sensory = await fetch(`${instance.baseUrl}/api/batches/story-a/sensory`, {
+      method: 'POST',
+      headers: { ...auth, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description_override: 'Manual public description', axis_overrides: { hops: 4.5 } })
+    });
+    assert.equal(sensory.status, 200);
+    assert.equal((await sensory.json()).sensory.axes.hops, 4.5);
+    const adminPayload = await (await fetch(`${instance.baseUrl}/api/batches/story-a/story`, { headers: auth })).json();
+    assert.deepEqual(adminPayload.sensory.override, {
+      hidden: false,
+      description_override: 'Manual public description',
+      axis_overrides: { hops: 4.5 }
+    });
+    assert.equal(
+      (
+        await fetch(`${instance.baseUrl}/api/batches/story-a/sensory`, {
+          method: 'POST',
+          headers: { ...auth, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ axis_overrides: { hops: 4.3 } })
+        })
+      ).status,
+      400
+    );
+    assert.equal(
+      (
+        await fetch(`${instance.baseUrl}/api/batches/story-a/sensory`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{}'
+        })
+      ).status,
+      401
+    );
+  } finally {
+    database.close();
+    await stopServer(instance.child);
+  }
+});
+
 test('configured reverse-proxy origin is exact for normal and OPTIONS requests', async () => {
   const publicOrigin = 'https://tapboard.example';
   const instance = await startServer({ publicOrigin });

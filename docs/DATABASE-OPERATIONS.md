@@ -57,7 +57,7 @@ Before a production storage or schema migration:
    Restore rejects non-quiescent WAL/SHM sidecars and writes a mode-`0600` approval marker containing the verified pre-migration schema version, table counts, and database digest. Do not create or edit this marker manually.
 
 3. Start the candidate against that disposable volume with `HA_TOKEN` empty, a random loopback port, the read-only root filesystem, and the approved hardening.
-4. Verify `integrity_check`, `foreign_key_check`, schema version 5 and migration ledger (including `brewfather-cache`), durable counts, lifecycle relationships, Brewfather cache/On Deck/custom-beverage records, nullable accent overrides, administrator initialization, digest-only sessions, HA hydration where appropriate, and HTTP 200 from `/healthz`.
+4. Verify `integrity_check`, `foreign_key_check`, schema version 6 and migration ledger (including `brewfather-cache` and `brew-story`), durable counts, lifecycle relationships, Brewfather cache/On Deck/custom-beverage records, reading pH and history-sync state, sensory overrides, nullable accent overrides, administrator initialization, digest-only sessions, HA hydration where appropriate, and HTTP 200 from `/healthz`.
 5. Remove only the disposable container. Keep a useful rehearsal volume until the rollout is complete.
 
 ## Live named-volume migration and rollback

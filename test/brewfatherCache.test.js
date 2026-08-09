@@ -115,11 +115,17 @@ test('details are allowlisted and bounded without leaking arbitrary keys', () =>
       notes: 'future story context',
       accessToken: 'must-not-survive',
       events: [{ id: 'event-1', name: 'Dry hop', description: 'Added hops', secret: 'no' }],
+      tags: ['competition', '<script>text only</script>'],
+      measuredPh: 4.4,
       recipe: {
         _id: 'recipe-a',
         name: 'Privacy IPA',
         notes: 'recipe note',
-        fermentables: Array.from({ length: 150 }, (_, index) => ({ name: `Malt ${index}`, amount: 1 }))
+        fermentables: Array.from({ length: 150 }, (_, index) => ({
+          name: `Malt ${index}`,
+          amount: 1,
+          percentage: index === 0 ? 80 : 0
+        }))
       }
     };
     const sanitized = sanitizeDetail(detail);
@@ -127,6 +133,7 @@ test('details are allowlisted and bounded without leaking arbitrary keys', () =>
     assert.equal(sanitized.payload_json.includes('must-not-survive'), false);
     assert.equal(sanitized.payload_json.includes('"secret"'), false);
     assert.equal(JSON.parse(sanitized.payload_json).recipe.ingredients.fermentables.length, 100);
+    assert.equal(JSON.parse(sanitized.payload_json).batch.measurements.measured_ph, 4.4);
     upsertDetail(db, 'batch-a', detail, { now: () => 2_000 });
     upsertDetail(db, 'batch-a', detail, { now: () => 3_000 });
     assert.equal(db.prepare('SELECT COUNT(*) AS count FROM brewfather_batch_details').get().count, 1);
@@ -139,10 +146,11 @@ test('readings use deterministic identities and deduplicate idempotently', () =>
   const db = database();
   try {
     upsertSummaries(db, [summary()], { now: () => 1_000 });
-    const reading = { timestamp: '2026-01-01T00:00:00Z', gravity: 1.01, temp: 20, id: 'device-color' };
+    const reading = { timestamp: '2026-01-01T00:00:00Z', gravity: 1.01, temp: 20, ph: 4.2, id: 'device-color' };
     const first = sanitizeReading(reading);
     const second = sanitizeReading(reading);
     assert.equal(first.reading_key, second.reading_key);
+    assert.equal(first.ph, 4.2);
     assert.equal(sanitizeReading({ timestamp: 'not-a-date' }), null);
     upsertReadings(db, 'batch-a', [reading]);
     upsertReadings(db, 'batch-a', [reading]);

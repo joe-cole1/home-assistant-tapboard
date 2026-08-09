@@ -43,8 +43,10 @@ export function buildTapCardContent({
   const header = element('div', 'tap-card-header');
   const actions = element('div', 'tap-card-actions');
   header.appendChild(element('div', 'tap-number-badge', tapId));
-  const title = element('h2', 'beer-title', beerName);
+  const title = element('button', 'beer-title tap-story-btn', beerName);
+  title.type = 'button';
   title.title = String(beerName || '');
+  title.setAttribute('aria-label', `Open Brew Story for ${beerName}`);
   header.appendChild(title);
   const cog = element('button', 'btn-icon tap-cog-btn', '⚙️');
   cog.type = 'button';
@@ -124,7 +126,13 @@ export function buildOnDeckItems(onDeckBrews) {
     return fragment;
   }
   onDeckBrews.forEach((brew) => {
-    const item = element('span', 'ondeck-item');
+    const batchId = brew.batch_id || brew.id || brew.batchId;
+    const item = batchId ? element('button', 'ondeck-item ondeck-story-button') : element('span', 'ondeck-item');
+    if (batchId) {
+      item.type = 'button';
+      item.dataset.batchId = String(batchId);
+      item.setAttribute('aria-label', 'Open Brew Story');
+    }
     const name = brew.name || brew.recipe_name || 'Untitled batch';
     const style = brew.style || 'Craft';
     const abv = brew.abv ?? '--';

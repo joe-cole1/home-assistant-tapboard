@@ -1,8 +1,11 @@
 import { BREWFATHER_STATUSES } from './brewfatherClient.js';
 import {
+  batchRecipeId,
   detailCandidates,
+  historyCandidates,
   latestReadingCandidates,
   markBatchError,
+  updateHistorySyncState,
   upsertDetail,
   upsertReadings,
   upsertSummaries
@@ -56,6 +59,20 @@ function validateDetail(detail, batchId) {
   return detail;
 }
 
+function validateRecipe(recipe, recipeId) {
+  const remoteId = recipe?._id ?? recipe?.id;
+  if (
+    !recipe ||
+    typeof recipe !== 'object' ||
+    Array.isArray(recipe) ||
+    typeof remoteId !== 'string' ||
+    remoteId !== recipeId
+  ) {
+    throw Object.assign(new Error('Brewfather recipe detail was invalid'), { category: 'invalid_response' });
+  }
+  return recipe;
+}
+
 export class BrewfatherSyncCoordinator {
   constructor({
     db,
@@ -66,6 +83,8 @@ export class BrewfatherSyncCoordinator {
     intervalMs = SIX_HOURS_MS,
     detailLimit = 12,
     latestReadingLimit = 12,
+    historyLimit = 12,
+    historyIntervalMs = 24 * 60 * 60 * 1_000,
     onUpdate = () => {},
     onFailure = () => {},
     logger = console
@@ -79,6 +98,8 @@ export class BrewfatherSyncCoordinator {
     this.intervalMs = Math.max(intervalMs, 60_000);
     this.detailLimit = Math.min(Math.max(detailLimit, 1), 12);
     this.latestReadingLimit = Math.min(Math.max(latestReadingLimit, 1), 12);
+    this.historyLimit = Math.min(Math.max(historyLimit, 1), 12);
+    this.historyIntervalMs = Math.max(historyIntervalMs, 60_000);
     this.onUpdate = onUpdate;
     this.onFailure = onFailure;
     this.logger = logger;
@@ -241,7 +262,18 @@ export class BrewfatherSyncCoordinator {
       for (const batchId of detailCandidates(this.db, summaryResult.changedIds, this.detailLimit)) {
         if (this.stopped) return { outcome: 'failed', errorCategory: 'configuration', reason };
         try {
-          const detail = validateDetail(await this.client.getBatch(batchId), batchId);
+          let detail = validateDetail(await this.client.getBatch(batchId), batchId);
+          const embeddedRecipe = detail?.recipe;
+          const needsRecipe =
+            !embeddedRecipe ||
+            typeof embeddedRecipe !== 'object' ||
+            Array.isArray(embeddedRecipe) ||
+            Object.keys(embeddedRecipe).length <= 2;
+          const recipeId = batchRecipeId(this.db, batchId);
+          if (needsRecipe && recipeId && typeof this.client.getRecipe === 'function') {
+            const recipe = validateRecipe(await this.client.getRecipe(recipeId), recipeId);
+            detail = { ...detail, recipe };
+          }
           if (this.stopped) return { outcome: 'failed', errorCategory: 'configuration', reason };
           upsertDetail(this.db, batchId, detail, { now: this.now });
         } catch (error) {
@@ -262,6 +294,22 @@ export class BrewfatherSyncCoordinator {
           const errorCategory = category(error);
           markBatchError(this.db, batchId, errorCategory, iso(this.now));
           secondaryFailures.push({ error: { category: errorCategory, retryAfter: error?.retryAfter ?? null } });
+        }
+      }
+
+      for (const batchId of historyCandidates(this.db, {
+        now: this.now,
+        intervalMs: this.historyIntervalMs,
+        limit: this.historyLimit
+      })) {
+        if (this.stopped) return { outcome: 'failed', errorCategory: 'configuration', reason };
+        try {
+          await this.loadHistory(batchId);
+          if (this.stopped) return { outcome: 'failed', errorCategory: 'configuration', reason };
+        } catch (error) {
+          secondaryFailures.push({
+            error: { category: category(error), retryAfter: error?.retryAfter ?? null }
+          });
         }
       }
 
@@ -340,12 +388,27 @@ export class BrewfatherSyncCoordinator {
     if (!this.client || this.stopped) {
       return { outcome: 'failed', errorCategory: 'configuration', readings: 0 };
     }
-    const rows = await this.client.getReadings(batchId);
-    if (this.stopped) return { outcome: 'failed', errorCategory: 'configuration', readings: 0 };
-    const cached = upsertReadings(this.db, batchId, rows, {
-      maxPerWrite: Math.min(Math.max(Number(maxReadings) || 1, 1), 1_000)
-    });
-    return { outcome: 'succeeded', errorCategory: null, readings: cached.length };
+    const attemptedAt = iso(this.now);
+    updateHistorySyncState(this.db, batchId, { last_attempt_at: attemptedAt, error_category: null });
+    try {
+      const rows = await this.client.getReadings(batchId);
+      if (this.stopped) return { outcome: 'failed', errorCategory: 'configuration', readings: 0 };
+      if (!Array.isArray(rows)) {
+        throw Object.assign(new Error('Brewfather reading history was invalid'), { category: 'invalid_response' });
+      }
+      const cached = upsertReadings(this.db, batchId, rows, {
+        maxPerWrite: Math.min(Math.max(Number(maxReadings) || 1, 1), 1_000)
+      });
+      updateHistorySyncState(this.db, batchId, {
+        last_success_at: iso(this.now),
+        error_category: null,
+        reading_count: cached.length
+      });
+      return { outcome: 'succeeded', errorCategory: null, readings: cached.length };
+    } catch (error) {
+      updateHistorySyncState(this.db, batchId, { error_category: category(error) });
+      throw error;
+    }
   }
 }
 

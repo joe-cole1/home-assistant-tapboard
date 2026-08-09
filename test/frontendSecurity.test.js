@@ -141,6 +141,8 @@ test('compact-card semantics keep the header, graphic badges, and right-side det
     assert.ok(header);
     assert.equal(directChild(header, '.tap-number-badge')?.textContent, '4');
     assert.equal(directChild(header, '.beer-title')?.textContent, 'Compact Header Beer');
+    assert.equal(directChild(header, '.beer-title')?.localName, 'button');
+    assert.equal(header.querySelector('.beer-title .tap-cog-btn'), null);
     assert.equal(card.querySelectorAll('.beer-title').length, 1);
 
     assert.ok(graphicColumn);

@@ -36,12 +36,17 @@ src/
   tapboardProjection.js   allowlisted, capacity-aware Home Assistant projection
   displayUpdateCoalescer.js compact browser state-change batching
   sseHub.js               SSE framing, heartbeat, slow-client bounds
-  db.js / dbMigrations.js SQLite startup and schema-v5 migrations
+  brewStory.js            bounded cache-only story projection and keg chapters
+  sensoryEngine.js        deterministic versioned sensory precedence engine
+  sensoryMappings.js      reviewed local style and ingredient mappings
+  imageProxy.js           pinned-resolution, bounded HTTPS image retrieval
+  db.js / dbMigrations.js SQLite startup and schema-v6 migrations
   kegLifecycle.js         immutable lifecycle assignment and attribution
   kegForecast.js          active-lifecycle forecast calculation
   databaseMaintenance.js  verified backup, restore, rotation, and retention
 public/
   app.js                  SSE client, browser display profiles, targeted DOM updates
+  brewStory.js            safe full-screen story rendering and override controls
   displayPreferences.js  validated local storage, precedence, and pre-paint display bootstrap
   graphics.js             SVG glassware and SRM colour rendering
   styles.css              dashboard styles
@@ -59,7 +64,7 @@ The canonical measurement contract is `sensor.tap_N_fl_oz` plus `input_number.ta
 
 ## SQLite schema and lifecycle ownership
 
-Startup enforces `foreign_keys=ON`, validates the database, and migrates ordered schema versions transactionally. The current schema is version 5. Version 3 adds the display-layout and On Deck defaults, per-Brewfather-batch visibility preferences, and the singleton custom-beverage record; version 4 adds nullable primary and secondary accent overrides; version 5 extends the existing batch table with indexed native summaries and adds bounded detail snapshots, idempotent readings, and singleton sync metadata.
+Startup enforces `foreign_keys=ON`, validates the database, and migrates ordered schema versions transactionally. The current schema is version 6. Version 3 adds the display-layout and On Deck defaults, per-Brewfather-batch visibility preferences, and the singleton custom-beverage record; version 4 adds nullable primary and secondary accent overrides; version 5 extends the existing batch table with indexed native summaries and adds bounded detail snapshots, idempotent readings, and singleton sync metadata. Version 6 adds reading pH, per-batch history-sync state, and authenticated per-batch sensory overrides.
 
 - A tap assignment opens one immutable keg lifecycle; reassignment or an end action closes the existing lifecycle.
 - A pour captures the open lifecycle at pour start. Historical and unassigned pours may have no lifecycle and cannot affect an active keg forecast.
@@ -70,7 +75,13 @@ Startup enforces `foreign_keys=ON`, validates the database, and migrates ordered
 
 Brewfather owns recipes, batches, brewing and fermentation measurements, profiles, and brewer tasting records. Tapboard reads summaries for Planning, Brewing, Fermenting, Conditioning, and Completed through paginated `GET /v2/batches`; changed/important details through `GET /v2/batches/:id`; recipes through `GET /v2/recipes/:id`; latest readings through `GET /v2/batches/:id/readings/last`; and lazy history through `GET /v2/batches/:id/readings`.
 
-The coordinator starts an immediate refresh and schedules six-hour refreshes. Concurrent manual/scheduled work coalesces. A rolling default budget of 100 requests/hour (hard configuration ceiling 200) retains at least 300 calls/hour of headroom under Brewfather's shared 500-call limit. Details and latest-reading polls are each limited to 12 per cycle; history writes are limited to 1,000 readings per request and retained to 5,000 per batch. Individual detail snapshots are 256 KiB and reading snapshots are 16 KiB.
+The coordinator starts an immediate refresh and schedules six-hour refreshes. Concurrent manual/scheduled work coalesces. A rolling default budget of 100 requests/hour (hard configuration ceiling 200) retains at least 300 calls/hour of headroom under Brewfather's shared 500-call limit. Details and latest-reading polls are each limited to 12 per cycle. A due-state table limits full-history refreshes to a daily background pass over at most 12 public active candidates; story GETs are cache-only. History writes are limited to 1,000 readings per request and retained to 5,000 per batch. Individual detail snapshots are 256 KiB and reading snapshots are 16 KiB.
+
+### Brew Story projection
+
+`GET /api/batches/:id/story` returns versioned, allowlisted cached data with an explicit 512 KiB JSON ceiling. Public reads require either a current tap assignment or a visible On Deck preference while the global On Deck footer is enabled; authenticated reads may access any present cached batch. The 24-hour, 7-day, and all-history windows are anchored to the newest cached reading and downsample to at most 600 points while retaining endpoints and per-bucket extrema. Each immutable keg lifecycle is a separate Tapboard chapter.
+
+The sensory engine uses the fixed precedence `manual > brewer tasting > recipe prediction > style baseline`, resolves eight 0–5 axes in half steps, attaches evidence/confidence/source metadata, and leaves unsupported values null. Public responses suppress hidden guidance; authenticated responses include raw override controls. Remote artwork is fetched only through a same-origin endpoint that revalidates the exact cached URL, requires credential-free default-port HTTPS, pins a public DNS result, limits redirects/time/type/bytes, and sends no cookies or authorization headers.
 
 Summary absence is authoritative only when every requested status/page succeeds. Partial or external failures preserve last-known-good summaries, details, readings, assignments, lifecycles, and On Deck preferences. A Completed batch is presentation data only and does not imply a physical keg exists.
 
@@ -112,22 +123,25 @@ Display controls remain behind administrator authentication. Normal theme, font,
 
 All API JSON responses are `no-store`. Mutation bodies must be JSON and are limited to 16 KiB; validation rejects unknown fields and invalid values before database or Home Assistant mutation. Origin checks allow the configured public origin or, for direct access, the request host.
 
-| Endpoint                  | Method | Purpose                                            |
-| ------------------------- | ------ | -------------------------------------------------- |
-| `/healthz`                | `GET`  | Health response for the container health check.    |
-| `/events`                 | `GET`  | Public live SSE stream.                            |
-| `/api/state`              | `GET`  | Public formatted snapshot.                         |
-| `/api/auth`               | `POST` | Administrator PIN authentication.                  |
-| `/api/settings`           | `POST` | Administrator settings update.                     |
-| `/api/admin/pin`          | `POST` | Verify and replace the administrator PIN.          |
-| `/api/taps/:id`           | `POST` | Administrator tap configuration/assignment update. |
-| `/api/taps/:id/end-batch` | `POST` | Administrator batch end and lifecycle close.       |
-| `/api/taps/:id/end-keg`   | `POST` | Administrator keg end and lifecycle close.         |
-| `/api/ondeck`             | `GET`  | Administrator Brewfather On Deck preferences.      |
-| `/api/ondeck`             | `POST` | Administrator Brewfather visibility update.        |
-| `/api/brewfather/status`  | `GET`  | Administrator Brewfather sync and cache status.    |
-| `/api/brewfather/refresh` | `POST` | Native coalesced Brewfather refresh and outcome.   |
-| `/api/custom-beverage`    | `POST` | Administrator custom-beverage metadata update.     |
+| Endpoint                   | Method | Purpose                                             |
+| -------------------------- | ------ | --------------------------------------------------- |
+| `/healthz`                 | `GET`  | Health response for the container health check.     |
+| `/events`                  | `GET`  | Public live SSE stream.                             |
+| `/api/state`               | `GET`  | Public formatted snapshot.                          |
+| `/api/batches/:id/story`   | `GET`  | Eligible public or administrator cached Brew Story. |
+| `/api/batches/:id/image`   | `GET`  | Eligible bounded same-origin cached artwork proxy.  |
+| `/api/batches/:id/sensory` | `POST` | Administrator sensory guidance override.            |
+| `/api/auth`                | `POST` | Administrator PIN authentication.                   |
+| `/api/settings`            | `POST` | Administrator settings update.                      |
+| `/api/admin/pin`           | `POST` | Verify and replace the administrator PIN.           |
+| `/api/taps/:id`            | `POST` | Administrator tap configuration/assignment update.  |
+| `/api/taps/:id/end-batch`  | `POST` | Administrator batch end and lifecycle close.        |
+| `/api/taps/:id/end-keg`    | `POST` | Administrator keg end and lifecycle close.          |
+| `/api/ondeck`              | `GET`  | Administrator Brewfather On Deck preferences.       |
+| `/api/ondeck`              | `POST` | Administrator Brewfather visibility update.         |
+| `/api/brewfather/status`   | `GET`  | Administrator Brewfather sync and cache status.     |
+| `/api/brewfather/refresh`  | `POST` | Native coalesced Brewfather refresh and outcome.    |
+| `/api/custom-beverage`     | `POST` | Administrator custom-beverage metadata update.      |
 
 `POST /api/auth` returns an opaque random bearer token. The database stores only `sha256:` token digests and expiry timestamps; it does not use JWTs. Sessions expire after 24 hours, expired sessions are pruned, and a PIN change revokes all existing sessions. PIN changes use a separate authenticated endpoint and require the current PIN plus matching new values; failed current-PIN verification is separately limited. A newly initialized database fails closed for administrator actions until a deliberate non-default PIN has been configured.
 

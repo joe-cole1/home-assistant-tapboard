@@ -13,6 +13,16 @@ const GRAPHICS = new Set(['corny_keg', 'pint_glass', 'tulip_glass', 'wheat_glass
 const DISPLAY_UNITS = new Set(['percent', 'pints', 'oz', 'pours_12', 'pours_custom']);
 const VOLUME_FORMATS = new Set(['oz', 'pints']);
 const LAYOUT_MODES = new Set(['cozy', 'compact']);
+const SENSORY_AXES = new Set([
+  'malt',
+  'hops',
+  'bitterness',
+  'sweetness',
+  'roast',
+  'tartness',
+  'body',
+  'perceived_strength'
+]);
 // eslint-disable-next-line no-control-regex -- Reject control characters from untrusted request text.
 const DISALLOWED_CONTROLS = /[\u0000-\u0009\u000B\u000C\u000E-\u001F\u007F]/;
 const CANONICAL_NUMBER = /^(?:0|[1-9]\d*)(?:\.\d+)?$/;
@@ -182,6 +192,27 @@ export function validateCustomBeverage(body) {
     srm: numeric(body.srm, 0, 50, { integer: true, required: true }),
     description: text(body.description, 2_000, { required: true })
   };
+}
+
+export function validateSensoryOverride(body) {
+  assertObject(body);
+  rejectUnknown(body, new Set(['hidden', 'description_override', 'axis_overrides']));
+  const output = {};
+  if (body.hidden !== undefined) output.hidden = boolean(body.hidden);
+  if (body.description_override === null) output.description_override = null;
+  else assignIfDefined(output, 'description_override', text(body.description_override, 2_000));
+  if (body.axis_overrides !== undefined) {
+    assertObject(body.axis_overrides);
+    rejectUnknown(body.axis_overrides, SENSORY_AXES);
+    output.axis_overrides = {};
+    for (const [axis, raw] of Object.entries(body.axis_overrides)) {
+      const value = numeric(raw, 0, 5, { allowNull: true });
+      if (value !== null && !Number.isInteger(value * 2)) throw new ValidationError('Sensory scores use half steps');
+      output.axis_overrides[axis] = value;
+    }
+  }
+  if (Object.keys(output).length === 0) throw new ValidationError();
+  return output;
 }
 
 export function validateTap(body) {
