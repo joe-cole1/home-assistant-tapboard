@@ -11,6 +11,7 @@ Tapboard is a containerized dashboard for six Home Assistant-connected beer taps
 - Lifecycle-scoped lifetime forecast based on average consumption and cadence on drinking days, with a clearly labeled 24 oz every 4 days default until usage is recorded.
 - Canonical, capacity-aware keg measurements sourced from Home Assistant scales; the browser never estimates volume from a percentage.
 - Cozy horizontal-swipe and compact 3-by-2 layouts sized for a six-tap landscape display.
+- Per-browser display profiles for theme, title/body fonts, accent colours, and cozy/compact layout; shared SQLite settings remain the default for new or reset displays.
 - Brewfather-powered tap assignment and On Deck visibility for Planning, Fermenting, and Conditioning batches.
 - One Tapboard-owned custom beverage whose display metadata is editable without Home Assistant hard-coding.
 - Hardened Docker Compose deployment with loopback-only access and independent named data and backup volumes.
@@ -102,6 +103,9 @@ npm run check
 
 ## Current operational boundaries
 
+- Display profiles are local to one browser profile and exact origin (scheme, host, and port). They persist across reloads and hard refreshes through browser storage, but private browsing, site-data clearing, kiosk policies, or blocked storage can remove or prevent that persistence. A storage failure leaves the current page usable and shows that the preference could not be saved.
+- Appearance and layout controls are administrator-only. Their normal changes apply only to the current browser; local values override shared HTTP and SSE settings. “Use theme defaults” restores the active preset’s accent colours, “Reset this browser” removes its local profile, and “Set current display as shared defaults” deliberately writes the current display values to SQLite for browsers that inherit them.
+- Per-browser layout currently covers only cozy versus compact mode. Tap visibility/order, tap sizing, drag-and-drop placement, content configuration, and Home Assistant integration remain shared; this feature makes no Home Assistant changes.
 - Home Assistant and ESPHome deployment, including the physical/mechanical inspection tracked in Batch 4, remain operator-owned and are still open.
 - HA-token rotation is operator-owned and deliberately deferred. Replace it privately in the ignored environment file, recreate Tapboard, and verify hydration without displaying the token or authorization data.
 - The legacy `config/www/tapboard` frontend, its `write_tapboard_json` shell command, and the orphaned writer script have been removed. Apply and validate the accompanying Home Assistant packages before restarting Home Assistant.

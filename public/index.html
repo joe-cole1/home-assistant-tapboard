@@ -9,13 +9,14 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Balsamiq+Sans:ital,wght@0,400;0,700;1,400;1,700&family=Carter+One&family=Fredoka:wght@400;600;700&family=Montserrat:wght@400;600;700;800&family=Outfit:wght@400;600;700;800&family=Permanent+Marker&family=Roboto:wght@400;500;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Balsamiq+Sans:ital,wght@0,400;0,700;1,400;1,700&family=Carter+One&family=Fredoka:wght@400;600;700&family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@400;600;700;800&family=Outfit:wght@400;600;700;800&family=Permanent+Marker&family=Roboto:wght@400;500;700&display=swap"
       rel="stylesheet"
     />
 
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body data-theme="modern_dark">
+    <script src="displayPreferences.js"></script>
     <!-- Header -->
     <header class="app-header">
       <div class="header-title-container">
@@ -169,10 +170,17 @@
 
         <div class="general-settings-content">
           <details class="settings-disclosure" open>
-            <summary>Appearance <span class="settings-summary-help">Theme, colors, and typography</span></summary>
+            <summary>
+              Appearance <span class="settings-summary-help">This browser · theme, colors, and typography</span>
+            </summary>
             <div class="settings-disclosure-content">
+              <p class="display-preferences-help">
+                These display choices save only in this browser. Other screens keep their own appearance.
+              </p>
               <div class="form-group settings-field" data-setting="theme">
-                <label class="form-label" for="themeSelect">Dashboard Theme</label>
+                <label class="form-label" for="themeSelect"
+                  >Dashboard Theme <span class="browser-setting-scope">This browser</span></label
+                >
                 <select class="form-control" id="themeSelect">
                   <option value="modern_dark">Modern Dark</option>
                   <option value="warm_pub">Warm Pub</option>
@@ -183,7 +191,9 @@
               </div>
               <div class="accent-color-grid">
                 <div class="form-group settings-field" data-setting="primary_color">
-                  <label class="form-label" for="primaryColorInput">Primary accent</label>
+                  <label class="form-label" for="primaryColorInput"
+                    >Primary accent <span class="browser-setting-scope">This browser</span></label
+                  >
                   <div class="color-control-row">
                     <input
                       id="primaryColorPicker"
@@ -207,7 +217,9 @@
                   <span class="setting-save-status" id="primaryColorSaveStatus" aria-live="polite"></span>
                 </div>
                 <div class="form-group settings-field" data-setting="secondary_color">
-                  <label class="form-label" for="secondaryColorInput">Secondary accent</label>
+                  <label class="form-label" for="secondaryColorInput"
+                    >Secondary accent <span class="browser-setting-scope">This browser</span></label
+                  >
                   <div class="color-control-row">
                     <input
                       id="secondaryColorPicker"
@@ -242,7 +254,9 @@
                 <span class="setting-save-status" id="headerTitleSaveStatus" aria-live="polite"></span>
               </div>
               <div class="form-group settings-field" data-setting="font_title">
-                <label class="form-label" for="titleFontSelect">Header Title Font</label>
+                <label class="form-label" for="titleFontSelect"
+                  >Header Title Font <span class="browser-setting-scope">This browser</span></label
+                >
                 <select class="form-control" id="titleFontSelect">
                   <option value="Outfit">Outfit</option>
                   <option value="Roboto">Roboto</option>
@@ -256,7 +270,9 @@
                 <span class="setting-save-status" id="titleFontSaveStatus" aria-live="polite"></span>
               </div>
               <div class="form-group settings-field" data-setting="font_body">
-                <label class="form-label" for="bodyFontSelect">Body Text Font</label>
+                <label class="form-label" for="bodyFontSelect"
+                  >Body Text Font <span class="browser-setting-scope">This browser</span></label
+                >
                 <select class="form-control" id="bodyFontSelect">
                   <option value="Inter">Inter</option>
                   <option value="Roboto">Roboto</option>
@@ -268,14 +284,38 @@
                 <div id="bodyFontPreview" class="font-preview">Hazy IPA · 6.5% ABV · 45 IBU · Fresh on Tap</div>
                 <span class="setting-save-status" id="bodyFontSaveStatus" aria-live="polite"></span>
               </div>
+              <div class="display-preferences-actions">
+                <button id="resetBrowserDisplayPreferencesBtn" class="btn-secondary" type="button">
+                  Reset this browser
+                </button>
+                <span class="setting-save-status" id="browserDisplayPreferencesSaveStatus" aria-live="polite"></span>
+              </div>
+              <div class="display-preferences-global-action">
+                <p class="settings-help">
+                  Make this screen’s current appearance and layout the shared defaults for browsers that have not chosen
+                  their own values.
+                </p>
+                <div class="settings-inline-actions">
+                  <button id="setSharedDisplayDefaultsBtn" class="btn-secondary" type="button">
+                    Set current display as shared defaults
+                  </button>
+                  <span class="setting-save-status" id="sharedDisplayDefaultsSaveStatus" aria-live="polite"></span>
+                </div>
+              </div>
             </div>
           </details>
 
           <details class="settings-disclosure">
-            <summary>Dashboard <span class="settings-summary-help">Layout and visible taps</span></summary>
+            <summary>
+              Dashboard <span class="settings-summary-help">This browser layout · shared visible taps</span>
+            </summary>
             <div class="settings-disclosure-content">
+              <p class="display-preferences-help">
+                Layout saves in this browser. Which taps are visible remains shared across all displays.
+              </p>
               <div class="form-group settings-field" data-setting="layout_mode">
-                <label class="form-label" for="layoutModeSelect">Dashboard Layout</label
+                <label class="form-label" for="layoutModeSelect"
+                  >Dashboard Layout <span class="browser-setting-scope">This browser</span></label
                 ><select class="form-control" id="layoutModeSelect">
                   <option value="cozy">Cozy — scroll through tap cards</option>
                   <option value="compact">Compact — six taps at a glance</option></select

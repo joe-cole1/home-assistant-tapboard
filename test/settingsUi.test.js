@@ -51,6 +51,39 @@ test('theme and PIN controls expose reset, warning, verification, and inline sta
   assert.ok(document.getElementById('pinChangeSaveStatus'));
 });
 
+test('per-browser display controls load before visible content and communicate their scope', () => {
+  const { document } = parseHTML(html);
+  const bodyChildren = [...document.body.children];
+  const preferenceScript = document.querySelector('script[src="displayPreferences.js"]');
+  const fonts = document.querySelector('link[href*="fonts.googleapis.com/css2"]');
+
+  assert.equal(bodyChildren[0], preferenceScript, 'display preference bootstrap must be the first body element');
+  assert.equal(preferenceScript.getAttribute('type'), null, 'bootstrap must be a synchronous classic script');
+  assert.match(fonts.getAttribute('href'), /family=Inter/);
+  assert.ok(document.querySelectorAll('.browser-setting-scope').length >= 6);
+  assert.match(document.querySelector('.display-preferences-help').textContent, /only in this browser/i);
+  assert.match(document.querySelector('#layoutModeSelect').parentElement.textContent, /This browser/i);
+});
+
+test('per-browser display controls retain reset, theme-default, and explicit shared-default actions', () => {
+  const { document } = parseHTML(html);
+  const reset = document.getElementById('resetBrowserDisplayPreferencesBtn');
+  const resetStatus = document.getElementById('browserDisplayPreferencesSaveStatus');
+  const shared = document.getElementById('setSharedDisplayDefaultsBtn');
+  const sharedStatus = document.getElementById('sharedDisplayDefaultsSaveStatus');
+
+  assert.equal(document.getElementById('resetAccentColorsBtn').textContent.trim(), 'Use theme defaults');
+  assert.equal(reset.getAttribute('type'), 'button');
+  assert.equal(resetStatus.getAttribute('aria-live'), 'polite');
+  assert.equal(shared.getAttribute('type'), 'button');
+  assert.equal(sharedStatus.getAttribute('aria-live'), 'polite');
+  assert.match(shared.parentElement.parentElement.textContent, /shared default/i);
+  assert.ok(
+    document.getElementById('globalSettingsModal').contains(shared),
+    'actions remain behind the admin-gated dialog'
+  );
+});
+
 test('tap and custom-beverage settings provide an inline autosave result beside every editable field', () => {
   const { document } = parseHTML(html);
   const controlStatusPairs = [
