@@ -144,7 +144,7 @@ function handleError(res, error, context = 'request') {
 }
 
 function allowedMethodsForApiPath(pathname) {
-  if (pathname === '/api/state') return ['GET'];
+  if (['/api/state', '/api/brewfather/status'].includes(pathname)) return ['GET'];
   if (pathname === '/api/ondeck') return ['GET', 'POST'];
   if (
     ['/api/auth', '/api/settings', '/api/admin/pin', '/api/brewfather/refresh', '/api/custom-beverage'].includes(
@@ -241,9 +241,15 @@ function isOndeckEnabled() {
 
 function brewfatherStatus() {
   const budget = brewfatherClient?.getBudgetStatus?.() || null;
+  const sync = getBrewfatherSyncStatus(db);
+  const hasCache = Boolean(db.prepare('SELECT 1 FROM batches LIMIT 1').get());
+  const cacheStatus =
+    sync.status === 'running' ? 'refreshing' : sync.status === 'ok' ? 'current' : hasCache ? 'stale' : 'empty';
   return {
     configured: Boolean(brewfatherClient),
-    ...getBrewfatherSyncStatus(db),
+    ...sync,
+    has_cache: hasCache,
+    cache_status: cacheStatus,
     budget: budget
       ? { limit: budget.limit, used: budget.used, remaining: budget.remaining, blockedUntil: budget.blockedUntil }
       : null
@@ -548,7 +554,18 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // 4. Change the administrator PIN. This is deliberately separate from
+  // 4. Read Brewfather configuration and cache-sync status for General Settings.
+  if (url.pathname === '/api/brewfather/status' && req.method === 'GET') {
+    if (!requireAdmin(req, res)) return;
+    try {
+      sendJson(res, 200, { brewfather: brewfatherStatus() });
+    } catch (error) {
+      handleError(res, error, requestContext('read Brewfather status'));
+    }
+    return;
+  }
+
+  // 5. Change the administrator PIN. This is deliberately separate from
   // general settings so ordinary autosaves can never include credentials.
   if (url.pathname === '/api/admin/pin' && req.method === 'POST') {
     if (!requireAdmin(req, res)) return;

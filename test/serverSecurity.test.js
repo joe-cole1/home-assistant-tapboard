@@ -814,6 +814,57 @@ test('On Deck and custom beverage APIs require authentication, validate strictly
   }
 });
 
+test('Brewfather status requires authentication and exposes only safe unconfigured status', async () => {
+  const instance = await startServer();
+  try {
+    const unauthorized = await fetch(`${instance.baseUrl}/api/brewfather/status`);
+    assert.equal(unauthorized.status, 401);
+    assert.deepEqual(await unauthorized.json(), { error: 'Unauthorized' });
+
+    const { token } = await authenticate(instance.baseUrl);
+    const authorized = await fetch(`${instance.baseUrl}/api/brewfather/status`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    assert.equal(authorized.status, 200);
+    const { brewfather } = await authorized.json();
+    assert.equal(brewfather.configured, false);
+    assert.equal(brewfather.status, 'not_configured');
+    assert.equal(brewfather.error_category, 'configuration');
+    assert.equal(brewfather.stale, true);
+    assert.equal(brewfather.has_cache, false);
+    assert.equal(brewfather.cache_status, 'empty');
+    assert.equal(brewfather.budget, null);
+
+    const database = new Database(path.join(instance.dataDir, 'tapboard.db'));
+    database
+      .prepare("INSERT INTO batches(batch_id, recipe_name, status) VALUES('retained', 'Retained', 'Completed')")
+      .run();
+    const cached = await (
+      await fetch(`${instance.baseUrl}/api/brewfather/status`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+    ).json();
+    assert.equal(cached.brewfather.has_cache, true);
+    assert.equal(cached.brewfather.cache_status, 'stale');
+
+    database.prepare("UPDATE brewfather_sync_state SET status = 'running' WHERE id = 1").run();
+    const running = await (
+      await fetch(`${instance.baseUrl}/api/brewfather/status`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+    ).json();
+    assert.equal(running.brewfather.has_cache, true);
+    assert.equal(running.brewfather.cache_status, 'refreshing');
+    database.close();
+
+    const wrongMethod = await fetch(`${instance.baseUrl}/api/brewfather/status`, { method: 'POST' });
+    assert.equal(wrongMethod.status, 405);
+    assert.equal(wrongMethod.headers.get('allow'), 'GET');
+  } finally {
+    await stopServer(instance.child);
+  }
+});
+
 test('simulation is absent and traversal variants cannot escape public', async () => {
   const instance = await startServer();
   const database = new Database(path.join(instance.dataDir, 'tapboard.db'));

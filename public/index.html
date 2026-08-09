@@ -363,6 +363,32 @@
             </div>
           </details>
 
+          <details class="settings-disclosure" id="brewfatherStatusSection">
+            <summary>
+              Brewfather <span class="settings-summary-help">Connection, cache health, and refresh</span>
+            </summary>
+            <div class="settings-disclosure-content">
+              <dl class="brewfather-status-list" aria-label="Brewfather synchronization status">
+                <div class="brewfather-status-row">
+                  <dt>Connection</dt>
+                  <dd id="brewfatherConnectionStatus">Checking connection status…</dd>
+                </div>
+                <div class="brewfather-status-row">
+                  <dt>Cache</dt>
+                  <dd id="brewfatherCacheStatus">Checking cache status…</dd>
+                </div>
+                <div class="brewfather-status-row">
+                  <dt>Last successful refresh</dt>
+                  <dd><time id="brewfatherLastSuccess" datetime="">Not available</time></dd>
+                </div>
+              </dl>
+              <div class="settings-inline-actions">
+                <button id="refreshBrewfatherBtn" class="btn-secondary" type="button">Refresh now</button>
+                <span id="brewfatherRefreshStatus" class="setting-save-status" aria-live="polite"></span>
+              </div>
+            </div>
+          </details>
+
           <details class="settings-disclosure">
             <summary>
               Custom Beverage <span class="settings-summary-help">Reusable beverage assigned to any tap</span>
