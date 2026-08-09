@@ -94,6 +94,37 @@ test('does not read failure bodies or log response text and resource IDs', async
   assert.doesNotMatch(lines[0], /private response text|secret=yes|private-batch-id/);
 });
 
+test('treats a missing latest reading as absent without logging a transport failure', async () => {
+  const lines = [];
+  const api = client(async () => response({ private: 'response body' }, { status: 404 }), {
+    logger: { error: (line) => lines.push(line) }
+  });
+
+  assert.equal(await api.getLatestReading('private-batch-id'), null);
+  assert.deepEqual(lines, []);
+});
+
+test('keeps 404s from required endpoints observable and masks their resource IDs', async () => {
+  const lines = [];
+  const api = client(async () => response({}, { status: 404 }), { logger: { error: (line) => lines.push(line) } });
+
+  await assert.rejects(api.getBatch('private-batch-id'), (error) => {
+    assert.equal(error.category, 'not_found');
+    assert.equal(error.status, 404);
+    return true;
+  });
+  assert.equal(lines.length, 1);
+  assert.deepEqual(JSON.parse(lines[0]), {
+    event: 'brewfather.transport_failure',
+    operation: '/v2/batches/:batchId',
+    method: 'GET',
+    category: 'not_found',
+    status: 404,
+    contentType: 'application/json'
+  });
+  assert.doesNotMatch(lines[0], /private-batch-id/);
+});
+
 test('paginates all supported statuses using start_after', async () => {
   const calls = [];
   const api = client(async (url) => {
