@@ -214,9 +214,9 @@ test('verified restore marker permits migration, is consumed after success, and 
   });
   assert.equal(result.status, 0, result.stderr);
   assert.equal(existsSync(approvalFile), false);
-  assert.equal(existsSync(path.join(restoredDir, '.tapboard-migration-v4.json')), true);
+  assert.equal(existsSync(path.join(restoredDir, '.tapboard-migration-v5.json')), true);
   let migrated = open(restoredDir);
-  assert.equal(migrated.pragma('user_version', { simple: true }), 4);
+  assert.equal(migrated.pragma('user_version', { simple: true }), 5);
   assert.equal(migrated.prepare('SELECT COUNT(*) AS count FROM pour_logs').get().count, 1);
   migrated.close();
 

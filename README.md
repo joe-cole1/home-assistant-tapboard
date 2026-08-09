@@ -12,7 +12,8 @@ Tapboard is a containerized dashboard for six Home Assistant-connected beer taps
 - Canonical, capacity-aware keg measurements sourced from Home Assistant scales; the browser never estimates volume from a percentage.
 - Cozy horizontal-swipe and compact 3-by-2 layouts sized for a six-tap landscape display.
 - Per-browser display profiles for theme, title/body fonts, accent colours, and cozy/compact layout; shared SQLite settings remain the default for new or reset displays.
-- Brewfather-powered tap assignment and On Deck visibility for Planning, Fermenting, and Conditioning batches.
+- Native Brewfather v2 cache for Planning, Brewing, Fermenting, Conditioning, and Completed batches, with durable On Deck preferences and stale-cache operation.
+- Versioned, allowlisted `tapboard_event` delivery to Home Assistant after durable Tapboard actions.
 - One Tapboard-owned custom beverage whose display metadata is editable without Home Assistant hard-coding.
 - Hardened Docker Compose deployment with loopback-only access and independent named data and backup volumes.
 
@@ -28,17 +29,21 @@ the standalone Brewfather package, credentials, verification, and rollback.
    cp .env.example .env
    ```
 
-2. Set the Home Assistant endpoint, a long-lived token, and a one-time non-default administrator PIN:
+2. Set the Home Assistant endpoint, a long-lived token, Brewfather credentials, and a one-time non-default administrator PIN:
 
    ```env
    HA_URL=http://192.168.1.100:8123
    HA_TOKEN=your_long_lived_access_token
+   BREWFATHER_USER_ID=your_brewfather_user_id
+   BREWFATHER_API_KEY=your_existing_brewfather_api_key
    PORT=3000
    TAPBOARD_INITIAL_ADMIN_PIN=<choose-four-digits>
    TAPBOARD_EXPECT_EXISTING_DATA=false
    ```
 
-   The Compose host port is fixed at `3005`; `PORT=3000` is the container listener. Do not commit or share `.env`.
+   Reuse the Brewfather API user/key already used by Home Assistant. Do not regenerate it: Brewfather permits one key per account, and the retained HA fermentation integration still uses that key. The API user needs `batches.read`, `recipes.read`, and `batches.write`; Tapboard's only write is an explicit End Batch status change to `Completed`.
+
+   The Compose host port is fixed at `3005`; `PORT=3000` is the container listener. Do not commit, print, or share `.env`.
 
 3. Start the local deployment:
 
@@ -71,7 +76,7 @@ For each tap `N` (1–6), Tapboard reads exactly these entities:
 - `sensor.tap_N_fl_oz`: remaining measured volume in fluid ounces.
 - `input_number.tap_N_keg_capacity_oz`: authoritative per-tap capacity, an integer from 16 through 2048 fluid ounces.
 
-Tapboard publishes the coherent measurement tuple `volumeOz`, `capacityOz`, `fillPercent`, `pintsRemaining`, and `volumeStatus` in snapshot schema version 5 and in incremental SSE updates. It does not consume `sensor.tap_N_fill` or `sensor.tap_N_pints_remaining`.
+Tapboard publishes the coherent measurement tuple `volumeOz`, `capacityOz`, `fillPercent`, `pintsRemaining`, and `volumeStatus` in snapshot schema version 6 and in incremental SSE updates. It does not consume `sensor.tap_N_fill`, `sensor.tap_N_pints_remaining`, or HA-projected Brewfather entities.
 
 `volumeStatus` is `measured` for a fresh valid scale reading, `stale` when the last valid in-process reading is retained after an existing source becomes unavailable, `assumed_full` only when the exact volume entity is absent and a batch is assigned, or `unavailable` on a cold start without a valid measurement (and for unassigned/sensor-unavailable taps). Low-keg alerts and low-keg badges are limited to fresh `measured` readings. Forecasts use the same server-derived tuple.
 
@@ -89,6 +94,20 @@ npm run db:prune-pours
 When running against the Compose service, use `docker compose exec -T tapboard` before the npm command. These commands use the configured data and backup locations; do not copy a live SQLite database file or use retired ad-hoc database scripts. See [Database operations](docs/DATABASE-OPERATIONS.md) for backup, restore rehearsal, retention, and rollback procedures.
 
 The repository does not install a backup scheduler. Run the supported backup command from an operator-owned scheduler after verifying the deployment.
+
+## Native Brewfather synchronization
+
+Tapboard refreshes at startup and every six hours, with bounded retry backoff after failures. An authenticated manual refresh uses the same coordinator and the same rolling request budget, so overlapping startup, scheduled, and manual refreshes coalesce into one cycle.
+
+The summary cycle reads `GET /v2/batches` for all five supported statuses using `limit=50` and `start_after` pagination. It fetches `GET /v2/batches/:id` only for new or changed batches, prioritizing assigned and visible On Deck batches, with at most 12 details per cycle. For visible active On Deck batches it reads at most 12 latest readings through `GET /v2/batches/:id/readings/last`. `GET /v2/recipes/:id` and full `GET /v2/batches/:id/readings` support bounded detail/history retrieval; full history is lazy and is not part of the background cycle.
+
+The default Tapboard budget is 100 requests in any rolling hour and cannot be configured above 200. A single-page no-change cycle normally costs five list calls; its bounded enrichment work adds at most 12 details and 12 latest readings. Pagination can use more list calls, but the same 100/hour ceiling applies to every scheduled, manual, detail, reading, and End Batch request. Together with the retained HA package's normal three list calls every six hours, the steady request rate is about 1.3 calls/hour and Tapboard always leaves at least 400 of the shared 500 calls/hour available to HA at the default limit.
+
+Failed pages or details never erase successful cached data. The administrator On Deck status distinguishes Brewfather configuration, last attempt/success, stale-cache state, safe error category, retry timing, request budget, and HA connectivity. Cached beer display remains available when either external service is down.
+
+End Batch validates the current non-custom assignment, sends exactly `PATCH /v2/batches/:id` with `{"status":"Completed"}`, and only then transactionally closes the lifecycle and clears the assignment. A failed PATCH leaves local state unchanged. End Keg only closes the local lifecycle and never contacts Brewfather.
+
+Home Assistant receives the versioned `tapboard_event` contract on a best-effort basis. See [Home Assistant event examples](docs/HOME-ASSISTANT-EVENTS.md). No HA configuration is created or changed automatically.
 
 ## Development
 

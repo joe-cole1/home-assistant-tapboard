@@ -5,48 +5,7 @@ import { PourDetector, normalizeVolumeToOz } from './pourDetector.js';
 import { DisplayUpdateCoalescer } from './displayUpdateCoalescer.js';
 import { createTapStatesProjection, projectTapStateChange } from './tapboardProjection.js';
 import { captureActiveLifecycle, recordPour } from './kegLifecycle.js';
-
-const BREWFATHER_ACTIVE_BATCHES_ENTITY = 'sensor.brewfather_active_batches';
-const BREWFATHER_ELIGIBLE_STATUSES = new Set(['Planning', 'Fermenting', 'Conditioning']);
-
-function boundedText(value, max) {
-  return typeof value === 'string' && value.length <= max && value.trim() ? value.trim() : null;
-}
-
-function boundedNumber(value, min, max) {
-  const number = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(number) && number >= min && number <= max ? number : null;
-}
-
-export function sanitizeBrewfatherActiveBatches(entity) {
-  if (
-    entity?.entity_id !== BREWFATHER_ACTIVE_BATCHES_ENTITY ||
-    entity?.state === 'unknown' ||
-    entity?.state === 'unavailable' ||
-    !entity.attributes ||
-    typeof entity.attributes !== 'object'
-  )
-    return [];
-  const source = Array.isArray(entity.attributes.batches) ? entity.attributes.batches : [];
-  const seen = new Set();
-  const batches = [];
-  for (const batch of source) {
-    if (batches.length >= 150) break;
-    if (!batch || typeof batch !== 'object') continue;
-    const id = boundedText(batch.id ?? batch.batch_id, 256);
-    const status = boundedText(batch.status, 32);
-    if (!id || !status || !BREWFATHER_ELIGIBLE_STATUSES.has(status) || seen.has(id)) continue;
-    seen.add(id);
-    batches.push({
-      id,
-      name: boundedText(batch.name ?? batch.recipe_name, 160) || 'Unknown Brew',
-      status,
-      style: boundedText(batch.style, 120) || '',
-      abv: boundedNumber(batch.abv, 0, 100)
-    });
-  }
-  return batches;
-}
+import { buildTapboardEvent } from './tapboardEvents.js';
 
 export class HAClient extends EventEmitter {
   constructor({
@@ -59,6 +18,7 @@ export class HAClient extends EventEmitter {
     clearTimeout: cancel = clearTimeout,
     now = () => Date.now(),
     requestTimeoutMs = 10_000,
+    maxPendingRequests = 64,
     captureLifecycle = (tapId) => captureActiveLifecycle(db, tapId),
     isTapAssigned = (tapId) => Boolean(captureActiveLifecycle(db, tapId)),
     recordPourFn = (pour) => recordPour(db, pour)
@@ -69,6 +29,10 @@ export class HAClient extends EventEmitter {
     this.clearTimeout = cancel;
     this.now = now;
     this.requestTimeoutMs = requestTimeoutMs;
+    if (!Number.isInteger(maxPendingRequests) || maxPendingRequests < 1 || maxPendingRequests > 256) {
+      throw new TypeError('HA WebSocket pending request limit is invalid');
+    }
+    this.maxPendingRequests = maxPendingRequests;
     this.captureLifecycle = captureLifecycle;
     this.isTapAssigned = isTapAssigned;
     this.recordPour = recordPourFn;
@@ -97,8 +61,6 @@ export class HAClient extends EventEmitter {
     this.primaryTapSensors = new Map();
     this.unitWarnings = new Map();
     this.activePourContexts = new Map();
-    this.brewfatherBatches = [];
-    this.brewfatherChangeTimer = null;
     this.displayUpdateCoalescer =
       displayUpdateCoalescer ||
       new DisplayUpdateCoalescer({
@@ -271,7 +233,6 @@ export class HAClient extends EventEmitter {
     const socket = this.ws;
     this.failSocket(socket, new Error('HA client stopped'), 'shutdown', { reconnect: false });
     this.displayUpdateCoalescer.dispose?.();
-    if (this.brewfatherChangeTimer !== null) this.clearTimeout(this.brewfatherChangeTimer);
   }
 
   send(msg, { onId } = {}) {
@@ -279,6 +240,9 @@ export class HAClient extends EventEmitter {
       const socket = this.ws;
       if (!socket || socket.readyState !== this.WebSocket.OPEN) {
         return reject(new Error('WebSocket is not connected'));
+      }
+      if (this.pendingRequests.size >= this.maxPendingRequests) {
+        return reject(new Error('HA WebSocket pending request limit reached'));
       }
       const id = ++this.messageId;
       const payload = { ...msg, id };
@@ -397,7 +361,6 @@ export class HAClient extends EventEmitter {
       this.statesMap.clear();
       for (const entity of states) {
         this.statesMap.set(entity.entity_id, entity);
-        this.syncBrewfatherBatchData(entity, { emit: false });
       }
 
       // Ensure HA input_boolean.tap_N_enabled matches active taps in database
@@ -467,9 +430,6 @@ export class HAClient extends EventEmitter {
     const { entity_id, new_state } = data;
     if (!new_state) {
       this.statesMap.delete(entity_id);
-      if (entity_id === BREWFATHER_ACTIVE_BATCHES_ENTITY) {
-        this.syncBrewfatherBatchData({ entity_id, attributes: {} });
-      }
       const displayChange = enqueueDisplay
         ? projectTapStateChange(entity_id, null, {
             statesMap: this.statesMap,
@@ -482,7 +442,6 @@ export class HAClient extends EventEmitter {
     }
 
     this.statesMap.set(entity_id, new_state);
-    this.syncBrewfatherBatchData(new_state);
 
     // Apply 4-Stage Noise Filtering strictly to each tap's designated primary scale sensor
     for (let tapId = 1; ingestDetector && tapId <= 6; tapId++) {
@@ -552,18 +511,25 @@ export class HAClient extends EventEmitter {
   handleDetectorEvent(event) {
     if (event.type === 'start') {
       const lifecycle = this.captureLifecycle(event.tapId);
-      const tapInfo = db.prepare('SELECT override_name FROM taps WHERE tap_id = ?').get(event.tapId);
+      const outboundContext = this.eventContext(event.tapId, lifecycle);
       this.activePourContexts.set(event.tapId, {
         lifecycleId: lifecycle?.lifecycle_id ?? null,
-        beerName: tapInfo?.override_name || `Tap ${event.tapId}`
+        batchId: lifecycle?.batch_id ?? null,
+        beerName: outboundContext.metadata.display_name || `Tap ${event.tapId}`,
+        beerStyle: outboundContext.metadata.display_style || null
       });
       console.log(`[POUR EVENT] 🍺 Tap ${event.tapId} POUR STARTED! Baseline: ${event.startVolume.toFixed(1)} oz`);
+      this.publishTapboardEvent('pour_start', event.tapId, lifecycle, {
+        start_volume_oz: event.startVolume
+      });
       this.emit('pour_start', { tapId: event.tapId, startVolume: event.startVolume });
       return;
     }
     if (event.type === 'cancel') {
+      const context = this.activePourContexts.get(event.tapId) || null;
       this.activePourContexts.delete(event.tapId);
       console.log(`[POUR EVENT] 🚫 Tap ${event.tapId} pour cancelled: ${event.reason}`);
+      this.publishTapboardEvent('pour_cancelled', event.tapId, context, { reason: event.reason });
       this.emit('pour_cancel', event);
       return;
     }
@@ -579,7 +545,11 @@ export class HAClient extends EventEmitter {
     );
 
     if (finalPouredOz >= 1.0) {
-      const context = this.activePourContexts.get(tapId) || { lifecycleId: null, beerName: `Tap ${tapId}` };
+      const context = this.activePourContexts.get(tapId) || {
+        lifecycleId: null,
+        batchId: null,
+        beerName: `Tap ${tapId}`
+      };
       this.recordPour({
         tapId,
         lifecycleId: context.lifecycleId,
@@ -587,6 +557,13 @@ export class HAClient extends EventEmitter {
         timestamp: event.timestamp
       });
       this.activePourContexts.delete(tapId);
+
+      // The durable pour write is the commit boundary for outbound completion.
+      // Publishing remains best effort so HA transport failures cannot affect
+      // detector processing or the browser event stream.
+      this.publishTapboardEvent('pour_complete', tapId, context, {
+        volume_poured_oz: finalPouredOz
+      });
 
       this.emit('pour_complete', {
         tapId,
@@ -615,54 +592,12 @@ export class HAClient extends EventEmitter {
       console.log(
         `[Alert] Tap ${tapId} volume (${currentPercent}%) dipped below threshold (${tapRow.badge_low_keg}%).`
       );
+      this.publishTapboardEvent('low_keg', tapId, this.captureLifecycle(tapId), {
+        current_percent: currentPercent,
+        threshold_percent: tapRow.badge_low_keg
+      });
       this.emit('low_keg_alert', { tapId, currentPercent, threshold: tapRow.badge_low_keg });
     }
-  }
-
-  syncBrewfatherBatchData(entity, { emit = true } = {}) {
-    if (entity?.entity_id?.startsWith('sensor.tap_') && entity.entity_id.endsWith('_batch_info')) {
-      const attr = entity.attributes;
-      if (!attr || (!attr.batch_id && !attr.id)) return;
-      const batchId = attr.batch_id || attr.id;
-      const recipeName = attr.recipe_name || attr.name || 'Unknown Brew';
-      const style = attr.style || 'Craft Beer';
-      const brewDate = attr.brew_date || null;
-      const og = parseFloat(attr.og) || null;
-      const fg = parseFloat(attr.fg) || null;
-      const abv = parseFloat(attr.abv) || null;
-      const ibu = parseInt(attr.ibu, 10) || null;
-      const srm = parseInt(attr.srm || attr.color, 10) || null;
-      const status = attr.status || 'Active';
-      try {
-        db.prepare(
-          `INSERT INTO batches (batch_id, recipe_name, style, brew_date, og, fg, abv, ibu, srm, status, last_synced_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-           ON CONFLICT(batch_id) DO UPDATE SET recipe_name = excluded.recipe_name, style = excluded.style,
-             brew_date = excluded.brew_date, og = excluded.og, fg = excluded.fg, abv = excluded.abv,
-             ibu = excluded.ibu, srm = excluded.srm, status = excluded.status, last_synced_at = datetime('now')`
-        ).run(batchId, recipeName, style, brewDate, og, fg, abv, ibu, srm, status);
-      } catch (_err) {
-        // Optional batch metadata must never interrupt HA synchronization.
-      }
-      return;
-    }
-    if (entity?.entity_id !== BREWFATHER_ACTIVE_BATCHES_ENTITY) return;
-    const next = sanitizeBrewfatherActiveBatches(entity);
-    if (JSON.stringify(next) === JSON.stringify(this.brewfatherBatches)) return;
-    this.brewfatherBatches = next;
-    if (!emit) return;
-    // The HA entity can update in bursts. One notification per second is enough
-    // because consumers fetch the complete, sanitized snapshot.
-    if (this.brewfatherChangeTimer === null) {
-      this.brewfatherChangeTimer = this.setTimeout(() => {
-        this.brewfatherChangeTimer = null;
-        this.emit('brewfather_batches_changed', this.getBrewfatherBatches());
-      }, 1000);
-    }
-  }
-
-  getBrewfatherBatches() {
-    return this.brewfatherBatches.map((batch) => ({ ...batch }));
   }
 
   getFormattedState() {
@@ -687,6 +622,59 @@ export class HAClient extends EventEmitter {
       domain,
       service,
       service_data: serviceData
+    });
+  }
+
+  fireEvent(eventType, eventData = {}) {
+    return this.send({ type: 'fire_event', event_type: eventType, event_data: eventData });
+  }
+
+  eventContext(tapId, lifecycle = null) {
+    const tap = db
+      .prepare(
+        `SELECT t.override_name, t.override_style, t.batch_id, b.recipe_name, b.style
+         FROM taps t LEFT JOIN batches b ON b.batch_id = t.batch_id
+         WHERE t.tap_id = ?`
+      )
+      .get(tapId);
+    let displayName = lifecycle?.beerName || tap?.override_name || tap?.recipe_name || null;
+    let displayStyle = lifecycle?.beerStyle || tap?.override_style || tap?.style || null;
+    if (tap?.batch_id?.startsWith('custom:')) {
+      const custom = db.prepare('SELECT name, style FROM custom_beverage WHERE id = ?').get(tap.batch_id);
+      displayName = tap.override_name || custom?.name || displayName;
+      displayStyle = tap.override_style || custom?.style || displayStyle;
+    }
+    const lifecycleId =
+      lifecycle && typeof lifecycle === 'object'
+        ? (lifecycle.lifecycle_id ?? lifecycle.lifecycleId ?? null)
+        : Number.isSafeInteger(lifecycle)
+          ? lifecycle
+          : null;
+    const lifecycleBatchId =
+      lifecycle && typeof lifecycle === 'object' ? (lifecycle.batch_id ?? lifecycle.batchId ?? null) : null;
+    return {
+      tap_id: tapId,
+      lifecycle_id: lifecycleId,
+      batch_id: lifecycleBatchId ?? tap?.batch_id ?? null,
+      metadata: {
+        ...(displayName ? { display_name: displayName } : {}),
+        ...(displayStyle ? { display_style: displayStyle } : {})
+      }
+    };
+  }
+
+  publishTapboardEvent(eventType, tapId, lifecycle, data) {
+    let envelope;
+    try {
+      envelope = buildTapboardEvent(eventType, this.eventContext(tapId, lifecycle), data, {
+        now: () => new Date(this.now())
+      });
+    } catch (error) {
+      console.warn(`[HAClient] Could not build ${eventType} event:`, error.message);
+      return;
+    }
+    this.fireEvent('tapboard_event', envelope).catch((error) => {
+      console.warn(`[HAClient] Could not publish ${eventType} event:`, error.message);
     });
   }
 }

@@ -32,21 +32,7 @@ test('canonical projection derives every public measurement from only ounces and
     capacityOz: 640,
     fillPercent: 55.5,
     pintsRemaining: 22.2,
-    volumeStatus: 'measured',
-    batch: {
-      batchId: 'batch-1',
-      recipeName: 'Privacy IPA',
-      style: 'IPA',
-      brewDate: null,
-      og: null,
-      fg: null,
-      abv: null,
-      ibu: null,
-      srm: null,
-      description: null,
-      status: null
-    },
-    batchSelection: { value: 'batch-1 | Privacy IPA', options: ['batch-1 | Privacy IPA'] }
+    volumeStatus: 'measured'
   });
   assert.equal(JSON.stringify(projection).includes('obsolete'), false);
   assert.equal(JSON.stringify(projection).includes('999'), false);
@@ -60,18 +46,14 @@ test('measurement clamps negative and over-capacity readings, and reacts to capa
     capacityOz: 640,
     fillPercent: 0,
     pintsRemaining: 0,
-    volumeStatus: 'measured',
-    batch: null,
-    batchSelection: { value: '', options: [] }
+    volumeStatus: 'measured'
   });
   assert.deepEqual(createTapStatesProjection(measurementStates(800), options)['1'], {
     volumeOz: 640,
     capacityOz: 640,
     fillPercent: 100,
     pintsRemaining: 40,
-    volumeStatus: 'measured',
-    batch: null,
-    batchSelection: { value: '', options: [] }
+    volumeStatus: 'measured'
   });
   const changedCapacity = createTapStatesProjection(measurementStates(400, 320), options)['1'];
   assert.deepEqual(
@@ -175,13 +157,27 @@ test('incremental volume and capacity events emit coherent tuples; obsolete even
   );
 });
 
-test('batch options survive unusable selector states without exposing other attributes', () => {
-  const options = ['batch-1 | Privacy IPA', 42, { secret: 'nested' }, 'custom:topo_chico | Tapboard Custom Beverage'];
-  const states = new Map([['select.tap_1_batch_select', entity('unknown', { options, device_id: 'private' })]]);
-  const projection = createTapStatesProjection(states);
-  assert.deepEqual(projection['1'].batchSelection, {
-    value: '',
-    options: ['batch-1 | Privacy IPA', 'custom:topo_chico | Tapboard Custom Beverage']
+test('HA-projected Brewfather entities are ignored by the serving telemetry projection', () => {
+  const states = measurementStates(320);
+  states.set(
+    'sensor.tap_1_batch_info',
+    entity('active', { batch_id: 'private-batch', tasting_notes: 'private notes', gravity: 1.01 })
+  );
+  states.set('select.tap_1_batch_select', entity('private-batch', { options: ['private-batch'] }));
+  states.set('sensor.brewfather_active_batches', entity('ready', { batches: [{ id: 'private-batch' }] }));
+
+  const projection = createTapStatesProjection(states, assignedTapOne);
+  assert.deepEqual(projection['1'], {
+    volumeOz: 320,
+    capacityOz: 640,
+    fillPercent: 50,
+    pintsRemaining: 20,
+    volumeStatus: 'measured'
   });
-  assert.equal(JSON.stringify(projection).includes('private'), false);
+  assert.equal(projectTapStateChange('sensor.tap_1_batch_info', states.get('sensor.tap_1_batch_info')), null);
+  assert.equal(projectTapStateChange('select.tap_1_batch_select', states.get('select.tap_1_batch_select')), null);
+  assert.equal(
+    projectTapStateChange('sensor.brewfather_active_batches', states.get('sensor.brewfather_active_batches')),
+    null
+  );
 });

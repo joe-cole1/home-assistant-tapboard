@@ -3,7 +3,14 @@
 Tapboard is a Node.js ES-module service and single-page dashboard for six Home Assistant taps. The application serves its own static frontend, stores durable configuration and pour history in SQLite, consumes Home Assistant state through a persistent WebSocket, and publishes live browser updates through Server-Sent Events (SSE).
 
 ```
-Home Assistant -- WebSocket --> Tapboard (Node.js + SQLite) -- SSE /events --> browser
+Brewfather API -- batch/recipe/reading reads --> Tapboard
+Brewfather API <-- PATCH status=Completed -------- Tapboard End Batch only
+
+Home Assistant -- serving telemetry/state changes --> Tapboard
+Home Assistant <-- tapboard_event ----------------- Tapboard
+
+Tapboard -- SQLite --> cache, assignments, lifecycles, pours, preferences, sync state
+Tapboard -- SSE/API --> browser
 ```
 
 ## Runtime and deployment
@@ -20,11 +27,16 @@ Home Assistant -- WebSocket --> Tapboard (Node.js + SQLite) -- SSE /events --> b
 src/
   server.js               HTTP API, session checks, SSE wiring, snapshots
   haClient.js             HA WebSocket, bounded hydration, detector adapter
+  brewfatherClient.js     bounded native Brewfather v2 transport and budget
+  brewfatherCache.js      sanitized durable cache queries and writes
+  brewfatherSync.js       coalesced startup/scheduled/manual synchronization
+  tapActions.js           serialized End Batch and End Keg semantics
+  tapboardEvents.js       strict versioned outbound event envelopes
   pourDetector.js         deterministic timestamp-driven single-pour detector
   tapboardProjection.js   allowlisted, capacity-aware Home Assistant projection
   displayUpdateCoalescer.js compact browser state-change batching
   sseHub.js               SSE framing, heartbeat, slow-client bounds
-  db.js / dbMigrations.js SQLite startup and schema-v4 migrations
+  db.js / dbMigrations.js SQLite startup and schema-v5 migrations
   kegLifecycle.js         immutable lifecycle assignment and attribution
   kegForecast.js          active-lifecycle forecast calculation
   databaseMaintenance.js  verified backup, restore, rotation, and retention
@@ -41,18 +53,34 @@ The HA client authenticates over `/api/websocket`, subscribes to `state_changed`
 
 Only each tap’s designated primary volume sensor is used for pour detection. Values must declare a supported unit and are converted explicitly to fluid ounces; missing or unsupported units are ignored. The detector rejects stale/duplicate timestamps and implausible jumps, establishes settled baselines, arbitrates simultaneous candidates, permits only one active tap, and finalizes after a quiet period or cancels a hard-timeout session. It emits `pour_start`, `pour_complete`, or `pour_cancel`; completion records only qualifying pours.
 
-The canonical measurement contract is `sensor.tap_N_fl_oz` plus `input_number.tap_N_keg_capacity_oz`. The public snapshot uses schema version 5 and exposes one coherent tuple per tap: `volumeOz`, `capacityOz`, `fillPercent`, `pintsRemaining`, and `volumeStatus`, plus batch metadata and batch-selection value/options. Settings also expose nullable `primary_color` and `secondary_color` overrides; `null` selects the active preset default. `sensor.tap_N_fill` and `sensor.tap_N_pints_remaining` are deliberately excluded.
+The canonical measurement contract is `sensor.tap_N_fl_oz` plus `input_number.tap_N_keg_capacity_oz`. The public snapshot uses schema version 6 and exposes one coherent tuple per tap: `volumeOz`, `capacityOz`, `fillPercent`, `pintsRemaining`, and `volumeStatus`, plus native-cache batch metadata and selection options. Settings also expose nullable `primary_color` and `secondary_color` overrides; `null` selects the active preset default. `sensor.tap_N_fill`, `sensor.tap_N_pints_remaining`, `sensor.brewfather_active_batches`, `sensor.tap_N_batch_info`, and the HA batch selectors are deliberately excluded from Tapboard reads.
 
 `volumeStatus` is `measured` for a fresh scale reading; `stale` when a previously valid in-process scale source becomes unavailable; `assumed_full` only when the exact volume entity is absent while the tap has an active assignment; or `unavailable` when there is no valid measurement to retain. Ounces are clamped to capacity and pints/percent are derived on the server. The browser renders this tuple directly and may draw an empty graphic for unavailable data, but does not fabricate a numeric readout. Low-keg alerts and badges require `measured`; forecasts use the same derived tuple.
 
 ## SQLite schema and lifecycle ownership
 
-Startup enforces `foreign_keys=ON`, validates the database, and migrates ordered schema versions transactionally. The current schema is version 4. Version 3 adds the display-layout and On Deck defaults, per-Brewfather-batch visibility preferences, and the singleton custom-beverage record; version 4 adds nullable primary and secondary accent overrides.
+Startup enforces `foreign_keys=ON`, validates the database, and migrates ordered schema versions transactionally. The current schema is version 5. Version 3 adds the display-layout and On Deck defaults, per-Brewfather-batch visibility preferences, and the singleton custom-beverage record; version 4 adds nullable primary and secondary accent overrides; version 5 extends the existing batch table with indexed native summaries and adds bounded detail snapshots, idempotent readings, and singleton sync metadata.
 
 - A tap assignment opens one immutable keg lifecycle; reassignment or an end action closes the existing lifecycle.
 - A pour captures the open lifecycle at pour start. Historical and unassigned pours may have no lifecycle and cannot affect an active keg forecast.
 - Foreign keys restrict invalid tap/lifecycle relationships. `pour_logs_lifecycle_epoch` supports forecast queries by lifecycle and timestamp.
 - The forecast uses all pours from the currently open lifecycle, averaging consumption across UTC calendar days with positive usage and the observed interval between those days. A single observed day uses the default four-day interval; an active lifecycle with no usage uses a clearly labeled default of 24 oz every four days. Unassigned taps still have no forecast.
+
+## Brewfather ownership and cache
+
+Brewfather owns recipes, batches, brewing and fermentation measurements, profiles, and brewer tasting records. Tapboard reads summaries for Planning, Brewing, Fermenting, Conditioning, and Completed through paginated `GET /v2/batches`; changed/important details through `GET /v2/batches/:id`; recipes through `GET /v2/recipes/:id`; latest readings through `GET /v2/batches/:id/readings/last`; and lazy history through `GET /v2/batches/:id/readings`.
+
+The coordinator starts an immediate refresh and schedules six-hour refreshes. Concurrent manual/scheduled work coalesces. A rolling default budget of 100 requests/hour (hard configuration ceiling 200) retains at least 300 calls/hour of headroom under Brewfather's shared 500-call limit. Details and latest-reading polls are each limited to 12 per cycle; history writes are limited to 1,000 readings per request and retained to 5,000 per batch. Individual detail snapshots are 256 KiB and reading snapshots are 16 KiB.
+
+Summary absence is authoritative only when every requested status/page succeeds. Partial or external failures preserve last-known-good summaries, details, readings, assignments, lifecycles, and On Deck preferences. A Completed batch is presentation data only and does not imply a physical keg exists.
+
+Tapboard owns assignments and lifecycle state. It does not write HA batch selectors or text helpers. End Batch is the sole Brewfather mutation: exact assigned non-custom batch validation, exact Completed PATCH, then local lifecycle/assignment transaction. End Keg is local only. HA capacity helpers remain authoritative and serving telemetry remains HA-owned.
+
+## Home Assistant event bridge
+
+Outbound operational events use one HA WebSocket `fire_event` type, `tapboard_event`. The envelope is schema version 1 and contains a unique ID, occurrence time, nullable tap/lifecycle/batch IDs, bounded display metadata, and a strict type-specific data object. Batch 7 publishes `keg_assigned`, `keg_ended`, `pour_start`, `pour_complete`, `pour_cancelled`, and `low_keg` only.
+
+Durable events are published after their SQLite transaction or pour insert succeeds. Delivery is best effort: a WebSocket failure never rolls back or fails the primary action, and operational events are not replayed after a disconnection. The common request path has a 64-request pending ceiling and settles requests on result, timeout, disconnect, authentication failure, send failure, or shutdown. No event contains gravity, fermentation temperature/status/progress, controller state, complete Brewfather objects, arbitrary notes, service targets, credentials, or generic webhook payloads.
 
 ## Browser delivery
 
@@ -97,12 +125,14 @@ All API JSON responses are `no-store`. Mutation bodies must be JSON and are limi
 | `/api/taps/:id/end-keg`   | `POST` | Administrator keg end and lifecycle close.         |
 | `/api/ondeck`             | `GET`  | Administrator Brewfather On Deck preferences.      |
 | `/api/ondeck`             | `POST` | Administrator Brewfather visibility update.        |
-| `/api/brewfather/refresh` | `POST` | Administrator-triggered Brewfather refresh in HA.  |
+| `/api/brewfather/refresh` | `POST` | Native coalesced Brewfather refresh and outcome.   |
 | `/api/custom-beverage`    | `POST` | Administrator custom-beverage metadata update.     |
 
 `POST /api/auth` returns an opaque random bearer token. The database stores only `sha256:` token digests and expiry timestamps; it does not use JWTs. Sessions expire after 24 hours, expired sessions are pruned, and a PIN change revokes all existing sessions. PIN changes use a separate authenticated endpoint and require the current PIN plus matching new values; failed current-PIN verification is separately limited. A newly initialized database fails closed for administrator actions until a deliberate non-default PIN has been configured.
 
 `POST /api/taps/:id` accepts `capacity_oz` as an integer from 16 through 2048. The server must successfully call `input_number.set_value` for `input_number.tap_N_keg_capacity_oz` before treating that capacity update as saved; it returns a visible error if Home Assistant cannot accept it.
+
+The legacy Tapboard-facing HA Brewfather entities and commands remain installed for compatibility with uncertain fermentation consumers, but Tapboard no longer reads or writes them. No file under `home-assistant/` is changed as part of the native cutover.
 
 ## Operations boundaries
 
