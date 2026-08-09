@@ -34,6 +34,7 @@ const THEME_COLORS = {
   cyberpunk: { primary: '#FF007F', secondary: '#00F0FF' },
   light_minimal: { primary: '#D97706', secondary: '#2563EB' }
 };
+const displayPreferences = globalThis.TapboardDisplayPreferences;
 const autosaveTimers = new Map();
 const dirtyFields = new Set();
 const autosaves = createAutosaveController({ onStatus: updateSaveStatus });
@@ -860,20 +861,15 @@ function openRecipeModal(tapId) {
   modal.style.display = 'flex';
 }
 
-// Open Global Settings Modal
-function openGlobalSettingsModal() {
-  const { settings, taps } = appState;
+function syncDisplaySettingsControls() {
+  const displaySettings = effectiveDisplaySettings();
 
-  if (settings.theme) document.getElementById('themeSelect').value = settings.theme;
-  if (settings.title) document.getElementById('headerTitleInput').value = settings.title;
-  if (settings.font_title) document.getElementById('titleFontSelect').value = settings.font_title;
-  if (settings.font_body) document.getElementById('bodyFontSelect').value = settings.font_body;
-  document.getElementById('layoutModeSelect').value = settings.layout_mode === 'compact' ? 'compact' : 'cozy';
-  document.getElementById('showOnDeckCheckbox').checked = settings.show_ondeck !== false && settings.show_ondeck !== 0;
-  document.getElementById('onDeckNewBatchDefaultCheckbox').checked =
-    settings.ondeck_new_batch_default === true || settings.ondeck_new_batch_default === 1;
+  if (displaySettings.theme) document.getElementById('themeSelect').value = displaySettings.theme;
+  if (displaySettings.font_title) document.getElementById('titleFontSelect').value = displaySettings.font_title;
+  if (displaySettings.font_body) document.getElementById('bodyFontSelect').value = displaySettings.font_body;
+  document.getElementById('layoutModeSelect').value = displaySettings.layout_mode === 'compact' ? 'compact' : 'cozy';
 
-  const colors = currentThemeColors();
+  const colors = currentThemeColors(displaySettings);
   [
     ['primary', 'primaryColorPicker', 'primaryColorInput'],
     ['secondary', 'secondaryColorPicker', 'secondaryColorInput']
@@ -884,6 +880,18 @@ function openGlobalSettingsModal() {
     if (picker) picker.value = value;
     if (hex) hex.value = value;
   });
+  updateFontPreviews();
+}
+
+// Open Global Settings Modal
+function openGlobalSettingsModal() {
+  const { settings, taps } = appState;
+
+  syncDisplaySettingsControls();
+  if (settings.title) document.getElementById('headerTitleInput').value = settings.title;
+  document.getElementById('showOnDeckCheckbox').checked = settings.show_ondeck !== false && settings.show_ondeck !== 0;
+  document.getElementById('onDeckNewBatchDefaultCheckbox').checked =
+    settings.ondeck_new_batch_default === true || settings.ondeck_new_batch_default === 1;
 
   const custom = appState.customBeverage || {};
   const customFields = ['name', 'style', 'abv', 'ibu', 'og', 'fg', 'srm', 'description'];
@@ -900,7 +908,6 @@ function openGlobalSettingsModal() {
     }
   }
 
-  updateFontPreviews();
   showModal('globalSettingsModal');
 }
 
@@ -1106,6 +1113,8 @@ function updateSaveStatus(key, { state, error }) {
     'primary-color': 'primaryColorSaveStatus',
     'secondary-color': 'secondaryColorSaveStatus',
     'theme-colors': 'accentColorsSaveStatus',
+    'browser-display-preferences': 'browserDisplayPreferencesSaveStatus',
+    'shared-display-defaults': 'sharedDisplayDefaultsSaveStatus',
     'custom-beverage': 'customBeverageSaveStatus',
     pin: 'pinChangeSaveStatus',
     'tap-assignment': 'tapSettingsBatchSaveStatus',
@@ -1131,9 +1140,13 @@ function updateSaveStatus(key, { state, error }) {
     queued: 'Saving…',
     saving: 'Saving…',
     saved: 'Saved',
+    'local-saved': 'Saved in this browser',
+    'local-memory': 'Applied for this page — browser storage unavailable',
+    'shared-saved': 'Shared defaults saved',
     error: 'Not saved — Retry'
   };
-  status.textContent = messages[state] || '';
+  const displayState = key === 'shared-display-defaults' && state === 'saved' ? 'shared-saved' : state;
+  status.textContent = messages[displayState] || '';
   status.dataset.state = state;
   status.title = error?.message || '';
   status.setAttribute('role', 'status');
@@ -1155,6 +1168,45 @@ function flushDebounce(key) {
 function queueAutosave(key, callback) {
   dirtyFields.add(key);
   autosaves.save(key, callback);
+}
+
+function displayPreferenceStatus(result) {
+  return result.persistence === 'persistent' ? 'local-saved' : 'local-memory';
+}
+
+function saveDisplayPreference(field, value, statusKey) {
+  if (!displayPreferences?.setOverride) {
+    updateSaveStatus(statusKey, { state: 'error', error: new Error('Browser display preferences are unavailable') });
+    return false;
+  }
+  const result = displayPreferences.setOverride(field, value);
+  if (!result.ok) {
+    updateSaveStatus(statusKey, { state: 'error', error: new Error('Invalid display preference') });
+    return false;
+  }
+  applySettingsPreview();
+  updateSaveStatus(statusKey, { state: displayPreferenceStatus(result) });
+  return true;
+}
+
+function resetBrowserDisplayPreferences() {
+  if (!displayPreferences?.clear) return;
+  const result = displayPreferences.clear();
+  applySettingsPreview();
+  syncDisplaySettingsControls();
+  updateSaveStatus('browser-display-preferences', { state: displayPreferenceStatus(result) });
+}
+
+function sharedDisplayDefaultsPayload() {
+  const settings = effectiveDisplaySettings();
+  return {
+    theme: settings.theme,
+    font_title: settings.font_title,
+    font_body: settings.font_body,
+    primary_color: settings.primary_color ?? null,
+    secondary_color: settings.secondary_color ?? null,
+    layout_mode: settings.layout_mode === 'compact' ? 'compact' : 'cozy'
+  };
 }
 
 async function postAutosave(path, payload) {
@@ -1211,25 +1263,33 @@ function previewThemeColors(primary, secondary) {
   }
 }
 
-function currentThemeColors() {
-  const fallback = THEME_COLORS[appState.settings.theme] || THEME_COLORS.modern_dark;
+function effectiveDisplaySettings() {
+  return displayPreferences?.effective ? displayPreferences.effective(appState.settings) : appState.settings;
+}
+
+function currentThemeColors(settings = effectiveDisplaySettings()) {
+  const fallback = THEME_COLORS[settings.theme] || THEME_COLORS.modern_dark;
   return {
-    primary: normalizeHex(appState.settings.primary_color) || fallback.primary,
-    secondary: normalizeHex(appState.settings.secondary_color) || fallback.secondary
+    primary: normalizeHex(settings.primary_color) || fallback.primary,
+    secondary: normalizeHex(settings.secondary_color) || fallback.secondary
   };
 }
 
 function applySettingsPreview() {
-  const settings = appState.settings;
-  if (settings.theme) document.body.setAttribute('data-theme', settings.theme);
-  const colors = currentThemeColors();
-  previewThemeColors(colors.primary, colors.secondary);
-  if (settings.title) document.getElementById('headerTitle').textContent = settings.title;
-  if (settings.font_title)
-    document.documentElement.style.setProperty('--font-title', `'${settings.font_title}', sans-serif`);
-  if (settings.font_body)
-    document.documentElement.style.setProperty('--font-body', `'${settings.font_body}', sans-serif`);
-  document.body.setAttribute('data-layout-mode', settings.layout_mode === 'compact' ? 'compact' : 'cozy');
+  const settings = effectiveDisplaySettings();
+  if (displayPreferences?.apply) {
+    displayPreferences.apply(settings, { document });
+  } else {
+    if (settings.theme) document.body.setAttribute('data-theme', settings.theme);
+    const colors = currentThemeColors(settings);
+    previewThemeColors(colors.primary, colors.secondary);
+    if (settings.font_title)
+      document.documentElement.style.setProperty('--font-title', `'${settings.font_title}', sans-serif`);
+    if (settings.font_body)
+      document.documentElement.style.setProperty('--font-body', `'${settings.font_body}', sans-serif`);
+    document.body.setAttribute('data-layout-mode', settings.layout_mode === 'compact' ? 'compact' : 'cozy');
+  }
+  if (appState.settings.title) document.getElementById('headerTitle').textContent = appState.settings.title;
 }
 
 function renderOnDeckManager(batches) {
@@ -1316,6 +1376,18 @@ function bindAutosaveInput(id, key, payload, { immediate = false, preview } = {}
     });
 }
 
+function bindDisplayPreferenceInput(id, key, field, { preview } = {}) {
+  const input = document.getElementById(id);
+  if (!input) return;
+  input.addEventListener('change', () => {
+    if (!input.checkValidity()) {
+      updateSaveStatus(key, { state: 'error', error: new Error(input.validationMessage) });
+      return;
+    }
+    if (saveDisplayPreference(field, input.value, key)) preview?.(input);
+  });
+}
+
 function collectCustomBeverage() {
   const fields = ['name', 'style', 'abv', 'ibu', 'og', 'fg', 'srm', 'description'];
   const payload = Object.fromEntries(
@@ -1369,23 +1441,10 @@ function bindTapField(id, field, { immediate = false, transform = (value) => val
 }
 
 function setupAutosaveListeners() {
-  bindAutosaveInput('themeSelect', 'theme', (input) => ({ theme: input.value }), {
-    immediate: true,
+  bindDisplayPreferenceInput('themeSelect', 'theme', 'theme', {
     preview: (input) => {
       document.body.setAttribute('data-theme', input.value);
-      const fallback = THEME_COLORS[input.value] || THEME_COLORS.modern_dark;
-      const primary = normalizeHex(appState.settings.primary_color) || fallback.primary;
-      const secondary = normalizeHex(appState.settings.secondary_color) || fallback.secondary;
-      for (const [name, value] of [
-        ['primary', primary],
-        ['secondary', secondary]
-      ]) {
-        const picker = document.getElementById(`${name}ColorPicker`);
-        const hex = document.getElementById(`${name}ColorInput`);
-        if (picker) picker.value = value;
-        if (hex) hex.value = value;
-      }
-      previewThemeColors(primary, secondary);
+      syncDisplaySettingsControls();
     }
   });
   bindAutosaveInput('headerTitleInput', 'title', (input) => ({ title: input.value }), {
@@ -1394,15 +1453,13 @@ function setupAutosaveListeners() {
       if (title) title.textContent = input.value;
     }
   });
-  bindAutosaveInput('titleFontSelect', 'font-title', (input) => ({ font_title: input.value }), {
-    immediate: true,
+  bindDisplayPreferenceInput('titleFontSelect', 'font-title', 'font_title', {
     preview: () => updateFontPreviews()
   });
-  bindAutosaveInput('bodyFontSelect', 'font-body', (input) => ({ font_body: input.value }), {
-    immediate: true,
+  bindDisplayPreferenceInput('bodyFontSelect', 'font-body', 'font_body', {
     preview: () => updateFontPreviews()
   });
-  bindAutosaveInput('layoutModeSelect', 'layout-mode', (input) => ({ layout_mode: input.value }), { immediate: true });
+  bindDisplayPreferenceInput('layoutModeSelect', 'layout-mode', 'layout_mode');
   bindAutosaveInput('showOnDeckCheckbox', 'show-ondeck', (input) => ({ show_ondeck: input.checked }), {
     immediate: true
   });
@@ -1441,10 +1498,7 @@ function setupAutosaveListeners() {
       const primary = name === 'primary' ? normalized : document.getElementById('primaryColorInput')?.value;
       const secondary = name === 'secondary' ? normalized : document.getElementById('secondaryColorInput')?.value;
       previewThemeColors(primary, secondary);
-      queueAutosave(`${name}-color`, async () => {
-        const result = await postAutosave('/api/settings', { [`${name}_color`]: normalized });
-        appState.settings = { ...appState.settings, ...(result.settings || { [`${name}_color`]: normalized }) };
-      });
+      saveDisplayPreference(`${name}_color`, normalized, `${name}-color`);
     };
     picker?.addEventListener('input', () => {
       const normalized = normalizeHex(picker.value);
@@ -1469,20 +1523,26 @@ function setupAutosaveListeners() {
       if (picker) picker.value = fallback[name];
       if (hex) hex.value = fallback[name];
     });
-    previewThemeColors(fallback.primary, fallback.secondary);
-    [
-      '--primary-color',
-      '--secondary-color',
-      '--accent-color',
-      '--primary-foreground',
-      '--secondary-foreground'
-    ].forEach((property) => document.body.style.removeProperty(property));
-    queueAutosave('theme-colors', async () => {
-      const result = await postAutosave('/api/settings', { primary_color: null, secondary_color: null });
-      appState.settings = {
-        ...appState.settings,
-        ...(result.settings || { primary_color: null, secondary_color: null })
-      };
+    const primaryResult = displayPreferences?.setOverride('primary_color', null);
+    const secondaryResult = displayPreferences?.setOverride('secondary_color', null);
+    applySettingsPreview();
+    const result = secondaryResult || primaryResult;
+    if (!primaryResult?.ok || !secondaryResult?.ok) {
+      updateSaveStatus('theme-colors', { state: 'error', error: new Error('Unable to reset theme colors') });
+    } else {
+      updateSaveStatus('theme-colors', { state: displayPreferenceStatus(result) });
+    }
+  });
+
+  document
+    .getElementById('resetBrowserDisplayPreferencesBtn')
+    ?.addEventListener('click', resetBrowserDisplayPreferences);
+  document.getElementById('setSharedDisplayDefaultsBtn')?.addEventListener('click', () => {
+    if (!confirm('Set this display profile as the shared default for new and reset browsers?')) return;
+    queueAutosave('shared-display-defaults', async () => {
+      const result = await postAutosave('/api/settings', sharedDisplayDefaultsPayload());
+      appState.settings = { ...appState.settings, ...(result.settings || {}) };
+      renderApp();
     });
   });
 
@@ -1778,9 +1838,21 @@ function initModalListeners() {
   });
 }
 
+function initDisplayPreferenceSync() {
+  displayPreferences?.subscribe?.((state) => {
+    if (!hasRenderedSnapshot) {
+      displayPreferences.applyOverrides?.(state.overrides, { document });
+      return;
+    }
+    applySettingsPreview();
+    syncDisplaySettingsControls();
+  });
+}
+
 // Initialize Client Engine
 window.addEventListener('DOMContentLoaded', () => {
   loadInitialSnapshot();
   initSSE();
   initModalListeners();
+  initDisplayPreferenceSync();
 });

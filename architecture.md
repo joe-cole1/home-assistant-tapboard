@@ -29,7 +29,8 @@ src/
   kegForecast.js          active-lifecycle forecast calculation
   databaseMaintenance.js  verified backup, restore, rotation, and retention
 public/
-  app.js                  SSE client and targeted DOM updates
+  app.js                  SSE client, browser display profiles, targeted DOM updates
+  displayPreferences.js  validated local storage, precedence, and pre-paint display bootstrap
   graphics.js             SVG glassware and SRM colour rendering
   styles.css              dashboard styles
 ```
@@ -68,6 +69,16 @@ The application publishes these SSE events:
 - `brewfather_batches_changed`
 
 The dashboard applies targeted updates so SVG glassware remains attached rather than being recreated for each telemetry update.
+
+### Per-browser display profiles
+
+SQLite settings are the installation-wide defaults supplied by the HTTP snapshot and `settings_updated` SSE events. Each browser may store a small, versioned, non-sensitive `localStorage` record under `tapboard.display-preferences.v1` containing validated overrides for `theme`, `font_title`, `font_body`, `primary_color`, `secondary_color`, and `layout_mode`. The record is scoped to the browser profile and exact origin, so different browsers, profiles, schemes, hosts, or ports have independent displays.
+
+The browser derives effective display settings by overlaying valid local fields on the latest shared settings. Local values therefore retain precedence after HTTP reloads and subsequent SSE updates; missing fields inherit the server default. Accent `null` explicitly selects the active theme preset's built-in colour. A same-origin `storage` event synchronizes a changed profile to other tabs.
+
+A small same-origin bootstrap script reads and validates the record before dashboard content paints, so explicit browser overrides do not flash back to shared appearance values during startup. Fields that inherit installation defaults resolve when the first server snapshot arrives. Stored values are untrusted: the frontend accepts only fixed theme, font, and layout allowlists plus strict hex colours. Storage can be unavailable in private browsing or due to browser policy/quota; in that case the current page uses an in-memory profile and reports that it was not persisted.
+
+Display controls remain behind administrator authentication. Normal theme, font, accent, and cozy/compact changes write only browser storage and do not call the server. “Use theme defaults” writes explicit null accent overrides, “Reset this browser” removes the record and restores shared defaults, and the confirmed “Set current display as shared defaults” action sends the effective appearance to the existing authenticated settings endpoint for SQLite persistence. Per-browser layout is intentionally limited to cozy/compact mode; tap ordering, visibility, sizing, placement, dashboard content, and all Home Assistant configuration remain shared.
 
 ## HTTP API and access control
 

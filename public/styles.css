@@ -735,6 +735,28 @@ body.is-authenticated .ondeck-cog-btn {
   line-height: 1.4;
 }
 
+.display-preferences-help {
+  padding: 0.7rem 0.85rem;
+  border-left: 3px solid var(--secondary-color);
+  border-radius: 0.35rem;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--secondary-color) 9%, transparent);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.browser-setting-scope {
+  display: inline-block;
+  margin-left: 0.35rem;
+  color: var(--secondary-color);
+  font-family: var(--font-body);
+  font-size: 0.72em;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
 .app-modal {
   position: fixed;
   inset: 0;
@@ -1276,6 +1298,18 @@ body.is-authenticated .ondeck-cog-btn {
   display: flex;
   align-items: center;
   gap: 0.65rem;
+}
+
+.display-preferences-actions,
+.display-preferences-global-action {
+  display: grid;
+  gap: 0.65rem;
+  padding-top: 0.15rem;
+}
+
+.display-preferences-global-action {
+  padding-top: 1rem;
+  border-top: 1px solid color-mix(in srgb, var(--secondary-color) 25%, transparent);
 }
 
 .color-picker {
