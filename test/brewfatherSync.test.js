@@ -4,6 +4,8 @@ import Database from 'better-sqlite3';
 import { migrateDatabase } from '../src/dbMigrations.js';
 import { BrewfatherSync } from '../src/brewfatherSync.js';
 
+const silentLogger = { error() {} };
+
 function database({ visible = 0 } = {}) {
   const db = new Database(':memory:');
   migrateDatabase(db);
@@ -140,6 +142,173 @@ test('unconfigured coordinator starts safely and distinguishes empty from stale 
     });
     db.prepare("INSERT INTO batches(batch_id, recipe_name, status) VALUES('cached', 'Cached', 'Completed')").run();
     assert.equal((await sync.refresh().promise).outcome, 'stale_cache');
+  } finally {
+    db.close();
+  }
+});
+
+test('notifies on the first actionable completed sync failure', async () => {
+  const db = database();
+  const calls = [];
+  const client = budgetClient({
+    listBatchesByStatuses: async () => ({
+      batches: [],
+      failures: [{ error: { category: 'network', retryAfter: 60_000 } }]
+    })
+  });
+  try {
+    const sync = new BrewfatherSync({
+      db,
+      client,
+      now: () => 1_700_000_000_000,
+      logger: silentLogger,
+      onFailure: (result) => calls.push(result)
+    });
+    assert.equal((await sync.refresh().promise).outcome, 'failed');
+    assert.deepEqual(calls, [
+      {
+        outcome: 'failed',
+        errorCategory: 'network',
+        reason: 'manual',
+        summaries: 0,
+        requestCount: 0,
+        retryAt: '2023-11-14T22:14:20.000Z'
+      }
+    ]);
+  } finally {
+    db.close();
+  }
+});
+
+test('suppresses duplicate failure categories across manual and scheduled retries', async () => {
+  const db = database();
+  const calls = [];
+  const client = budgetClient({
+    listBatchesByStatuses: async () => ({ batches: [], failures: [{ error: { category: 'network' } }] })
+  });
+  try {
+    const sync = new BrewfatherSync({ db, client, logger: silentLogger, onFailure: (result) => calls.push(result) });
+    await sync.refresh({ reason: 'manual' }).promise;
+    await sync.refresh({ reason: 'scheduled' }).promise;
+    assert.equal(calls.length, 1);
+  } finally {
+    db.close();
+  }
+});
+
+test('notifies when the actionable failure category changes', async () => {
+  const db = database();
+  const calls = [];
+  let failureCategory = 'network';
+  const client = budgetClient({
+    listBatchesByStatuses: async () => ({ batches: [], failures: [{ error: { category: failureCategory } }] })
+  });
+  try {
+    const sync = new BrewfatherSync({
+      db,
+      client,
+      logger: silentLogger,
+      onFailure: (result) => calls.push(result.errorCategory)
+    });
+    await sync.refresh().promise;
+    failureCategory = 'auth';
+    await sync.refresh().promise;
+    assert.deepEqual(calls, ['network', 'auth']);
+  } finally {
+    db.close();
+  }
+});
+
+test('a successful cycle resets failure notification suppression', async () => {
+  const db = database();
+  const calls = [];
+  let failing = true;
+  const client = budgetClient({
+    listBatchesByStatuses: async () =>
+      failing ? { batches: [], failures: [{ error: { category: 'network' } }] } : { batches: [], failures: [] }
+  });
+  try {
+    const sync = new BrewfatherSync({
+      db,
+      client,
+      logger: silentLogger,
+      onFailure: (result) => calls.push(result.errorCategory)
+    });
+    await sync.refresh().promise;
+    failing = false;
+    await sync.refresh().promise;
+    failing = true;
+    await sync.refresh().promise;
+    assert.deepEqual(calls, ['network', 'network']);
+  } finally {
+    db.close();
+  }
+});
+
+test('seeds duplicate failure suppression from persisted sync state after restart', async () => {
+  const db = database();
+  const calls = [];
+  const client = budgetClient({
+    listBatchesByStatuses: async () => ({ batches: [], failures: [{ error: { category: 'network' } }] })
+  });
+  try {
+    await new BrewfatherSync({ db, client, logger: silentLogger, onFailure: (result) => calls.push(result) }).refresh()
+      .promise;
+    await new BrewfatherSync({ db, client, logger: silentLogger, onFailure: (result) => calls.push(result) }).refresh()
+      .promise;
+    assert.equal(calls.length, 1);
+  } finally {
+    db.close();
+  }
+});
+
+test('does not notify for unconfigured synchronization', async () => {
+  const db = database();
+  const calls = [];
+  try {
+    const sync = new BrewfatherSync({ db, onFailure: (result) => calls.push(result) });
+    await sync.refresh().promise;
+    assert.deepEqual(calls, []);
+  } finally {
+    db.close();
+  }
+});
+
+test('failure notification callback errors do not affect the sync outcome', async () => {
+  for (const onFailure of [
+    () => {
+      throw new Error('secret synchronous callback failure');
+    },
+    () => Promise.reject(new Error('secret asynchronous callback failure'))
+  ]) {
+    const db = database();
+    const client = budgetClient({
+      listBatchesByStatuses: async () => ({ batches: [], failures: [{ error: { category: 'network' } }] })
+    });
+    try {
+      const sync = new BrewfatherSync({ db, client, logger: silentLogger, onFailure });
+      assert.equal((await sync.refresh().promise).outcome, 'failed');
+    } finally {
+      db.close();
+    }
+  }
+});
+
+test('a missing optional latest reading remains successful and emits no failure notification', async () => {
+  const db = database({ visible: 1 });
+  const calls = [];
+  const client = budgetClient({
+    listBatchesByStatuses: async () => ({
+      batches: [{ id: 'one', status: 'Fermenting', name: 'One' }],
+      failures: []
+    }),
+    getBatch: async () => ({ id: 'one', status: 'Fermenting', recipe: { name: 'One' } }),
+    getLatestReading: async () => null
+  });
+  try {
+    const sync = new BrewfatherSync({ db, client, logger: silentLogger, onFailure: (result) => calls.push(result) });
+    assert.equal((await sync.refresh().promise).outcome, 'succeeded');
+    assert.deepEqual(calls, []);
   } finally {
     db.close();
   }

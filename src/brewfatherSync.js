@@ -67,6 +67,7 @@ export class BrewfatherSyncCoordinator {
     detailLimit = 12,
     latestReadingLimit = 12,
     onUpdate = () => {},
+    onFailure = () => {},
     logger = console
   } = {}) {
     if (!db) throw new TypeError('Brewfather sync requires a database');
@@ -79,12 +80,19 @@ export class BrewfatherSyncCoordinator {
     this.detailLimit = Math.min(Math.max(detailLimit, 1), 12);
     this.latestReadingLimit = Math.min(Math.max(latestReadingLimit, 1), 12);
     this.onUpdate = onUpdate;
+    this.onFailure = onFailure;
     this.logger = logger;
     this.inFlight = null;
     this.timer = null;
     this.started = false;
     this.stopped = false;
     this.backoffMs = INITIAL_BACKOFF_MS;
+    const previous = this.db.prepare('SELECT status, error_category FROM brewfather_sync_state WHERE id = 1').get();
+    this.failureCategory =
+      ['failed', 'stale_cache'].includes(previous?.status) &&
+      category({ category: previous.error_category }) !== 'configuration'
+        ? category({ category: previous.error_category })
+        : null;
   }
 
   start() {
@@ -163,6 +171,22 @@ export class BrewfatherSyncCoordinator {
     }
   }
 
+  #notifyFailure(result) {
+    if (result.outcome !== 'failed' && result.outcome !== 'stale_cache') return;
+    if (result.errorCategory === 'configuration') {
+      this.failureCategory = null;
+      return;
+    }
+    if (this.failureCategory === result.errorCategory) return;
+    this.failureCategory = result.errorCategory;
+    try {
+      const pending = this.onFailure(result);
+      pending?.catch?.(() => {});
+    } catch {
+      // Failure notifications are best effort and must not affect sync outcomes.
+    }
+  }
+
   #logCycleFailure({ reason, outcome, errorCategory, summaries, requestCount, retryAt: retryTimestamp }) {
     const entry = {
       event: 'brewfather_sync_cycle_failed',
@@ -191,6 +215,7 @@ export class BrewfatherSyncCoordinator {
       retry_at: null
     });
     if (!this.client) {
+      this.failureCategory = null;
       const result = {
         outcome: this.#hasCache() ? 'stale_cache' : 'failed',
         errorCategory: 'configuration',
@@ -260,6 +285,7 @@ export class BrewfatherSyncCoordinator {
           summaries: summaryResult.rows.length,
           requestCount: requestsUsed
         };
+        this.failureCategory = null;
         this.#notify(success);
         return success;
       }
@@ -281,6 +307,7 @@ export class BrewfatherSyncCoordinator {
         last_cycle_batches: summaryResult.rows.length
       });
       this.#logCycleFailure({ ...stale, retryAt: retryTimestamp });
+      this.#notifyFailure(retryTimestamp ? { ...stale, retryAt: retryTimestamp } : stale);
       this.#notify(stale);
       return stale;
     } catch (error) {
@@ -303,6 +330,7 @@ export class BrewfatherSyncCoordinator {
         last_cycle_batches: 0
       });
       this.#logCycleFailure({ ...failed, retryAt: retryTimestamp });
+      this.#notifyFailure(retryTimestamp ? { ...failed, retryAt: retryTimestamp } : failed);
       this.#notify(failed);
       return failed;
     }
