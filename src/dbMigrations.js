@@ -1,5 +1,5 @@
 const BASE_SCHEMA_VERSION = 1;
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 function tableExists(db, name) {
   return Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name));
@@ -248,6 +248,13 @@ function migrateTapboardContentSchema(db) {
   ).run();
 }
 
+function migrateThemeAccentSchema(db) {
+  // NULL means "use the selected preset's default", rather than a special
+  // sentinel colour that would leak into public snapshots.
+  addColumnIfMissing(db, 'settings', 'primary_color', 'TEXT');
+  addColumnIfMissing(db, 'settings', 'secondary_color', 'TEXT');
+}
+
 function validateLatestSchema(db) {
   for (const [table, required] of Object.entries({
     settings: ['id', 'admin_pin_hash', 'admin_pin_initialized'],
@@ -270,7 +277,7 @@ function validateLatestSchema(db) {
     if (!tableExists(db, table)) throw new Error(`Incompatible schema version ${SCHEMA_VERSION}: missing ${table}`);
     requireColumns(db, table, required);
   }
-  requireColumns(db, 'settings', ['layout_mode', 'ondeck_new_batch_default']);
+  requireColumns(db, 'settings', ['layout_mode', 'ondeck_new_batch_default', 'primary_color', 'secondary_color']);
   for (const index of ['keg_lifecycles_one_open_tap', 'pour_logs_lifecycle_epoch']) {
     if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ?").get(index)) {
       throw new Error(`Incompatible schema version ${SCHEMA_VERSION}: missing ${index}`);
@@ -339,6 +346,14 @@ export function migrateDatabase(db) {
           'brewfather-ondeck-and-custom-beverage'
         );
         db.pragma('user_version = 3');
+      }
+      if (version < 4) {
+        migrateThemeAccentSchema(db);
+        db.prepare('INSERT OR IGNORE INTO schema_migrations (version, name) VALUES (?, ?)').run(
+          4,
+          'theme-accent-overrides'
+        );
+        db.pragma('user_version = 4');
       }
     })();
   }

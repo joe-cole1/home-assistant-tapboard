@@ -70,7 +70,7 @@ For each tap `N` (1–6), Tapboard reads exactly these entities:
 - `sensor.tap_N_fl_oz`: remaining measured volume in fluid ounces.
 - `input_number.tap_N_keg_capacity_oz`: authoritative per-tap capacity, an integer from 16 through 2048 fluid ounces.
 
-Tapboard publishes the coherent measurement tuple `volumeOz`, `capacityOz`, `fillPercent`, `pintsRemaining`, and `volumeStatus` in snapshot schema version 4 and in incremental SSE updates. It does not consume `sensor.tap_N_fill` or `sensor.tap_N_pints_remaining`.
+Tapboard publishes the coherent measurement tuple `volumeOz`, `capacityOz`, `fillPercent`, `pintsRemaining`, and `volumeStatus` in snapshot schema version 5 and in incremental SSE updates. It does not consume `sensor.tap_N_fill` or `sensor.tap_N_pints_remaining`.
 
 `volumeStatus` is `measured` for a fresh valid scale reading, `stale` when the last valid in-process reading is retained after an existing source becomes unavailable, `assumed_full` only when the exact volume entity is absent and a batch is assigned, or `unavailable` on a cold start without a valid measurement (and for unassigned/sensor-unavailable taps). Low-keg alerts and low-keg badges are limited to fresh `measured` readings. Forecasts use the same server-derived tuple.
 

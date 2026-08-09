@@ -24,7 +24,7 @@ src/
   tapboardProjection.js   allowlisted, capacity-aware Home Assistant projection
   displayUpdateCoalescer.js compact browser state-change batching
   sseHub.js               SSE framing, heartbeat, slow-client bounds
-  db.js / dbMigrations.js SQLite startup and schema-v3 migrations
+  db.js / dbMigrations.js SQLite startup and schema-v4 migrations
   kegLifecycle.js         immutable lifecycle assignment and attribution
   kegForecast.js          active-lifecycle forecast calculation
   databaseMaintenance.js  verified backup, restore, rotation, and retention
@@ -40,13 +40,13 @@ The HA client authenticates over `/api/websocket`, subscribes to `state_changed`
 
 Only each tap’s designated primary volume sensor is used for pour detection. Values must declare a supported unit and are converted explicitly to fluid ounces; missing or unsupported units are ignored. The detector rejects stale/duplicate timestamps and implausible jumps, establishes settled baselines, arbitrates simultaneous candidates, permits only one active tap, and finalizes after a quiet period or cancels a hard-timeout session. It emits `pour_start`, `pour_complete`, or `pour_cancel`; completion records only qualifying pours.
 
-The canonical measurement contract is `sensor.tap_N_fl_oz` plus `input_number.tap_N_keg_capacity_oz`. The public snapshot uses schema version 4 and exposes one coherent tuple per tap: `volumeOz`, `capacityOz`, `fillPercent`, `pintsRemaining`, and `volumeStatus`, plus batch metadata and batch-selection value/options. `sensor.tap_N_fill` and `sensor.tap_N_pints_remaining` are deliberately excluded.
+The canonical measurement contract is `sensor.tap_N_fl_oz` plus `input_number.tap_N_keg_capacity_oz`. The public snapshot uses schema version 5 and exposes one coherent tuple per tap: `volumeOz`, `capacityOz`, `fillPercent`, `pintsRemaining`, and `volumeStatus`, plus batch metadata and batch-selection value/options. Settings also expose nullable `primary_color` and `secondary_color` overrides; `null` selects the active preset default. `sensor.tap_N_fill` and `sensor.tap_N_pints_remaining` are deliberately excluded.
 
 `volumeStatus` is `measured` for a fresh scale reading; `stale` when a previously valid in-process scale source becomes unavailable; `assumed_full` only when the exact volume entity is absent while the tap has an active assignment; or `unavailable` when there is no valid measurement to retain. Ounces are clamped to capacity and pints/percent are derived on the server. The browser renders this tuple directly and may draw an empty graphic for unavailable data, but does not fabricate a numeric readout. Low-keg alerts and badges require `measured`; forecasts use the same derived tuple.
 
 ## SQLite schema and lifecycle ownership
 
-Startup enforces `foreign_keys=ON`, validates the database, and migrates ordered schema versions transactionally. The current schema is version 3. Version 3 adds the display-layout and On Deck defaults, per-Brewfather-batch visibility preferences, and the singleton custom-beverage record.
+Startup enforces `foreign_keys=ON`, validates the database, and migrates ordered schema versions transactionally. The current schema is version 4. Version 3 adds the display-layout and On Deck defaults, per-Brewfather-batch visibility preferences, and the singleton custom-beverage record; version 4 adds nullable primary and secondary accent overrides.
 
 - A tap assignment opens one immutable keg lifecycle; reassignment or an end action closes the existing lifecycle.
 - A pour captures the open lifecycle at pour start. Historical and unassigned pours may have no lifecycle and cannot affect an active keg forecast.
@@ -80,6 +80,7 @@ All API JSON responses are `no-store`. Mutation bodies must be JSON and are limi
 | `/api/state`              | `GET`  | Public formatted snapshot.                         |
 | `/api/auth`               | `POST` | Administrator PIN authentication.                  |
 | `/api/settings`           | `POST` | Administrator settings update.                     |
+| `/api/admin/pin`          | `POST` | Verify and replace the administrator PIN.          |
 | `/api/taps/:id`           | `POST` | Administrator tap configuration/assignment update. |
 | `/api/taps/:id/end-batch` | `POST` | Administrator batch end and lifecycle close.       |
 | `/api/taps/:id/end-keg`   | `POST` | Administrator keg end and lifecycle close.         |
@@ -88,7 +89,7 @@ All API JSON responses are `no-store`. Mutation bodies must be JSON and are limi
 | `/api/brewfather/refresh` | `POST` | Administrator-triggered Brewfather refresh in HA.  |
 | `/api/custom-beverage`    | `POST` | Administrator custom-beverage metadata update.     |
 
-`POST /api/auth` returns an opaque random bearer token. The database stores only `sha256:` token digests and expiry timestamps; it does not use JWTs. Sessions expire after 24 hours, expired sessions are pruned, and a PIN change revokes all existing sessions. A newly initialized database fails closed for administrator actions until a deliberate non-default PIN has been configured.
+`POST /api/auth` returns an opaque random bearer token. The database stores only `sha256:` token digests and expiry timestamps; it does not use JWTs. Sessions expire after 24 hours, expired sessions are pruned, and a PIN change revokes all existing sessions. PIN changes use a separate authenticated endpoint and require the current PIN plus matching new values; failed current-PIN verification is separately limited. A newly initialized database fails closed for administrator actions until a deliberate non-default PIN has been configured.
 
 `POST /api/taps/:id` accepts `capacity_oz` as an integer from 16 through 2048. The server must successfully call `input_number.set_value` for `input_number.tap_N_keg_capacity_oz` before treating that capacity update as saved; it returns a visible error if Home Assistant cannot accept it.
 

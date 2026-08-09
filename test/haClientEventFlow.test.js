@@ -126,7 +126,7 @@ test('a sensitive unrelated HA entity is absent from HTTP and SSE public seriali
   };
   client.processStateUpdate({ entity_id: privateEntity.entity_id, new_state: privateEntity });
 
-  const snapshot = { schemaVersion: 4, tapStates: client.getPublicTapStates() };
+  const snapshot = { schemaVersion: 5, tapStates: client.getPublicTapStates() };
   const httpJson = JSON.stringify(snapshot);
   const sseFrame = formatSSEFrame('snapshot', snapshot);
   for (const output of [httpJson, sseFrame]) {

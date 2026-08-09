@@ -12,6 +12,7 @@ import {
   validateCatalog,
   validateCustomBeverage,
   validateOndeck,
+  validatePinChange,
   validateSettings,
   validateTap
 } from '../src/validation.js';
@@ -110,6 +111,17 @@ test('validation preserves client numeric strings while enforcing every approved
   assert.throws(() => validateSettings({ title: '   ' }));
   assert.throws(() => validateSettings({ title: 'x'.repeat(81) }));
   assert.throws(() => validateSettings({ new_pin: '0000' }));
+  assert.deepEqual(validateSettings({ primary_color: '#aBc123', secondary_color: null }), {
+    primary_color: '#ABC123',
+    secondary_color: null
+  });
+  assert.throws(() => validateSettings({ primary_color: '#abc' }));
+  assert.deepEqual(validatePinChange({ current_pin: '2468', new_pin: '1357', confirm_new_pin: '1357' }), {
+    current_pin: '2468',
+    new_pin: '1357',
+    confirm_new_pin: '1357'
+  });
+  assert.throws(() => validatePinChange({ current_pin: '2468', new_pin: '1357', confirm_new_pin: '2468' }));
   assert.throws(() => validateSettings({ tap_visibilities: { '01': true } }));
   assert.deepEqual(validateOndeck({ batches: [], show_ondeck: true }), { batches: [], show_ondeck: true });
   assert.throws(() => validateOndeck({ batches: [], show_ondeck: 'yes' }));
@@ -202,9 +214,9 @@ test('verified restore marker permits migration, is consumed after success, and 
   });
   assert.equal(result.status, 0, result.stderr);
   assert.equal(existsSync(approvalFile), false);
-  assert.equal(existsSync(path.join(restoredDir, '.tapboard-migration-v3.json')), true);
+  assert.equal(existsSync(path.join(restoredDir, '.tapboard-migration-v4.json')), true);
   let migrated = open(restoredDir);
-  assert.equal(migrated.pragma('user_version', { simple: true }), 3);
+  assert.equal(migrated.pragma('user_version', { simple: true }), 4);
   assert.equal(migrated.prepare('SELECT COUNT(*) AS count FROM pour_logs').get().count, 1);
   migrated.close();
 

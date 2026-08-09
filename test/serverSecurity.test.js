@@ -326,10 +326,10 @@ test('tokens are stored as digests, expired sessions are pruned, and PIN change 
       0
     );
 
-    const pinChange = await fetch(`${instance.baseUrl}/api/settings`, {
+    const pinChange = await fetch(`${instance.baseUrl}/api/admin/pin`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${first.token}` },
-      body: '{"new_pin":"1357"}'
+      body: '{"current_pin":"2468","new_pin":"1357","confirm_new_pin":"1357"}'
     });
     assert.equal(pinChange.status, 200);
     assert.deepEqual(await pinChange.json(), { success: true, sessionsRevoked: true });
@@ -346,6 +346,131 @@ test('tokens are stored as digests, expired sessions are pruned, and PIN change 
         401
       );
     }
+  } finally {
+    database.close();
+    await stopServer(instance.child);
+  }
+});
+
+test('PIN change verifies the current PIN, validates replacement values, limits guesses, and revokes sessions', async () => {
+  const instance = await startServer();
+  const database = new Database(path.join(instance.dataDir, 'tapboard.db'));
+  try {
+    const first = await authenticate(instance.baseUrl);
+    await authenticate(instance.baseUrl);
+    const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${first.token}` };
+    const beforeHash = database.prepare('SELECT admin_pin_hash FROM settings WHERE id = 1').get().admin_pin_hash;
+    for (const body of [
+      { current_pin: '9999', new_pin: '1357', confirm_new_pin: '1357' },
+      { current_pin: '2468', new_pin: '1357', confirm_new_pin: '2468' },
+      { current_pin: '2468', new_pin: '2468', confirm_new_pin: '2468' },
+      { current_pin: '2468', new_pin: '0000', confirm_new_pin: '0000' }
+    ]) {
+      const response = await fetch(`${instance.baseUrl}/api/admin/pin`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body)
+      });
+      assert.equal(response.status, body.current_pin === '9999' ? 403 : 400);
+      assert.equal(
+        database.prepare('SELECT admin_pin_hash FROM settings WHERE id = 1').get().admin_pin_hash,
+        beforeHash
+      );
+      assert.equal(database.prepare('SELECT COUNT(*) count FROM admin_sessions').get().count, 2);
+    }
+
+    // Four further failures plus the first one above exhaust this endpoint's
+    // independent limit without invalidating the already authenticated token.
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const response = await fetch(`${instance.baseUrl}/api/admin/pin`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ current_pin: '9999', new_pin: '1357', confirm_new_pin: '1357' })
+      });
+      assert.equal(response.status, 403);
+    }
+    const limited = await fetch(`${instance.baseUrl}/api/admin/pin`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ current_pin: '9999', new_pin: '1357', confirm_new_pin: '1357' })
+    });
+    assert.equal(limited.status, 429);
+    assert.match(limited.headers.get('retry-after') || '', /^\d+$/);
+  } finally {
+    database.close();
+    await stopServer(instance.child);
+  }
+});
+
+test('PIN change accepts the new credential and settings color overrides persist and reset', async () => {
+  const instance = await startServer();
+  const database = new Database(path.join(instance.dataDir, 'tapboard.db'));
+  try {
+    const { token } = await authenticate(instance.baseUrl);
+    const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+    const colors = await fetch(`${instance.baseUrl}/api/settings`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ primary_color: '#abc123', secondary_color: '#0dEeF0' })
+    });
+    assert.equal(colors.status, 200);
+    assert.deepEqual((await colors.json()).settings, {
+      id: 1,
+      theme: 'modern_dark',
+      volume_format: 'oz',
+      title: 'Hazardous Brews',
+      font_title: 'Outfit',
+      font_body: 'Inter',
+      show_ondeck: 1,
+      layout_mode: 'cozy',
+      ondeck_new_batch_default: 1,
+      primary_color: '#ABC123',
+      secondary_color: '#0DEEF0'
+    });
+    assert.equal((await (await fetch(`${instance.baseUrl}/api/state`)).json()).settings.primary_color, '#ABC123');
+    const reset = await fetch(`${instance.baseUrl}/api/settings`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ primary_color: null, secondary_color: null })
+    });
+    assert.equal(reset.status, 200);
+    assert.deepEqual(database.prepare('SELECT primary_color, secondary_color FROM settings WHERE id = 1').get(), {
+      primary_color: null,
+      secondary_color: null
+    });
+    const invalid = await fetch(`${instance.baseUrl}/api/settings`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ primary_color: '#abc' })
+    });
+    assert.equal(invalid.status, 400);
+
+    const changed = await fetch(`${instance.baseUrl}/api/admin/pin`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ current_pin: '2468', new_pin: '1357', confirm_new_pin: '1357' })
+    });
+    assert.equal(changed.status, 200);
+    assert.equal(
+      (
+        await fetch(`${instance.baseUrl}/api/auth`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin: '2468' })
+        })
+      ).status,
+      401
+    );
+    assert.equal(
+      (
+        await fetch(`${instance.baseUrl}/api/auth`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin: '1357' })
+        })
+      ).status,
+      200
+    );
   } finally {
     database.close();
     await stopServer(instance.child);
@@ -587,7 +712,7 @@ test('On Deck and custom beverage APIs require authentication, validate strictly
       400
     );
     const snapshot = await (await fetch(`${instance.baseUrl}/api/state`)).json();
-    assert.equal(snapshot.schemaVersion, 4);
+    assert.equal(snapshot.schemaVersion, 5);
     assert.deepEqual(snapshot.customBeverage, {
       id: 'custom:topo_chico',
       ...custom,

@@ -30,14 +30,19 @@ test('migrates legacy pour rows without changing IDs, volumes, or timestamps', (
     assert.deepEqual(db.prepare('SELECT version, name FROM schema_migrations ORDER BY version').all(), [
       { version: 1, name: 'canonical-base-schema' },
       { version: 2, name: 'immutable-keg-lifecycles' },
-      { version: 3, name: 'brewfather-ondeck-and-custom-beverage' }
+      { version: 3, name: 'brewfather-ondeck-and-custom-beverage' },
+      { version: 4, name: 'theme-accent-overrides' }
     ]);
     const settingColumns = db.prepare("SELECT name, dflt_value FROM pragma_table_info('settings')").all();
     assert.deepEqual(
-      settingColumns.filter((column) => ['layout_mode', 'ondeck_new_batch_default'].includes(column.name)),
+      settingColumns.filter((column) =>
+        ['layout_mode', 'ondeck_new_batch_default', 'primary_color', 'secondary_color'].includes(column.name)
+      ),
       [
         { name: 'layout_mode', dflt_value: "'cozy'" },
-        { name: 'ondeck_new_batch_default', dflt_value: '1' }
+        { name: 'ondeck_new_batch_default', dflt_value: '1' },
+        { name: 'primary_color', dflt_value: null },
+        { name: 'secondary_color', dflt_value: null }
       ]
     );
     assert.deepEqual(db.prepare("SELECT name FROM pragma_table_info('brewfather_ondeck_preferences')").all(), [
