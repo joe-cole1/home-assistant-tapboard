@@ -1,5 +1,5 @@
 const BASE_SCHEMA_VERSION = 1;
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 function tableExists(db, name) {
   return Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name));
@@ -61,7 +61,7 @@ function migrateBaseSchema(db) {
   requireColumns(db, 'batches', ['batch_id']);
   requireColumns(db, 'beverage_catalog', ['id', 'name']);
   requireColumns(db, 'admin_sessions', ['token', 'expires_at']);
-  requireColumns(db, 'pour_logs', ['id', 'tap_id', 'volume_poured_oz', 'timestamp']);
+  if (tableExists(db, 'pour_logs')) requireColumns(db, 'pour_logs', ['id', 'tap_id', 'volume_poured_oz', 'timestamp']);
 
   for (const [column, declaration] of Object.entries({
     theme: "TEXT DEFAULT 'modern_dark'",
@@ -255,6 +255,92 @@ function migrateThemeAccentSchema(db) {
   addColumnIfMissing(db, 'settings', 'secondary_color', 'TEXT');
 }
 
+function migrateBrewfatherCacheSchema(db) {
+  for (const [column, declaration] of Object.entries({
+    batch_name: 'TEXT',
+    batch_number: 'TEXT',
+    brewer: 'TEXT',
+    recipe_id: 'TEXT',
+    style_id: 'TEXT',
+    description: 'TEXT',
+    start_date: 'TEXT',
+    fermentation_start_date: 'TEXT',
+    conditioning_date: 'TEXT',
+    packaging_date: 'TEXT',
+    completed_date: 'TEXT',
+    image_url: 'TEXT',
+    estimated_og: 'REAL',
+    estimated_fg: 'REAL',
+    measured_og: 'REAL',
+    measured_fg: 'REAL',
+    estimated_abv: 'REAL',
+    measured_abv: 'REAL',
+    estimated_ibu: 'REAL',
+    estimated_srm: 'REAL',
+    carbonation: 'REAL',
+    carbonation_temp_c: 'REAL',
+    present: 'INTEGER NOT NULL DEFAULT 1 CHECK(present IN (0, 1))',
+    summary_fingerprint: 'TEXT',
+    source_updated_at: 'TEXT',
+    content_version: 'INTEGER NOT NULL DEFAULT 1',
+    first_seen_at: 'TEXT',
+    last_seen_at: 'TEXT',
+    last_attempt_at: 'TEXT',
+    last_success_at: 'TEXT',
+    error_category: 'TEXT',
+    detail_fingerprint: 'TEXT',
+    detail_fetched_at: 'TEXT'
+  })) {
+    addColumnIfMissing(db, 'batches', column, declaration);
+  }
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS brewfather_batch_details (
+      batch_id TEXT PRIMARY KEY,
+      payload_json TEXT NOT NULL CHECK(length(payload_json) <= 262144),
+      fingerprint TEXT NOT NULL,
+      fetched_at TEXT NOT NULL,
+      FOREIGN KEY(batch_id) REFERENCES batches(batch_id) ON DELETE RESTRICT ON UPDATE RESTRICT
+    );
+    CREATE TABLE IF NOT EXISTS brewfather_batch_readings (
+      batch_id TEXT NOT NULL,
+      reading_key TEXT NOT NULL,
+      remote_id TEXT,
+      recorded_at TEXT,
+      recorded_at_ms INTEGER,
+      reading_type TEXT,
+      device_id TEXT,
+      sg REAL,
+      temp_c REAL,
+      pressure REAL,
+      battery REAL,
+      rssi REAL,
+      payload_json TEXT NOT NULL CHECK(length(payload_json) <= 16384),
+      PRIMARY KEY(batch_id, reading_key),
+      FOREIGN KEY(batch_id) REFERENCES batches(batch_id) ON DELETE RESTRICT ON UPDATE RESTRICT
+    );
+    CREATE TABLE IF NOT EXISTS brewfather_sync_state (
+      id INTEGER PRIMARY KEY CHECK(id = 1),
+      last_attempt_at TEXT,
+      last_success_at TEXT,
+      status TEXT NOT NULL DEFAULT 'never'
+        CHECK(status IN ('never', 'running', 'ok', 'partial', 'stale_cache', 'failed', 'not_configured')),
+      error_category TEXT,
+      retry_at TEXT,
+      freshness_at TEXT,
+      last_cycle_requests INTEGER NOT NULL DEFAULT 0,
+      last_cycle_batches INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+    );
+    INSERT OR IGNORE INTO brewfather_sync_state (id) VALUES (1);
+    CREATE INDEX IF NOT EXISTS batches_brewfather_present_status_date
+      ON batches(present, status, brew_date DESC, batch_id);
+    CREATE INDEX IF NOT EXISTS batches_brewfather_last_seen
+      ON batches(last_seen_at DESC, batch_id);
+    CREATE INDEX IF NOT EXISTS brewfather_batch_readings_batch_time
+      ON brewfather_batch_readings(batch_id, recorded_at_ms DESC, reading_key);
+  `);
+}
+
 function validateLatestSchema(db) {
   for (const [table, required] of Object.entries({
     settings: ['id', 'admin_pin_hash', 'admin_pin_initialized'],
@@ -272,13 +358,34 @@ function validateLatestSchema(db) {
     ],
     brewfather_ondeck_preferences: ['batch_id', 'visible', 'first_seen_at', 'updated_at'],
     custom_beverage: ['id', 'name', 'style', 'abv', 'ibu', 'og', 'fg', 'srm', 'description'],
+    brewfather_batch_details: ['batch_id', 'payload_json', 'fingerprint', 'fetched_at'],
+    brewfather_batch_readings: ['batch_id', 'reading_key', 'recorded_at_ms', 'payload_json'],
+    brewfather_sync_state: ['id', 'status', 'error_category', 'last_cycle_requests', 'last_cycle_batches'],
     schema_migrations: ['version', 'name', 'applied_at']
   })) {
     if (!tableExists(db, table)) throw new Error(`Incompatible schema version ${SCHEMA_VERSION}: missing ${table}`);
     requireColumns(db, table, required);
   }
   requireColumns(db, 'settings', ['layout_mode', 'ondeck_new_batch_default', 'primary_color', 'secondary_color']);
-  for (const index of ['keg_lifecycles_one_open_tap', 'pour_logs_lifecycle_epoch']) {
+  requireColumns(db, 'batches', [
+    'batch_name',
+    'batch_number',
+    'recipe_id',
+    'description',
+    'present',
+    'summary_fingerprint',
+    'last_attempt_at',
+    'last_success_at',
+    'error_category',
+    'detail_fingerprint'
+  ]);
+  for (const index of [
+    'keg_lifecycles_one_open_tap',
+    'pour_logs_lifecycle_epoch',
+    'batches_brewfather_present_status_date',
+    'batches_brewfather_last_seen',
+    'brewfather_batch_readings_batch_time'
+  ]) {
     if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ?").get(index)) {
       throw new Error(`Incompatible schema version ${SCHEMA_VERSION}: missing ${index}`);
     }
@@ -355,7 +462,15 @@ export function migrateDatabase(db) {
         );
         db.pragma('user_version = 4');
       }
+      if (version < 5) {
+        migrateBrewfatherCacheSchema(db);
+        db.prepare('INSERT OR IGNORE INTO schema_migrations (version, name) VALUES (?, ?)').run(5, 'brewfather-cache');
+        db.pragma('user_version = 5');
+      }
+      // Validation is part of the migration transaction. A malformed legacy
+      // table or missing constraint must roll back schema changes, ledger rows,
+      // and user_version together.
+      validateLatestSchema(db);
     })();
-  }
-  validateLatestSchema(db);
+  } else validateLatestSchema(db);
 }

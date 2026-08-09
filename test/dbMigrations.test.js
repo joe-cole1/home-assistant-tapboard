@@ -31,7 +31,8 @@ test('migrates legacy pour rows without changing IDs, volumes, or timestamps', (
       { version: 1, name: 'canonical-base-schema' },
       { version: 2, name: 'immutable-keg-lifecycles' },
       { version: 3, name: 'brewfather-ondeck-and-custom-beverage' },
-      { version: 4, name: 'theme-accent-overrides' }
+      { version: 4, name: 'theme-accent-overrides' },
+      { version: 5, name: 'brewfather-cache' }
     ]);
     const settingColumns = db.prepare("SELECT name, dflt_value FROM pragma_table_info('settings')").all();
     assert.deepEqual(
@@ -111,5 +112,87 @@ test('rejects future versions and orphaned legacy pours without partial migratio
   } finally {
     future.close();
     orphan.close();
+  }
+});
+
+test('fresh database migration is re-entrant and passes integrity and foreign-key checks', () => {
+  const db = new Database(':memory:');
+  try {
+    migrateDatabase(db);
+    const tablesBefore = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+      .all()
+      .map((row) => row.name);
+    migrateDatabase(db);
+    const tablesAfter = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+      .all()
+      .map((row) => row.name);
+    assert.deepEqual(tablesAfter, tablesBefore);
+    assert.equal(db.pragma('integrity_check', { simple: true }), 'ok');
+    assert.deepEqual(db.pragma('foreign_key_check'), []);
+    assert.equal(db.prepare('SELECT COUNT(*) AS count FROM brewfather_sync_state').get().count, 1);
+  } finally {
+    db.close();
+  }
+});
+
+test('v4 to v5 cache upgrade preserves assignments and immutable lifecycle IDs', () => {
+  const db = new Database(':memory:');
+  try {
+    migrateDatabase(db);
+    db.prepare("INSERT INTO settings(id, admin_pin_hash, admin_pin_initialized) VALUES(1, 'hash', 1)").run();
+    db.prepare("INSERT INTO taps(tap_id, batch_id, on_tap_at) VALUES(1, 'batch-a', '2026-08-01T00:00:00.000Z')").run();
+    db.prepare(
+      `INSERT INTO keg_lifecycles(lifecycle_id, tap_id, batch_id, assignment_kind, started_at)
+       VALUES(41, 1, 'batch-a', 'brewfather', '2026-08-01T00:00:00.000Z')`
+    ).run();
+    db.exec(`
+      DROP TABLE brewfather_batch_readings;
+      DROP TABLE brewfather_batch_details;
+      DROP TABLE brewfather_sync_state;
+      DROP INDEX batches_brewfather_present_status_date;
+      DROP INDEX batches_brewfather_last_seen;
+      PRAGMA user_version = 4;
+      DELETE FROM schema_migrations WHERE version = 5;
+    `);
+
+    migrateDatabase(db);
+    assert.deepEqual(db.prepare('SELECT batch_id, on_tap_at FROM taps WHERE tap_id=1').get(), {
+      batch_id: 'batch-a',
+      on_tap_at: '2026-08-01T00:00:00.000Z'
+    });
+    assert.deepEqual(db.prepare('SELECT lifecycle_id, batch_id, closed_at FROM keg_lifecycles WHERE tap_id=1').get(), {
+      lifecycle_id: 41,
+      batch_id: 'batch-a',
+      closed_at: null
+    });
+    assert.deepEqual(db.pragma('foreign_key_check'), []);
+  } finally {
+    db.close();
+  }
+});
+
+test('a failed v5 migration rolls back its schema and version atomically', () => {
+  const db = new Database(':memory:');
+  try {
+    migrateDatabase(db);
+    db.exec(`
+      DROP TABLE brewfather_batch_readings;
+      DROP TABLE brewfather_batch_details;
+      DROP TABLE brewfather_sync_state;
+      DROP INDEX batches_brewfather_present_status_date;
+      DROP INDEX batches_brewfather_last_seen;
+      CREATE TABLE brewfather_sync_state (id INTEGER PRIMARY KEY);
+      PRAGMA user_version = 4;
+      DELETE FROM schema_migrations WHERE version = 5;
+    `);
+    assert.throws(() => migrateDatabase(db), /status|column/);
+    assert.equal(db.pragma('user_version', { simple: true }), 4);
+    assert.equal(db.prepare("SELECT 1 FROM sqlite_master WHERE name='brewfather_batch_details'").get(), undefined);
+    assert.equal(db.prepare('SELECT COUNT(*) AS count FROM brewfather_sync_state').get().count, 0);
+    assert.equal(db.prepare('SELECT COUNT(*) AS count FROM schema_migrations WHERE version=5').get().count, 0);
+  } finally {
+    db.close();
   }
 });

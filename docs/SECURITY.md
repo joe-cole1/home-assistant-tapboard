@@ -45,9 +45,19 @@ Tapboard denies iframe embedding. Do not weaken `frame-ancestors` or substitute 
 
 Compose binds only `127.0.0.1:3005`; the application listens on container port `3000`. The service runs as non-root, has a read-only root filesystem, uses a bounded writable `/tmp` tmpfs, drops all capabilities, sets `no-new-privileges`, and uses Docker init. Only the independent `tapboard_data` and `tapboard_backups` named volumes are persistent and writable.
 
-`HA_TOKEN` remains environment-injected for local deployment compatibility. Docker metadata access can reveal environment variables, so Docker access is administrator-level access. Do not print, read back, commit, or include the token in diagnostics.
+`HA_TOKEN`, `BREWFATHER_USER_ID`, and `BREWFATHER_API_KEY` remain environment-injected for local deployment compatibility. Docker metadata access can reveal environment variables, so Docker access is administrator-level access. Do not print, read back, commit, or include credentials or Basic authorization values in diagnostics. Reuse the existing Brewfather key shared with HA; do not regenerate it while HA fermentation consumers remain active.
 
 Token rotation is an operator-owned deferred action: revoke the old token in Home Assistant, create and privately place a replacement in the ignored environment file, recreate Tapboard, and verify HA hydration without exposing values or authorization data.
+
+## Brewfather and outbound-event boundary
+
+The native client permits only the fixed HTTPS origin `https://api.brewfather.app`, validates JSON/content type, aborts timed-out requests, bounds response bytes, and exposes only sanitized error categories. Its rolling request budget defaults to 100/hour and cannot exceed 200/hour, preserving headroom for the HA client that shares the account key. A `429 Retry-After` blocks follow-up calls until the bounded delay expires.
+
+Cached summaries and detail/reading snapshots are allowlisted and size bounded before entering SQLite. Public snapshots expose only compact beer presentation fields; notes, events, taste logs, nutrition, profiles, ingredients, readings, and sync internals remain server-side. Failed synchronization preserves last-known-good data and never clears assignments.
+
+The only Brewfather write is the explicit End Batch request body `{"status":"Completed"}` for the currently assigned non-custom batch. The client offers no arbitrary PATCH method. End Keg and custom beverages never call Brewfather. A completion failure leaves the assignment and lifecycle open.
+
+Home Assistant outbound events are built from per-type allowlists. They never accept complete Brewfather objects, arbitrary notes, action targets, webhooks, notification destinations, generic service payloads, fermentation measurements, controller state, or credentials. Publishing happens after the associated local commit and is non-fatal if HA is disconnected.
 
 ## Database safety
 

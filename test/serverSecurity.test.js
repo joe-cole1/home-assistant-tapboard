@@ -256,11 +256,11 @@ test('route validation rejects invalid IDs, fields, ranges, and bodyless action 
     assert.equal(database.prepare('SELECT COUNT(*) count FROM beverage_catalog').get().count, 0);
     assert.deepEqual(database.prepare('SELECT graphic, batch_id FROM taps WHERE tap_id = 1').get(), before);
 
-    // An empty JSON object is a valid body shape; HA is offline, so the action
-    // fails safely before local mutation.
+    // An empty JSON object is a valid body shape. With no assignment the local
+    // End Keg action rejects without involving Home Assistant.
     assert.equal(
       (await fetch(`${instance.baseUrl}/api/taps/1/end-keg`, { method: 'POST', headers, body: '{}' })).status,
-      502
+      409
     );
     assert.deepEqual(database.prepare('SELECT graphic, batch_id FROM taps WHERE tap_id = 1').get(), before);
   } finally {
@@ -515,7 +515,7 @@ test('assignment lifecycles preserve pour history and rotate after a clear', asy
       200
     );
     assert.deepEqual(database.prepare('SELECT batch_id, on_tap_at FROM taps WHERE tap_id = 1').get(), {
-      batch_id: '',
+      batch_id: null,
       on_tap_at: null
     });
     assert.equal(database.prepare('SELECT COUNT(*) count FROM pour_logs WHERE tap_id = 1').get().count, 2);
@@ -531,6 +531,65 @@ test('assignment lifecycles preserve pour history and rotate after a clear', asy
       .prepare('SELECT lifecycle_id FROM keg_lifecycles WHERE tap_id = 1 AND closed_at IS NULL')
       .get().lifecycle_id;
     assert.notEqual(secondLifecycle, firstLifecycle);
+    assert.equal(
+      (await fetch(`${instance.baseUrl}/api/taps/1/end-keg`, { method: 'POST', headers, body: '{}' })).status,
+      200
+    );
+    assert.equal(database.prepare('SELECT batch_id FROM taps WHERE tap_id=1').get().batch_id, null);
+    assert.equal(
+      database.prepare('SELECT close_reason FROM keg_lifecycles WHERE lifecycle_id=?').get(secondLifecycle)
+        .close_reason,
+      'end_keg'
+    );
+  } finally {
+    database.close();
+    await stopServer(instance.child);
+  }
+});
+
+test('native cached batches assign without HA projections and failed End Batch preserves local state', async () => {
+  const instance = await startServer();
+  const database = new Database(path.join(instance.dataDir, 'tapboard.db'));
+  try {
+    database
+      .prepare(
+        `INSERT INTO batches(batch_id, recipe_name, style, description, status, present, last_success_at)
+         VALUES('native-1', 'Native IPA', 'American IPA', 'Native description', 'Conditioning', 1,
+           '2026-08-09T00:00:00.000Z')`
+      )
+      .run();
+    const { token } = await authenticate(instance.baseUrl);
+    const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+    const assigned = await fetch(`${instance.baseUrl}/api/taps/3`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ batch_option: 'native-1 | Native IPA (Conditioning)' })
+    });
+    assert.equal(assigned.status, 200);
+    const snapshot = await (await fetch(`${instance.baseUrl}/api/state`)).json();
+    assert.equal(snapshot.tapStates['3'].batch.batchId, 'native-1');
+    assert.equal(snapshot.tapStates['3'].batch.description, 'Native description');
+    assert.equal(snapshot.haConnected, false);
+
+    const lifecycle = database
+      .prepare('SELECT lifecycle_id FROM keg_lifecycles WHERE tap_id=3 AND closed_at IS NULL')
+      .get();
+    assert.ok(lifecycle.lifecycle_id);
+    assert.equal(
+      (await fetch(`${instance.baseUrl}/api/taps/3/end-batch`, { method: 'POST', headers, body: '{}' })).status,
+      503
+    );
+    assert.equal(database.prepare('SELECT batch_id FROM taps WHERE tap_id=3').get().batch_id, 'native-1');
+    assert.equal(
+      database.prepare('SELECT closed_at FROM keg_lifecycles WHERE lifecycle_id=?').get(lifecycle.lifecycle_id)
+        .closed_at,
+      null
+    );
+    assert.equal(
+      (await fetch(`${instance.baseUrl}/api/taps/3/end-keg`, { method: 'POST', headers, body: '{}' })).status,
+      200
+    );
+    assert.equal(database.prepare('SELECT batch_id FROM taps WHERE tap_id=3').get().batch_id, null);
   } finally {
     database.close();
     await stopServer(instance.child);
@@ -615,7 +674,12 @@ test('On Deck and custom beverage APIs require authentication, validate strictly
     const headers = { ...json, Authorization: `Bearer ${token}` };
     const listed = await fetch(`${instance.baseUrl}/api/ondeck`, { headers });
     assert.equal(listed.status, 200);
-    assert.deepEqual(await listed.json(), { batches: [], show_ondeck: true });
+    const listedBody = await listed.json();
+    assert.deepEqual(listedBody.batches, []);
+    assert.equal(listedBody.show_ondeck, true);
+    assert.equal(listedBody.haConnected, false);
+    assert.equal(listedBody.brewfather.configured, false);
+    assert.equal(listedBody.brewfather.status, 'not_configured');
 
     const hideOnDeck = await fetch(`${instance.baseUrl}/api/ondeck`, {
       method: 'POST',
@@ -623,7 +687,11 @@ test('On Deck and custom beverage APIs require authentication, validate strictly
       body: JSON.stringify({ batches: [], show_ondeck: false })
     });
     assert.equal(hideOnDeck.status, 200);
-    assert.deepEqual(await hideOnDeck.json(), { success: true, batches: [], show_ondeck: false });
+    const hiddenBody = await hideOnDeck.json();
+    assert.equal(hiddenBody.success, true);
+    assert.deepEqual(hiddenBody.batches, []);
+    assert.equal(hiddenBody.show_ondeck, false);
+    assert.equal(hiddenBody.brewfather.configured, false);
     assert.equal(database.prepare('SELECT show_ondeck FROM settings WHERE id = 1').get().show_ondeck, 0);
     const hiddenSnapshot = await (await fetch(`${instance.baseUrl}/api/state`)).json();
     assert.equal(hiddenSnapshot.settings.show_ondeck, 0);
@@ -640,7 +708,7 @@ test('On Deck and custom beverage APIs require authentication, validate strictly
     );
     assert.equal(
       (await fetch(`${instance.baseUrl}/api/brewfather/refresh`, { method: 'POST', headers, body: '{}' })).status,
-      502
+      503
     );
     assert.equal(
       (
@@ -712,7 +780,7 @@ test('On Deck and custom beverage APIs require authentication, validate strictly
       400
     );
     const snapshot = await (await fetch(`${instance.baseUrl}/api/state`)).json();
-    assert.equal(snapshot.schemaVersion, 5);
+    assert.equal(snapshot.schemaVersion, 6);
     assert.deepEqual(snapshot.customBeverage, {
       id: 'custom:topo_chico',
       ...custom,

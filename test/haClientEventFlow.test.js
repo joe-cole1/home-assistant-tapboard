@@ -6,7 +6,7 @@ import test from 'node:test';
 import { formatSSEFrame } from '../src/sseHub.js';
 
 process.env.DATA_DIR = mkdtempSync(path.join(os.tmpdir(), 'tapboard-ha-client-test-'));
-const { HAClient, sanitizeBrewfatherActiveBatches } = await import('../src/haClient.js');
+const { HAClient } = await import('../src/haClient.js');
 
 function state(entityId, value, timestamp, unit = 'fl oz') {
   return {
@@ -126,7 +126,7 @@ test('a sensitive unrelated HA entity is absent from HTTP and SSE public seriali
   };
   client.processStateUpdate({ entity_id: privateEntity.entity_id, new_state: privateEntity });
 
-  const snapshot = { schemaVersion: 5, tapStates: client.getPublicTapStates() };
+  const snapshot = { schemaVersion: 6, tapStates: client.getPublicTapStates() };
   const httpJson = JSON.stringify(snapshot);
   const sseFrame = formatSSEFrame('snapshot', snapshot);
   for (const output of [httpJson, sseFrame]) {
@@ -137,53 +137,19 @@ test('a sensitive unrelated HA entity is absent from HTTP and SSE public seriali
   assert.equal(displayUpdates, 0);
 });
 
-test('Brewfather projection keeps only bounded, unique, eligible batch metadata', () => {
-  const batches = sanitizeBrewfatherActiveBatches({
-    entity_id: 'sensor.brewfather_active_batches',
-    state: '2026-08-08T12:00:00Z',
-    attributes: {
-      batches: [
-        { id: 'planning-1', name: 'Plan <script>', status: 'Planning', style: 'IPA', abv: '5.2' },
-        { id: 'fermenting-1', recipe_name: 'Fermenting', status: 'Fermenting' },
-        { id: 'conditioning-1', name: 'Conditioning', status: 'Conditioning', abv: 4.8 },
-        { id: 'planning-1', name: 'Duplicate', status: 'Planning' },
-        { id: 'completed-1', name: 'Completed', status: 'Completed' },
-        { id: '', name: 'Missing identity', status: 'Planning' },
-        'invalid'
-      ]
-    }
-  });
-
-  assert.deepEqual(batches, [
-    { id: 'planning-1', name: 'Plan <script>', status: 'Planning', style: 'IPA', abv: 5.2 },
-    { id: 'fermenting-1', name: 'Fermenting', status: 'Fermenting', style: '', abv: null },
-    { id: 'conditioning-1', name: 'Conditioning', status: 'Conditioning', style: '', abv: 4.8 }
-  ]);
-  assert.deepEqual(
-    sanitizeBrewfatherActiveBatches({
-      entity_id: 'sensor.brewfather_active_batches',
-      state: 'ready',
-      attributes: { batches: { planning: [] } }
-    }),
-    []
-  );
-  assert.deepEqual(
-    sanitizeBrewfatherActiveBatches({
-      entity_id: 'sensor.brewfather_active_batches',
-      state: 'ready',
-      attributes: {
-        batches: [
-          ...Array.from({ length: 151 }, (_, index) => ({
-            id: `completed-${index}`,
-            name: 'Ineligible',
-            status: 'Completed'
-          })),
-          { id: 'late-valid', name: 'Still eligible', status: 'Planning' }
-        ]
-      }
-    }),
-    [{ id: 'late-valid', name: 'Still eligible', status: 'Planning', style: '', abv: null }]
-  );
+test('HA Brewfather projection entities are retained privately but never produce public display changes', () => {
+  const changes = [];
+  const detector = { onEvent: null, ingest() {}, hydrate() {}, reset() {} };
+  const client = new HAClient({ detector, displayUpdateCoalescer: { enqueue: (change) => changes.push(change) } });
+  for (const entity of [
+    { entity_id: 'sensor.brewfather_active_batches', state: 'ready', attributes: { batches: [{ id: 'secret' }] } },
+    { entity_id: 'sensor.tap_1_batch_info', state: 'active', attributes: { notes: 'private' } },
+    { entity_id: 'select.tap_1_batch_select', state: 'secret', attributes: { options: ['secret'] } }
+  ]) {
+    client.processStateUpdate({ entity_id: entity.entity_id, new_state: entity });
+  }
+  assert.deepEqual(changes, []);
+  assert.equal(JSON.stringify(client.getPublicTapStates()).includes('secret'), false);
 });
 
 test('pour completion uses the lifecycle captured synchronously at pour start', () => {
@@ -206,4 +172,61 @@ test('pour completion uses the lifecycle captured synchronously at pour start', 
   assert.equal(recorded.lifecycleId, 41);
   assert.equal(recorded.tapId, 1);
   assert.equal(recorded.volumePouredOz, 6);
+});
+
+test('completion records before best-effort HA publishing and a publish failure stays nonfatal', async () => {
+  const order = [];
+  const detector = { onEvent: null, ingest() {}, hydrate() {}, reset() {} };
+  const client = new HAClient({
+    detector,
+    displayUpdateCoalescer: { enqueue() {} },
+    captureLifecycle: () => ({ lifecycle_id: 21, batch_id: 'batch-21' }),
+    recordPourFn: () => order.push('record')
+  });
+  client.fireEvent = () => {
+    order.push('fire');
+    return Promise.reject(new Error('offline'));
+  };
+  client.on('pour_complete', () => order.push('sse'));
+
+  client.handleDetectorEvent({ type: 'start', tapId: 1, startVolume: 100, timestamp: 1_000 });
+  client.handleDetectorEvent({ type: 'complete', tapId: 1, volumePouredOz: 6, timestamp: 2_000 });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(order, ['fire', 'record', 'fire', 'sse']);
+});
+
+test('an unassigned pour publishes nullable lifecycle and batch identities', () => {
+  const events = [];
+  const detector = { onEvent: null, ingest() {}, hydrate() {}, reset() {} };
+  const client = new HAClient({
+    detector,
+    displayUpdateCoalescer: { enqueue() {} },
+    captureLifecycle: () => null,
+    recordPourFn: () => {}
+  });
+  client.fireEvent = (_eventType, eventData) => {
+    events.push(eventData);
+    return Promise.resolve();
+  };
+  client.handleDetectorEvent({ type: 'start', tapId: 1, startVolume: 100, timestamp: 1_000 });
+  client.handleDetectorEvent({ type: 'complete', tapId: 1, volumePouredOz: 6, timestamp: 2_000 });
+
+  assert.equal(events[1].event_type, 'pour_complete');
+  assert.equal(events[1].lifecycle_id, null);
+  assert.equal(events[1].batch_id, null);
+});
+
+test('hydration never emits synthetic outbound pour events', () => {
+  let fires = 0;
+  const detector = { onEvent: null, ingest() {}, hydrate() {}, reset() {} };
+  const client = new HAClient({ detector, displayUpdateCoalescer: { enqueue() {} } });
+  client.fireEvent = () => {
+    fires += 1;
+    return Promise.resolve();
+  };
+  const entityId = 'sensor.tap_1_fl_oz';
+  client.statesMap.set(entityId, state(entityId, 100, 1_000));
+  client.rehydrateDetectorFromCurrentPrimaries('hydrate');
+  assert.equal(fires, 0);
 });

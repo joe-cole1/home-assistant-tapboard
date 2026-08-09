@@ -488,7 +488,7 @@ function createTapCard(tap) {
   const tapState = getTapState(tapId);
   const batchAttr = getBatchState(tapId);
 
-  // 3-Tier Recipe Lookup Hierarchy (Overrides -> HA Attributes -> Local Batches Cache)
+  // Recipe lookup hierarchy: Tapboard overrides -> native cached assignment.
   const cachedBatch =
     tap.batch_id && appState.batches ? appState.batches.find((b) => b.batch_id === tap.batch_id) : null;
   const customBeverage = customBeverageForTap(tapId, tap);
@@ -1342,7 +1342,13 @@ async function openOnDeckModal() {
     const showOnDeck = data.show_ondeck ?? appState.settings.show_ondeck;
     document.getElementById('onDeckFooterEnabledCheckbox').checked = showOnDeck === true || showOnDeck === 1;
     renderOnDeckManager(batches);
-    status.textContent = `${batches.length} eligible batch${batches.length === 1 ? '' : 'es'}${
+    const brewfatherState = data.brewfather?.configured
+      ? data.brewfather.stale
+        ? `Brewfather cache stale${data.brewfather.error_category ? ` (${data.brewfather.error_category})` : ''}`
+        : 'Brewfather cache current'
+      : 'Brewfather credentials not configured';
+    const haState = data.haConnected ? 'HA connected' : 'HA disconnected';
+    status.textContent = `${batches.length} eligible batch${batches.length === 1 ? '' : 'es'} · ${brewfatherState} · ${haState}${
       showOnDeck === true || showOnDeck === 1 ? '' : ' · footer currently hidden'
     }`;
   } catch (error) {
@@ -1777,11 +1783,14 @@ function initModalListeners() {
     status.textContent = 'Refreshing Brewfather…';
     try {
       const res = await fetch('/api/brewfather/refresh', { method: 'POST', headers: authHeaders() });
+      const result = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const result = await res.json().catch(() => ({}));
-        throw new Error(result.error || 'Brewfather refresh failed');
+        throw new Error(result.error || result.errorCategory || 'Brewfather refresh failed');
       }
-      status.textContent = 'Refresh requested. Waiting for Home Assistant…';
+      status.textContent =
+        result.outcome === 'succeeded'
+          ? `Native refresh completed (${result.summaries} batches, ${result.requestCount} requests).`
+          : `Refresh completed with stale cached data (${result.errorCategory || 'partial failure'}).`;
     } catch (error) {
       status.textContent = error.message || 'Brewfather refresh failed.';
     }

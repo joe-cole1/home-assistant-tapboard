@@ -9,6 +9,16 @@ import { HAClient } from './haClient.js';
 import { SSEHub } from './sseHub.js';
 import { calculateKegKickForecast as calculateForecast } from './kegForecast.js';
 import { activeLifecycle, assignKegLifecycle, closeKegLifecycle } from './kegLifecycle.js';
+import { createBrewfatherClientFromEnv } from './brewfatherClient.js';
+import {
+  assignmentOptions,
+  batchSummary,
+  onDeckBatches,
+  syncStatus as getBrewfatherSyncStatus
+} from './brewfatherCache.js';
+import { BrewfatherSyncCoordinator } from './brewfatherSync.js';
+import { buildTapboardEvent } from './tapboardEvents.js';
+import { TapMutationCoordinator } from './tapActions.js';
 import {
   HttpError,
   applySecurityHeaders,
@@ -39,11 +49,35 @@ const PORT = parseInt(process.env.PORT || '3000', 10);
 const PUBLIC_DIR = path.resolve(process.cwd(), 'public');
 const PUBLIC_REAL_DIR = fs.realpathSync(PUBLIC_DIR);
 
-// Initialize HA Client
+// Home Assistant owns serving telemetry. Brewfather credentials remain
+// server-side and are optional so last-known-good cache display can start
+// during an outage or before native credentials are configured.
 const haClient = new HAClient();
-haClient.connect();
-
 const sseHub = new SSEHub();
+const brewfatherClient = createBrewfatherClientFromEnv();
+const brewfatherSync = new BrewfatherSyncCoordinator({
+  db,
+  client: brewfatherClient,
+  onUpdate: () => sseHub.publishImmediate('brewfather_batches_changed', getFullStateSnapshot())
+});
+
+function brewfatherCompletion(batchId) {
+  if (!brewfatherClient) throw new HttpError(503, 'Brewfather credentials are not configured');
+  return brewfatherClient.completeBatch(batchId).catch((error) => {
+    const messages = {
+      auth: 'Brewfather authentication failed',
+      forbidden: 'Brewfather batch-edit permission is required',
+      rate_limited: 'Brewfather request budget is temporarily exhausted',
+      timeout: 'Brewfather completion request timed out',
+      network: 'Brewfather is unavailable'
+    };
+    const status = error?.category === 'rate_limited' ? 429 : error?.category === 'configuration' ? 503 : 502;
+    throw new HttpError(status, messages[error?.category] || 'Brewfather completion request failed');
+  });
+}
+
+const tapMutations = new TapMutationCoordinator({ db, completeBatch: brewfatherCompletion });
+haClient.connect();
 
 // Failed Auth Rate Limiter (IP -> { count, lockUntil })
 const authAttempts = new Map();
@@ -190,42 +224,30 @@ haClient.on('low_keg_alert', (data) => {
 });
 
 haClient.on('hydrated', () => {
-  observeBrewfatherBatches(haClient.getBrewfatherBatches());
   sseHub.publishImmediate('snapshot', getFullStateSnapshot());
 });
 
-haClient.on('brewfather_batches_changed', (batches) => {
-  observeBrewfatherBatches(batches);
-  sseHub.publishImmediate('brewfather_batches_changed', getFullStateSnapshot());
-});
-
-function observeBrewfatherBatches(batches) {
-  const defaultVisible = db.prepare('SELECT ondeck_new_batch_default FROM settings WHERE id = 1').get()
-    ?.ondeck_new_batch_default
-    ? 1
-    : 0;
-  const insert = db.prepare(`INSERT OR IGNORE INTO brewfather_ondeck_preferences (batch_id, visible) VALUES (?, ?)`);
-  db.transaction(() => {
-    for (const batch of batches) insert.run(batch.id, defaultVisible);
-  })();
+function eligibleOndeckBatches() {
+  return onDeckBatches(db);
 }
 
-function eligibleOndeckBatches() {
-  const batches = haClient.getBrewfatherBatches();
-  const preferences = new Map(
-    db
-      .prepare('SELECT batch_id, visible FROM brewfather_ondeck_preferences')
-      .all()
-      .map((row) => [row.batch_id, row.visible === 1])
-  );
-  const defaultVisible = db
-    .prepare('SELECT ondeck_new_batch_default FROM settings WHERE id = 1')
-    .get()?.ondeck_new_batch_default;
-  return batches.map((batch) => ({ ...batch, visible: preferences.get(batch.id) ?? Boolean(defaultVisible) }));
+function onDeckBatchesForPublic() {
+  return onDeckBatches(db, { limit: 50 });
 }
 
 function isOndeckEnabled() {
   return db.prepare('SELECT show_ondeck FROM settings WHERE id = 1').get()?.show_ondeck === 1;
+}
+
+function brewfatherStatus() {
+  const budget = brewfatherClient?.getBudgetStatus?.() || null;
+  return {
+    configured: Boolean(brewfatherClient),
+    ...getBrewfatherSyncStatus(db),
+    budget: budget
+      ? { limit: budget.limit, used: budget.used, remaining: budget.remaining, blockedUntil: budget.blockedUntil }
+      : null
+  };
 }
 
 function customBeverage() {
@@ -233,6 +255,113 @@ function customBeverage() {
     .prepare('SELECT id, name, style, abv, ibu, og, fg, srm, description FROM custom_beverage WHERE id = ?')
     .get('custom:topo_chico');
   return beverage ? { ...beverage, assignmentOption: 'custom:topo_chico | Tapboard Custom Beverage' } : null;
+}
+
+function optionForBatch(batch) {
+  return batch ? `${batch.batch_id} | ${batch.recipe_name} (${batch.status || 'Cached'})` : null;
+}
+
+function batchOptionsForTap(tap) {
+  const options = assignmentOptions(db).map((batch) => batch.assignmentOption);
+  const custom = customBeverage();
+  if (custom) options.push(custom.assignmentOption);
+  if (tap?.batch_id && !tap.batch_id.startsWith('custom:')) {
+    const current = batchSummary(db, tap.batch_id);
+    const option = optionForBatch(current) || `${tap.batch_id} | Current assignment`;
+    if (!options.includes(option)) options.push(option);
+  }
+  return options.slice(0, 152);
+}
+
+function resolveBatchOption(tap, option) {
+  if (option === '') return null;
+  const custom = customBeverage();
+  if (custom && option === custom.assignmentOption) return custom.id;
+  const match = assignmentOptions(db).find((batch) => batch.assignmentOption === option);
+  if (match) return match.batch_id;
+  if (tap?.batch_id && !tap.batch_id.startsWith('custom:')) {
+    const current = batchSummary(db, tap.batch_id);
+    if (option === (optionForBatch(current) || `${tap.batch_id} | Current assignment`)) return tap.batch_id;
+  }
+  throw new ValidationError('Invalid batch option');
+}
+
+function batchProjection(batch) {
+  if (!batch) return null;
+  return {
+    batchId: batch.batch_id,
+    recipeName: batch.recipe_name,
+    style: batch.style,
+    brewDate: batch.brew_date,
+    og: batch.og,
+    fg: batch.fg,
+    abv: batch.abv,
+    ibu: batch.ibu,
+    srm: batch.srm,
+    description: batch.description,
+    status: batch.status
+  };
+}
+
+function tapStatesFromNativeCache(taps) {
+  const states = haClient.getPublicTapStates();
+  const custom = customBeverage();
+  for (const tap of taps) {
+    const tapId = String(tap.tap_id);
+    const batch = tap.batch_id?.startsWith('custom:')
+      ? custom && {
+          batch_id: custom.id,
+          recipe_name: custom.name,
+          style: custom.style,
+          brew_date: null,
+          og: custom.og,
+          fg: custom.fg,
+          abv: custom.abv,
+          ibu: custom.ibu,
+          srm: custom.srm,
+          description: custom.description,
+          status: 'Custom'
+        }
+      : batchSummary(db, tap.batch_id);
+    const options = batchOptionsForTap(tap);
+    states[tapId] = {
+      ...states[tapId],
+      batch: batchProjection(batch),
+      batchSelection: {
+        value: tap.batch_id
+          ? options.find((option) => option === custom?.assignmentOption || option.startsWith(`${tap.batch_id} |`)) ||
+            ''
+          : '',
+        options
+      }
+    };
+  }
+  return states;
+}
+
+function publishTapboardEvent(eventType, context, data) {
+  let event;
+  try {
+    event = buildTapboardEvent(eventType, context, data);
+  } catch (error) {
+    console.warn(`[Tapboard event] Could not build ${eventType}: ${error.message}`);
+    return;
+  }
+  haClient.fireEvent('tapboard_event', event).catch((error) => {
+    console.warn(`[Tapboard event] Could not publish ${eventType}: ${error.message}`);
+  });
+}
+
+function lifecycleEventContext({ tapId, lifecycle, batchId, displayName, displayStyle }) {
+  return {
+    tap_id: tapId,
+    lifecycle_id: lifecycle?.lifecycle_id ?? null,
+    batch_id: batchId ?? lifecycle?.batch_id ?? null,
+    metadata: {
+      ...(displayName ? { display_name: displayName } : {}),
+      ...(displayStyle ? { display_style: displayStyle } : {})
+    }
+  };
 }
 
 // Construct Full Application State Snapshot
@@ -255,17 +384,10 @@ function getFullStateSnapshot() {
   `
     )
     .all();
-  const batches = db
-    .prepare(
-      `
-    SELECT batch_id, recipe_name, style, brew_date, og, fg, abv, ibu, srm,
-      status, last_synced_at
-    FROM batches ORDER BY last_synced_at DESC
-  `
-    )
-    .all();
-  const onDeckBatches = settings.show_ondeck ? eligibleOndeckBatches().filter((batch) => batch.visible) : [];
-  const tapStates = haClient.getPublicTapStates();
+  const assignedIds = [...new Set(taps.map((tap) => tap.batch_id).filter((id) => id && !id.startsWith('custom:')))];
+  const batches = assignedIds.map((batchId) => batchSummary(db, batchId)).filter(Boolean);
+  const onDeckBatches = settings.show_ondeck ? onDeckBatchesForPublic().filter((batch) => batch.visible) : [];
+  const tapStates = tapStatesFromNativeCache(taps);
 
   const kegKickForecasts = {};
   for (let i = 1; i <= 6; i++) {
@@ -273,7 +395,7 @@ function getFullStateSnapshot() {
   }
 
   return {
-    schemaVersion: 5,
+    schemaVersion: 6,
     settings,
     taps,
     batches,
@@ -559,162 +681,174 @@ const server = http.createServer(async (req, res) => {
     try {
       const body = validateTap(await readJsonBody(req));
       ensureServing();
-
-      if (
-        body.batch_option !== undefined &&
-        body.batch_option !== '' &&
-        body.batch_option !== customBeverage()?.assignmentOption
-      ) {
-        const options = haClient.getPublicTapStates()?.[String(tapId)]?.batchSelection?.options;
-        if (!Array.isArray(options) || !options.includes(body.batch_option))
-          throw new ValidationError('Invalid batch option');
-      }
-
-      // Auto-enable tap if a batch is assigned
-      let shouldEnable = body.enabled !== undefined ? (body.enabled ? 1 : 0) : null;
-      let extractedBatchId = null;
-      const currentTap = db
-        .prepare(
-          `SELECT enabled, batch_id, on_tap_at, override_enabled, override_name
+      await tapMutations.runExclusive(tapId, async () => {
+        // Auto-enable tap if a batch is assigned
+        let shouldEnable = body.enabled !== undefined ? (body.enabled ? 1 : 0) : null;
+        let extractedBatchId = null;
+        const currentTap = db
+          .prepare(
+            `SELECT enabled, batch_id, on_tap_at, override_enabled, override_name, override_style
         FROM taps WHERE tap_id = ?`
-        )
-        .get(tapId);
-      let onTapAt = currentTap.on_tap_at;
-      if (body.batch_option !== undefined) {
-        if (body.batch_option !== '') {
-          shouldEnable = 1;
-          extractedBatchId = body.batch_option.split('|')[0].trim();
-          if (extractedBatchId !== currentTap.batch_id || !onTapAt) onTapAt = new Date().toISOString();
-        } else {
-          extractedBatchId = '';
-          onTapAt = null;
+          )
+          .get(tapId);
+        let onTapAt = currentTap.on_tap_at;
+        if (body.batch_option !== undefined) {
+          if (body.batch_option !== '') {
+            shouldEnable = 1;
+            extractedBatchId = resolveBatchOption(currentTap, body.batch_option);
+            if (extractedBatchId !== currentTap.batch_id || !onTapAt) onTapAt = new Date().toISOString();
+          } else {
+            extractedBatchId = null;
+            onTapAt = null;
+          }
         }
-      }
 
-      const finalBatchId = body.batch_option === undefined ? currentTap.batch_id : extractedBatchId || null;
-      const finalOverrideEnabled =
-        body.override_enabled === undefined ? currentTap.override_enabled === 1 : body.override_enabled;
-      const finalOverrideName = body.override_name === undefined ? currentTap.override_name : body.override_name;
-      const desiredAssignment = assignmentIdentity({
-        batchId: finalBatchId,
-        overrideEnabled: finalOverrideEnabled,
-        overrideName: finalOverrideName
-      });
-      const currentLifecycle = activeLifecycle(db, tapId);
-      const lifecycleChanges = !lifecycleMatchesAssignment(currentLifecycle, desiredAssignment);
-      if (!desiredAssignment) onTapAt = null;
-      else if (lifecycleChanges || !onTapAt) onTapAt = new Date().toISOString();
+        const finalBatchId = body.batch_option === undefined ? currentTap.batch_id : extractedBatchId || null;
+        const finalOverrideEnabled =
+          body.override_enabled === undefined ? currentTap.override_enabled === 1 : body.override_enabled;
+        const finalOverrideName = body.override_name === undefined ? currentTap.override_name : body.override_name;
+        const desiredAssignment = assignmentIdentity({
+          batchId: finalBatchId,
+          overrideEnabled: finalOverrideEnabled,
+          overrideName: finalOverrideName
+        });
+        const currentLifecycle = activeLifecycle(db, tapId);
+        const lifecycleChanges = !lifecycleMatchesAssignment(currentLifecycle, desiredAssignment);
+        const currentBatch = currentTap.batch_id?.startsWith('custom:')
+          ? customBeverage()
+          : batchSummary(db, currentTap.batch_id);
+        const currentDisplayName = currentTap.override_name || currentBatch?.name || currentBatch?.recipe_name || null;
+        const currentDisplayStyle = currentTap.override_style || currentBatch?.style || null;
+        if (!desiredAssignment) onTapAt = null;
+        else if (lifecycleChanges || !onTapAt) onTapAt = new Date().toISOString();
 
-      // Capacity is authoritative in Home Assistant. Complete request
-      // validation first, but write HA before touching SQLite so a rejected
-      // capacity can never leave the local tap settings partially saved.
-      if (body.capacity_oz !== undefined) {
-        try {
-          await haClient.callHAService('input_number', 'set_value', {
-            entity_id: `input_number.tap_${tapId}_keg_capacity_oz`,
-            value: body.capacity_oz
+        // Capacity is authoritative in Home Assistant. Complete request
+        // validation first, but write HA before touching SQLite so a rejected
+        // capacity can never leave the local tap settings partially saved.
+        if (body.capacity_oz !== undefined) {
+          try {
+            await haClient.callHAService('input_number', 'set_value', {
+              entity_id: `input_number.tap_${tapId}_keg_capacity_oz`,
+              value: body.capacity_oz
+            });
+          } catch (error) {
+            console.error(`[HA ERROR] Capacity update failed for Tap ${tapId}:`, error);
+            throw new HttpError(502, 'Home Assistant capacity update failed');
+          }
+          ensureServing();
+        }
+
+        // Build a partial update rather than using COALESCE: empty override
+        // fields are an intentional request to clear the stored nullable value.
+        const tapUpdates = [];
+        const tapValues = [];
+        const addTapUpdate = (column, value) => {
+          tapUpdates.push(`${column} = ?`);
+          tapValues.push(value);
+        };
+        if (shouldEnable !== null) addTapUpdate('enabled', shouldEnable);
+        if (body.batch_option !== undefined) addTapUpdate('batch_id', extractedBatchId);
+        if (body.batch_option !== undefined || lifecycleChanges) addTapUpdate('on_tap_at', onTapAt);
+        const directColumns = {
+          graphic: body.graphic,
+          override_enabled: body.override_enabled === undefined ? undefined : body.override_enabled ? 1 : 0,
+          override_name: body.override_name,
+          override_style: body.override_style,
+          override_description: body.override_description,
+          badge_low_keg: body.badge_low_keg,
+          badge_fresh: body.badge_fresh === undefined ? undefined : body.badge_fresh ? 1 : 0,
+          display_unit: body.display_unit
+        };
+        for (const [column, value] of Object.entries(directColumns))
+          if (value !== undefined) addTapUpdate(column, value);
+        for (const column of [
+          'override_abv',
+          'override_ibu',
+          'override_og',
+          'override_fg',
+          'override_srm',
+          'custom_pour_size'
+        ]) {
+          if (body[column] !== undefined) addTapUpdate(column, body[column] === '' ? null : body[column]);
+        }
+        const updateTap = tapUpdates.length
+          ? db.prepare(`UPDATE taps SET ${tapUpdates.join(', ')} WHERE tap_id = ?`)
+          : null;
+        const applyTapUpdate = () => {
+          if (updateTap) updateTap.run(...tapValues, tapId);
+        };
+        let committedLifecycle = currentLifecycle;
+        if (lifecycleChanges && desiredAssignment) {
+          committedLifecycle = assignKegLifecycle(db, {
+            tapId,
+            ...desiredAssignment,
+            startedAt: onTapAt,
+            closeReason: currentLifecycle ? 'reassigned' : 'opened',
+            updateTap: applyTapUpdate
           });
-        } catch (error) {
-          console.error(`[HA ERROR] Capacity update failed for Tap ${tapId}:`, error);
-          throw new HttpError(502, 'Home Assistant capacity update failed');
+        } else if (lifecycleChanges && currentLifecycle) {
+          committedLifecycle = closeKegLifecycle(db, {
+            tapId,
+            closedAt: new Date().toISOString(),
+            closeReason: 'cleared',
+            updateTap: applyTapUpdate
+          });
+        } else {
+          db.transaction(applyTapUpdate)();
         }
-        ensureServing();
-      }
+        if (lifecycleChanges) haClient.clearTapMeasurement(tapId);
 
-      // Build a partial update rather than using COALESCE: empty override
-      // fields are an intentional request to clear the stored nullable value.
-      const tapUpdates = [];
-      const tapValues = [];
-      const addTapUpdate = (column, value) => {
-        tapUpdates.push(`${column} = ?`);
-        tapValues.push(value);
-      };
-      if (shouldEnable !== null) addTapUpdate('enabled', shouldEnable);
-      if (body.batch_option !== undefined) addTapUpdate('batch_id', extractedBatchId);
-      if (body.batch_option !== undefined || lifecycleChanges) addTapUpdate('on_tap_at', onTapAt);
-      const directColumns = {
-        graphic: body.graphic,
-        override_enabled: body.override_enabled === undefined ? undefined : body.override_enabled ? 1 : 0,
-        override_name: body.override_name,
-        override_style: body.override_style,
-        override_description: body.override_description,
-        badge_low_keg: body.badge_low_keg,
-        badge_fresh: body.badge_fresh === undefined ? undefined : body.badge_fresh ? 1 : 0,
-        display_unit: body.display_unit
-      };
-      for (const [column, value] of Object.entries(directColumns)) if (value !== undefined) addTapUpdate(column, value);
-      for (const column of [
-        'override_abv',
-        'override_ibu',
-        'override_og',
-        'override_fg',
-        'override_srm',
-        'custom_pour_size'
-      ]) {
-        if (body[column] !== undefined) addTapUpdate(column, body[column] === '' ? null : body[column]);
-      }
-      const updateTap = tapUpdates.length
-        ? db.prepare(`UPDATE taps SET ${tapUpdates.join(', ')} WHERE tap_id = ?`)
-        : null;
-      const applyTapUpdate = () => {
-        if (updateTap) updateTap.run(...tapValues, tapId);
-      };
-      if (lifecycleChanges && desiredAssignment) {
-        assignKegLifecycle(db, {
-          tapId,
-          ...desiredAssignment,
-          startedAt: onTapAt,
-          closeReason: currentLifecycle ? 'reassigned' : 'opened',
-          updateTap: applyTapUpdate
-        });
-      } else if (lifecycleChanges && currentLifecycle) {
-        closeKegLifecycle(db, {
-          tapId,
-          closedAt: new Date().toISOString(),
-          closeReason: 'cleared',
-          updateTap: applyTapUpdate
-        });
-      } else {
-        db.transaction(applyTapUpdate)();
-      }
-      if (lifecycleChanges) haClient.clearTapMeasurement(tapId);
+        if (lifecycleChanges && currentLifecycle) {
+          publishTapboardEvent(
+            'keg_ended',
+            lifecycleEventContext({
+              tapId,
+              lifecycle: currentLifecycle,
+              batchId: currentLifecycle.batch_id,
+              displayName: currentDisplayName,
+              displayStyle: currentDisplayStyle
+            }),
+            { reason: desiredAssignment ? 'reassigned' : 'cleared' }
+          );
+        }
+        if (lifecycleChanges && desiredAssignment) {
+          const updatedTap = db
+            .prepare('SELECT override_name, override_style, batch_id FROM taps WHERE tap_id = ?')
+            .get(tapId);
+          const updatedBatch = updatedTap.batch_id?.startsWith('custom:')
+            ? customBeverage()
+            : batchSummary(db, updatedTap.batch_id);
+          publishTapboardEvent(
+            'keg_assigned',
+            lifecycleEventContext({
+              tapId,
+              lifecycle: committedLifecycle,
+              batchId: desiredAssignment.batchId,
+              displayName: updatedTap.override_name || updatedBatch?.name || updatedBatch?.recipe_name || null,
+              displayStyle: updatedTap.override_style || updatedBatch?.style || null
+            }),
+            { assignment_kind: desiredAssignment.assignmentKind }
+          );
+        }
 
-      console.log(`[TAP ACTION] Tap settings updated request_id=${requestId} tap_id=${tapId} client=${clientIp}`);
+        console.log(`[TAP ACTION] Tap settings updated request_id=${requestId} tap_id=${tapId} client=${clientIp}`);
 
-      // Sync Home Assistant input_boolean.tap_N_enabled
-      const finalEnabled = shouldEnable === null ? currentTap.enabled : shouldEnable;
-      if (finalEnabled !== currentTap.enabled) {
-        const haEnabledService = finalEnabled === 1 ? 'turn_on' : 'turn_off';
-        await haClient
-          .callHAService('input_boolean', haEnabledService, {
-            entity_id: `input_boolean.tap_${tapId}_enabled`
-          })
-          .catch((err) => console.warn(`[HA Warning] Enable boolean call failed:`, err.message));
-      }
-
-      if (body.batch_option !== undefined && finalBatchId !== currentTap.batch_id) {
-        await haClient
-          .callHAService('select', 'select_option', {
-            entity_id: `select.tap_${tapId}_batch_select`,
-            option: body.batch_option
-          })
-          .catch((err) => console.warn(`[HA Warning] Select option failed:`, err.message));
-
-        const batchId = body.batch_option.split('|')[0].trim();
-        if (batchId) {
+        // Sync Home Assistant input_boolean.tap_N_enabled
+        const finalEnabled = shouldEnable === null ? currentTap.enabled : shouldEnable;
+        if (finalEnabled !== currentTap.enabled) {
+          const haEnabledService = finalEnabled === 1 ? 'turn_on' : 'turn_off';
           await haClient
-            .callHAService('input_text', 'set_value', {
-              entity_id: `input_text.tap_${tapId}_batch`,
-              value: batchId
+            .callHAService('input_boolean', haEnabledService, {
+              entity_id: `input_boolean.tap_${tapId}_enabled`
             })
-            .catch((err) => console.warn(`[HA Warning] Batch text set failed:`, err.message));
+            .catch((err) => console.warn(`[HA Warning] Enable boolean call failed:`, err.message));
         }
-      }
 
-      sseHub.publishImmediate('settings_updated', getFullStateSnapshot());
-      sendJson(res, 200, {
-        success: true,
-        tap: db.prepare('SELECT * FROM taps WHERE tap_id = ?').get(tapId)
+        sseHub.publishImmediate('settings_updated', getFullStateSnapshot());
+        sendJson(res, 200, {
+          success: true,
+          tap: db.prepare('SELECT * FROM taps WHERE tap_id = ?').get(tapId)
+        });
       });
     } catch (err) {
       handleError(res, err, requestContext('update tap', tapId));
@@ -736,36 +870,21 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     try {
-      try {
-        await haClient.callHAService('script', 'end_tap_batch', { tap_number: tapId });
-      } catch (error) {
-        console.error(`[HA ERROR] End batch failed for Tap ${tapId}:`, error);
-        throw new HttpError(502, 'Home Assistant request failed');
-      }
+      const result = await tapMutations.endBatch(tapId);
       ensureServing();
-
-      const clearBatch = db.prepare(`
-        UPDATE taps SET
-          batch_id = NULL,
-          on_tap_at = NULL,
-          override_enabled = 0,
-          override_name = NULL,
-          override_style = NULL,
-          override_abv = NULL,
-          override_ibu = NULL,
-          override_og = NULL,
-          override_fg = NULL,
-          override_srm = NULL,
-          override_description = NULL
-        WHERE tap_id = ?
-      `);
-      closeKegLifecycle(db, {
-        tapId,
-        closedAt: new Date().toISOString(),
-        closeReason: 'end_batch',
-        updateTap: () => clearBatch.run(tapId)
-      });
       haClient.clearTapMeasurement(tapId);
+
+      publishTapboardEvent(
+        'keg_ended',
+        lifecycleEventContext({
+          tapId,
+          lifecycle: result.lifecycle,
+          batchId: result.batchId,
+          displayName: result.displayName,
+          displayStyle: result.displayStyle
+        }),
+        { reason: 'end_batch' }
+      );
 
       sseHub.publishImmediate('settings_updated', getFullStateSnapshot());
       sendJson(res, 200, { success: true, message: `Batch completed and tap ${tapId} cleared.` });
@@ -789,39 +908,21 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     try {
-      try {
-        await haClient.callHAService('select', 'select_option', {
-          entity_id: `select.tap_${tapId}_batch_select`,
-          option: ''
-        });
-      } catch (error) {
-        console.error(`[HA ERROR] End keg failed for Tap ${tapId}:`, error);
-        throw new HttpError(502, 'Home Assistant request failed');
-      }
+      const result = await tapMutations.endKeg(tapId);
       ensureServing();
-
-      const clearKeg = db.prepare(`
-        UPDATE taps SET
-          batch_id = NULL,
-          on_tap_at = NULL,
-          override_enabled = 0,
-          override_name = NULL,
-          override_style = NULL,
-          override_abv = NULL,
-          override_ibu = NULL,
-          override_og = NULL,
-          override_fg = NULL,
-          override_srm = NULL,
-          override_description = NULL
-        WHERE tap_id = ?
-      `);
-      closeKegLifecycle(db, {
-        tapId,
-        closedAt: new Date().toISOString(),
-        closeReason: 'end_keg',
-        updateTap: () => clearKeg.run(tapId)
-      });
       haClient.clearTapMeasurement(tapId);
+
+      publishTapboardEvent(
+        'keg_ended',
+        lifecycleEventContext({
+          tapId,
+          lifecycle: result.lifecycle,
+          batchId: result.batchId,
+          displayName: result.displayName,
+          displayStyle: result.displayStyle
+        }),
+        { reason: 'end_keg' }
+      );
 
       sseHub.publishImmediate('settings_updated', getFullStateSnapshot());
       sendJson(res, 200, { success: true, message: `Tap ${tapId} unassigned / off-tap.` });
@@ -835,7 +936,12 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === '/api/ondeck' && req.method === 'GET') {
     if (!requireAdmin(req, res)) return;
     try {
-      sendJson(res, 200, { batches: eligibleOndeckBatches(), show_ondeck: isOndeckEnabled() });
+      sendJson(res, 200, {
+        batches: eligibleOndeckBatches(),
+        show_ondeck: isOndeckEnabled(),
+        brewfather: brewfatherStatus(),
+        haConnected: haClient.isConnected
+      });
     } catch (err) {
       handleError(res, err, requestContext('read on deck'));
     }
@@ -848,7 +954,7 @@ const server = http.createServer(async (req, res) => {
       const body = validateOndeck(await readJsonBody(req));
       ensureServing();
       const eligible = eligibleOndeckBatches();
-      const known = new Set(eligible.map((batch) => batch.id));
+      const known = new Set(eligible.map((batch) => batch.batch_id));
       if (body.batches.some((batch) => !known.has(batch.batch_id)))
         throw new ValidationError('Invalid Brewfather batch');
       const update = db.prepare(
@@ -864,7 +970,9 @@ const server = http.createServer(async (req, res) => {
       sendJson(res, 200, {
         success: true,
         batches: eligibleOndeckBatches(),
-        show_ondeck: isOndeckEnabled()
+        show_ondeck: isOndeckEnabled(),
+        brewfather: brewfatherStatus(),
+        haConnected: haClient.isConnected
       });
     } catch (err) {
       handleError(res, err, requestContext('update on deck'));
@@ -877,14 +985,19 @@ const server = http.createServer(async (req, res) => {
     try {
       await readEmptyJsonBody(req);
       ensureServing();
-      try {
-        await haClient.callHAService('input_button', 'press', { entity_id: 'input_button.brewery_brewfather_refresh' });
-      } catch (error) {
-        console.error('[HA ERROR] Brewfather refresh failed:', error);
-        throw new HttpError(502, 'Home Assistant Brewfather refresh failed');
-      }
+      const refresh = brewfatherSync.refresh({ reason: 'manual' });
+      const result = await refresh.promise;
       ensureServing();
-      sendJson(res, 200, { success: true });
+      const payload = {
+        success: result.outcome === 'succeeded',
+        requestStatus: refresh.requestStatus,
+        outcome: result.outcome,
+        errorCategory: result.errorCategory,
+        summaries: result.summaries,
+        requestCount: result.requestCount,
+        brewfather: brewfatherStatus()
+      };
+      sendJson(res, result.outcome === 'failed' ? 503 : 200, payload);
     } catch (err) {
       handleError(res, err, requestContext('refresh Brewfather'));
     }
@@ -981,11 +1094,13 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(`[Tapboard Server] Running on http://localhost:${PORT}`);
 });
+brewfatherSync.start();
 
 function shutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
   console.log(`[Tapboard Server] ${signal} received; shutting down cleanly.`);
+  brewfatherSync.stop();
   haClient.stop();
   sseHub.close();
   const forceExit = setTimeout(() => {

@@ -5,7 +5,13 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const maintainedMarkdown = ['README.md', 'architecture.md', 'docs/SECURITY.md', 'docs/DATABASE-OPERATIONS.md'];
+const maintainedMarkdown = [
+  'README.md',
+  'architecture.md',
+  'docs/SECURITY.md',
+  'docs/DATABASE-OPERATIONS.md',
+  'docs/HOME-ASSISTANT-EVENTS.md'
+];
 const currentVersionRoots = ['package.json', ...maintainedMarkdown, 'public', 'src', 'scripts'];
 const supportedDatabaseCommands = ['db:backup', 'db:verify', 'db:restore', 'db:prune-pours'];
 

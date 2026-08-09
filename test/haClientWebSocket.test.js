@@ -66,6 +66,59 @@ function clientWith(timers, detector = { onEvent: null, ingest() {}, hydrate() {
   });
 }
 
+test('fireEvent uses the normal request/result channel', async () => {
+  const timers = fakeTimers();
+  const client = clientWith(timers);
+  client.connect();
+  const socket = FakeWebSocket.instances.at(-1);
+  const fired = client.fireEvent('tapboard_event', { schema_version: 1 });
+  const request = socket.sent.at(-1);
+  assert.deepEqual(request, {
+    type: 'fire_event',
+    event_type: 'tapboard_event',
+    event_data: { schema_version: 1 },
+    id: request.id
+  });
+  socket.message({ id: request.id, success: true, result: { accepted: true } });
+  assert.deepEqual(await fired, { accepted: true });
+  client.stop();
+});
+
+test('fireEvent timeout and disconnect both settle and release the pending slot', async () => {
+  const timers = fakeTimers();
+  const client = clientWith(timers);
+  client.connect();
+  const timedOut = client.fireEvent('tapboard_event', {});
+  timers.runNext();
+  await assert.rejects(timedOut, /timed out/);
+  assert.equal(client.pendingRequests.size, 0);
+
+  const pending = client.fireEvent('tapboard_event', {});
+  FakeWebSocket.instances.at(-1).emit('close', 1006);
+  await assert.rejects(pending, /closed/);
+  assert.equal(client.pendingRequests.size, 0);
+  client.stop();
+});
+
+test('pending request ceiling rejects excess work without allocating timers', async () => {
+  const timers = fakeTimers();
+  const client = new HAClient({
+    WebSocketImpl: FakeWebSocket,
+    setTimeout: timers.setTimeout.bind(timers),
+    clearTimeout: timers.clearTimeout.bind(timers),
+    maxPendingRequests: 1,
+    detector: { onEvent: null, ingest() {}, hydrate() {}, reset() {} },
+    displayUpdateCoalescer: { enqueue() {} }
+  });
+  client.connect();
+  const first = client.fireEvent('tapboard_event', {});
+  await assert.rejects(client.fireEvent('tapboard_event', {}), /pending request limit/);
+  assert.equal(client.pendingRequests.size, 1);
+  assert.equal(timers.pending.size, 1);
+  client.stop();
+  await assert.rejects(first, /stopped/);
+});
+
 test('requests time out and settle only once', async () => {
   const timers = fakeTimers();
   const client = clientWith(timers);
