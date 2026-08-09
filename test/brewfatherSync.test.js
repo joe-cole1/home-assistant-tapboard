@@ -64,7 +64,7 @@ test('status/page failure keeps last-known-good cache and does not mark absent r
   const db = database();
   const client = budgetClient();
   try {
-    const sync = new BrewfatherSync({ db, client, now: () => 1_700_000_000_000 });
+    const sync = new BrewfatherSync({ db, client, logger: { error() {} }, now: () => 1_700_000_000_000 });
     assert.equal((await sync.refresh().promise).outcome, 'succeeded');
     client.listBatchesByStatuses = async () => ({
       batches: [],
@@ -77,6 +77,53 @@ test('status/page failure keeps last-known-good cache and does not mark absent r
     assert.equal(db.prepare('SELECT status FROM brewfather_sync_state WHERE id=1').get().status, 'stale_cache');
   } finally {
     db.close();
+  }
+});
+
+test('configured failed response cycle logs one sanitized structured error', async () => {
+  const db = database();
+  const logs = [];
+  const logger = { error: (line) => logs.push(line) };
+  const secret = 'do-not-log-this-brewfather-error';
+  const client = budgetClient({
+    listBatchesByStatuses: async () => ({
+      batches: [],
+      failures: [{ status: 'Planning', error: { category: 'network', message: secret, retryAfter: 60_000 } }]
+    })
+  });
+  try {
+    const sync = new BrewfatherSync({ db, client, logger, now: () => 1_700_000_000_000 });
+    assert.equal((await sync.refresh({ reason: 'scheduled' }).promise).outcome, 'failed');
+    assert.equal(logs.length, 1);
+    assert.equal(logs[0].includes(secret), false);
+    assert.deepEqual(JSON.parse(logs[0]), {
+      event: 'brewfather_sync_cycle_failed',
+      reason: 'scheduled',
+      outcome: 'failed',
+      errorCategory: 'network',
+      summaryCount: 0,
+      requestCount: 0,
+      retryAt: '2023-11-14T22:14:20.000Z'
+    });
+  } finally {
+    db.close();
+  }
+});
+
+test('successful and unconfigured cycles do not emit failure logs', async () => {
+  const successDb = database();
+  const unconfiguredDb = database();
+  const logs = [];
+  const logger = { error: (line) => logs.push(line) };
+  try {
+    const success = new BrewfatherSync({ db: successDb, client: budgetClient(), logger, now: () => 1_700_000_000_000 });
+    const unconfigured = new BrewfatherSync({ db: unconfiguredDb, logger, now: () => 1_700_000_000_000 });
+    assert.equal((await success.refresh().promise).outcome, 'succeeded');
+    assert.equal((await unconfigured.refresh().promise).outcome, 'failed');
+    assert.deepEqual(logs, []);
+  } finally {
+    successDb.close();
+    unconfiguredDb.close();
   }
 });
 

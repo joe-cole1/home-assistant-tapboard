@@ -47,6 +47,8 @@ Compose binds only `127.0.0.1:3005`; the application listens on container port `
 
 `HA_TOKEN`, `BREWFATHER_USER_ID`, and `BREWFATHER_API_KEY` remain environment-injected for local deployment compatibility. Docker metadata access can reveal environment variables, so Docker access is administrator-level access. Do not print, read back, commit, or include credentials or Basic authorization values in diagnostics. Reuse the existing Brewfather key shared with HA; do not regenerate it while HA fermentation consumers remain active.
 
+Failed Brewfather calls emit one structured container-log record with an endpoint template, allowlisted method and error category, exact HTTP status, normalized content type, and numeric retry delay. Batch and recipe IDs, full URLs and queries, response status text and bodies, request headers and bodies, credentials, and Basic authorization values are never logged. A separate bounded sync-cycle record reports only the refresh reason, outcome, category, counts, and retry time.
+
 Token rotation is an operator-owned deferred action: revoke the old token in Home Assistant, create and privately place a replacement in the ignored environment file, recreate Tapboard, and verify HA hydration without exposing values or authorization data.
 
 ## Brewfather and outbound-event boundary

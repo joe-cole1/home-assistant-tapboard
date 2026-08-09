@@ -21,6 +21,18 @@ const BATCH_SUMMARY_INCLUDE = [
   'image',
   'updatedAt'
 ].join(',');
+const LOG_CATEGORIES = new Set([
+  'auth',
+  'forbidden',
+  'rate_limited',
+  'timeout',
+  'network',
+  'transient',
+  'response_too_large',
+  'invalid_response',
+  'not_found',
+  'unknown'
+]);
 export const BREWFATHER_STATUSES = Object.freeze(['Planning', 'Brewing', 'Fermenting', 'Conditioning', 'Completed']);
 
 export class BrewfatherError extends Error {
@@ -77,6 +89,24 @@ async function boundedBody(response, limit) {
   return text;
 }
 
+function endpointTemplate(path) {
+  const pathname = typeof path === 'string' ? path.split(/[?#]/, 1)[0] : '';
+  if (/^\/v2\/batches\/[^/]+\/readings\/last$/.test(pathname)) return '/v2/batches/:batchId/readings/last';
+  if (/^\/v2\/batches\/[^/]+\/readings$/.test(pathname)) return '/v2/batches/:batchId/readings';
+  if (/^\/v2\/batches\/[^/]+$/.test(pathname)) return '/v2/batches/:batchId';
+  if (/^\/v2\/recipes\/[^/]+$/.test(pathname)) return '/v2/recipes/:recipeId';
+  if (pathname === '/v2/batches' || pathname === '/v2/recipes') return pathname;
+  return '/v2/unknown';
+}
+
+function responseContentType(response) {
+  const value = response?.headers?.get?.('content-type');
+  if (!value) return null;
+  if (/^application\/json(?:\s*;|$)/i.test(value)) return 'application/json';
+  if (/^text\/plain(?:\s*;|$)/i.test(value)) return 'text/plain';
+  return 'other';
+}
+
 export class BrewfatherClient {
   constructor({
     userId,
@@ -90,14 +120,18 @@ export class BrewfatherClient {
     requestBudget = 100,
     budgetWindowMs = 3_600_000,
     maxPages = 50,
-    maxItems = 2_500
+    maxItems = 2_500,
+    logger = console
   } = {}) {
     if (typeof userId !== 'string' || !userId || typeof apiKey !== 'string' || !apiKey)
       throw new BrewfatherError('configuration', 'Brewfather credentials are required');
     if (typeof fetchFn !== 'function') throw new BrewfatherError('configuration', 'Fetch is required');
+    if (!logger || typeof logger.error !== 'function')
+      throw new BrewfatherError('configuration', 'Logger with an error method is required');
     this.userId = userId;
     this.apiKey = apiKey;
     this.fetchFn = fetchFn;
+    this.logger = logger;
     this.now = now;
     this.setTimeoutFn = setTimeoutFn;
     this.clearTimeoutFn = clearTimeoutFn;
@@ -109,6 +143,26 @@ export class BrewfatherClient {
     this.maxItems = configuredInteger(maxItems, 2_500, 1, 10_000);
     this.requestTimes = [];
     this.blockedUntil = 0;
+  }
+
+  logFailure({ method, path, response, category }) {
+    try {
+      const status = Number.isInteger(response?.status) ? response.status : null;
+      const retryDelay = response ? retryAfter(response.headers?.get?.('retry-after'), this.now) : null;
+      const entry = {
+        event: 'brewfather.transport_failure',
+        operation: endpointTemplate(path),
+        method: ['GET', 'PATCH'].includes(method) ? method : 'UNKNOWN',
+        category: LOG_CATEGORIES.has(category) ? category : 'unknown',
+        status,
+        contentType: responseContentType(response),
+        ...(retryDelay !== null ? { retryAfterMs: retryDelay } : {})
+      };
+      const pending = this.logger.error(JSON.stringify(entry));
+      pending?.catch?.(() => {});
+    } catch {
+      // Observability must never affect request classification or handling.
+    }
   }
 
   consumeBudget() {
@@ -159,9 +213,29 @@ export class BrewfatherClient {
           ...(body ? { body: JSON.stringify(body) } : {})
         });
       } catch (error) {
-        if (controller.signal.aborted || error?.name === 'AbortError')
+        if (controller.signal.aborted || error?.name === 'AbortError') {
+          this.logFailure({ method, path, category: 'timeout' });
           throw new BrewfatherError('timeout', 'Brewfather request timed out');
+        }
+        this.logFailure({ method, path, category: 'network' });
         throw new BrewfatherError('network', 'Brewfather request failed');
+      }
+      if (!response || !Number.isInteger(response.status) || !response.headers?.get) {
+        this.logFailure({ method, path, response, category: 'invalid_response' });
+        throw new BrewfatherError('invalid_response', 'Brewfather response was invalid');
+      }
+      if (response.status < 200 || response.status >= 300) {
+        const category =
+          response.status === 401
+            ? 'auth'
+            : response.status === 403
+              ? 'forbidden'
+              : response.status === 404
+                ? 'not_found'
+                : response.status === 429
+                  ? 'rate_limited'
+                  : 'transient';
+        this.logFailure({ method, path, response, category });
       }
       if (response.status === 401)
         throw new BrewfatherError('auth', 'Brewfather authentication failed', { status: 401 });
@@ -184,22 +258,30 @@ export class BrewfatherClient {
       const contentType = response.headers.get('content-type');
       const isJson = Boolean(contentType && /^application\/json(?:\s*;|$)/i.test(contentType));
       const isText = Boolean(contentType && /^text\/plain(?:\s*;|$)/i.test(contentType));
-      if (!isJson && !(responseMode === 'completion' && isText))
+      if (!isJson && !(responseMode === 'completion' && isText)) {
+        this.logFailure({ method, path, response, category: 'invalid_response' });
         throw new BrewfatherError('invalid_response', 'Brewfather response was not JSON', { status: response.status });
+      }
       let text;
       try {
         text = await boundedBody(response, this.maxResponseBytes);
       } catch (error) {
-        if (error instanceof BrewfatherError) throw error;
+        if (error instanceof BrewfatherError) {
+          this.logFailure({ method, path, response, category: error.category });
+          throw error;
+        }
         if (controller.signal.aborted || error?.name === 'AbortError') {
+          this.logFailure({ method, path, response, category: 'timeout' });
           throw new BrewfatherError('timeout', 'Brewfather request timed out');
         }
+        this.logFailure({ method, path, response, category: 'network' });
         throw new BrewfatherError('network', 'Brewfather response could not be read');
       }
       if (responseMode === 'completion' && !isJson) return Object.freeze({ completed: true });
       try {
         return JSON.parse(text);
       } catch {
+        this.logFailure({ method, path, response, category: 'invalid_response' });
         throw new BrewfatherError('invalid_response', 'Brewfather response contained invalid JSON', {
           status: response.status
         });
