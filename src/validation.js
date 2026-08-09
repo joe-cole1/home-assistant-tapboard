@@ -16,6 +16,7 @@ const LAYOUT_MODES = new Set(['cozy', 'compact']);
 // eslint-disable-next-line no-control-regex -- Reject control characters from untrusted request text.
 const DISALLOWED_CONTROLS = /[\u0000-\u0009\u000B\u000C\u000E-\u001F\u007F]/;
 const CANONICAL_NUMBER = /^(?:0|[1-9]\d*)(?:\.\d+)?$/;
+const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 
 export class ValidationError extends Error {
   constructor(message = 'Invalid request body') {
@@ -101,7 +102,8 @@ export function validateSettings(body) {
       'layout_mode',
       'ondeck_new_batch_default',
       'tap_visibilities',
-      'new_pin'
+      'primary_color',
+      'secondary_color'
     ])
   );
   const output = {};
@@ -114,10 +116,12 @@ export function validateSettings(body) {
   assignIfDefined(output, 'layout_mode', choice(body.layout_mode, LAYOUT_MODES));
   if (body.ondeck_new_batch_default !== undefined)
     output.ondeck_new_batch_default = boolean(body.ondeck_new_batch_default);
-  if (body.new_pin !== undefined) {
-    const pin = text(body.new_pin, 4, { allowEmpty: false });
-    if (!/^\d{4}$/.test(pin) || pin === '0000') throw new ValidationError('Invalid PIN');
-    output.new_pin = pin;
+  for (const key of ['primary_color', 'secondary_color']) {
+    if (body[key] === null) output[key] = null;
+    else if (body[key] !== undefined) {
+      if (typeof body[key] !== 'string' || !HEX_COLOR.test(body[key])) throw new ValidationError('Invalid color');
+      output[key] = body[key].toUpperCase();
+    }
   }
   if (body.tap_visibilities !== undefined) {
     assertObject(body.tap_visibilities);
@@ -129,6 +133,21 @@ export function validateSettings(body) {
     output.tap_visibilities = visibilities;
   }
   return output;
+}
+
+export function validatePinChange(body) {
+  assertObject(body);
+  rejectUnknown(body, new Set(['current_pin', 'new_pin', 'confirm_new_pin']));
+  const current_pin = text(body.current_pin, 4, { required: true, allowEmpty: false });
+  const new_pin = text(body.new_pin, 4, { required: true, allowEmpty: false });
+  const confirm_new_pin = text(body.confirm_new_pin, 4, { required: true, allowEmpty: false });
+  if (![current_pin, new_pin, confirm_new_pin].every((pin) => /^\d{4}$/.test(pin))) {
+    throw new ValidationError('Invalid PIN');
+  }
+  if (new_pin === '0000') throw new ValidationError('Invalid PIN');
+  if (new_pin !== confirm_new_pin) throw new ValidationError('New PINs do not match');
+  if (new_pin === current_pin) throw new ValidationError('New PIN must be different');
+  return { current_pin, new_pin, confirm_new_pin };
 }
 
 export function validateOndeck(body) {

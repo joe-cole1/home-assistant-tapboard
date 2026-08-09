@@ -8,6 +8,7 @@ import {
   createToast
 } from './domBuilders.js';
 import { shouldShowNewBadge } from './freshness.js';
+import { createAutosaveController } from './autosave.js';
 
 let appState = {
   settings: {},
@@ -27,6 +28,15 @@ let hasRenderedSnapshot = false;
 const simulatedPourTimers = new Map();
 const LONG_PRESS_MS = 600;
 const SIMULATED_POUR_MS = 8000;
+const THEME_COLORS = {
+  modern_dark: { primary: '#FBC02D', secondary: '#38BDF8' },
+  warm_pub: { primary: '#FBC02D', secondary: '#C5A880' },
+  cyberpunk: { primary: '#FF007F', secondary: '#00F0FF' },
+  light_minimal: { primary: '#D97706', secondary: '#2563EB' }
+};
+const autosaveTimers = new Map();
+const dirtyFields = new Set();
+const autosaves = createAutosaveController({ onStatus: updateSaveStatus });
 
 function getTapState(tapId) {
   return appState.tapStates[String(tapId)] || {};
@@ -438,21 +448,8 @@ function formatForecastText(forecast) {
 
 // Main Render Function with In-Place Targeted DOM Preservation
 function renderApp() {
-  const { settings, taps } = appState;
-
-  if (settings.theme) {
-    document.body.setAttribute('data-theme', settings.theme);
-  }
-  if (settings.title) {
-    document.getElementById('headerTitle').textContent = settings.title;
-  }
-  if (settings.font_title) {
-    document.documentElement.style.setProperty('--font-title', `'${settings.font_title}', sans-serif`);
-  }
-  if (settings.font_body) {
-    document.documentElement.style.setProperty('--font-body', `'${settings.font_body}', sans-serif`);
-  }
-  document.body.setAttribute('data-layout-mode', settings.layout_mode === 'compact' ? 'compact' : 'cozy');
+  const { taps } = appState;
+  applySettingsPreview();
 
   const tapGrid = document.getElementById('tapGrid');
   if (!tapGrid) return;
@@ -876,6 +873,18 @@ function openGlobalSettingsModal() {
   document.getElementById('onDeckNewBatchDefaultCheckbox').checked =
     settings.ondeck_new_batch_default === true || settings.ondeck_new_batch_default === 1;
 
+  const colors = currentThemeColors();
+  [
+    ['primary', 'primaryColorPicker', 'primaryColorInput'],
+    ['secondary', 'secondaryColorPicker', 'secondaryColorInput']
+  ].forEach(([name, pickerId, hexId]) => {
+    const value = colors[name];
+    const picker = document.getElementById(pickerId);
+    const hex = document.getElementById(hexId);
+    if (picker) picker.value = value;
+    if (hex) hex.value = value;
+  });
+
   const custom = appState.customBeverage || {};
   const customFields = ['name', 'style', 'abv', 'ibu', 'og', 'fg', 'srm', 'description'];
   customFields.forEach((field) => {
@@ -892,7 +901,24 @@ function openGlobalSettingsModal() {
   }
 
   updateFontPreviews();
-  document.getElementById('globalSettingsModal').style.display = 'flex';
+  showModal('globalSettingsModal');
+}
+
+function showModal(id) {
+  const modal = document.getElementById(id);
+  if (!modal) return;
+  if (typeof modal.showModal === 'function') {
+    if (!modal.open) modal.showModal();
+  } else {
+    modal.style.display = 'flex';
+  }
+}
+
+function hideModal(id) {
+  const modal = document.getElementById(id);
+  if (!modal) return;
+  if (typeof modal.close === 'function' && modal.open) modal.close();
+  else modal.style.display = 'none';
 }
 
 // Open Per-Tap Settings Modal
@@ -949,6 +975,7 @@ function openTapSettings(tapId) {
       document.getElementById('tapSettingsEnabledCheckbox').checked = true;
     }
   };
+  batchSelect.dataset.confirmedValue = batchSelect.value;
 
   // Set Graphic & Enabled
   document.getElementById('tapSettingsGraphicSelect').value = tap.graphic || 'corny_keg';
@@ -1067,6 +1094,144 @@ function authHeaders(json = false) {
   };
 }
 
+function updateSaveStatus(key, { state, error }) {
+  const statusIds = {
+    theme: 'themeSaveStatus',
+    title: 'headerTitleSaveStatus',
+    'font-title': 'titleFontSaveStatus',
+    'font-body': 'bodyFontSaveStatus',
+    'layout-mode': 'layoutModeSaveStatus',
+    'show-ondeck': 'showOnDeckSaveStatus',
+    'ondeck-default': 'onDeckNewBatchDefaultSaveStatus',
+    'primary-color': 'primaryColorSaveStatus',
+    'secondary-color': 'secondaryColorSaveStatus',
+    'theme-colors': 'accentColorsSaveStatus',
+    'custom-beverage': 'customBeverageSaveStatus',
+    pin: 'pinChangeSaveStatus',
+    'tap-assignment': 'tapSettingsBatchSaveStatus',
+    tapSettingsGraphicSelect: 'tapSettingsGraphicSaveStatus',
+    tapSettingsDisplayUnitSelect: 'tapSettingsDisplayUnitSaveStatus',
+    tapSettingsCustomPourInput: 'tapSettingsCustomPourSaveStatus',
+    tapSettingsCapacityInput: 'tapSettingsCapacitySaveStatus',
+    tapSettingsEnabledCheckbox: 'tapSettingsEnabledSaveStatus',
+    tapSettingsOverrideToggle: 'tapSettingsOverrideToggleSaveStatus',
+    badgeLowKegToggle: 'badgeLowKegSaveStatus',
+    badgeFreshToggle: 'badgeFreshSaveStatus'
+  };
+  if (/^tap-visibility-\d+$/.test(key))
+    statusIds[key] = `globalTapCheck_${key.slice('tap-visibility-'.length)}SaveStatus`;
+  const status =
+    document.querySelector(`[data-save-status="${key}"]`) ||
+    document.getElementById(statusIds[key] || '') ||
+    document.getElementById(`${key}SaveStatus`) ||
+    document.getElementById(`${key}Status`) ||
+    document.getElementById(`${key.replace(/[^a-zA-Z0-9_-]/g, '')}Status`);
+  if (!status) return;
+  const messages = {
+    queued: 'Saving…',
+    saving: 'Saving…',
+    saved: 'Saved',
+    error: 'Not saved — Retry'
+  };
+  status.textContent = messages[state] || '';
+  status.dataset.state = state;
+  status.title = error?.message || '';
+  status.setAttribute('role', 'status');
+  status.setAttribute('aria-live', 'polite');
+  if (state === 'saved') dirtyFields.delete(key);
+}
+
+function debounceAutosave(key, callback, delay = 600) {
+  dirtyFields.add(key);
+  clearTimeout(autosaveTimers.get(key));
+  autosaveTimers.set(key, setTimeout(callback, delay));
+}
+
+function flushDebounce(key) {
+  clearTimeout(autosaveTimers.get(key));
+  autosaveTimers.delete(key);
+}
+
+function queueAutosave(key, callback) {
+  dirtyFields.add(key);
+  autosaves.save(key, callback);
+}
+
+async function postAutosave(path, payload) {
+  const response = await fetch(path, {
+    method: 'POST',
+    headers: authHeaders(true),
+    body: JSON.stringify(payload)
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    if (response.status === 401) {
+      authToken = null;
+      sessionStorage.removeItem('tapboard_token');
+      updateAuthUI();
+      openPinModal();
+    }
+    throw new Error(result.error || 'Unable to save this setting');
+  }
+  return result;
+}
+
+function normalizeHex(value) {
+  const text = String(value || '').trim();
+  return /^#[0-9a-f]{6}$/i.test(text) ? text.toUpperCase() : null;
+}
+
+function colorForeground(hex) {
+  const color = normalizeHex(hex);
+  if (!color) return '#000000';
+  const values = [1, 3, 5].map((index) => Number.parseInt(color.slice(index, index + 2), 16) / 255);
+  const linear = values.map((value) => (value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2] > 0.179 ? '#000000' : '#FFFFFF';
+}
+
+function previewThemeColors(primary, secondary) {
+  const validPrimary = normalizeHex(primary);
+  const validSecondary = normalizeHex(secondary);
+  if (validPrimary) {
+    document.body.style.setProperty('--primary-color', validPrimary);
+    document.body.style.setProperty('--accent-color', validPrimary);
+    document.body.style.setProperty('--primary-foreground', colorForeground(validPrimary));
+  }
+  if (validSecondary) {
+    document.body.style.setProperty('--secondary-color', validSecondary);
+    document.body.style.setProperty('--secondary-foreground', colorForeground(validSecondary));
+  }
+  const advisory = document.getElementById('accentContrastAdvisory');
+  if (advisory && validPrimary && validSecondary) {
+    advisory.textContent =
+      colorForeground(validPrimary) === colorForeground(validSecondary)
+        ? 'Tip: verify both accent colors remain easy to distinguish on your dashboard.'
+        : '';
+    advisory.hidden = advisory.textContent === '';
+  }
+}
+
+function currentThemeColors() {
+  const fallback = THEME_COLORS[appState.settings.theme] || THEME_COLORS.modern_dark;
+  return {
+    primary: normalizeHex(appState.settings.primary_color) || fallback.primary,
+    secondary: normalizeHex(appState.settings.secondary_color) || fallback.secondary
+  };
+}
+
+function applySettingsPreview() {
+  const settings = appState.settings;
+  if (settings.theme) document.body.setAttribute('data-theme', settings.theme);
+  const colors = currentThemeColors();
+  previewThemeColors(colors.primary, colors.secondary);
+  if (settings.title) document.getElementById('headerTitle').textContent = settings.title;
+  if (settings.font_title)
+    document.documentElement.style.setProperty('--font-title', `'${settings.font_title}', sans-serif`);
+  if (settings.font_body)
+    document.documentElement.style.setProperty('--font-body', `'${settings.font_body}', sans-serif`);
+  document.body.setAttribute('data-layout-mode', settings.layout_mode === 'compact' ? 'compact' : 'cozy');
+}
+
 function renderOnDeckManager(batches) {
   const list = document.getElementById('onDeckBatchList');
   if (!list) return;
@@ -1089,7 +1254,11 @@ function renderOnDeckManager(batches) {
     name.title = name.textContent;
     const meta = document.createElement('span');
     meta.textContent = [batch.status, batch.style].filter(Boolean).join(' · ') || 'Brewfather batch';
-    details.append(name, meta);
+    const saveStatus = document.createElement('span');
+    saveStatus.className = 'setting-save-status';
+    saveStatus.dataset.saveStatus = `ondeck-${checkbox.dataset.batchId}`;
+    saveStatus.setAttribute('aria-live', 'polite');
+    details.append(name, meta, saveStatus);
     row.append(checkbox, details);
     list.appendChild(row);
   });
@@ -1121,8 +1290,326 @@ async function openOnDeckModal() {
   }
 }
 
+function bindAutosaveInput(id, key, payload, { immediate = false, preview } = {}) {
+  const input = document.getElementById(id);
+  if (!input) return;
+  const save = () => {
+    if (!input.checkValidity()) {
+      updateSaveStatus(key, { state: 'error', error: new Error(input.validationMessage) });
+      return;
+    }
+    queueAutosave(key, async () => {
+      const result = await postAutosave('/api/settings', payload(input));
+      appState.settings = { ...appState.settings, ...(result.settings || payload(input)) };
+      renderApp();
+    });
+  };
+  input.addEventListener(immediate ? 'change' : 'input', () => {
+    preview?.(input);
+    if (immediate) save();
+    else debounceAutosave(key, save);
+  });
+  if (!immediate)
+    input.addEventListener('blur', () => {
+      flushDebounce(key);
+      save();
+    });
+}
+
+function collectCustomBeverage() {
+  const fields = ['name', 'style', 'abv', 'ibu', 'og', 'fg', 'srm', 'description'];
+  const payload = Object.fromEntries(
+    fields.map((field) => {
+      const id = `customBeverage${field[0].toUpperCase()}${field.slice(1)}`;
+      return [field, document.getElementById(id)?.value ?? ''];
+    })
+  );
+  ['abv', 'ibu', 'og', 'fg', 'srm'].forEach((field) => {
+    payload[field] = payload[field] === '' ? null : Number(payload[field]);
+  });
+  return payload;
+}
+
+function customBeverageIsValid() {
+  return ['name', 'style', 'abv', 'ibu', 'og', 'fg', 'srm', 'description'].every((field) => {
+    const input = document.getElementById(`customBeverage${field[0].toUpperCase()}${field.slice(1)}`);
+    return input?.checkValidity();
+  });
+}
+
+function queueTapAutosave(key, payloadFactory) {
+  if (!editingTapId) return;
+  const tapId = editingTapId;
+  queueAutosave(key, async () => {
+    const result = await postAutosave(`/api/taps/${tapId}`, payloadFactory());
+    if (result.tap) {
+      appState.taps = appState.taps.map((tap) => (tap.tap_id === tapId ? { ...tap, ...result.tap } : tap));
+      renderApp();
+    }
+  });
+}
+
+function bindTapField(id, field, { immediate = false, transform = (value) => value, validate } = {}) {
+  const input = document.getElementById(id);
+  if (!input) return;
+  const key = id;
+  const save = () => {
+    if ((validate && !validate(input)) || !input.checkValidity()) {
+      updateSaveStatus(key, { state: 'error', error: new Error(input.validationMessage || 'Enter a valid value') });
+      return;
+    }
+    queueTapAutosave(key, () => ({ [field]: transform(input.type === 'checkbox' ? input.checked : input.value) }));
+  };
+  input.addEventListener(immediate ? 'change' : 'input', () => (immediate ? save() : debounceAutosave(key, save)));
+  if (!immediate)
+    input.addEventListener('blur', () => {
+      flushDebounce(key);
+      save();
+    });
+}
+
+function setupAutosaveListeners() {
+  bindAutosaveInput('themeSelect', 'theme', (input) => ({ theme: input.value }), {
+    immediate: true,
+    preview: (input) => {
+      document.body.setAttribute('data-theme', input.value);
+      const fallback = THEME_COLORS[input.value] || THEME_COLORS.modern_dark;
+      const primary = normalizeHex(appState.settings.primary_color) || fallback.primary;
+      const secondary = normalizeHex(appState.settings.secondary_color) || fallback.secondary;
+      for (const [name, value] of [
+        ['primary', primary],
+        ['secondary', secondary]
+      ]) {
+        const picker = document.getElementById(`${name}ColorPicker`);
+        const hex = document.getElementById(`${name}ColorInput`);
+        if (picker) picker.value = value;
+        if (hex) hex.value = value;
+      }
+      previewThemeColors(primary, secondary);
+    }
+  });
+  bindAutosaveInput('headerTitleInput', 'title', (input) => ({ title: input.value }), {
+    preview: (input) => {
+      const title = document.getElementById('headerTitle');
+      if (title) title.textContent = input.value;
+    }
+  });
+  bindAutosaveInput('titleFontSelect', 'font-title', (input) => ({ font_title: input.value }), {
+    immediate: true,
+    preview: () => updateFontPreviews()
+  });
+  bindAutosaveInput('bodyFontSelect', 'font-body', (input) => ({ font_body: input.value }), {
+    immediate: true,
+    preview: () => updateFontPreviews()
+  });
+  bindAutosaveInput('layoutModeSelect', 'layout-mode', (input) => ({ layout_mode: input.value }), { immediate: true });
+  bindAutosaveInput('showOnDeckCheckbox', 'show-ondeck', (input) => ({ show_ondeck: input.checked }), {
+    immediate: true
+  });
+  bindAutosaveInput(
+    'onDeckNewBatchDefaultCheckbox',
+    'ondeck-default',
+    (input) => ({ ondeck_new_batch_default: input.checked }),
+    { immediate: true }
+  );
+
+  for (let id = 1; id <= 6; id += 1) {
+    bindAutosaveInput(
+      `globalTapCheck_${id}`,
+      `tap-visibility-${id}`,
+      (input) => ({
+        tap_visibilities: { [id]: input.checked }
+      }),
+      { immediate: true }
+    );
+  }
+
+  [
+    ['primary', 'primaryColorPicker', 'primaryColorInput'],
+    ['secondary', 'secondaryColorPicker', 'secondaryColorInput']
+  ].forEach(([name, pickerId, hexId]) => {
+    const picker = document.getElementById(pickerId);
+    const hex = document.getElementById(hexId);
+    const apply = (value) => {
+      const normalized = normalizeHex(value);
+      if (!normalized) {
+        updateSaveStatus(`${name}-color`, { state: 'error', error: new Error('Use #RRGGBB') });
+        return;
+      }
+      if (picker) picker.value = normalized;
+      if (hex) hex.value = normalized;
+      const primary = name === 'primary' ? normalized : document.getElementById('primaryColorInput')?.value;
+      const secondary = name === 'secondary' ? normalized : document.getElementById('secondaryColorInput')?.value;
+      previewThemeColors(primary, secondary);
+      queueAutosave(`${name}-color`, async () => {
+        const result = await postAutosave('/api/settings', { [`${name}_color`]: normalized });
+        appState.settings = { ...appState.settings, ...(result.settings || { [`${name}_color`]: normalized }) };
+      });
+    };
+    picker?.addEventListener('input', () => {
+      const normalized = normalizeHex(picker.value);
+      if (!normalized) return;
+      if (hex) hex.value = normalized;
+      const primary = name === 'primary' ? normalized : document.getElementById('primaryColorInput')?.value;
+      const secondary = name === 'secondary' ? normalized : document.getElementById('secondaryColorInput')?.value;
+      previewThemeColors(primary, secondary);
+    });
+    picker?.addEventListener('change', () => apply(picker.value));
+    hex?.addEventListener('input', () => debounceAutosave(`${name}-color-input`, () => apply(hex.value)));
+    hex?.addEventListener('blur', () => {
+      flushDebounce(`${name}-color-input`);
+      apply(hex.value);
+    });
+  });
+  document.getElementById('resetAccentColorsBtn')?.addEventListener('click', () => {
+    const fallback = THEME_COLORS[document.getElementById('themeSelect')?.value] || THEME_COLORS.modern_dark;
+    ['primary', 'secondary'].forEach((name) => {
+      const picker = document.getElementById(`${name}ColorPicker`);
+      const hex = document.getElementById(`${name}ColorInput`);
+      if (picker) picker.value = fallback[name];
+      if (hex) hex.value = fallback[name];
+    });
+    previewThemeColors(fallback.primary, fallback.secondary);
+    [
+      '--primary-color',
+      '--secondary-color',
+      '--accent-color',
+      '--primary-foreground',
+      '--secondary-foreground'
+    ].forEach((property) => document.body.style.removeProperty(property));
+    queueAutosave('theme-colors', async () => {
+      const result = await postAutosave('/api/settings', { primary_color: null, secondary_color: null });
+      appState.settings = {
+        ...appState.settings,
+        ...(result.settings || { primary_color: null, secondary_color: null })
+      };
+    });
+  });
+
+  ['name', 'style', 'abv', 'ibu', 'og', 'fg', 'srm', 'description'].forEach((field) => {
+    const input = document.getElementById(`customBeverage${field[0].toUpperCase()}${field.slice(1)}`);
+    const key = input?.id;
+    input?.addEventListener('input', () =>
+      debounceAutosave(key, () => {
+        if (!customBeverageIsValid()) return;
+        queueAutosave(key, async () => {
+          const result = await postAutosave('/api/custom-beverage', collectCustomBeverage());
+          if (result.customBeverage) appState.customBeverage = result.customBeverage;
+        });
+      })
+    );
+    input?.addEventListener('blur', () => {
+      flushDebounce(key);
+      if (customBeverageIsValid()) {
+        queueAutosave(key, async () => {
+          const result = await postAutosave('/api/custom-beverage', collectCustomBeverage());
+          if (result.customBeverage) appState.customBeverage = result.customBeverage;
+        });
+      }
+    });
+  });
+
+  bindTapField('tapSettingsGraphicSelect', 'graphic', { immediate: true });
+  bindTapField('tapSettingsEnabledCheckbox', 'enabled', { immediate: true });
+  bindTapField('tapSettingsDisplayUnitSelect', 'display_unit', { immediate: true });
+  bindTapField('tapSettingsCustomPourInput', 'custom_pour_size', { transform: Number });
+  bindTapField('tapSettingsCapacityInput', 'capacity_oz', {
+    transform: Number,
+    validate: (input) =>
+      Number.isInteger(Number(input.value)) && Number(input.value) >= 16 && Number(input.value) <= 2048
+  });
+  bindTapField('tapSettingsOverrideToggle', 'override_enabled', { immediate: true });
+  bindTapField('badgeLowKegToggle', 'badge_low_keg', { immediate: true, transform: (checked) => (checked ? 20 : 0) });
+  bindTapField('badgeFreshToggle', 'badge_fresh', { immediate: true });
+  [
+    ['overrideName', 'override_name'],
+    ['overrideStyle', 'override_style'],
+    ['overrideAbv', 'override_abv'],
+    ['overrideIbu', 'override_ibu'],
+    ['overrideOg', 'override_og'],
+    ['overrideFg', 'override_fg'],
+    ['overrideSrm', 'override_srm'],
+    ['overrideDescription', 'override_description']
+  ].forEach(([id, field]) => bindTapField(id, field));
+
+  document.getElementById('tapSettingsBatchSelect')?.addEventListener('change', (event) => {
+    const input = event.currentTarget;
+    const previous = input.dataset.confirmedValue || '';
+    const tapId = editingTapId;
+    if (
+      previous &&
+      input.value !== previous &&
+      !confirm('Change this tap assignment? This may create or close a keg lifecycle.')
+    ) {
+      input.value = previous;
+      return;
+    }
+    queueTapAutosave('tap-assignment', async () => {
+      await postAutosave(`/api/taps/${tapId}`, {
+        batch_option: input.value,
+        enabled: input.value !== '' || document.getElementById('tapSettingsEnabledCheckbox')?.checked
+      });
+      input.dataset.confirmedValue = input.value;
+    });
+  });
+
+  document
+    .getElementById('onDeckFooterEnabledCheckbox')
+    ?.addEventListener('change', () => queueOnDeckAutosave('onDeckFooterEnabled'));
+  document.getElementById('onDeckBatchList')?.addEventListener('change', (event) => {
+    if (event.target.matches('input[data-batch-id]')) queueOnDeckAutosave(`ondeck-${event.target.dataset.batchId}`);
+  });
+  document.getElementById('changePinBtn')?.addEventListener('click', changePin);
+}
+
+function queueOnDeckAutosave(key) {
+  queueAutosave(key, async () => {
+    const batches = Array.from(document.querySelectorAll('#onDeckBatchList input[data-batch-id]')).map((input) => ({
+      batch_id: input.dataset.batchId,
+      visible: input.checked
+    }));
+    const result = await postAutosave('/api/ondeck', {
+      batches,
+      show_ondeck: document.getElementById('onDeckFooterEnabledCheckbox')?.checked
+    });
+    appState.settings = { ...appState.settings, show_ondeck: result.show_ondeck ? 1 : 0 };
+    appState.onDeckBatches = result.show_ondeck ? (result.batches || []).filter((batch) => batch.visible) : [];
+    renderOnDeckTicker();
+  });
+}
+
+async function changePin() {
+  const current = document.getElementById('currentPinInput');
+  const next = document.getElementById('newPinInput');
+  const confirmInput = document.getElementById('confirmNewPinInput');
+  if (!current || !next || !confirmInput) return;
+  if (!/^\d{4}$/.test(current.value) || !/^\d{4}$/.test(next.value) || next.value !== confirmInput.value) {
+    updateSaveStatus('pin', {
+      state: 'error',
+      error: new Error('Enter the current PIN and matching four-digit new PINs')
+    });
+    return;
+  }
+  queueAutosave('pin', async () => {
+    await postAutosave('/api/admin/pin', {
+      current_pin: current.value,
+      new_pin: next.value,
+      confirm_new_pin: confirmInput.value
+    });
+    [current, next, confirmInput].forEach((input) => {
+      input.value = '';
+    });
+    authToken = null;
+    sessionStorage.removeItem('tapboard_token');
+    updateAuthUI();
+    hideModal('globalSettingsModal');
+    showToast('PIN updated. Sign in again to manage Tapboard.');
+  });
+}
+
 // Modal Listeners Setup
 function initModalListeners() {
+  setupAutosaveListeners();
   // Font Select Live Preview Listeners
   document.getElementById('titleFontSelect')?.addEventListener('change', updateFontPreviews);
   document.getElementById('titleFontSelect')?.addEventListener('input', updateFontPreviews);
@@ -1212,7 +1699,7 @@ function initModalListeners() {
 
   // Close Settings Modals
   document.getElementById('closeGlobalSettingsBtn')?.addEventListener('click', () => {
-    document.getElementById('globalSettingsModal').style.display = 'none';
+    hideModal('globalSettingsModal');
   });
   document.getElementById('closeTapSettingsBtn')?.addEventListener('click', () => {
     document.getElementById('tapSettingsModal').style.display = 'none';
@@ -1221,107 +1708,8 @@ function initModalListeners() {
   ['recipeModal', 'pinModal', 'globalSettingsModal', 'tapSettingsModal', 'onDeckModal'].forEach((id) => {
     const modal = document.getElementById(id);
     modal?.addEventListener('click', (event) => {
-      if (event.target === modal) modal.style.display = 'none';
+      if (event.target === modal) hideModal(id);
     });
-  });
-
-  // Save Global Settings
-  document.getElementById('saveGlobalSettingsBtn')?.addEventListener('click', async () => {
-    const theme = document.getElementById('themeSelect').value;
-    const title = document.getElementById('headerTitleInput').value;
-    const font_title = document.getElementById('titleFontSelect').value;
-    const font_body = document.getElementById('bodyFontSelect').value;
-    const layout_mode = document.getElementById('layoutModeSelect').value;
-    const show_ondeck = document.getElementById('showOnDeckCheckbox').checked;
-    const ondeck_new_batch_default = document.getElementById('onDeckNewBatchDefaultCheckbox').checked;
-    const new_pin = document.getElementById('pinInputSetting').value;
-
-    const tap_visibilities = {};
-    for (let i = 1; i <= 6; i++) {
-      const check = document.getElementById(`globalTapCheck_${i}`);
-      if (check) {
-        tap_visibilities[i] = check.checked;
-      }
-    }
-
-    try {
-      const res = await fetch('/api/settings', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${authToken}`
-        },
-        body: JSON.stringify({
-          theme,
-          title,
-          font_title,
-          font_body,
-          layout_mode,
-          show_ondeck,
-          ondeck_new_batch_default,
-          tap_visibilities,
-          new_pin: new_pin || undefined
-        })
-      });
-      if (res.ok) {
-        const result = await res.json();
-        appState.settings = {
-          ...appState.settings,
-          theme,
-          title,
-          font_title,
-          font_body,
-          layout_mode,
-          show_ondeck: show_ondeck ? 1 : 0,
-          ondeck_new_batch_default: ondeck_new_batch_default ? 1 : 0
-        };
-        renderApp();
-        document.getElementById('globalSettingsModal').style.display = 'none';
-        document.getElementById('pinInputSetting').value = '';
-        if (result.sessionsRevoked) {
-          authToken = null;
-          sessionStorage.removeItem('tapboard_token');
-          updateAuthUI();
-          showToast('🔑 PIN updated. Sign in again to manage Tapboard.');
-        } else {
-          showToast('✨ Global studio settings saved!');
-        }
-      } else {
-        alert('Failed to save settings');
-      }
-    } catch (err) {
-      alert('Error saving settings');
-    }
-  });
-
-  document.getElementById('saveCustomBeverageBtn')?.addEventListener('click', async () => {
-    const fields = ['name', 'style', 'abv', 'ibu', 'og', 'fg', 'srm', 'description'];
-    const requiredFields = ['name', 'style', 'abv', 'ibu', 'srm'].map((field) =>
-      document.getElementById(`customBeverage${field[0].toUpperCase()}${field.slice(1)}`)
-    );
-    if (!requiredFields.every((input) => input.reportValidity())) return;
-    const payload = Object.fromEntries(
-      fields.map((field) => [
-        field,
-        document.getElementById(`customBeverage${field[0].toUpperCase()}${field.slice(1)}`).value
-      ])
-    );
-    ['abv', 'ibu', 'og', 'fg', 'srm'].forEach((field) => {
-      payload[field] = payload[field] === '' ? null : Number(payload[field]);
-    });
-    try {
-      const res = await fetch('/api/custom-beverage', {
-        method: 'POST',
-        headers: authHeaders(true),
-        body: JSON.stringify(payload)
-      });
-      const result = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(result.error || 'Failed to save custom beverage');
-      if (result.customBeverage) appState.customBeverage = result.customBeverage;
-      showToast('✨ Custom beverage saved!');
-    } catch (error) {
-      alert(error.message || 'Error saving custom beverage');
-    }
   });
 
   document.getElementById('refreshOnDeckBtn')?.addEventListener('click', async () => {
@@ -1336,101 +1724,6 @@ function initModalListeners() {
       status.textContent = 'Refresh requested. Waiting for Home Assistant…';
     } catch (error) {
       status.textContent = error.message || 'Brewfather refresh failed.';
-    }
-  });
-
-  document.getElementById('saveOnDeckBtn')?.addEventListener('click', async () => {
-    const batches = Array.from(document.querySelectorAll('#onDeckBatchList input[data-batch-id]')).map((input) => ({
-      batch_id: input.dataset.batchId,
-      visible: input.checked
-    }));
-    const show_ondeck = document.getElementById('onDeckFooterEnabledCheckbox').checked;
-    try {
-      const res = await fetch('/api/ondeck', {
-        method: 'POST',
-        headers: authHeaders(true),
-        body: JSON.stringify({ batches, show_ondeck })
-      });
-      const result = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(result.error || 'Failed to save On Deck visibility');
-      const eligible = Array.isArray(result.batches) ? result.batches : [];
-      appState.settings = { ...appState.settings, show_ondeck: result.show_ondeck ? 1 : 0 };
-      appState.onDeckBatches = result.show_ondeck ? eligible.filter((batch) => batch.visible === true) : [];
-      renderOnDeckTicker();
-      document.getElementById('onDeckModal').style.display = 'none';
-      showToast('✨ On Deck visibility saved!');
-    } catch (error) {
-      alert(error.message || 'Error saving On Deck visibility');
-    }
-  });
-
-  // Save Per-Tap Settings
-  document.getElementById('saveTapSettingsBtn')?.addEventListener('click', async () => {
-    if (!editingTapId) return;
-
-    const graphic = document.getElementById('tapSettingsGraphicSelect').value;
-    const enabled = document.getElementById('tapSettingsEnabledCheckbox').checked;
-    const display_unit = document.getElementById('tapSettingsDisplayUnitSelect').value;
-    const custom_pour_size = document.getElementById('tapSettingsCustomPourInput').value;
-    const capacityInput = document.getElementById('tapSettingsCapacityInput');
-    const capacity_oz = Number(capacityInput?.value);
-    if (!Number.isInteger(capacity_oz) || capacity_oz < 16 || capacity_oz > 2048) {
-      alert('Keg capacity must be a whole number from 16 to 2048 fl oz.');
-      capacityInput?.focus();
-      return;
-    }
-
-    const override_enabled = document.getElementById('tapSettingsOverrideToggle').checked;
-    const override_name = document.getElementById('overrideName').value;
-    const override_style = document.getElementById('overrideStyle').value;
-    const override_abv = document.getElementById('overrideAbv').value;
-    const override_ibu = document.getElementById('overrideIbu').value;
-    const override_og = document.getElementById('overrideOg').value;
-    const override_fg = document.getElementById('overrideFg').value;
-    const override_srm = document.getElementById('overrideSrm').value;
-    const override_description = document.getElementById('overrideDescription').value;
-
-    const badge_low_keg = document.getElementById('badgeLowKegToggle').checked ? 20 : 0;
-    const badge_fresh = document.getElementById('badgeFreshToggle').checked;
-    const batch_option = document.getElementById('tapSettingsBatchSelect').value;
-
-    try {
-      const res = await fetch(`/api/taps/${editingTapId}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${authToken}`
-        },
-        body: JSON.stringify({
-          graphic,
-          enabled,
-          display_unit,
-          custom_pour_size,
-          capacity_oz,
-          override_enabled,
-          override_name,
-          override_style,
-          override_abv,
-          override_ibu,
-          override_og,
-          override_fg,
-          override_srm,
-          override_description,
-          badge_low_keg,
-          badge_fresh,
-          batch_option
-        })
-      });
-
-      if (res.ok) {
-        document.getElementById('tapSettingsModal').style.display = 'none';
-        showToast(`✨ Tap ${editingTapId} settings saved!`);
-      } else {
-        const result = await res.json().catch(() => ({}));
-        alert(result.error || 'Failed to save tap settings');
-      }
-    } catch (err) {
-      alert('Error saving tap settings');
     }
   });
 

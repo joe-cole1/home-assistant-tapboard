@@ -25,6 +25,7 @@ import {
   validateAuth,
   validateCustomBeverage,
   validateOndeck,
+  validatePinChange,
   validateSettings,
   validateTap
 } from './validation.js';
@@ -46,6 +47,9 @@ const sseHub = new SSEHub();
 
 // Failed Auth Rate Limiter (IP -> { count, lockUntil })
 const authAttempts = new Map();
+// PIN changes have their own limiter so a valid administrator session cannot
+// be used to repeatedly guess the current credential.
+const pinChangeAttempts = new Map();
 
 // Helper: Check Admin Authorization Header
 function sessionDigest(token) {
@@ -108,7 +112,11 @@ function handleError(res, error, context = 'request') {
 function allowedMethodsForApiPath(pathname) {
   if (pathname === '/api/state') return ['GET'];
   if (pathname === '/api/ondeck') return ['GET', 'POST'];
-  if (['/api/auth', '/api/settings', '/api/brewfather/refresh', '/api/custom-beverage'].includes(pathname))
+  if (
+    ['/api/auth', '/api/settings', '/api/admin/pin', '/api/brewfather/refresh', '/api/custom-beverage'].includes(
+      pathname
+    )
+  )
     return ['POST'];
   if (/^\/api\/taps\/[1-6](?:\/(?:end-batch|end-keg))?$/.test(pathname)) return ['POST'];
   return null;
@@ -231,7 +239,9 @@ function customBeverage() {
 function getFullStateSnapshot() {
   const settings = db
     .prepare(
-      'SELECT id, theme, volume_format, title, font_title, font_body, show_ondeck, layout_mode, ondeck_new_batch_default FROM settings WHERE id = 1'
+      `SELECT id, theme, volume_format, title, font_title, font_body, show_ondeck,
+        layout_mode, ondeck_new_batch_default, primary_color, secondary_color
+       FROM settings WHERE id = 1`
     )
     .get();
   const taps = db
@@ -263,7 +273,7 @@ function getFullStateSnapshot() {
   }
 
   return {
-    schemaVersion: 4,
+    schemaVersion: 5,
     settings,
     taps,
     batches,
@@ -354,6 +364,7 @@ const server = http.createServer(async (req, res) => {
 
       if (attempt.lockUntil > now) {
         const remainingMinutes = Math.ceil((attempt.lockUntil - now) / 60000);
+        res.setHeader('Retry-After', String(Math.ceil((attempt.lockUntil - now) / 1000)));
         sendJson(res, 429, { error: `Too many failed attempts. Locked out for ${remainingMinutes} minutes.` });
         return;
       }
@@ -415,7 +426,45 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // 4. Update Global Settings & Tap Visibilities (/api/settings)
+  // 4. Change the administrator PIN. This is deliberately separate from
+  // general settings so ordinary autosaves can never include credentials.
+  if (url.pathname === '/api/admin/pin' && req.method === 'POST') {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const now = Date.now();
+      const attempt = pinChangeAttempts.get(clientIp) || { count: 0, lockUntil: 0 };
+      if (attempt.lockUntil > now) {
+        const remainingMinutes = Math.ceil((attempt.lockUntil - now) / 60000);
+        res.setHeader('Retry-After', String(Math.ceil((attempt.lockUntil - now) / 1000)));
+        sendJson(res, 429, { error: `Too many failed attempts. Locked out for ${remainingMinutes} minutes.` });
+        return;
+      }
+      const body = validatePinChange(await readJsonBody(req));
+      ensureServing();
+      const settings = db.prepare('SELECT admin_pin_hash FROM settings WHERE id = 1').get();
+      if (!bcrypt.compareSync(body.current_pin, settings.admin_pin_hash)) {
+        attempt.count += 1;
+        if (attempt.count >= 5) attempt.lockUntil = now + 15 * 60 * 1000;
+        pinChangeAttempts.set(clientIp, attempt);
+        console.warn(`[PIN SECURITY] Failed current PIN verification request_id=${requestId} client=${clientIp}`);
+        sendError(res, 403, 'Current PIN is incorrect');
+        return;
+      }
+      pinChangeAttempts.delete(clientIp);
+      const pinHash = bcrypt.hashSync(body.new_pin, 10);
+      db.transaction(() => {
+        db.prepare('UPDATE settings SET admin_pin_hash = ?, admin_pin_initialized = 1 WHERE id = 1').run(pinHash);
+        db.prepare('DELETE FROM admin_sessions').run();
+      })();
+      console.log(`[PIN ACTION] Admin PIN updated request_id=${requestId} client=${clientIp}`);
+      sendJson(res, 200, { success: true, sessionsRevoked: true });
+    } catch (err) {
+      handleError(res, err, requestContext('change admin PIN'));
+    }
+    return;
+  }
+
+  // 5. Update Global Settings & Tap Visibilities (/api/settings)
   if (url.pathname === '/api/settings' && req.method === 'POST') {
     if (!requireAdmin(req, res)) return;
 
@@ -432,7 +481,8 @@ const server = http.createServer(async (req, res) => {
         layout_mode,
         ondeck_new_batch_default,
         tap_visibilities,
-        new_pin
+        primary_color,
+        secondary_color
       } = body;
 
       db.prepare(
@@ -445,7 +495,9 @@ const server = http.createServer(async (req, res) => {
           font_body = COALESCE(?, font_body),
           show_ondeck = COALESCE(?, show_ondeck),
           layout_mode = COALESCE(?, layout_mode),
-          ondeck_new_batch_default = COALESCE(?, ondeck_new_batch_default)
+          ondeck_new_batch_default = COALESCE(?, ondeck_new_batch_default),
+          primary_color = CASE WHEN ? THEN ? ELSE primary_color END,
+          secondary_color = CASE WHEN ? THEN ? ELSE secondary_color END
         WHERE id = 1
       `
       ).run(
@@ -456,39 +508,36 @@ const server = http.createServer(async (req, res) => {
         font_body,
         show_ondeck !== undefined ? (show_ondeck ? 1 : 0) : null,
         layout_mode,
-        ondeck_new_batch_default !== undefined ? (ondeck_new_batch_default ? 1 : 0) : null
+        ondeck_new_batch_default !== undefined ? (ondeck_new_batch_default ? 1 : 0) : null,
+        primary_color !== undefined ? 1 : 0,
+        primary_color,
+        secondary_color !== undefined ? 1 : 0,
+        secondary_color
       );
 
       if (tap_visibilities && typeof tap_visibilities === 'object') {
-        const updateTapEnabled = db.prepare('UPDATE taps SET enabled = ? WHERE tap_id = ?');
+        const updateTapEnabled = db.prepare('UPDATE taps SET enabled = ? WHERE tap_id = ? AND enabled IS NOT ?');
         for (let i = 1; i <= 6; i++) {
           if (tap_visibilities[i] !== undefined) {
             const isEnabled = tap_visibilities[i] ? 1 : 0;
-            updateTapEnabled.run(isEnabled, i);
-            haClient
-              .callHAService('input_boolean', isEnabled ? 'turn_on' : 'turn_off', {
-                entity_id: `input_boolean.tap_${i}_enabled`
-              })
-              .catch((_err) => {
-                // HA synchronization is best-effort after the local change commits.
-              });
+            const changed = updateTapEnabled.run(isEnabled, i).changes > 0;
+            if (changed) {
+              haClient
+                .callHAService('input_boolean', isEnabled ? 'turn_on' : 'turn_off', {
+                  entity_id: `input_boolean.tap_${i}_enabled`
+                })
+                .catch((_err) => {
+                  // HA synchronization is best-effort after the local change commits.
+                });
+            }
           }
         }
-      }
-
-      if (new_pin) {
-        const pinHash = bcrypt.hashSync(new_pin, 10);
-        db.transaction(() => {
-          db.prepare('UPDATE settings SET admin_pin_hash = ?, admin_pin_initialized = 1 WHERE id = 1').run(pinHash);
-          db.prepare('DELETE FROM admin_sessions').run();
-        })();
-        console.log(`[SETTINGS ACTION] Admin PIN updated request_id=${requestId} client=${clientIp}`);
       }
 
       console.log(`[SETTINGS ACTION] Global Studio Settings updated request_id=${requestId} client=${clientIp}`);
 
       sseHub.publishImmediate('settings_updated', getFullStateSnapshot());
-      sendJson(res, 200, { success: true, sessionsRevoked: Boolean(new_pin) });
+      sendJson(res, 200, { success: true, settings: getFullStateSnapshot().settings });
     } catch (err) {
       handleError(res, err, requestContext('update global settings'));
     }
@@ -526,7 +575,7 @@ const server = http.createServer(async (req, res) => {
       let extractedBatchId = null;
       const currentTap = db
         .prepare(
-          `SELECT batch_id, on_tap_at, override_enabled, override_name
+          `SELECT enabled, batch_id, on_tap_at, override_enabled, override_name
         FROM taps WHERE tap_id = ?`
         )
         .get(tapId);
@@ -572,52 +621,43 @@ const server = http.createServer(async (req, res) => {
         ensureServing();
       }
 
-      const updateTap = db.prepare(`
-        UPDATE taps SET
-          enabled = COALESCE(?, enabled),
-          batch_id = COALESCE(?, batch_id),
-          on_tap_at = ?,
-          graphic = COALESCE(?, graphic),
-          override_enabled = COALESCE(?, override_enabled),
-          override_name = COALESCE(?, override_name),
-          override_style = COALESCE(?, override_style),
-          override_abv = COALESCE(?, override_abv),
-          override_ibu = COALESCE(?, override_ibu),
-          override_og = COALESCE(?, override_og),
-          override_fg = COALESCE(?, override_fg),
-          override_srm = COALESCE(?, override_srm),
-          override_description = COALESCE(?, override_description),
-          badge_low_keg = COALESCE(?, badge_low_keg),
-          badge_fresh = COALESCE(?, badge_fresh),
-          display_unit = COALESCE(?, display_unit),
-          custom_pour_size = COALESCE(?, custom_pour_size)
-        WHERE tap_id = ?
-      `);
+      // Build a partial update rather than using COALESCE: empty override
+      // fields are an intentional request to clear the stored nullable value.
+      const tapUpdates = [];
+      const tapValues = [];
+      const addTapUpdate = (column, value) => {
+        tapUpdates.push(`${column} = ?`);
+        tapValues.push(value);
+      };
+      if (shouldEnable !== null) addTapUpdate('enabled', shouldEnable);
+      if (body.batch_option !== undefined) addTapUpdate('batch_id', extractedBatchId);
+      if (body.batch_option !== undefined || lifecycleChanges) addTapUpdate('on_tap_at', onTapAt);
+      const directColumns = {
+        graphic: body.graphic,
+        override_enabled: body.override_enabled === undefined ? undefined : body.override_enabled ? 1 : 0,
+        override_name: body.override_name,
+        override_style: body.override_style,
+        override_description: body.override_description,
+        badge_low_keg: body.badge_low_keg,
+        badge_fresh: body.badge_fresh === undefined ? undefined : body.badge_fresh ? 1 : 0,
+        display_unit: body.display_unit
+      };
+      for (const [column, value] of Object.entries(directColumns)) if (value !== undefined) addTapUpdate(column, value);
+      for (const column of [
+        'override_abv',
+        'override_ibu',
+        'override_og',
+        'override_fg',
+        'override_srm',
+        'custom_pour_size'
+      ]) {
+        if (body[column] !== undefined) addTapUpdate(column, body[column] === '' ? null : body[column]);
+      }
+      const updateTap = tapUpdates.length
+        ? db.prepare(`UPDATE taps SET ${tapUpdates.join(', ')} WHERE tap_id = ?`)
+        : null;
       const applyTapUpdate = () => {
-        updateTap.run(
-          shouldEnable,
-          extractedBatchId,
-          onTapAt,
-          body.graphic,
-          body.override_enabled !== undefined ? (body.override_enabled ? 1 : 0) : null,
-          body.override_name !== undefined ? body.override_name : null,
-          body.override_style !== undefined ? body.override_style : null,
-          body.override_abv !== undefined ? (body.override_abv !== '' ? parseFloat(body.override_abv) : null) : null,
-          body.override_ibu !== undefined ? (body.override_ibu !== '' ? parseInt(body.override_ibu) : null) : null,
-          body.override_og !== undefined ? (body.override_og !== '' ? parseFloat(body.override_og) : null) : null,
-          body.override_fg !== undefined ? (body.override_fg !== '' ? parseFloat(body.override_fg) : null) : null,
-          body.override_srm !== undefined ? (body.override_srm !== '' ? parseInt(body.override_srm) : null) : null,
-          body.override_description !== undefined ? body.override_description : null,
-          body.badge_low_keg !== undefined ? parseFloat(body.badge_low_keg) : null,
-          body.badge_fresh !== undefined ? (body.badge_fresh ? 1 : 0) : null,
-          body.display_unit !== undefined ? body.display_unit : null,
-          body.custom_pour_size !== undefined
-            ? body.custom_pour_size !== ''
-              ? parseFloat(body.custom_pour_size)
-              : null
-            : null,
-          tapId
-        );
+        if (updateTap) updateTap.run(...tapValues, tapId);
       };
       if (lifecycleChanges && desiredAssignment) {
         assignKegLifecycle(db, {
@@ -642,14 +682,17 @@ const server = http.createServer(async (req, res) => {
       console.log(`[TAP ACTION] Tap settings updated request_id=${requestId} tap_id=${tapId} client=${clientIp}`);
 
       // Sync Home Assistant input_boolean.tap_N_enabled
-      const haEnabledService = shouldEnable === 1 || shouldEnable === null ? 'turn_on' : 'turn_off';
-      await haClient
-        .callHAService('input_boolean', haEnabledService, {
-          entity_id: `input_boolean.tap_${tapId}_enabled`
-        })
-        .catch((err) => console.warn(`[HA Warning] Enable boolean call failed:`, err.message));
+      const finalEnabled = shouldEnable === null ? currentTap.enabled : shouldEnable;
+      if (finalEnabled !== currentTap.enabled) {
+        const haEnabledService = finalEnabled === 1 ? 'turn_on' : 'turn_off';
+        await haClient
+          .callHAService('input_boolean', haEnabledService, {
+            entity_id: `input_boolean.tap_${tapId}_enabled`
+          })
+          .catch((err) => console.warn(`[HA Warning] Enable boolean call failed:`, err.message));
+      }
 
-      if (body.batch_option !== undefined) {
+      if (body.batch_option !== undefined && finalBatchId !== currentTap.batch_id) {
         await haClient
           .callHAService('select', 'select_option', {
             entity_id: `select.tap_${tapId}_batch_select`,
@@ -669,7 +712,10 @@ const server = http.createServer(async (req, res) => {
       }
 
       sseHub.publishImmediate('settings_updated', getFullStateSnapshot());
-      sendJson(res, 200, { success: true });
+      sendJson(res, 200, {
+        success: true,
+        tap: db.prepare('SELECT * FROM taps WHERE tap_id = ?').get(tapId)
+      });
     } catch (err) {
       handleError(res, err, requestContext('update tap', tapId));
     }

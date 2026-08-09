@@ -31,7 +31,7 @@ async function waitForServer(url, child) {
   throw new Error('server did not become ready');
 }
 
-test('healthcheck is lightweight and public HTTP/SSE snapshots use schema v4 content state', async () => {
+test('healthcheck is lightweight and public HTTP/SSE snapshots use schema v5 content state', async () => {
   const port = await reservePort();
   const dataDir = mkdtempSync(path.join(os.tmpdir(), 'tapboard-server-smoke-'));
   const child = spawn(process.execPath, ['src/server.js'], {
@@ -59,7 +59,7 @@ test('healthcheck is lightweight and public HTTP/SSE snapshots use schema v4 con
     const stateResponse = await fetch(`${baseUrl}/api/state`);
     const stateText = await stateResponse.text();
     const snapshot = JSON.parse(stateText);
-    assert.equal(snapshot.schemaVersion, 4);
+    assert.equal(snapshot.schemaVersion, 5);
     assert.deepEqual(snapshot.settings, {
       id: 1,
       theme: 'modern_dark',
@@ -69,7 +69,9 @@ test('healthcheck is lightweight and public HTTP/SSE snapshots use schema v4 con
       font_body: 'Inter',
       show_ondeck: 1,
       layout_mode: 'cozy',
-      ondeck_new_batch_default: 1
+      ondeck_new_batch_default: 1,
+      primary_color: null,
+      secondary_color: null
     });
     assert.deepEqual(snapshot.onDeckBatches, []);
     assert.deepEqual(snapshot.customBeverage, {
@@ -103,7 +105,7 @@ test('healthcheck is lightweight and public HTTP/SSE snapshots use schema v4 con
     }
     controller.abort();
     assert.match(eventText, /event: snapshot\n/);
-    assert.match(eventText, /"schemaVersion":4/);
+    assert.match(eventText, /"schemaVersion":5/);
     assert.match(eventText, /"tapStates":/);
     assert.doesNotMatch(eventText, /"haStates":/);
 

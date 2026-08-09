@@ -14,7 +14,7 @@ Tapboard has no usable default administrator PIN. Public dashboard reads remain 
 3. Remove `TAPBOARD_INITIAL_ADMIN_PIN` from `.env`.
 4. Recreate the service so plaintext is no longer in the container environment.
 
-The PIN is consumed only while `admin_pin_initialized` is false and is stored as a bcrypt hash. It is never returned by the API. Changing a PIN or finishing legacy initialization deletes every administrator session.
+The PIN is consumed only while `admin_pin_initialized` is false and is stored as a bcrypt hash. It is never returned by the API. Changing a PIN uses authenticated `POST /api/admin/pin` with the current PIN and two matching new PIN values; it rejects `0000` and an unchanged PIN, and deletes every administrator session. Failed current-PIN checks are limited to five attempts per client per 15 minutes and do not invalidate the existing bearer session.
 
 Successful authentication returns an opaque random bearer value, not a JWT. Tapboard stores only a `sha256:` digest of that value and an expiry timestamp in SQLite. Sessions expire after 24 hours; a valid `Authorization: Bearer <token>` is required for administrator mutations.
 
