@@ -520,7 +520,7 @@ const server = http.createServer(async (req, res) => {
         for (let i = 1; i <= 6; i++) {
           if (tap_visibilities[i] !== undefined) {
             const isEnabled = tap_visibilities[i] ? 1 : 0;
-            const changed = updateTapEnabled.run(isEnabled, i).changes > 0;
+            const changed = updateTapEnabled.run(isEnabled, i, isEnabled).changes > 0;
             if (changed) {
               haClient
                 .callHAService('input_boolean', isEnabled ? 'turn_on' : 'turn_off', {
