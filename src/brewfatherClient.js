@@ -192,7 +192,7 @@ export class BrewfatherClient {
     });
   }
 
-  async request(method, path, { query, body, responseMode = 'json' } = {}) {
+  async request(method, path, { query, body, responseMode = 'json', notFoundAsNull = false } = {}) {
     this.consumeBudget();
     const url = new URL(path, ORIGIN);
     for (const [key, value] of Object.entries(query || {}))
@@ -224,6 +224,7 @@ export class BrewfatherClient {
         this.logFailure({ method, path, response, category: 'invalid_response' });
         throw new BrewfatherError('invalid_response', 'Brewfather response was invalid');
       }
+      if (response.status === 404 && notFoundAsNull) return null;
       if (response.status < 200 || response.status >= 300) {
         const category =
           response.status === 401
@@ -359,7 +360,7 @@ export class BrewfatherClient {
     return this.request('GET', `/v2/recipes/${safeId(id)}`);
   }
   getLatestReading(id) {
-    return this.request('GET', `/v2/batches/${safeId(id)}/readings/last`);
+    return this.request('GET', `/v2/batches/${safeId(id)}/readings/last`, { notFoundAsNull: true });
   }
   getReadings(id) {
     return this.request('GET', `/v2/batches/${safeId(id)}/readings`);
