@@ -6,7 +6,8 @@ export const TAPBOARD_EVENT_TYPES = Object.freeze([
   'pour_start',
   'pour_complete',
   'pour_cancelled',
-  'low_keg'
+  'low_keg',
+  'brewfather_sync_failed'
 ]);
 
 const EVENT_TYPES = new Set(TAPBOARD_EVENT_TYPES);
@@ -18,7 +19,8 @@ const DATA_KEYS = {
   pour_start: new Set(['start_volume_oz']),
   pour_complete: new Set(['volume_poured_oz']),
   pour_cancelled: new Set(['reason']),
-  low_keg: new Set(['current_percent', 'threshold_percent'])
+  low_keg: new Set(['current_percent', 'threshold_percent']),
+  brewfather_sync_failed: new Set(['reason', 'error_category', 'outcome', 'request_count', 'retry_at'])
 };
 const KEG_END_REASONS = new Set(['end_batch', 'end_keg', 'reassigned', 'cleared']);
 const POUR_CANCEL_REASONS = new Set([
@@ -35,6 +37,21 @@ const POUR_CANCEL_REASONS = new Set([
   'hydrate',
   'reset'
 ]);
+const BREWFATHER_SYNC_REASONS = new Set(['manual', 'startup', 'scheduled']);
+const BREWFATHER_ERROR_CATEGORIES = new Set([
+  'configuration',
+  'auth',
+  'forbidden',
+  'rate_limited',
+  'timeout',
+  'network',
+  'transient',
+  'response_too_large',
+  'invalid_response',
+  'not_found',
+  'unknown'
+]);
+const BREWFATHER_SYNC_OUTCOMES = new Set(['failed', 'stale_cache']);
 
 function assertPlainObject(value, label) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError(`${label} must be an object`);
@@ -67,6 +84,21 @@ function boundedNumber(value, min, max, label) {
 function nullablePositiveInteger(value, label) {
   if (value === null || value === undefined) return null;
   if (!Number.isSafeInteger(value) || value < 1) throw new TypeError(`${label} is invalid`);
+  return value;
+}
+
+function boundedSafeInteger(value, min, max, label) {
+  if (!Number.isSafeInteger(value) || value < min || value > max) throw new TypeError(`${label} is invalid`);
+  return value;
+}
+
+function nullableCanonicalIsoUtc(value, label) {
+  if (value === null) return null;
+  if (typeof value !== 'string') throw new TypeError(`${label} is invalid`);
+  const timestamp = new Date(value);
+  if (!Number.isFinite(timestamp.getTime()) || timestamp.toISOString() !== value) {
+    throw new TypeError(`${label} is invalid`);
+  }
   return value;
 }
 
@@ -123,12 +155,27 @@ function normalizeData(eventType, data) {
         current_percent: boundedNumber(data.current_percent, 0, 100, 'data.current_percent'),
         threshold_percent: boundedNumber(data.threshold_percent, 0, 100, 'data.threshold_percent')
       };
+    case 'brewfather_sync_failed': {
+      const reason = boundedText(data.reason, 16, 'data.reason');
+      const errorCategory = boundedText(data.error_category, 32, 'data.error_category');
+      const outcome = boundedText(data.outcome, 16, 'data.outcome');
+      if (!BREWFATHER_SYNC_REASONS.has(reason)) throw new TypeError('data.reason is invalid');
+      if (!BREWFATHER_ERROR_CATEGORIES.has(errorCategory)) throw new TypeError('data.error_category is invalid');
+      if (!BREWFATHER_SYNC_OUTCOMES.has(outcome)) throw new TypeError('data.outcome is invalid');
+      return {
+        reason,
+        error_category: errorCategory,
+        outcome,
+        request_count: boundedSafeInteger(data.request_count, 0, 200, 'data.request_count'),
+        retry_at: nullableCanonicalIsoUtc(data.retry_at, 'data.retry_at')
+      };
+    }
   }
 }
 
 // This is deliberately a small outbound contract. It carries display-safe
-// identities only; operational sensor state and Brewfather/fermentation data
-// never enter this event envelope.
+// identities and safe operational status only; remote Brewfather content,
+// credentials, response bodies, and fermentation data never enter it.
 export function buildTapboardEvent(
   eventType,
   context,
@@ -140,6 +187,15 @@ export function buildTapboardEvent(
   if (!(occurredAt instanceof Date) || !Number.isFinite(occurredAt.getTime()))
     throw new TypeError('Event timestamp is invalid');
   const normalizedContext = normalizeContext(context);
+  if (
+    eventType === 'brewfather_sync_failed' &&
+    (normalizedContext.tap_id !== null ||
+      normalizedContext.lifecycle_id !== null ||
+      normalizedContext.batch_id !== null ||
+      Object.keys(normalizedContext.metadata).length > 0)
+  ) {
+    throw new TypeError('Brewfather sync failure context must not contain resource identities');
+  }
   return {
     schema_version: 1,
     event_id: boundedText(uuid(), 64, 'event_id'),
@@ -151,4 +207,20 @@ export function buildTapboardEvent(
     metadata: normalizedContext.metadata,
     data: normalizeData(eventType, data)
   };
+}
+
+export function buildBrewfatherSyncFailureEvent(syncResult, options) {
+  assertPlainObject(syncResult, 'sync result');
+  return buildTapboardEvent(
+    'brewfather_sync_failed',
+    { tap_id: null, lifecycle_id: null, batch_id: null, metadata: {} },
+    {
+      reason: syncResult.reason,
+      error_category: syncResult.errorCategory,
+      outcome: syncResult.outcome,
+      request_count: syncResult.requestCount,
+      retry_at: syncResult.retryAt === undefined ? null : syncResult.retryAt
+    },
+    options
+  );
 }

@@ -17,7 +17,7 @@ import {
   syncStatus as getBrewfatherSyncStatus
 } from './brewfatherCache.js';
 import { BrewfatherSyncCoordinator } from './brewfatherSync.js';
-import { buildTapboardEvent } from './tapboardEvents.js';
+import { buildBrewfatherSyncFailureEvent, buildTapboardEvent } from './tapboardEvents.js';
 import { TapMutationCoordinator } from './tapActions.js';
 import {
   HttpError,
@@ -58,7 +58,8 @@ const brewfatherClient = createBrewfatherClientFromEnv();
 const brewfatherSync = new BrewfatherSyncCoordinator({
   db,
   client: brewfatherClient,
-  onUpdate: () => sseHub.publishImmediate('brewfather_batches_changed', getFullStateSnapshot())
+  onUpdate: () => sseHub.publishImmediate('brewfather_batches_changed', getFullStateSnapshot()),
+  onFailure: (result) => publishBrewfatherSyncFailure(result)
 });
 
 function brewfatherCompletion(batchId) {
@@ -355,6 +356,19 @@ function publishTapboardEvent(eventType, context, data) {
   }
   haClient.fireEvent('tapboard_event', event).catch((error) => {
     console.warn(`[Tapboard event] Could not publish ${eventType}: ${error.message}`);
+  });
+}
+
+function publishBrewfatherSyncFailure(result) {
+  let event;
+  try {
+    event = buildBrewfatherSyncFailureEvent(result);
+  } catch {
+    console.warn('[Tapboard event] Could not build brewfather_sync_failed');
+    return;
+  }
+  haClient.fireEvent('tapboard_event', event).catch(() => {
+    console.warn('[Tapboard event] Could not publish brewfather_sync_failed');
   });
 }
 
