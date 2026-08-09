@@ -80,6 +80,29 @@ automation:
           color_name: orange
 ```
 
+## Discord example
+
+Configure the Discord notification integration and channel target in Home Assistant. Tapboard sends neither the Discord token nor the channel ID:
+
+```yaml
+automation:
+  - alias: Tapboard Brewfather sync failure to Discord
+    triggers:
+      - trigger: event
+        event_type: tapboard_event
+        event_data:
+          event_type: brewfather_sync_failed
+    actions:
+      - action: notify.discord
+        data:
+          target:
+            - !secret tapboard_discord_channel_id
+          message: >-
+            Tapboard Brewfather sync {{ trigger.event.data.data.outcome }}:
+            {{ trigger.event.data.data.error_category }}
+            ({{ trigger.event.data.data.reason }} refresh).
+```
+
 ## External routing example
 
 Keep destinations and credentials in Home Assistant, not Tapboard. For example, an operator can route a subset through an existing HA script:
