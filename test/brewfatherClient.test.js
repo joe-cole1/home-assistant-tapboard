@@ -15,15 +15,32 @@ function response(body, { status = 200, contentType = 'application/json', header
 }
 
 function client(fetchFn, options = {}) {
-  return new BrewfatherClient({ userId: 'user', apiKey: 'super-secret-key', fetchFn, ...options });
+  return new BrewfatherClient({
+    userId: 'user',
+    apiKey: 'super-secret-key',
+    fetchFn,
+    logger: { error() {} },
+    ...options
+  });
 }
 
 test('sends Basic authentication without including credentials in thrown errors', async () => {
   let authorization;
-  const api = client(async (_url, init) => {
-    authorization = init.headers.Authorization;
-    return response({}, { status: 401 });
-  });
+  const lines = [];
+  const api = client(
+    async (_url, init) => {
+      authorization = init.headers.Authorization;
+      return response(
+        {
+          error: {
+            message: 'Invalid user user, key super-secret-key, Basic dXNlcjpzdXBlci1zZWNyZXQta2V5\nnext\u2028line'
+          }
+        },
+        { status: 401, headers: { 'retry-after': '30' } }
+      );
+    },
+    { logger: { error: (line) => lines.push(line) } }
+  );
   await assert.rejects(api.getBatch('batch_1'), (error) => {
     assert.equal(error.category, 'auth');
     assert.doesNotMatch(`${error.message} ${error.stack}`, /super-secret-key|user:/);
@@ -31,6 +48,50 @@ test('sends Basic authentication without including credentials in thrown errors'
   });
   assert.match(authorization, /^Basic /);
   assert.doesNotMatch(authorization, /super-secret-key/);
+  assert.equal(lines.length, 1);
+  assert.equal(lines[0].split('\n').length, 1);
+  const log = JSON.parse(lines[0]);
+  assert.deepEqual(log, {
+    event: 'brewfather.transport_failure',
+    operation: '/v2/batches/:batchId',
+    method: 'GET',
+    category: 'auth',
+    status: 401,
+    contentType: 'application/json',
+    retryAfterMs: 30_000
+  });
+  assert.doesNotMatch(lines[0], /\u2028|\u2029/);
+  assert.doesNotMatch(lines[0], /super-secret-key|dXNlcjpzdXBlci1zZWNyZXQta2V5|batch_1/);
+});
+
+test('does not read failure bodies or log response text and resource IDs', async () => {
+  const lines = [];
+  let bodyRead = false;
+  const api = client(
+    async () => ({
+      status: 403,
+      statusText: 'private response text and query ?secret=yes',
+      headers: new Headers({ 'content-type': 'text/plain' }),
+      get clone() {
+        bodyRead = true;
+        throw new Error('response body must not be read');
+      }
+    }),
+    { logger: { error: (line) => lines.push(line) } }
+  );
+
+  await assert.rejects(api.getBatch('private-batch-id'), (error) => error.category === 'forbidden');
+  assert.equal(bodyRead, false);
+  assert.equal(lines.length, 1);
+  assert.deepEqual(JSON.parse(lines[0]), {
+    event: 'brewfather.transport_failure',
+    operation: '/v2/batches/:batchId',
+    method: 'GET',
+    category: 'forbidden',
+    status: 403,
+    contentType: 'text/plain'
+  });
+  assert.doesNotMatch(lines[0], /private response text|secret=yes|private-batch-id/);
 });
 
 test('paginates all supported statuses using start_after', async () => {
@@ -81,10 +142,15 @@ test('rejects oversized, non-json, and malformed JSON responses', async () => {
     client(async () => response('12345'), { maxResponseBytes: 4 }).getBatch('one'),
     (error) => error.category === 'response_too_large'
   );
+  const logs = [];
   await assert.rejects(
-    client(async () => response('{}', { contentType: 'text/plain' })).getBatch('one'),
+    client(async () => response('private successful response body', { contentType: 'text/plain' }), {
+      logger: { error: (line) => logs.push(line) }
+    }).getBatch('one'),
     (error) => error.category === 'invalid_response'
   );
+  assert.equal(logs.length, 1);
+  assert.doesNotMatch(logs[0], /private successful response body/);
   await assert.rejects(
     client(async () => response('{')).getBatch('one'),
     (error) => error.category === 'invalid_response'
