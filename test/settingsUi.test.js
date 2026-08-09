@@ -12,16 +12,33 @@ test('General Settings is an accessible full-page disclosure workspace', () => {
 
   assert.equal(dialog.localName, 'dialog');
   assert.equal(dialog.getAttribute('aria-labelledby'), 'generalSettingsTitle');
-  assert.equal(disclosures.length, 5);
+  assert.equal(disclosures.length, 6);
   assert.equal(disclosures[0].hasAttribute('open'), true);
   assert.ok(disclosures.slice(1).every((details) => !details.hasAttribute('open')));
   assert.deepEqual(
     disclosures.map((details) => details.querySelector('summary')?.firstChild?.textContent.trim()),
-    ['Appearance', 'Dashboard', 'On Deck', 'Custom Beverage', 'Security']
+    ['Appearance', 'Dashboard', 'On Deck', 'Brewfather', 'Custom Beverage', 'Security']
   );
   for (const removedId of ['saveGlobalSettingsBtn', 'saveCustomBeverageBtn', 'saveTapSettingsBtn', 'saveOnDeckBtn']) {
     assert.equal(document.getElementById(removedId), null);
   }
+});
+
+test('Brewfather settings expose accessible cache status and manual refresh controls', () => {
+  const { document } = parseHTML(html);
+  const section = document.getElementById('brewfatherStatusSection');
+  const refresh = document.getElementById('refreshBrewfatherBtn');
+  const feedback = document.getElementById('brewfatherRefreshStatus');
+  const lastSuccess = document.getElementById('brewfatherLastSuccess');
+
+  assert.ok(section);
+  assert.equal(section.hasAttribute('open'), false);
+  assert.match(section.querySelector('summary').textContent, /connection, cache health, and refresh/i);
+  assert.ok(document.getElementById('brewfatherConnectionStatus'));
+  assert.ok(document.getElementById('brewfatherCacheStatus'));
+  assert.equal(lastSuccess.localName, 'time');
+  assert.equal(refresh.getAttribute('type'), 'button');
+  assert.equal(feedback.getAttribute('aria-live'), 'polite');
 });
 
 test('theme and PIN controls expose reset, warning, verification, and inline status semantics', () => {

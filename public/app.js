@@ -25,6 +25,7 @@ let editingTapId = null;
 let authToken = sessionStorage.getItem('tapboard_token') || null;
 let liveUpdates;
 let hasRenderedSnapshot = false;
+let brewfatherStatusRequestId = 0;
 const simulatedPourTimers = new Map();
 const LONG_PRESS_MS = 600;
 const SIMULATED_POUR_MS = 8000;
@@ -214,6 +215,7 @@ function initSSE() {
 
   eventSource.addEventListener('brewfather_batches_changed', (e) => {
     applyFullSnapshot(JSON.parse(e.data));
+    if (isGlobalSettingsOpen()) loadBrewfatherStatus();
   });
 }
 
@@ -883,6 +885,93 @@ function syncDisplaySettingsControls() {
   updateFontPreviews();
 }
 
+function isGlobalSettingsOpen() {
+  const modal = document.getElementById('globalSettingsModal');
+  return Boolean(modal?.open || modal?.style.display === 'flex');
+}
+
+function formatBrewfatherTimestamp(value) {
+  if (typeof value !== 'string' || !value) return null;
+  const timestamp = new Date(value);
+  if (Number.isNaN(timestamp.getTime())) return null;
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(timestamp);
+}
+
+function renderBrewfatherStatus(status) {
+  const connection = document.getElementById('brewfatherConnectionStatus');
+  const cache = document.getElementById('brewfatherCacheStatus');
+  const lastSuccess = document.getElementById('brewfatherLastSuccess');
+  if (!connection || !cache || !lastSuccess) return;
+
+  const configured = status?.configured === true;
+  const syncStatus = typeof status?.status === 'string' ? status.status : 'never';
+  const cacheStatus = ['empty', 'current', 'stale', 'refreshing'].includes(status?.cache_status)
+    ? status.cache_status
+    : status?.stale === true || syncStatus === 'stale_cache'
+      ? 'stale'
+      : syncStatus === 'ok'
+        ? 'current'
+        : 'empty';
+  const hasCache = status?.has_cache === true;
+  const errorCategory = typeof status?.error_category === 'string' ? status.error_category : '';
+  const rawTimestamp = typeof status?.last_success_at === 'string' ? status.last_success_at : '';
+  const formattedTimestamp = formatBrewfatherTimestamp(rawTimestamp);
+
+  if (!configured) {
+    connection.textContent = 'Not configured';
+    connection.dataset.state = 'not-configured';
+  } else if (syncStatus === 'ok') {
+    connection.textContent = 'Connected — last synchronization succeeded';
+    connection.dataset.state = 'connected';
+  } else if (syncStatus === 'running') {
+    connection.textContent = 'Synchronizing — refresh in progress';
+    connection.dataset.state = 'running';
+  } else if (syncStatus === 'never') {
+    connection.textContent = 'Never connected — no successful synchronization yet';
+    connection.dataset.state = 'never';
+  } else {
+    connection.textContent = `Last synchronization failed${errorCategory ? ` (${errorCategory})` : ''}`;
+    connection.dataset.state = 'error';
+  }
+
+  const cacheStates = {
+    empty: ['No synced data', 'never'],
+    current: ['Current', 'current'],
+    stale: [hasCache ? 'Stale — using cached data' : 'Stale', 'stale'],
+    refreshing: [hasCache ? 'Cached data — refresh in progress' : 'Refresh in progress', 'running']
+  };
+  [cache.textContent, cache.dataset.state] = cacheStates[cacheStatus];
+
+  lastSuccess.textContent = formattedTimestamp || 'Not available';
+  lastSuccess.setAttribute('datetime', formattedTimestamp ? rawTimestamp : '');
+}
+
+async function loadBrewfatherStatus() {
+  const feedback = document.getElementById('brewfatherRefreshStatus');
+  const requestId = ++brewfatherStatusRequestId;
+  try {
+    const response = await fetch('/api/brewfather/status', { headers: authHeaders() });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || 'Unable to load Brewfather status');
+    if (!payload.brewfather || typeof payload.brewfather !== 'object') {
+      throw new Error('Brewfather status was unavailable');
+    }
+    if (requestId === brewfatherStatusRequestId && isGlobalSettingsOpen()) {
+      renderBrewfatherStatus(payload.brewfather);
+      if (feedback?.dataset.source === 'status-load') {
+        feedback.textContent = '';
+        delete feedback.dataset.state;
+        delete feedback.dataset.source;
+      }
+    }
+  } catch (error) {
+    if (requestId !== brewfatherStatusRequestId || !isGlobalSettingsOpen() || !feedback) return;
+    feedback.textContent = error.message || 'Unable to load Brewfather status.';
+    feedback.dataset.state = 'error';
+    feedback.dataset.source = 'status-load';
+  }
+}
+
 // Open Global Settings Modal
 function openGlobalSettingsModal() {
   const { settings, taps } = appState;
@@ -909,6 +998,7 @@ function openGlobalSettingsModal() {
   }
 
   showModal('globalSettingsModal');
+  loadBrewfatherStatus();
 }
 
 function showModal(id) {
@@ -1793,6 +1883,37 @@ function initModalListeners() {
           : `Refresh completed with stale cached data (${result.errorCategory || 'partial failure'}).`;
     } catch (error) {
       status.textContent = error.message || 'Brewfather refresh failed.';
+    }
+  });
+
+  document.getElementById('refreshBrewfatherBtn')?.addEventListener('click', async (event) => {
+    const button = event.currentTarget;
+    const feedback = document.getElementById('brewfatherRefreshStatus');
+    ++brewfatherStatusRequestId;
+    button.disabled = true;
+    delete feedback.dataset.source;
+    feedback.textContent = 'Refreshing Brewfather…';
+    feedback.dataset.state = 'saving';
+    try {
+      const response = await fetch('/api/brewfather/refresh', { method: 'POST', headers: authHeaders() });
+      const result = await response.json().catch(() => ({}));
+      if (result.brewfather) renderBrewfatherStatus(result.brewfather);
+
+      if (result.outcome === 'succeeded') {
+        feedback.textContent = `Refresh completed (${result.summaries ?? 0} batches, ${result.requestCount ?? 0} requests).`;
+        feedback.dataset.state = 'saved';
+      } else if (result.outcome === 'stale_cache') {
+        feedback.textContent = `Refresh completed with stale cached data${result.errorCategory ? ` (${result.errorCategory})` : ''}.`;
+        feedback.dataset.state = 'error';
+      } else {
+        feedback.textContent = result.error || result.errorCategory || 'Brewfather refresh failed.';
+        feedback.dataset.state = 'error';
+      }
+    } catch (error) {
+      feedback.textContent = error.message || 'Brewfather refresh failed.';
+      feedback.dataset.state = 'error';
+    } finally {
+      button.disabled = false;
     }
   });
 

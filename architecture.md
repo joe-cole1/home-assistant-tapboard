@@ -125,6 +125,7 @@ All API JSON responses are `no-store`. Mutation bodies must be JSON and are limi
 | `/api/taps/:id/end-keg`   | `POST` | Administrator keg end and lifecycle close.         |
 | `/api/ondeck`             | `GET`  | Administrator Brewfather On Deck preferences.      |
 | `/api/ondeck`             | `POST` | Administrator Brewfather visibility update.        |
+| `/api/brewfather/status`  | `GET`  | Administrator Brewfather sync and cache status.    |
 | `/api/brewfather/refresh` | `POST` | Native coalesced Brewfather refresh and outcome.   |
 | `/api/custom-beverage`    | `POST` | Administrator custom-beverage metadata update.     |
 
