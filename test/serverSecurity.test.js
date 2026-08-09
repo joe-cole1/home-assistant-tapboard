@@ -477,6 +477,28 @@ test('PIN change accepts the new credential and settings color overrides persist
   }
 });
 
+test('global settings can hide and show taps', async () => {
+  const instance = await startServer();
+  const database = new Database(path.join(instance.dataDir, 'tapboard.db'));
+  try {
+    const { token } = await authenticate(instance.baseUrl);
+    const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+
+    for (const visible of [false, true]) {
+      const response = await fetch(`${instance.baseUrl}/api/settings`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ tap_visibilities: { 1: visible } })
+      });
+      assert.equal(response.status, 200);
+      assert.equal(database.prepare('SELECT enabled FROM taps WHERE tap_id = 1').get().enabled, visible ? 1 : 0);
+    }
+  } finally {
+    database.close();
+    await stopServer(instance.child);
+  }
+});
+
 test('assignment lifecycles preserve pour history and rotate after a clear', async () => {
   const instance = await startServer();
   const database = new Database(path.join(instance.dataDir, 'tapboard.db'));
