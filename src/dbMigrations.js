@@ -595,6 +595,8 @@ function migrateHealthRedesignV11(db) {
     db.exec(`ALTER TABLE maintenance_records ADD COLUMN style_swap INTEGER NOT NULL DEFAULT 0;`);
   }
 
+  addColumnIfMissing(db, 'brewfather_ondeck_preferences', 'target_tap_id', 'INTEGER DEFAULT NULL');
+
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_mrt_tap_completed ON maintenance_record_taps(tap_id, maintenance_id);
     CREATE INDEX IF NOT EXISTS idx_kl_tap_started ON keg_lifecycles(tap_id, started_at);
@@ -616,7 +618,7 @@ function validateLatestSchema(db) {
       'closed_at',
       'close_reason'
     ],
-    brewfather_ondeck_preferences: ['batch_id', 'visible', 'first_seen_at', 'updated_at'],
+    brewfather_ondeck_preferences: ['batch_id', 'visible', 'target_tap_id', 'first_seen_at', 'updated_at'],
     custom_beverage: ['id', 'name', 'style', 'abv', 'ibu', 'og', 'fg', 'srm', 'description'],
     brewfather_batch_details: ['batch_id', 'payload_json', 'fingerprint', 'fetched_at'],
     brewfather_batch_readings: ['batch_id', 'reading_key', 'recorded_at_ms', 'payload_json'],
