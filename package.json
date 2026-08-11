@@ -27,7 +27,7 @@
     "bcryptjs": "3.0.3",
     "better-sqlite3": "13.0.3",
     "dotenv": "17.4.2",
-    "ws": "8.21.2"
+    "ws": "8.21.3"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
