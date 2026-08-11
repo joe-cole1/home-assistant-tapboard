@@ -21,8 +21,7 @@
     "db:backup": "node scripts/db-maintenance.js backup",
     "db:verify": "node scripts/db-maintenance.js verify",
     "db:restore": "node scripts/db-maintenance.js restore",
-    "db:prune-pours": "node scripts/db-maintenance.js prune-pours",
-    "sensory:shadow": "node scripts/sensory-shadow-report.js"
+    "db:prune-pours": "node scripts/db-maintenance.js prune-pours"
   },
   "dependencies": {
     "bcryptjs": "3.0.3",
