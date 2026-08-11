@@ -78,27 +78,35 @@ test('validates versioned sparse records and normalizes colors', () => {
   const { api } = loadApi();
   const overrides = api.parse(
     JSON.stringify({
-      version: 1,
-      overrides: { theme: 'cyberpunk', font_body: 'Inter', primary_color: '#aBc123', secondary_color: null, bad: 'x' }
+      version: 2,
+      overrides: {
+        theme: 'cyberpunk',
+        font_body: 'Inter',
+        primary_color: '#aBc123',
+        secondary_color: null,
+        sound_enabled: false,
+        bad: 'x'
+      }
     })
   );
   assert.deepEqual(plain(overrides), {
     theme: 'cyberpunk',
     font_body: 'Inter',
     primary_color: '#ABC123',
-    secondary_color: null
+    secondary_color: null,
+    sound_enabled: false
   });
   assert.deepEqual(plain(api.parse('{')), {});
-  assert.deepEqual(plain(api.parse(JSON.stringify({ version: 2, overrides }))), {});
+  assert.deepEqual(plain(api.parse(JSON.stringify({ version: 1, overrides }))), {});
   assert.deepEqual(
     plain(
-      api.parse(JSON.stringify({ version: 1, overrides: { theme: 'x', primary_color: '#abc', font_title: 'Inter' } }))
+      api.parse(JSON.stringify({ version: 2, overrides: { theme: 'x', primary_color: '#abc', font_title: 'Inter' } }))
     ),
     {}
   );
 });
 
-test('bootstraps stored preferences before the application starts', () => {
+test('migrates v1 preferences into v2 before the application starts', () => {
   const storage = createStorage();
   storage.setItem(
     'tapboard.display-preferences.v1',
@@ -109,13 +117,18 @@ test('bootstraps stored preferences before the application starts', () => {
   assert.equal(document.body.getAttribute('data-theme'), 'warm_pub');
   assert.equal(document.body.getAttribute('data-layout-mode'), 'compact');
   assert.equal(document.documentElement.style.values.get('color-scheme'), 'dark');
+  assert.equal(storage.values.has('tapboard.display-preferences.v1'), false);
+  assert.deepEqual(JSON.parse(storage.values.get('tapboard.display-preferences.v2')), {
+    version: 2,
+    overrides: { theme: 'warm_pub', layout_mode: 'compact' }
+  });
 });
 
 test('bootstrap leaves non-overridden shared fields untouched until the snapshot resolves them', () => {
   const storage = createStorage();
   storage.setItem(
-    'tapboard.display-preferences.v1',
-    JSON.stringify({ version: 1, overrides: { primary_color: '#112233' } })
+    'tapboard.display-preferences.v2',
+    JSON.stringify({ version: 2, overrides: { primary_color: '#112233' } })
   );
   const document = createDocument();
   document.body.setAttribute('data-theme', 'warm_pub');
@@ -143,6 +156,8 @@ test('persists sparse overrides and overlays them onto shared settings', () => {
   assert.equal(api.setOverride('primary_color', '#bad').ok, false);
   assert.equal(api.setOverride('primary_color', null).ok, true);
   assert.equal(api.read().overrides.primary_color, null);
+  assert.equal(api.setOverride('sound_enabled', false).ok, true);
+  assert.equal(api.read().overrides.sound_enabled, false);
 });
 
 test('local overrides retain precedence when shared snapshot settings change', () => {
@@ -175,8 +190,8 @@ test('falls back to memory when browser storage is unavailable and clears safely
 test('retains the session fallback when a write fails after a successful read', () => {
   const storage = createStorage({ setThrows: true });
   storage.values.set(
-    'tapboard.display-preferences.v1',
-    JSON.stringify({ version: 1, overrides: { theme: 'warm_pub' } })
+    'tapboard.display-preferences.v2',
+    JSON.stringify({ version: 2, overrides: { theme: 'warm_pub' } })
   );
   const { api } = loadApi({ storage });
   assert.equal(api.read().persistence, 'persistent');
@@ -222,7 +237,7 @@ test('notifies other same-origin tabs through storage events', () => {
   });
   listeners.get('storage')({
     key: api.STORAGE_KEY,
-    newValue: JSON.stringify({ version: 1, overrides: { theme: 'warm_pub' } })
+    newValue: JSON.stringify({ version: 2, overrides: { theme: 'warm_pub' } })
   });
   assert.deepEqual(plain(received), { overrides: { theme: 'warm_pub' }, persistence: 'persistent' });
   unsubscribe();

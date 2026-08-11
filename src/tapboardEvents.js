@@ -7,6 +7,8 @@ export const TAPBOARD_EVENT_TYPES = Object.freeze([
   'pour_complete',
   'pour_cancelled',
   'low_keg',
+  'first_pour',
+  'keg_kicked',
   'brewfather_sync_failed'
 ]);
 
@@ -20,9 +22,11 @@ const DATA_KEYS = {
   pour_complete: new Set(['volume_poured_oz']),
   pour_cancelled: new Set(['reason']),
   low_keg: new Set(['current_percent', 'threshold_percent']),
+  first_pour: new Set(['receipt_id', 'volume_poured_oz']),
+  keg_kicked: new Set(['trigger', 'receipt_id', 'remaining_volume_oz', 'threshold_oz']),
   brewfather_sync_failed: new Set(['reason', 'error_category', 'outcome', 'request_count', 'retry_at'])
 };
-const KEG_END_REASONS = new Set(['end_batch', 'end_keg', 'reassigned', 'cleared']);
+const KEG_END_REASONS = new Set(['end_batch', 'end_keg', 'reassigned', 'cleared', 'kicked', 'removed', 'other']);
 const POUR_CANCEL_REASONS = new Set([
   'rebound',
   'timeout',
@@ -155,6 +159,26 @@ function normalizeData(eventType, data) {
         current_percent: boundedNumber(data.current_percent, 0, 100, 'data.current_percent'),
         threshold_percent: boundedNumber(data.threshold_percent, 0, 100, 'data.threshold_percent')
       };
+    case 'first_pour':
+      return {
+        receipt_id: boundedSafeInteger(data.receipt_id, 1, Number.MAX_SAFE_INTEGER, 'data.receipt_id'),
+        volume_poured_oz: boundedNumber(data.volume_poured_oz, 0, 10000, 'data.volume_poured_oz')
+      };
+    case 'keg_kicked': {
+      const trigger = boundedText(data.trigger, 16, 'data.trigger');
+      if (!['manual', 'automatic'].includes(trigger)) throw new TypeError('data.trigger is invalid');
+      const nullableNumber = (value, label) =>
+        value === null || value === undefined ? null : boundedNumber(value, 0, 10000, label);
+      return {
+        trigger,
+        receipt_id:
+          data.receipt_id === null || data.receipt_id === undefined
+            ? null
+            : boundedSafeInteger(data.receipt_id, 1, Number.MAX_SAFE_INTEGER, 'data.receipt_id'),
+        remaining_volume_oz: nullableNumber(data.remaining_volume_oz, 'data.remaining_volume_oz'),
+        threshold_oz: nullableNumber(data.threshold_oz, 'data.threshold_oz')
+      };
+    }
     case 'brewfather_sync_failed': {
       const reason = boundedText(data.reason, 16, 'data.reason');
       const errorCategory = boundedText(data.error_category, 32, 'data.error_category');

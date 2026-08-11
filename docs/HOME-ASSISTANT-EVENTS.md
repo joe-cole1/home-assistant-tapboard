@@ -29,11 +29,19 @@ All IDs except `event_id` may be `null`. Metadata contains only optional bounded
 | `pour_complete`          | `volume_poured_oz`                                                 |
 | `pour_cancelled`         | bounded detector cancellation `reason`                             |
 | `low_keg`                | `current_percent`, `threshold_percent`                             |
+| `first_pour`             | `receipt_id`, `volume_poured_oz`                                   |
+| `keg_kicked`             | `trigger`, `receipt_id`, `remaining_volume_oz`, `threshold_oz`     |
 | `brewfather_sync_failed` | `reason`, `error_category`, `outcome`, `request_count`, `retry_at` |
 
 Events are operational and best effort. They are not replayed after a long disconnect. Automation delivery failure does not undo a pour, assignment, or end action. Consumers that need deduplication can retain `event_id` for their own short operational window.
 
 No event contains gravity, fermentation temperature, fermentation progress/status, readiness, controller state, notes, taste logs, recipes, credentials, action targets, or arbitrary service data.
+
+### Lifecycle events
+
+`first_pour` is emitted only when the durable first-pour milestone is newly claimed for a lifecycle. It carries the durable pour ID as `receipt_id`; it is not re-emitted for later pours or after reconnects.
+
+`keg_kicked` is emitted only when the durable kick milestone is newly claimed. `trigger` is `manual` when an administrator chooses **Kicked** while ending the keg, or `automatic` after the configured threshold is confirmed by a fresh scale reading. Automatic events include the qualifying pour ID and the observed remaining volume; manual events may use `null` for those values. A duplicate claim does not generate another event. The manual path also emits `keg_ended` with reason `kicked` after closing the lifecycle and clearing the tap; the automatic path records the milestone but leaves that operator action explicit.
 
 ### Brewfather sync failures
 

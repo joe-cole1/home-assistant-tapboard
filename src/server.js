@@ -9,6 +9,7 @@ import { HAClient } from './haClient.js';
 import { SSEHub } from './sseHub.js';
 import { calculateKegKickForecast as calculateForecast } from './kegForecast.js';
 import { activeLifecycle, assignKegLifecycle, closeKegLifecycle } from './kegLifecycle.js';
+import { resolveServingGlass } from './servingGlass.js';
 import { createBrewfatherClientFromEnv } from './brewfatherClient.js';
 import {
   assignmentOptions,
@@ -36,6 +37,7 @@ import {
   publicError as toPublicError,
   readEmptyJsonBody,
   readJsonBody,
+  readOptionalJsonBody,
   resolvePublicPath
 } from './httpSecurity.js';
 import {
@@ -43,6 +45,7 @@ import {
   tapId as validateTapId,
   validateAuth,
   validateCustomBeverage,
+  validateEndKeg,
   validateOndeck,
   validatePinChange,
   validateSettings,
@@ -176,13 +179,15 @@ function allowedMethodsForApiPath(pathname) {
   return null;
 }
 
-// Forecast from the current tap's lifetime average usage on drinking days.
 function calculateKegKickForecast(tapId) {
-  const measurement = haClient.getPublicTapStates()?.[String(tapId)];
-  if (!measurement || !['measured', 'stale'].includes(measurement.volumeStatus)) {
-    return { avgDailyOz: null, estimatedDaysRemaining: null, hasUsageData: false };
-  }
-  return calculateForecast({ db, tapId, currentOz: measurement.volumeOz });
+  const measurement = haClient.getPublicTapStates()?.[String(tapId)] || {};
+  return calculateForecast({
+    db,
+    tapId,
+    currentOz: measurement.volumeOz,
+    capacityOz: measurement.capacityOz,
+    volumeStatus: measurement.volumeStatus
+  });
 }
 
 function assignmentIdentity({ batchId, overrideEnabled, overrideName }) {
@@ -232,6 +237,23 @@ haClient.on('pour_complete', (data) => {
     ...data,
     kegKickForecast: calculateKegKickForecast(data.tapId)
   });
+});
+
+haClient.on('pour_receipt', (data) => {
+  sseHub.publishImmediate('pour_receipt', data);
+});
+
+haClient.on('pour_receipt_updated', (data) => {
+  sseHub.publishImmediate('pour_receipt_updated', data);
+});
+
+haClient.on('first_pour', (data) => {
+  sseHub.publishImmediate('first_pour', data);
+});
+
+haClient.on('keg_kicked', (data) => {
+  sseHub.publishImmediate('keg_kicked', data);
+  sseHub.publishImmediate('settings_updated', getFullStateSnapshot());
 });
 
 haClient.on('pour_cancel', (data) => {
@@ -403,26 +425,58 @@ function lifecycleEventContext({ tapId, lifecycle, batchId, displayName, display
   };
 }
 
+function servingRecommendationForTap(tap) {
+  const isCustom = Boolean(tap.batch_id?.startsWith('custom:'));
+  const source = isCustom ? customBeverage() : batchSummary(db, tap.batch_id);
+  const style = tap.override_enabled === 1 && tap.override_style ? tap.override_style : source?.style;
+  return resolveServingGlass({ selection: tap.serving_glass || 'auto', style, isCustom });
+}
+
+function activeLifecycleMilestones() {
+  return Object.fromEntries(
+    db
+      .prepare(
+        `SELECT l.tap_id, l.lifecycle_id, m.first_pour_at, m.kicked_at, m.kick_trigger
+         FROM keg_lifecycles l
+         LEFT JOIN lifecycle_milestones m ON m.lifecycle_id = l.lifecycle_id
+         WHERE l.closed_at IS NULL`
+      )
+      .all()
+      .map((row) => [
+        row.tap_id,
+        {
+          lifecycleId: row.lifecycle_id,
+          firstPourAt: row.first_pour_at ?? null,
+          kickedAt: row.kicked_at ?? null,
+          kickTrigger: row.kick_trigger ?? null
+        }
+      ])
+  );
+}
+
 // Construct Full Application State Snapshot
 function getFullStateSnapshot() {
   const settings = db
     .prepare(
       `SELECT id, theme, volume_format, title, font_title, font_body, show_ondeck,
-        layout_mode, ondeck_new_batch_default, primary_color, secondary_color
+        layout_mode, ondeck_new_batch_default, primary_color, secondary_color,
+        first_pour_effects, kick_effects, ceremony_sound
        FROM settings WHERE id = 1`
     )
     .get();
   const taps = db
     .prepare(
       `
-    SELECT tap_id, enabled, batch_id, graphic, override_enabled, override_name,
+    SELECT tap_id, enabled, batch_id, graphic, serving_glass, kick_threshold_oz,
+      override_enabled, override_name,
       override_style, override_abv, override_ibu, override_og, override_fg,
       override_srm, override_description, badge_low_keg, badge_fresh,
       on_tap_at, display_unit, custom_pour_size
     FROM taps ORDER BY tap_id ASC
   `
     )
-    .all();
+    .all()
+    .map((tap) => ({ ...tap, serving_recommendation: servingRecommendationForTap(tap) }));
   const assignedIds = [...new Set(taps.map((tap) => tap.batch_id).filter((id) => id && !id.startsWith('custom:')))];
   const batches = assignedIds.map((batchId) => batchSummary(db, batchId)).filter(Boolean);
   const onDeckBatches = settings.show_ondeck ? onDeckBatchesForPublic().filter((batch) => batch.visible) : [];
@@ -434,7 +488,7 @@ function getFullStateSnapshot() {
   }
 
   return {
-    schemaVersion: 6,
+    schemaVersion: 7,
     settings,
     taps,
     batches,
@@ -443,6 +497,7 @@ function getFullStateSnapshot() {
     tapStates,
     haConnected: haClient.isConnected,
     kegKickForecasts,
+    lifecycleMilestones: activeLifecycleMilestones(),
     timestamp: new Date().toISOString()
   };
 }
@@ -593,22 +648,40 @@ const server = http.createServer(async (req, res) => {
     try {
       if (!validBrewfatherBatchId(batchId)) throw new ValidationError('Invalid Brewfather batch');
       const queryKeys = [...new Set(url.searchParams.keys())];
-      if (queryKeys.some((key) => key !== 'window') || url.searchParams.getAll('window').length > 1) {
+      if (
+        queryKeys.some((key) => !['window', 'tap_id'].includes(key)) ||
+        url.searchParams.getAll('window').length > 1 ||
+        url.searchParams.getAll('tap_id').length > 1
+      ) {
         throw new ValidationError('Invalid story query');
       }
       const window = url.searchParams.get('window') || '7d';
       if (!BREW_STORY_WINDOWS.includes(window)) throw new ValidationError('Invalid story window');
+      const storyTapId = url.searchParams.has('tap_id') ? validateTapId(url.searchParams.get('tap_id')) : null;
       const authorized = isAuthorized(req);
       if (!authorized && !storyIsPublic(db, batchId)) {
         sendError(res, 404, 'Brew story not found');
         return;
       }
+      const storyTap =
+        storyTapId === null
+          ? null
+          : db
+              .prepare(
+                `SELECT tap_id, batch_id, override_enabled, override_style, serving_glass
+                 FROM taps WHERE tap_id=? AND batch_id=?`
+              )
+              .get(storyTapId, batchId);
+      if (storyTapId !== null && !storyTap) throw new ValidationError('Tap does not have this batch assigned');
       const story = buildBrewStory({
         db,
         batchId,
         window,
         tapStates: haClient.getPublicTapStates(),
         forecastForTap: calculateKegKickForecast,
+        servingGlass: storyTap
+          ? servingRecommendationForTap(storyTap)
+          : resolveServingGlass({ selection: 'auto', style: batchSummary(db, batchId)?.style, isCustom: false }),
         includeHiddenSensory: authorized
       });
       if (!story) sendError(res, 404, 'Brew story not found');
@@ -742,7 +815,10 @@ const server = http.createServer(async (req, res) => {
         ondeck_new_batch_default,
         tap_visibilities,
         primary_color,
-        secondary_color
+        secondary_color,
+        first_pour_effects,
+        kick_effects,
+        ceremony_sound
       } = body;
 
       db.prepare(
@@ -757,7 +833,10 @@ const server = http.createServer(async (req, res) => {
           layout_mode = COALESCE(?, layout_mode),
           ondeck_new_batch_default = COALESCE(?, ondeck_new_batch_default),
           primary_color = CASE WHEN ? THEN ? ELSE primary_color END,
-          secondary_color = CASE WHEN ? THEN ? ELSE secondary_color END
+          secondary_color = CASE WHEN ? THEN ? ELSE secondary_color END,
+          first_pour_effects = COALESCE(?, first_pour_effects),
+          kick_effects = COALESCE(?, kick_effects),
+          ceremony_sound = COALESCE(?, ceremony_sound)
         WHERE id = 1
       `
       ).run(
@@ -772,7 +851,10 @@ const server = http.createServer(async (req, res) => {
         primary_color !== undefined ? 1 : 0,
         primary_color,
         secondary_color !== undefined ? 1 : 0,
-        secondary_color
+        secondary_color,
+        first_pour_effects !== undefined ? (first_pour_effects ? 1 : 0) : null,
+        kick_effects !== undefined ? (kick_effects ? 1 : 0) : null,
+        ceremony_sound
       );
 
       if (tap_visibilities && typeof tap_visibilities === 'object') {
@@ -889,6 +971,8 @@ const server = http.createServer(async (req, res) => {
         if (body.batch_option !== undefined || lifecycleChanges) addTapUpdate('on_tap_at', onTapAt);
         const directColumns = {
           graphic: body.graphic,
+          serving_glass: body.serving_glass,
+          kick_threshold_oz: body.kick_threshold_oz,
           override_enabled: body.override_enabled === undefined ? undefined : body.override_enabled ? 1 : 0,
           override_name: body.override_name,
           override_style: body.override_style,
@@ -1037,16 +1121,17 @@ const server = http.createServer(async (req, res) => {
     if (!requireAdmin(req, res)) return;
 
     let tapId;
+    let endKegReason;
     try {
       tapId = validateTapId(url.pathname.split('/')[3]);
-      await readEmptyJsonBody(req);
+      endKegReason = validateEndKeg(await readOptionalJsonBody(req)).reason;
       ensureServing();
     } catch (err) {
       handleError(res, err, requestContext('end keg validation', tapId));
       return;
     }
     try {
-      const result = await tapMutations.endKeg(tapId);
+      const result = await tapMutations.endKeg(tapId, { reason: endKegReason });
       ensureServing();
       haClient.clearTapMeasurement(tapId);
 
@@ -1059,11 +1144,38 @@ const server = http.createServer(async (req, res) => {
           displayName: result.displayName,
           displayStyle: result.displayStyle
         }),
-        { reason: 'end_keg' }
+        { reason: result.closeReason }
       );
 
+      if (result.kickClaimed) {
+        publishTapboardEvent(
+          'keg_kicked',
+          lifecycleEventContext({
+            tapId,
+            lifecycle: result.lifecycle,
+            batchId: result.batchId,
+            displayName: result.displayName,
+            displayStyle: result.displayStyle
+          }),
+          { trigger: 'manual', receipt_id: null, remaining_volume_oz: null, threshold_oz: null }
+        );
+        sseHub.publishImmediate('keg_kicked', {
+          tapId,
+          lifecycleId: result.lifecycle?.lifecycle_id ?? null,
+          beerName: result.displayName || `Tap ${tapId}`,
+          trigger: 'manual',
+          kickedAt: result.kickMilestone?.kicked_at ?? new Date().toISOString()
+        });
+      }
+
       sseHub.publishImmediate('settings_updated', getFullStateSnapshot());
-      sendJson(res, 200, { success: true, message: `Tap ${tapId} unassigned / off-tap.` });
+      sendJson(res, 200, {
+        success: true,
+        message:
+          result.closeReason === 'kicked'
+            ? `Keg on tap ${tapId} marked kicked and removed.`
+            : `Tap ${tapId} unassigned / off-tap.`
+      });
     } catch (err) {
       handleError(res, err, requestContext('end keg', tapId));
     }

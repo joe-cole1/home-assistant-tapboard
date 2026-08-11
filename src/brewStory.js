@@ -1,6 +1,6 @@
 import { buildSensoryProfile, SENSORY_AXES } from './sensoryEngine.js';
 
-export const BREW_STORY_SCHEMA_VERSION = 1;
+export const BREW_STORY_SCHEMA_VERSION = 3;
 export const BREW_STORY_WINDOWS = Object.freeze(['24h', '7d', 'all']);
 export const MAX_STORY_POINTS = 600;
 const STALE_AFTER_MS = 12 * 60 * 60 * 1_000;
@@ -123,8 +123,10 @@ function lifecycleChapters(db, batchId, tapStates, forecastForTap) {
   return db
     .prepare(
       `SELECT l.lifecycle_id, l.tap_id, l.started_at, l.closed_at, l.close_reason,
+        m.first_pour_at, m.kicked_at, m.kick_trigger,
         COUNT(p.id) AS pour_count, COALESCE(SUM(p.volume_poured_oz), 0) AS poured_oz
        FROM keg_lifecycles l
+       LEFT JOIN lifecycle_milestones m ON m.lifecycle_id=l.lifecycle_id
        LEFT JOIN pour_logs p ON p.lifecycle_id=l.lifecycle_id
        WHERE l.batch_id=?
        GROUP BY l.lifecycle_id
@@ -140,6 +142,9 @@ function lifecycleChapters(db, batchId, tapStates, forecastForTap) {
         tapped_at: row.started_at,
         closed_at: row.closed_at,
         close_reason: row.close_reason,
+        first_pour_at: row.first_pour_at,
+        kicked_at: row.kicked_at,
+        kick_trigger: row.kick_trigger,
         active,
         pours: { count: row.pour_count, total_oz: row.poured_oz },
         remaining:
@@ -194,6 +199,7 @@ export function buildBrewStory({
   now = Date.now,
   tapStates = {},
   forecastForTap,
+  servingGlass = null,
   includeHiddenSensory = false
 } = {}) {
   if (!BREW_STORY_WINDOWS.includes(window)) throw new TypeError('Invalid story window');
@@ -257,7 +263,7 @@ export function buildBrewStory({
       latest,
       history: { window, downsampled: points.length < rawReadings.length, total_points: rawReadings.length, points }
     },
-    tapboard: { lifecycles: lifecycleChapters(db, batchId, tapStates, forecastForTap) },
+    tapboard: { lifecycles: lifecycleChapters(db, batchId, tapStates, forecastForTap), serving_glass: servingGlass },
     sensory
   };
 }

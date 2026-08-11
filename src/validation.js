@@ -1,3 +1,5 @@
+import { FILL_GRAPHICS, SERVING_GLASS_OPTIONS } from './servingGlass.js';
+
 const THEMES = new Set(['modern_dark', 'warm_pub', 'cyberpunk', 'light_minimal']);
 const TITLE_FONTS = new Set([
   'Outfit',
@@ -9,7 +11,9 @@ const TITLE_FONTS = new Set([
   'Montserrat'
 ]);
 const BODY_FONTS = new Set(['Inter', 'Roboto', 'Balsamiq Sans', 'Outfit', 'Fredoka', 'Montserrat']);
-const GRAPHICS = new Set(['corny_keg', 'pint_glass', 'tulip_glass', 'wheat_glass', 'mug', 'stout_glass', 'snifter']);
+const GRAPHICS = new Set(FILL_GRAPHICS);
+const SERVING_GLASSES = new Set(SERVING_GLASS_OPTIONS);
+const CEREMONY_SOUNDS = new Set(['pub_bell', 'fanfare', 'last_call']);
 const DISPLAY_UNITS = new Set(['percent', 'pints', 'oz', 'pours_12', 'pours_custom']);
 const VOLUME_FORMATS = new Set(['oz', 'pints']);
 const LAYOUT_MODES = new Set(['cozy', 'compact']);
@@ -113,7 +117,10 @@ export function validateSettings(body) {
       'ondeck_new_batch_default',
       'tap_visibilities',
       'primary_color',
-      'secondary_color'
+      'secondary_color',
+      'first_pour_effects',
+      'kick_effects',
+      'ceremony_sound'
     ])
   );
   const output = {};
@@ -126,6 +133,9 @@ export function validateSettings(body) {
   assignIfDefined(output, 'layout_mode', choice(body.layout_mode, LAYOUT_MODES));
   if (body.ondeck_new_batch_default !== undefined)
     output.ondeck_new_batch_default = boolean(body.ondeck_new_batch_default);
+  if (body.first_pour_effects !== undefined) output.first_pour_effects = boolean(body.first_pour_effects);
+  if (body.kick_effects !== undefined) output.kick_effects = boolean(body.kick_effects);
+  assignIfDefined(output, 'ceremony_sound', choice(body.ceremony_sound, CEREMONY_SOUNDS));
   for (const key of ['primary_color', 'secondary_color']) {
     if (body[key] === null) output[key] = null;
     else if (body[key] !== undefined) {
@@ -220,6 +230,7 @@ export function validateTap(body) {
     'enabled',
     'batch_option',
     'graphic',
+    'serving_glass',
     'override_enabled',
     'override_name',
     'override_style',
@@ -233,7 +244,8 @@ export function validateTap(body) {
     'badge_fresh',
     'display_unit',
     'custom_pour_size',
-    'capacity_oz'
+    'capacity_oz',
+    'kick_threshold_oz'
   ]);
   assertObject(body);
   rejectUnknown(body, allowed);
@@ -242,6 +254,7 @@ export function validateTap(body) {
   if (body.override_enabled !== undefined) output.override_enabled = boolean(body.override_enabled);
   if (body.badge_fresh !== undefined) output.badge_fresh = boolean(body.badge_fresh);
   assignIfDefined(output, 'graphic', choice(body.graphic, GRAPHICS));
+  assignIfDefined(output, 'serving_glass', choice(body.serving_glass, SERVING_GLASSES));
   assignIfDefined(output, 'display_unit', choice(body.display_unit, DISPLAY_UNITS));
   assignIfDefined(output, 'batch_option', text(body.batch_option, 512));
   assignIfDefined(output, 'override_name', text(body.override_name, 120));
@@ -255,7 +268,15 @@ export function validateTap(body) {
   assignIfDefined(output, 'badge_low_keg', numeric(body.badge_low_keg, 0, 100));
   assignIfDefined(output, 'custom_pour_size', numeric(body.custom_pour_size, 0.5, 128));
   assignIfDefined(output, 'capacity_oz', numeric(body.capacity_oz, 16, 2048, { integer: true }));
+  assignIfDefined(output, 'kick_threshold_oz', numeric(body.kick_threshold_oz, 0, 128, { allowNull: true }));
   return output;
+}
+
+export function validateEndKeg(body) {
+  assertObject(body);
+  rejectUnknown(body, new Set(['reason']));
+  if (body.reason === undefined) return { reason: 'end_keg' };
+  return { reason: choice(body.reason, new Set(['kicked', 'removed', 'other'])) };
 }
 
 export function validateCatalog(body) {

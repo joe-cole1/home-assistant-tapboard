@@ -12,12 +12,12 @@ test('General Settings is an accessible full-page disclosure workspace', () => {
 
   assert.equal(dialog.localName, 'dialog');
   assert.equal(dialog.getAttribute('aria-labelledby'), 'generalSettingsTitle');
-  assert.equal(disclosures.length, 6);
+  assert.equal(disclosures.length, 7);
   assert.equal(disclosures[0].hasAttribute('open'), true);
   assert.ok(disclosures.slice(1).every((details) => !details.hasAttribute('open')));
   assert.deepEqual(
     disclosures.map((details) => details.querySelector('summary')?.firstChild?.textContent.trim()),
-    ['Appearance', 'Dashboard', 'On Deck', 'Brewfather', 'Custom Beverage', 'Security']
+    ['Appearance', 'Dashboard', 'On Deck', 'Celebrations', 'Brewfather', 'Custom Beverage', 'Security']
   );
   for (const removedId of ['saveGlobalSettingsBtn', 'saveCustomBeverageBtn', 'saveTapSettingsBtn', 'saveOnDeckBtn']) {
     assert.equal(document.getElementById(removedId), null);
@@ -99,6 +99,20 @@ test('per-browser display controls retain reset, theme-default, and explicit sha
     document.getElementById('globalSettingsModal').contains(shared),
     'actions remain behind the admin-gated dialog'
   );
+});
+
+test('celebrations separate shared visual policy from explicit browser sound consent', () => {
+  const { document } = parseHTML(html);
+  const sound = document.getElementById('browserSoundEnabledCheckbox');
+  assert.ok(document.getElementById('firstPourEffectsCheckbox'));
+  assert.ok(document.getElementById('kickEffectsCheckbox'));
+  assert.deepEqual(
+    [...document.getElementById('ceremonySoundSelect').options].map((option) => option.value),
+    ['pub_bell', 'fanfare', 'last_call']
+  );
+  assert.equal(sound.hasAttribute('checked'), false);
+  assert.match(sound.parentElement.textContent, /This browser/);
+  assert.ok(document.getElementById('endKegReasonDialog'));
 });
 
 test('tap and custom-beverage settings provide an inline autosave result beside every editable field', () => {

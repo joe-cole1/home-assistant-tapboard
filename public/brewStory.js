@@ -352,9 +352,64 @@ function tastingSection(logs) {
   return node;
 }
 
-function lifecycleSection(lifecycles) {
+function servingGlassSummary(servingGlass) {
+  if (!servingGlass || typeof servingGlass !== 'object') return null;
+  const label = typeof servingGlass.label === 'string' ? servingGlass.label : null;
+  if (!label) return null;
+  const summary = el('div', 'brew-story-serving-glass');
+  summary.append(
+    el('span', 'brew-story-serving-icon', '◒'),
+    el('strong', null, 'Serving glass'),
+    el('span', null, label)
+  );
+  if (servingGlass.source === 'auto') summary.appendChild(el('span', 'brew-story-serving-source', 'Style-guided'));
+  return summary;
+}
+
+function forecastDetails(forecast) {
+  if (!forecast || typeof forecast !== 'object') return null;
+  const depletion = forecast.depletion || {};
+  const confidence = forecast.confidence || {};
+  const range = forecast.range || {};
+  const days = depletion.medianDaysRemaining ?? forecast.estimatedDaysRemaining;
+  const earliest = depletion.earliestDaysRemaining;
+  const latest = depletion.latestDaysRemaining;
+  if (!present(days) && !present(earliest) && !present(latest)) return null;
+  const details = el('div', 'brew-story-forecast');
+  details.appendChild(el('strong', null, 'Kick forecast'));
+  const rangeText =
+    present(earliest) && present(latest) ? `${earliest}–${latest} days remaining` : `${days} days remaining`;
+  details.appendChild(el('p', 'brew-story-forecast-range', rangeText));
+  appendFacts(details, [
+    ['Confidence', confidence.level],
+    [
+      'Kick window',
+      present(depletion.earliestDate) && present(depletion.latestDate)
+        ? `${formatDate(depletion.earliestDate)} to ${formatDate(depletion.latestDate)}`
+        : null
+    ],
+    ['Observed', present(range.startDate) && present(range.endDate) ? `${range.startDate} to ${range.endDate}` : null],
+    ['Basis', forecast.explanation || humanize(forecast.reason || forecast.evidence?.method || '')]
+  ]);
+  return details;
+}
+
+function milestoneList(entry) {
+  const milestones = [
+    ['First pour', entry.first_pour_at],
+    ['Kicked', entry.kicked_at || entry.kick_date]
+  ].filter(([, value]) => present(value));
+  if (!milestones.length) return null;
+  const list = el('ul', 'brew-story-milestones');
+  milestones.forEach(([name, at]) => list.appendChild(el('li', null, `${name} · ${formatDate(at)}`)));
+  return list;
+}
+
+function lifecycleSection(lifecycles, servingGlass) {
   if (!Array.isArray(lifecycles) || !lifecycles.length) return null;
   const node = section('Tapboard chapter', 'Tapboard lifecycle');
+  const serving = servingGlassSummary(servingGlass);
+  if (serving) node.appendChild(serving);
   lifecycles.forEach((entry, index) => {
     const chapter = el('article', 'brew-story-lifecycle');
     chapter.appendChild(
@@ -371,12 +426,12 @@ function lifecycleSection(lifecycles) {
       ['Kick date', formatDate(entry.kick_date)],
       ['Pours', entry.pours?.count],
       ['Poured', present(entry.pours?.total_oz) ? `${entry.pours.total_oz} oz` : null],
-      ['Remaining', present(entry.remaining?.volume_oz) ? `${entry.remaining.volume_oz} oz` : null],
-      [
-        'Forecast',
-        present(entry.forecast?.estimatedDaysRemaining) ? `${entry.forecast.estimatedDaysRemaining} days` : null
-      ]
+      ['Remaining', present(entry.remaining?.volume_oz) ? `${entry.remaining.volume_oz} oz` : null]
     ]);
+    const milestones = milestoneList(entry);
+    if (milestones) chapter.appendChild(milestones);
+    const forecast = forecastDetails(entry.forecast);
+    if (forecast) chapter.appendChild(forecast);
     node.appendChild(chapter);
   });
   return node;
@@ -495,7 +550,7 @@ export function buildBrewStoryContent(story, fallback = {}) {
     timelineSection(detail.batch?.events),
     telemetrySection(story),
     tastingSection(detail.batch?.taste_logs),
-    lifecycleSection(story?.tapboard?.lifecycles),
+    lifecycleSection(story?.tapboard?.lifecycles, story?.tapboard?.serving_glass),
     sensorySection(story?.sensory)
   ]) {
     if (node) fragment.appendChild(node);
@@ -522,7 +577,7 @@ export function createBrewStoryController({ dialog, title, body, status, fetchSt
     setStatus('Loading Brewfather story…');
     body.replaceChildren(el('p', 'brew-story-loading', 'Loading…'));
     try {
-      const response = await fetchStory(current.batchId, windowName, controller.signal);
+      const response = await fetchStory(current.batchId, windowName, controller.signal, current.tapId);
       if (id !== requestId) return;
       if (!response.ok) throw new Error('Brew Story is unavailable.');
       const story = await response.json();

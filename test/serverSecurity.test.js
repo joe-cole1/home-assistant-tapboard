@@ -140,6 +140,8 @@ test('Brew Story routes enforce public visibility and authenticated sensory over
       .run();
 
     assert.equal((await fetch(`${instance.baseUrl}/api/batches/story-a/story`)).status, 404);
+    assert.equal((await fetch(`${instance.baseUrl}/api/batches/story-a/story?tap_id=1`)).status, 404);
+    assert.equal((await fetch(`${instance.baseUrl}/api/batches/story-a/story?tap_id=2`)).status, 404);
     const { token } = await authenticate(instance.baseUrl);
     const auth = { Authorization: `Bearer ${token}` };
     assert.equal((await fetch(`${instance.baseUrl}/api/batches/story-a/story`, { headers: auth })).status, 200);
@@ -150,7 +152,7 @@ test('Brew Story routes enforce public visibility and authenticated sensory over
     const storyText = await publicStory.text();
     assert.ok(Buffer.byteLength(storyText) < 512 * 1024);
     const publicPayload = JSON.parse(storyText);
-    assert.equal(publicPayload.schema_version, 1);
+    assert.equal(publicPayload.schema_version, 3);
     assert.equal('override' in publicPayload.sensory, false);
 
     const sensory = await fetch(`${instance.baseUrl}/api/batches/story-a/sensory`, {
@@ -497,7 +499,10 @@ test('PIN change accepts the new credential and settings color overrides persist
       layout_mode: 'cozy',
       ondeck_new_batch_default: 1,
       primary_color: '#ABC123',
-      secondary_color: '#0DEEF0'
+      secondary_color: '#0DEEF0',
+      first_pour_effects: 1,
+      kick_effects: 1,
+      ceremony_sound: 'pub_bell'
     });
     assert.equal((await (await fetch(`${instance.baseUrl}/api/state`)).json()).settings.primary_color, '#ABC123');
     const reset = await fetch(`${instance.baseUrl}/api/settings`, {
@@ -874,7 +879,7 @@ test('On Deck and custom beverage APIs require authentication, validate strictly
       400
     );
     const snapshot = await (await fetch(`${instance.baseUrl}/api/state`)).json();
-    assert.equal(snapshot.schemaVersion, 6);
+    assert.equal(snapshot.schemaVersion, 7);
     assert.deepEqual(snapshot.customBeverage, {
       id: 'custom:topo_chico',
       ...custom,

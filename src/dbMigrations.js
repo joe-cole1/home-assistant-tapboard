@@ -1,5 +1,5 @@
 const BASE_SCHEMA_VERSION = 1;
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 8;
 
 function tableExists(db, name) {
   return Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name));
@@ -373,10 +373,54 @@ function migrateBrewStorySchema(db) {
   `);
 }
 
+function migrateServingGlassSchema(db) {
+  addColumnIfMissing(db, 'taps', 'serving_glass', "TEXT NOT NULL DEFAULT 'auto'");
+}
+
+function migrateLifecycleExperienceSchema(db) {
+  addColumnIfMissing(
+    db,
+    'taps',
+    'kick_threshold_oz',
+    'REAL CHECK(kick_threshold_oz IS NULL OR (kick_threshold_oz >= 0 AND kick_threshold_oz <= 128))'
+  );
+  addColumnIfMissing(
+    db,
+    'settings',
+    'first_pour_effects',
+    'INTEGER NOT NULL DEFAULT 1 CHECK(first_pour_effects IN (0, 1))'
+  );
+  addColumnIfMissing(db, 'settings', 'kick_effects', 'INTEGER NOT NULL DEFAULT 1 CHECK(kick_effects IN (0, 1))');
+  addColumnIfMissing(
+    db,
+    'settings',
+    'ceremony_sound',
+    "TEXT NOT NULL DEFAULT 'pub_bell' CHECK(ceremony_sound IN ('pub_bell', 'fanfare', 'last_call'))"
+  );
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS lifecycle_milestones (
+      lifecycle_id INTEGER PRIMARY KEY,
+      first_pour_id INTEGER UNIQUE,
+      first_pour_at TEXT,
+      kicked_at TEXT,
+      kick_trigger TEXT CHECK(kick_trigger IS NULL OR kick_trigger IN ('manual', 'automatic')),
+      kick_pour_id INTEGER,
+      kick_threshold_oz REAL CHECK(kick_threshold_oz IS NULL OR (kick_threshold_oz >= 0 AND kick_threshold_oz <= 128)),
+      FOREIGN KEY(lifecycle_id) REFERENCES keg_lifecycles(lifecycle_id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+      FOREIGN KEY(first_pour_id) REFERENCES pour_logs(id) ON DELETE SET NULL ON UPDATE RESTRICT,
+      FOREIGN KEY(kick_pour_id) REFERENCES pour_logs(id) ON DELETE SET NULL ON UPDATE RESTRICT,
+      CHECK(first_pour_id IS NULL OR first_pour_at IS NOT NULL),
+      CHECK((kicked_at IS NULL AND kick_trigger IS NULL) OR (kicked_at IS NOT NULL AND kick_trigger IS NOT NULL))
+    );
+    CREATE INDEX IF NOT EXISTS lifecycle_milestones_kicked_at
+      ON lifecycle_milestones(kicked_at, lifecycle_id);
+  `);
+}
+
 function validateLatestSchema(db) {
   for (const [table, required] of Object.entries({
     settings: ['id', 'admin_pin_hash', 'admin_pin_initialized'],
-    taps: ['tap_id', 'batch_id', 'on_tap_at'],
+    taps: ['tap_id', 'batch_id', 'on_tap_at', 'serving_glass', 'kick_threshold_oz'],
     batches: ['batch_id'],
     pour_logs: ['id', 'tap_id', 'batch_id', 'volume_poured_oz', 'timestamp', 'lifecycle_id', 'timestamp_epoch'],
     keg_lifecycles: [
@@ -413,12 +457,29 @@ function validateLatestSchema(db) {
       'perceived_strength'
     ],
     brewfather_sync_state: ['id', 'status', 'error_category', 'last_cycle_requests', 'last_cycle_batches'],
+    lifecycle_milestones: [
+      'lifecycle_id',
+      'first_pour_id',
+      'first_pour_at',
+      'kicked_at',
+      'kick_trigger',
+      'kick_pour_id',
+      'kick_threshold_oz'
+    ],
     schema_migrations: ['version', 'name', 'applied_at']
   })) {
     if (!tableExists(db, table)) throw new Error(`Incompatible schema version ${SCHEMA_VERSION}: missing ${table}`);
     requireColumns(db, table, required);
   }
-  requireColumns(db, 'settings', ['layout_mode', 'ondeck_new_batch_default', 'primary_color', 'secondary_color']);
+  requireColumns(db, 'settings', [
+    'layout_mode',
+    'ondeck_new_batch_default',
+    'primary_color',
+    'secondary_color',
+    'first_pour_effects',
+    'kick_effects',
+    'ceremony_sound'
+  ]);
   requireColumns(db, 'batches', [
     'batch_name',
     'batch_number',
@@ -438,7 +499,8 @@ function validateLatestSchema(db) {
     'batches_brewfather_present_status_date',
     'batches_brewfather_last_seen',
     'brewfather_batch_readings_batch_time',
-    'brewfather_history_sync_due'
+    'brewfather_history_sync_due',
+    'lifecycle_milestones_kicked_at'
   ]) {
     if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ?").get(index)) {
       throw new Error(`Incompatible schema version ${SCHEMA_VERSION}: missing ${index}`);
@@ -525,6 +587,22 @@ export function migrateDatabase(db) {
         migrateBrewStorySchema(db);
         db.prepare('INSERT OR IGNORE INTO schema_migrations (version, name) VALUES (?, ?)').run(6, 'brew-story');
         db.pragma('user_version = 6');
+      }
+      if (version < 7) {
+        migrateServingGlassSchema(db);
+        db.prepare('INSERT OR IGNORE INTO schema_migrations (version, name) VALUES (?, ?)').run(
+          7,
+          'serving-glass-recommendations'
+        );
+        db.pragma('user_version = 7');
+      }
+      if (version < 8) {
+        migrateLifecycleExperienceSchema(db);
+        db.prepare('INSERT OR IGNORE INTO schema_migrations (version, name) VALUES (?, ?)').run(
+          8,
+          'lifecycle-experiences'
+        );
+        db.pragma('user_version = 8');
       }
       // Validation is part of the migration transaction. A malformed legacy
       // table or missing constraint must roll back schema changes, ledger rows,

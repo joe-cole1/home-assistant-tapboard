@@ -33,20 +33,45 @@ test('migrates legacy pour rows without changing IDs, volumes, or timestamps', (
       { version: 3, name: 'brewfather-ondeck-and-custom-beverage' },
       { version: 4, name: 'theme-accent-overrides' },
       { version: 5, name: 'brewfather-cache' },
-      { version: 6, name: 'brew-story' }
+      { version: 6, name: 'brew-story' },
+      { version: 7, name: 'serving-glass-recommendations' },
+      { version: 8, name: 'lifecycle-experiences' }
     ]);
     const settingColumns = db.prepare("SELECT name, dflt_value FROM pragma_table_info('settings')").all();
     assert.deepEqual(
       settingColumns.filter((column) =>
-        ['layout_mode', 'ondeck_new_batch_default', 'primary_color', 'secondary_color'].includes(column.name)
+        [
+          'layout_mode',
+          'ondeck_new_batch_default',
+          'primary_color',
+          'secondary_color',
+          'first_pour_effects',
+          'kick_effects',
+          'ceremony_sound'
+        ].includes(column.name)
       ),
       [
         { name: 'layout_mode', dflt_value: "'cozy'" },
         { name: 'ondeck_new_batch_default', dflt_value: '1' },
         { name: 'primary_color', dflt_value: null },
-        { name: 'secondary_color', dflt_value: null }
+        { name: 'secondary_color', dflt_value: null },
+        { name: 'first_pour_effects', dflt_value: '1' },
+        { name: 'kick_effects', dflt_value: '1' },
+        { name: 'ceremony_sound', dflt_value: "'pub_bell'" }
       ]
     );
+    assert.deepEqual(
+      db
+        .prepare(
+          "SELECT name, dflt_value FROM pragma_table_info('taps') WHERE name IN ('serving_glass', 'kick_threshold_oz')"
+        )
+        .all(),
+      [
+        { name: 'serving_glass', dflt_value: "'auto'" },
+        { name: 'kick_threshold_oz', dflt_value: null }
+      ]
+    );
+    assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='lifecycle_milestones'").get());
     assert.deepEqual(db.prepare("SELECT name FROM pragma_table_info('brewfather_ondeck_preferences')").all(), [
       { name: 'batch_id' },
       { name: 'visible' },
@@ -176,7 +201,7 @@ test('v4 to current cache upgrade preserves assignments and immutable lifecycle 
   }
 });
 
-test('v5 to v6 Brew Story migration preserves cached readings and enforces sensory half steps', () => {
+test('v5 to current migration preserves cached readings and enforces sensory half steps', () => {
   const db = new Database(':memory:');
   try {
     migrateDatabase(db);
@@ -197,7 +222,7 @@ test('v5 to v6 Brew Story migration preserves cached readings and enforces senso
     `);
 
     migrateDatabase(db);
-    assert.equal(db.pragma('user_version', { simple: true }), 6);
+    assert.equal(db.pragma('user_version', { simple: true }), SCHEMA_VERSION);
     assert.deepEqual(
       db.prepare("SELECT reading_key, sg, ph FROM brewfather_batch_readings WHERE batch_id='batch-a'").get(),
       { reading_key: 'reading-a', sg: 1.01, ph: null }

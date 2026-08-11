@@ -1,9 +1,21 @@
 import { renderTapGraphic, srmToHex } from './graphics.js';
 import { createLiveUpdateController, updateGraphicFill } from './liveUpdates.js';
-import { buildOnDeckItems, buildTapCardContent, createSelectOption, createToast } from './domBuilders.js';
+import {
+  buildOnDeckItems,
+  buildTapCardContent,
+  createSelectOption,
+  createToast,
+  syncServingGlassReadout
+} from './domBuilders.js';
 import { createBrewStoryController } from './brewStory.js';
 import { shouldShowNewBadge } from './freshness.js';
 import { createAutosaveController } from './autosave.js';
+import {
+  createCelebrationController,
+  formatLifecycleLine,
+  playCeremonySound,
+  renderForecastDetails
+} from './phase3Ui.js';
 
 let appState = {
   settings: {},
@@ -13,7 +25,8 @@ let appState = {
   customBeverage: null,
   tapStates: {},
   haConnected: true,
-  kegKickForecasts: {}
+  kegKickForecasts: {},
+  lifecycleMilestones: {}
 };
 
 let editingTapId = null;
@@ -22,6 +35,7 @@ let liveUpdates;
 let hasRenderedSnapshot = false;
 let brewfatherStatusRequestId = 0;
 let brewStory;
+let celebration;
 const simulatedPourTimers = new Map();
 const LONG_PRESS_MS = 600;
 const SIMULATED_POUR_MS = 8000;
@@ -44,11 +58,14 @@ function getBrewStoryController() {
     body: document.getElementById('recipeBody'),
     status: document.getElementById('recipeStatus'),
     canEdit: () => Boolean(authToken),
-    fetchStory: (id, windowName, signal) =>
-      fetch(`/api/batches/${encodeURIComponent(id)}/story?window=${encodeURIComponent(windowName)}`, {
-        signal,
-        ...(authToken ? { headers: authHeaders() } : {})
-      }),
+    fetchStory: (id, windowName, signal, tapId) =>
+      fetch(
+        `/api/batches/${encodeURIComponent(id)}/story?window=${encodeURIComponent(windowName)}${tapId ? `&tap_id=${tapId}` : ''}`,
+        {
+          signal,
+          ...(authToken ? { headers: authHeaders() } : {})
+        }
+      ),
     saveSensory: (id, payload) =>
       fetch(`/api/batches/${encodeURIComponent(id)}/sensory`, {
         method: 'POST',
@@ -198,10 +215,9 @@ function initSSE() {
     setTapPouringAnimation(tapId, true);
   });
 
-  // 5. Pour Complete Summary & Toast Notification
+  // 5. Pour completion updates the forecast; durable receipts own the UI notice.
   eventSource.addEventListener('pour_complete', (e) => {
-    const { tapId, volumePouredOz, beerName, kegKickForecast } = JSON.parse(e.data);
-    showToast(`🍺 Poured ${volumePouredOz} oz of ${beerName}!`);
+    const { tapId, kegKickForecast } = JSON.parse(e.data);
     setTapPouringAnimation(tapId, false);
     if (kegKickForecast) {
       appState = {
@@ -213,6 +229,24 @@ function initSSE() {
       };
       scheduleTapUpdates(new Set([String(tapId)]));
     }
+  });
+
+  eventSource.addEventListener('pour_receipt', (e) => celebration?.receipt(JSON.parse(e.data)));
+  eventSource.addEventListener('pour_receipt_updated', (e) => celebration?.receiptUpdated(JSON.parse(e.data)));
+  eventSource.addEventListener('first_pour', (e) => celebration?.firstPour(JSON.parse(e.data)));
+  eventSource.addEventListener('keg_kicked', (e) => {
+    const event = JSON.parse(e.data);
+    appState.lifecycleMilestones = {
+      ...appState.lifecycleMilestones,
+      [event.tapId]: {
+        ...(appState.lifecycleMilestones?.[event.tapId] || {}),
+        lifecycleId: event.lifecycleId,
+        kickedAt: event.kickedAt,
+        kickTrigger: event.trigger
+      }
+    };
+    celebration?.kegKicked(event);
+    scheduleTapUpdates(new Set([String(event.tapId)]));
   });
 
   // 6. Canceled Pour (rebound, disconnect, large change, or safety timeout)
@@ -451,23 +485,6 @@ function formatVolumeReadout(tap, measurement) {
   }
 }
 
-// Helper: Clean Format Forecast Readout
-function formatForecastText(forecast) {
-  if (forecast.estimatedDaysRemaining === null || forecast.estimatedDaysRemaining === undefined) {
-    return '';
-  }
-
-  if (forecast.estimatedDaysRemaining < 1.0) {
-    return forecast.isFallback ? `🔴 Kicking soon (default estimate)` : `🔴 Kicking soon`;
-  }
-
-  if (forecast.isFallback) {
-    return `⌛ ${forecast.estimatedDaysRemaining} days remaining (24 oz every 4 days default)`;
-  }
-
-  return `⌛ ${forecast.estimatedDaysRemaining} days remaining (${forecast.avgDrinkingDayOz} oz/drinking day avg)`;
-}
-
 // Main Render Function with In-Place Targeted DOM Preservation
 function renderApp() {
   const { taps } = appState;
@@ -575,7 +592,8 @@ function createTapCard(tap) {
   const beerColorHex = isWaterOrSeltzer ? 'WATER' : srmToHex(srm);
 
   const forecast = appState.kegKickForecasts[tapId] || {};
-  const forecastText = formatForecastText(forecast);
+  const milestone = appState.lifecycleMilestones?.[tapId] || {};
+  const forecastText = formatLifecycleLine(forecast, milestone);
   const volumeReadoutText = formatVolumeReadout(tap, measurement);
 
   const card = document.createElement('div');
@@ -599,7 +617,9 @@ function createTapCard(tap) {
       og,
       fg,
       volumeReadoutText,
-      forecastText
+      forecastText,
+      servingGlass: tap.serving_recommendation,
+      kicked: Boolean(milestone.kickedAt)
     })
   );
 
@@ -634,6 +654,10 @@ function createTapCard(tap) {
   storyBtn?.addEventListener('click', (event) => {
     event.stopPropagation();
     openRecipeModal(tapId);
+  });
+  card.querySelector('.lifecycle-forecast-btn')?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    openForecastDialog(forecast, milestone);
   });
 
   // Card Body Click: Open Recipe Detail Modal
@@ -713,7 +737,8 @@ function updateTapCard(card, tap) {
   const beerColorHex = isWaterOrSeltzer ? 'WATER' : srmToHex(srm);
 
   const forecast = appState.kegKickForecasts[tapId] || {};
-  const forecastText = formatForecastText(forecast);
+  const milestone = appState.lifecycleMilestones?.[tapId] || {};
+  const forecastText = formatLifecycleLine(forecast, milestone);
   const newVolText = formatVolumeReadout(tap, measurement);
 
   // Update text content in-place
@@ -790,7 +815,18 @@ function updateTapCard(card, tap) {
   if (forecastEl) {
     if (forecastEl.textContent !== forecastText) forecastEl.textContent = forecastText;
     forecastEl.hidden = !forecastText;
+    forecastEl.setAttribute('aria-label', `${forecastText}. Open forecast details.`);
   }
+
+  syncServingGlassReadout(card, tap.serving_recommendation);
+
+  let kickedBadge = badges?.querySelector('.badge-kicked');
+  if (milestone.kickedAt && !kickedBadge) {
+    kickedBadge = document.createElement('span');
+    kickedBadge.className = 'badge badge-kicked';
+    kickedBadge.textContent = 'KICKED';
+    badges?.appendChild(kickedBadge);
+  } else if (!milestone.kickedAt) kickedBadge?.remove();
 
   // Numeric telemetry mutates the existing SVG so carbonation nodes keep animating.
   const graphicContainer = card.querySelector(`#graphic-tap-${tapId}`);
@@ -883,7 +919,18 @@ function openRecipeModal(tapId) {
   const batchId = customBeverage ? null : tap.batch_id || cachedBatch?.batch_id;
   const fallback = { style, abv, ibu, srm, og, fg, description };
   // Custom and local overrides have no authoritative Brewfather batch; keep their useful local detail.
-  getBrewStoryController().open({ batchId, title: beerName, fallback });
+  getBrewStoryController().open({ batchId, tapId, title: beerName, fallback });
+}
+
+function openForecastDialog(forecast, milestone) {
+  if (!forecast?.lifecycle?.startedAt) return;
+  renderForecastDetails({
+    title: document.getElementById('forecastDialogTitle'),
+    body: document.getElementById('forecastDialogBody'),
+    forecast,
+    milestone
+  });
+  showModal('forecastDialog');
 }
 
 function syncDisplaySettingsControls() {
@@ -1004,6 +1051,10 @@ function openGlobalSettingsModal() {
   document.getElementById('showOnDeckCheckbox').checked = settings.show_ondeck !== false && settings.show_ondeck !== 0;
   document.getElementById('onDeckNewBatchDefaultCheckbox').checked =
     settings.ondeck_new_batch_default === true || settings.ondeck_new_batch_default === 1;
+  document.getElementById('firstPourEffectsCheckbox').checked = settings.first_pour_effects !== 0;
+  document.getElementById('kickEffectsCheckbox').checked = settings.kick_effects !== 0;
+  document.getElementById('ceremonySoundSelect').value = settings.ceremony_sound || 'pub_bell';
+  document.getElementById('browserSoundEnabledCheckbox').checked = effectiveDisplaySettings().sound_enabled === true;
 
   const custom = appState.customBeverage || {};
   const customFields = ['name', 'style', 'abv', 'ibu', 'og', 'fg', 'srm', 'description'];
@@ -1099,6 +1150,7 @@ function openTapSettings(tapId) {
 
   // Set Graphic & Enabled
   document.getElementById('tapSettingsGraphicSelect').value = tap.graphic || 'corny_keg';
+  document.getElementById('tapSettingsServingGlassSelect').value = tap.serving_glass || 'auto';
 
   const isEnabled = tap.enabled === 1 || batchSelect.value !== '';
   document.getElementById('tapSettingsEnabledCheckbox').checked = isEnabled;
@@ -1117,6 +1169,8 @@ function openTapSettings(tapId) {
         ? String(tapState.capacityOz)
         : '';
   }
+  const kickThresholdInput = document.getElementById('tapSettingsKickThresholdInput');
+  kickThresholdInput.value = tap.kick_threshold_oz ?? '';
 
   toggleCustomPourSizeUI(unitSelect.value);
 
@@ -1228,13 +1282,19 @@ function updateSaveStatus(key, { state, error }) {
     'theme-colors': 'accentColorsSaveStatus',
     'browser-display-preferences': 'browserDisplayPreferencesSaveStatus',
     'shared-display-defaults': 'sharedDisplayDefaultsSaveStatus',
+    'first-pour-effects': 'firstPourEffectsSaveStatus',
+    'kick-effects': 'kickEffectsSaveStatus',
+    'ceremony-sound': 'ceremonySoundSaveStatus',
+    'browser-sound-enabled': 'browserSoundEnabledSaveStatus',
     'custom-beverage': 'customBeverageSaveStatus',
     pin: 'pinChangeSaveStatus',
     'tap-assignment': 'tapSettingsBatchSaveStatus',
     tapSettingsGraphicSelect: 'tapSettingsGraphicSaveStatus',
+    tapSettingsServingGlassSelect: 'tapSettingsServingGlassSaveStatus',
     tapSettingsDisplayUnitSelect: 'tapSettingsDisplayUnitSaveStatus',
     tapSettingsCustomPourInput: 'tapSettingsCustomPourSaveStatus',
     tapSettingsCapacityInput: 'tapSettingsCapacitySaveStatus',
+    tapSettingsKickThresholdInput: 'tapSettingsKickThresholdSaveStatus',
     tapSettingsEnabledCheckbox: 'tapSettingsEnabledSaveStatus',
     tapSettingsOverrideToggle: 'tapSettingsOverrideToggleSaveStatus',
     badgeLowKegToggle: 'badgeLowKegSaveStatus',
@@ -1596,6 +1656,26 @@ function setupAutosaveListeners() {
     (input) => ({ ondeck_new_batch_default: input.checked }),
     { immediate: true }
   );
+  bindAutosaveInput(
+    'firstPourEffectsCheckbox',
+    'first-pour-effects',
+    (input) => ({ first_pour_effects: input.checked }),
+    {
+      immediate: true
+    }
+  );
+  bindAutosaveInput('kickEffectsCheckbox', 'kick-effects', (input) => ({ kick_effects: input.checked }), {
+    immediate: true
+  });
+  bindAutosaveInput('ceremonySoundSelect', 'ceremony-sound', (input) => ({ ceremony_sound: input.value }), {
+    immediate: true
+  });
+  document.getElementById('browserSoundEnabledCheckbox')?.addEventListener('change', (event) => {
+    const enabled = event.currentTarget.checked;
+    if (saveDisplayPreference('sound_enabled', enabled, 'browser-sound-enabled') && enabled) {
+      void playCeremonySound(appState.settings.ceremony_sound || 'pub_bell');
+    }
+  });
 
   for (let id = 1; id <= 6; id += 1) {
     bindAutosaveInput(
@@ -1697,6 +1777,7 @@ function setupAutosaveListeners() {
   });
 
   bindTapField('tapSettingsGraphicSelect', 'graphic', { immediate: true });
+  bindTapField('tapSettingsServingGlassSelect', 'serving_glass', { immediate: true });
   bindTapField('tapSettingsEnabledCheckbox', 'enabled', { immediate: true });
   bindTapField('tapSettingsDisplayUnitSelect', 'display_unit', { immediate: true });
   bindTapField('tapSettingsCustomPourInput', 'custom_pour_size', { transform: Number });
@@ -1704,6 +1785,12 @@ function setupAutosaveListeners() {
     transform: Number,
     validate: (input) =>
       Number.isInteger(Number(input.value)) && Number(input.value) >= 16 && Number(input.value) <= 2048
+  });
+  bindTapField('tapSettingsKickThresholdInput', 'kick_threshold_oz', {
+    transform: (value) => (value === '' ? null : Number(value)),
+    validate: (input) =>
+      input.value === '' ||
+      (Number(input.value) >= 0 && Number(input.value) <= 128 && Number.isFinite(Number(input.value)))
   });
   bindTapField('tapSettingsOverrideToggle', 'override_enabled', { immediate: true });
   bindTapField('badgeLowKegToggle', 'badge_low_keg', { immediate: true, transform: (checked) => (checked ? 20 : 0) });
@@ -1846,6 +1933,7 @@ function initModalListeners() {
   document.getElementById('closeOnDeckBtn')?.addEventListener('click', () => {
     document.getElementById('onDeckModal').style.display = 'none';
   });
+  document.getElementById('closeForecastBtn')?.addEventListener('click', () => hideModal('forecastDialog'));
 
   // PIN Submit
   const pinSubmitBtn = document.getElementById('pinSubmitBtn');
@@ -1994,28 +2082,26 @@ function initModalListeners() {
     }
   });
 
-  // Action Button: End Keg
-  document.getElementById('tapSettingsEndKegBtn')?.addEventListener('click', async () => {
+  document.getElementById('tapSettingsEndKegBtn')?.addEventListener('click', () => {
     if (!editingTapId) return;
-    if (
-      confirm(
-        `End keg on Tap ${editingTapId}? This will unassign the tap without marking the Brewfather batch completed.`
-      )
-    ) {
-      try {
-        const res = await fetch(`/api/taps/${editingTapId}/end-keg`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${authToken}` }
-        });
-        if (res.ok) {
-          document.getElementById('tapSettingsModal').style.display = 'none';
-          showToast(`🍺 Tap ${editingTapId} keg ended / off-tap.`);
-        } else {
-          alert('Failed to end keg');
-        }
-      } catch (err) {
-        alert('Error executing end keg');
-      }
+    showModal('endKegReasonDialog');
+  });
+  document.getElementById('endKegReasonDialog')?.addEventListener('close', async (event) => {
+    const reason = event.currentTarget.returnValue;
+    if (!editingTapId || !['kicked', 'removed', 'other'].includes(reason)) return;
+    const tapId = editingTapId;
+    try {
+      const res = await fetch(`/api/taps/${tapId}/end-keg`, {
+        method: 'POST',
+        headers: authHeaders(true),
+        body: JSON.stringify({ reason })
+      });
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(result.error || 'Failed to end keg');
+      document.getElementById('tapSettingsModal').style.display = 'none';
+      showToast(reason === 'kicked' ? `🍺 Tap ${tapId} kicked and cleared.` : `Tap ${tapId} cleared.`);
+    } catch (error) {
+      alert(error.message || 'Error executing end keg');
     }
   });
 }
@@ -2033,6 +2119,11 @@ function initDisplayPreferenceSync() {
 
 // Initialize Client Engine
 window.addEventListener('DOMContentLoaded', () => {
+  celebration = createCelebrationController({
+    layer: document.getElementById('celebrationLayer'),
+    getSettings: () => appState.settings,
+    soundEnabled: () => effectiveDisplaySettings().sound_enabled === true
+  });
   loadInitialSnapshot();
   initSSE();
   initModalListeners();
