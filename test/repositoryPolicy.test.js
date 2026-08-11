@@ -135,7 +135,19 @@ test('cozy landscape uses a shrinkable dynamic-viewport flex chain and preserves
     /body\[data-layout-mode='cozy'\] \.main-content\s*\{[^}]*display:\s*flex;[^}]*flex:\s*1 1 0;[^}]*flex-direction:\s*column;[^}]*min-height:\s*0;[^}]*overflow:\s*hidden;/s
   );
   assert.match(styles, /body\[data-layout-mode='cozy'\] \.tap-grid\s*\{[^}]*flex:\s*1 1 0;[^}]*min-height:\s*0;/s);
-  assert.match(styles, /body\[data-layout-mode='cozy'\] \.tap-card\s*\{[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;/s);
+  assert.match(
+    styles,
+    /body\[data-layout-mode='cozy'\] \.tap-card\s*\{[^}]*display:\s*grid;[^}]*grid-template-rows:\s*auto auto minmax\(0, 1fr\);[^}]*min-height:\s*0;[^}]*overflow-y:\s*hidden;/s
+  );
+  assert.match(
+    styles,
+    /body\[data-layout-mode='cozy'\] \.tap-graphic-wrapper\s*\{[^}]*flex:\s*1 1 0;[^}]*height:\s*auto;[^}]*min-height:\s*0;/s
+  );
+  assert.match(
+    styles,
+    /@media \(max-height:\s*600px\)\s*\{[^]*body\[data-layout-mode='cozy'\] \.tap-card\s*\{[^}]*grid-template-columns:\s*minmax\(72px, 36%\) minmax\(0, 1fr\);/s
+  );
+  assert.doesNotMatch(styles, /body\[data-layout-mode='cozy'\] \.tap-card\s*\{[^}]*overflow-y:\s*auto;/s);
   assert.match(
     styles,
     /body\[data-layout-mode='cozy'\] \.app-header,\s*body\[data-layout-mode='cozy'\] \.ondeck-ticker-container\s*\{[^}]*flex:\s*0 0 auto;/s

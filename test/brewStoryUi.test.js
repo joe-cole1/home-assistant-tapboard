@@ -74,6 +74,34 @@ test('Brew Story renders telemetry and partial radar without interpreting remote
     assert.ok(wrapper.textContent.includes('Brewer tasting'));
   }));
 
+test('Tap Details starts with the Tapboard chapter and Flavor guidance', () =>
+  withDocument((document) => {
+    const wrapper = document.createElement('div');
+    wrapper.appendChild(
+      buildBrewStoryContent(
+        {
+          ...story,
+          tapboard: {
+            lifecycles: [
+              {
+                tap_id: 2,
+                active: true,
+                tapped_at: '2026-08-10T00:00:00.000Z',
+                pours: { count: 3, total_oz: 36 },
+                remaining: { volume_oz: 604 }
+              }
+            ]
+          }
+        },
+        {}
+      )
+    );
+    const headings = Array.from(wrapper.querySelectorAll('.brew-story-section-heading h3'), (heading) =>
+      heading.textContent.trim()
+    );
+    assert.deepEqual(headings.slice(0, 3), ['Tapboard chapter', 'Flavor guidance', 'Identity']);
+  }));
+
 test('controller loads on demand, switches windows, and suppresses stale responses', () =>
   withDocument(async (document) => {
     const dialog = document.createElement('dialog');

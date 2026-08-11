@@ -525,17 +525,17 @@ function sensoryEditor(story, onSave, onError) {
 
 export function buildBrewStoryContent(story, fallback = {}) {
   const fragment = document.createDocumentFragment();
-  fragment.appendChild(identitySection(story, fallback));
   const detail = story?.sections || {};
   for (const node of [
+    lifecycleSection(story?.tapboard?.lifecycles),
+    sensorySection(story?.sensory),
+    identitySection(story, fallback),
     styleSection(detail.recipe),
     recipeSection(detail.recipe),
     measurementsSection(detail.batch, fallback),
     timelineSection(detail.batch?.events),
     telemetrySection(story),
-    tastingSection(detail.batch?.taste_logs),
-    lifecycleSection(story?.tapboard?.lifecycles),
-    sensorySection(story?.sensory)
+    tastingSection(detail.batch?.taste_logs)
   ]) {
     if (node) fragment.appendChild(node);
   }
