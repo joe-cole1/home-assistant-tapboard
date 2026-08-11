@@ -324,3 +324,22 @@ test('v11 migration is idempotent when run twice consecutively', () => {
     db.close();
   }
 });
+
+test('a v11 database missing target_tap_id is repaired on startup', () => {
+  const db = new Database(':memory:');
+  try {
+    migrateDatabase(db);
+    assert.equal(db.pragma('user_version', { simple: true }), 11);
+    db.exec(`
+      CREATE TABLE brewfather_ondeck_preferences_old AS SELECT batch_id, visible, first_seen_at, updated_at FROM brewfather_ondeck_preferences;
+      DROP TABLE brewfather_ondeck_preferences;
+      ALTER TABLE brewfather_ondeck_preferences_old RENAME TO brewfather_ondeck_preferences;
+    `);
+    assert.doesNotThrow(() => migrateDatabase(db));
+    assert.ok(
+      db.prepare("SELECT 1 FROM pragma_table_info('brewfather_ondeck_preferences') WHERE name='target_tap_id'").get()
+    );
+  } finally {
+    db.close();
+  }
+});
