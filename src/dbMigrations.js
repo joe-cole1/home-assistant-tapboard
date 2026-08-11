@@ -852,5 +852,8 @@ export function migrateDatabase(db) {
       // and user_version together.
       validateLatestSchema(db);
     })();
-  } else validateLatestSchema(db);
+  } else {
+    migrateHealthRedesignV11(db);
+    validateLatestSchema(db);
+  }
 }
