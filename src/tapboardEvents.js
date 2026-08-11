@@ -9,7 +9,9 @@ export const TAPBOARD_EVENT_TYPES = Object.freeze([
   'low_keg',
   'first_pour',
   'keg_kicked',
-  'brewfather_sync_failed'
+  'brewfather_sync_failed',
+  'health_transition',
+  'forecast_gap'
 ]);
 
 const EVENT_TYPES = new Set(TAPBOARD_EVENT_TYPES);
@@ -24,7 +26,17 @@ const DATA_KEYS = {
   low_keg: new Set(['current_percent', 'threshold_percent']),
   first_pour: new Set(['receipt_id', 'volume_poured_oz']),
   keg_kicked: new Set(['trigger', 'receipt_id', 'remaining_volume_oz', 'threshold_oz']),
-  brewfather_sync_failed: new Set(['reason', 'error_category', 'outcome', 'request_count', 'retry_at'])
+  brewfather_sync_failed: new Set(['reason', 'error_category', 'outcome', 'request_count', 'retry_at']),
+  health_transition: new Set(['check_id', 'transition', 'state', 'severity', 'code']),
+  forecast_gap: new Set([
+    'transition',
+    'classification',
+    'candidate_batch_id',
+    'gap_min_days',
+    'gap_max_days',
+    'confidence',
+    'compatibility'
+  ])
 };
 const KEG_END_REASONS = new Set(['end_batch', 'end_keg', 'reassigned', 'cleared', 'kicked', 'removed', 'other']);
 const POUR_CANCEL_REASONS = new Set([
@@ -56,6 +68,19 @@ const BREWFATHER_ERROR_CATEGORIES = new Set([
   'unknown'
 ]);
 const BREWFATHER_SYNC_OUTCOMES = new Set(['failed', 'stale_cache']);
+const HEALTH_CHECK_IDS = new Set([
+  'low_keg',
+  'scale_availability',
+  'suspected_leak',
+  'serving_temperature',
+  'line_cleaning_due'
+]);
+const TRANSITIONS = new Set(['opened', 'escalated', 'updated', 'resolved']);
+const HEALTH_STATES = new Set(['healthy', 'degraded', 'active']);
+const SEVERITIES = new Set(['none', 'info', 'warning', 'critical']);
+const GAP_CLASSIFICATIONS = new Set(['unknown', 'covered', 'possible_gap', 'forecast_gap']);
+const CONFIDENCE_LEVELS = new Set(['low', 'medium', 'high']);
+const COMPATIBILITY_STATES = new Set(['potential', 'compatible', 'incompatible']);
 
 function assertPlainObject(value, label) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError(`${label} must be an object`);
@@ -192,6 +217,47 @@ function normalizeData(eventType, data) {
         outcome,
         request_count: boundedSafeInteger(data.request_count, 0, 200, 'data.request_count'),
         retry_at: nullableCanonicalIsoUtc(data.retry_at, 'data.retry_at')
+      };
+    }
+    case 'health_transition': {
+      const checkId = boundedText(data.check_id, 64, 'data.check_id');
+      const transition = boundedText(data.transition, 16, 'data.transition');
+      const state = boundedText(data.state, 24, 'data.state');
+      const severity = boundedText(data.severity, 16, 'data.severity');
+      if (!HEALTH_CHECK_IDS.has(checkId)) throw new TypeError('data.check_id is invalid');
+      if (!TRANSITIONS.has(transition)) throw new TypeError('data.transition is invalid');
+      if (!HEALTH_STATES.has(state)) throw new TypeError('data.state is invalid');
+      if (!SEVERITIES.has(severity)) throw new TypeError('data.severity is invalid');
+      return {
+        check_id: checkId,
+        transition,
+        state,
+        severity,
+        code: data.code === null ? null : boundedText(data.code, 64, 'data.code')
+      };
+    }
+    case 'forecast_gap': {
+      const transition = boundedText(data.transition, 16, 'data.transition');
+      const classification = boundedText(data.classification, 24, 'data.classification');
+      const confidence = boundedText(data.confidence, 16, 'data.confidence');
+      const compatibility = boundedText(data.compatibility, 16, 'data.compatibility');
+      if (!TRANSITIONS.has(transition)) throw new TypeError('data.transition is invalid');
+      if (!GAP_CLASSIFICATIONS.has(classification)) throw new TypeError('data.classification is invalid');
+      if (!CONFIDENCE_LEVELS.has(confidence)) throw new TypeError('data.confidence is invalid');
+      if (!COMPATIBILITY_STATES.has(compatibility)) throw new TypeError('data.compatibility is invalid');
+      const nullableGap = (value, label) =>
+        value === null || value === undefined ? null : boundedNumber(value, -3650, 3650, label);
+      return {
+        transition,
+        classification,
+        candidate_batch_id:
+          data.candidate_batch_id === null
+            ? null
+            : boundedText(data.candidate_batch_id, 256, 'data.candidate_batch_id'),
+        gap_min_days: nullableGap(data.gap_min_days, 'data.gap_min_days'),
+        gap_max_days: nullableGap(data.gap_max_days, 'data.gap_max_days'),
+        confidence,
+        compatibility
       };
     }
   }

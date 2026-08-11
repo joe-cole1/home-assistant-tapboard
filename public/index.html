@@ -23,6 +23,15 @@
         <h1 class="header-title" id="headerTitle">Hazardous Brews</h1>
       </div>
       <div class="header-right">
+        <button
+          class="header-info-badge taproom-status-trigger"
+          id="taproomStatusBtn"
+          type="button"
+          title="Open Taproom Status"
+        >
+          <span aria-hidden="true">🩺</span>
+          <span id="taproomStatusBadge">Draft health</span>
+        </button>
         <div
           class="header-info-badge"
           id="liveStatusBadge"
@@ -88,6 +97,8 @@
         <div id="forecastDialogBody" class="forecast-dialog-body"></div>
       </div>
     </dialog>
+
+    <dialog id="taproomStatusDialog" class="taproom-status-dialog" aria-labelledby="taproom-status-title"></dialog>
 
     <div id="celebrationLayer" class="celebration-layer" aria-live="polite" aria-atomic="false"></div>
 

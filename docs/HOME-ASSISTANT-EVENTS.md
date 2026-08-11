@@ -1,6 +1,6 @@
 # Home Assistant `tapboard_event` contract
 
-Tapboard sends one Home Assistant event type, `tapboard_event`, through the authenticated HA WebSocket. Batch 7 does not install, edit, reload, or run automations. These examples are operator-owned starting points.
+Tapboard sends one Home Assistant event type, `tapboard_event`, through the authenticated HA WebSocket. Tapboard does not install, edit, reload, or run automations. These examples are operator-owned starting points.
 
 ## Envelope version 1
 
@@ -21,21 +21,53 @@ data:
 
 All IDs except `event_id` may be `null`. Metadata contains only optional bounded `display_name` and `display_style`. Event-specific `data` fields are strict:
 
-| `event_type`             | Allowed `data`                                                     |
-| ------------------------ | ------------------------------------------------------------------ |
-| `keg_assigned`           | `assignment_kind`: `brewfather`, `custom`, or `override`           |
-| `keg_ended`              | `reason`: `end_batch`, `end_keg`, `reassigned`, or `cleared`       |
-| `pour_start`             | `start_volume_oz`                                                  |
-| `pour_complete`          | `volume_poured_oz`                                                 |
-| `pour_cancelled`         | bounded detector cancellation `reason`                             |
-| `low_keg`                | `current_percent`, `threshold_percent`                             |
-| `first_pour`             | `receipt_id`, `volume_poured_oz`                                   |
-| `keg_kicked`             | `trigger`, `receipt_id`, `remaining_volume_oz`, `threshold_oz`     |
-| `brewfather_sync_failed` | `reason`, `error_category`, `outcome`, `request_count`, `retry_at` |
+| `event_type`             | Allowed `data`                                                                                                      |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `keg_assigned`           | `assignment_kind`: `brewfather`, `custom`, or `override`                                                            |
+| `keg_ended`              | `reason`: `end_batch`, `end_keg`, `reassigned`, or `cleared`                                                        |
+| `pour_start`             | `start_volume_oz`                                                                                                   |
+| `pour_complete`          | `volume_poured_oz`                                                                                                  |
+| `pour_cancelled`         | bounded detector cancellation `reason`                                                                              |
+| `low_keg`                | `current_percent`, `threshold_percent`                                                                              |
+| `first_pour`             | `receipt_id`, `volume_poured_oz`                                                                                    |
+| `keg_kicked`             | `trigger`, `receipt_id`, `remaining_volume_oz`, `threshold_oz`                                                      |
+| `brewfather_sync_failed` | `reason`, `error_category`, `outcome`, `request_count`, `retry_at`                                                  |
+| `health_transition`      | `check_id`, `transition`, `state`, `severity`, `code`                                                               |
+| `forecast_gap`           | `transition`, `classification`, `candidate_batch_id`, `gap_min_days`, `gap_max_days`, `confidence`, `compatibility` |
 
 Events are operational and best effort. They are not replayed after a long disconnect. Automation delivery failure does not undo a pour, assignment, or end action. Consumers that need deduplication can retain `event_id` for their own short operational window.
 
-No event contains gravity, fermentation temperature, fermentation progress/status, readiness, controller state, notes, taste logs, recipes, credentials, action targets, or arbitrary service data.
+No event contains gravity, fermentation temperature, fermentation progress/status, controller state, maintenance notes, configured sensor entity IDs, taste logs, recipes, credentials, action targets, or arbitrary service data. `forecast_gap` includes only a bounded potential-readiness comparison, never a fermentation-complete assertion.
+
+### Draft health and planning transitions
+
+`health_transition` is emitted when one of the five stable checks opens, escalates, or resolves: `low_keg`, `scale_availability`, `suspected_leak`, `serving_temperature`, or `line_cleaning_due`. Repeated unchanged incidents are suppressed by durable incident state and cooldown. The safe `code` is a short reason label; check evidence, maintenance notes, and backing HA entity IDs are not sent.
+
+`forecast_gap` is emitted when a likely replacement gap opens, resolves, or materially changes after cooldown. It contains the comparison classification and bounded day range. Readiness remains a potential date range: Tapboard never emits a `fermentation_ready` event and never changes a fermentation controller or batch from this path.
+
+## Line-cleaning notification example
+
+This automation is the intended action path for a cleaning reminder. Tapboard detects and emits; Home Assistant selects and runs the notification action.
+
+```yaml
+automation:
+  - alias: Tapboard line cleaning due
+    triggers:
+      - trigger: event
+        event_type: tapboard_event
+        event_data:
+          event_type: health_transition
+          data:
+            check_id: line_cleaning_due
+            transition: opened
+    actions:
+      - action: notify.mobile_app_operator_phone
+        data:
+          title: Tap line cleaning due
+          message: >-
+            Tap {{ trigger.event.data.tap_id }} needs line cleaning
+            ({{ trigger.event.data.data.severity }}).
+```
 
 ### Lifecycle events
 

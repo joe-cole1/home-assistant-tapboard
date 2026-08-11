@@ -29,6 +29,8 @@ import {
 import { fetchCachedImage } from './imageProxy.js';
 import { buildBrewfatherSyncFailureEvent, buildTapboardEvent } from './tapboardEvents.js';
 import { TapMutationCoordinator } from './tapActions.js';
+import { DraftHealthEngine, mergeDraftHealthConfig } from './draftHealth.js';
+import { DEFAULT_TAP_PLANNING_POLICY, buildTapPlanningProjection } from './tapPlanning.js';
 import {
   HttpError,
   applySecurityHeaders,
@@ -46,11 +48,17 @@ import {
   validateAuth,
   validateCustomBeverage,
   validateEndKeg,
+  validateEffectiveHealthConfig,
+  validateHealthAcknowledgement,
+  validateHealthConfig,
+  validateMaintenance,
   validateOndeck,
   validatePinChange,
   validateSettings,
   validateSensoryOverride,
-  validateTap
+  validateTap,
+  validateReadinessOverride,
+  validateReadinessPolicy
 } from './validation.js';
 
 dotenv.config({
@@ -71,7 +79,10 @@ const brewfatherClient = createBrewfatherClientFromEnv();
 const brewfatherSync = new BrewfatherSyncCoordinator({
   db,
   client: brewfatherClient,
-  onUpdate: () => sseHub.publishImmediate('brewfather_batches_changed', getFullStateSnapshot()),
+  onUpdate: () => {
+    evaluatePlanning();
+    sseHub.publishImmediate('brewfather_batches_changed', getFullStateSnapshot());
+  },
   onFailure: (result) => publishBrewfatherSyncFailure(result)
 });
 
@@ -165,6 +176,9 @@ function handleError(res, error, context = 'request') {
 
 function allowedMethodsForApiPath(pathname) {
   if (['/api/state', '/api/brewfather/status'].includes(pathname)) return ['GET'];
+  if (pathname === '/api/draft-health/config') return ['GET', 'POST'];
+  if (pathname === '/api/planning/config') return ['GET'];
+  if (['/api/draft-health/acknowledge', '/api/maintenance', '/api/planning/policy'].includes(pathname)) return ['POST'];
   if (pathname === '/api/ondeck') return ['GET', 'POST'];
   if (
     ['/api/auth', '/api/settings', '/api/admin/pin', '/api/brewfather/refresh', '/api/custom-beverage'].includes(
@@ -175,6 +189,7 @@ function allowedMethodsForApiPath(pathname) {
   if (/^\/api\/taps\/[1-6](?:\/(?:end-batch|end-keg))?$/.test(pathname)) return ['POST'];
   if (/^\/api\/batches\/[A-Za-z0-9_-]{1,256}\/story$/.test(pathname)) return ['GET'];
   if (/^\/api\/batches\/[A-Za-z0-9_-]{1,256}\/sensory$/.test(pathname)) return ['POST'];
+  if (/^\/api\/batches\/[A-Za-z0-9_-]{1,256}\/readiness$/.test(pathname)) return ['POST'];
   if (/^\/api\/batches\/[A-Za-z0-9_-]{1,256}\/image$/.test(pathname)) return ['GET'];
   return null;
 }
@@ -188,6 +203,509 @@ function calculateKegKickForecast(tapId) {
     capacityOz: measurement.capacityOz,
     volumeStatus: measurement.volumeStatus
   });
+}
+
+const healthEngines = new Map();
+let draftHealthProjection = {
+  schemaVersion: 1,
+  configured: true,
+  summary: 'Draft health is initializing.',
+  checks: []
+};
+let tapPlanningProjection = { schemaVersion: 1, configured: true, stale: true, taps: [] };
+let healthEvaluationTimer = null;
+let phase4DebounceTimer = null;
+
+function schedulePhase4Evaluation({ health = true, planning = false } = {}) {
+  if (phase4DebounceTimer !== null) clearTimeout(phase4DebounceTimer);
+  phase4DebounceTimer = setTimeout(() => {
+    phase4DebounceTimer = null;
+    if (health) evaluateDraftHealth();
+    if (planning) evaluatePlanning();
+  }, 250);
+  phase4DebounceTimer.unref?.();
+}
+
+function parseBoundedJson(value, fallback = {}) {
+  try {
+    const parsed = JSON.parse(value || '{}');
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function healthRowsForTap(tapId) {
+  const rows = db
+    .prepare(
+      `SELECT check_id, tap_id, enabled, config_json FROM health_check_config
+       WHERE tap_id IN (0, ?) ORDER BY tap_id`
+    )
+    .all(tapId);
+  const merged = new Map();
+  for (const row of rows) {
+    const previous = merged.get(row.check_id) || { enabled: false, config: {} };
+    merged.set(row.check_id, {
+      enabled: Boolean(row.enabled),
+      config: { ...previous.config, ...parseBoundedJson(row.config_json) }
+    });
+  }
+  return merged;
+}
+
+function healthConfigAtScope(checkId, tapId) {
+  const row = db
+    .prepare('SELECT config_json FROM health_check_config WHERE check_id=? AND tap_id=?')
+    .get(checkId, tapId);
+  return parseBoundedJson(row?.config_json);
+}
+
+function proposedHealthConfig(body) {
+  const currentGlobal = healthConfigAtScope(body.check_id, 0);
+  const proposedGlobal = body.tap_id === 0 ? { ...currentGlobal, ...body.config } : currentGlobal;
+  const affectedTaps = body.tap_id === 0 ? [1, 2, 3, 4, 5, 6] : [body.tap_id];
+  for (const tapId of affectedTaps) {
+    const currentTap = healthConfigAtScope(body.check_id, tapId);
+    const proposedTap = body.tap_id === tapId ? { ...currentTap, ...body.config } : currentTap;
+    validateEffectiveHealthConfig(body.check_id, { ...proposedGlobal, ...proposedTap });
+  }
+  return {
+    ...healthConfigAtScope(body.check_id, body.tap_id),
+    ...body.config
+  };
+}
+
+function draftHealthEngineConfig(tapId) {
+  const rows = healthRowsForTap(tapId);
+  const get = (id) => rows.get(id) || { enabled: false, config: {} };
+  const low = get('low_keg');
+  const scale = get('scale_availability');
+  const leak = get('suspected_leak');
+  const temperature = get('serving_temperature');
+  const cleaning = get('line_cleaning_due');
+  const cToF = (value) => (Number(value) * 9) / 5 + 32;
+  return mergeDraftHealthConfig({
+    low_keg: {
+      enabled: low.enabled,
+      thresholdOz: 0,
+      thresholdPercent: Number(low.config.warning_percent ?? 20),
+      criticalPercent: Number(low.config.critical_percent ?? 5)
+    },
+    scale_availability: {
+      enabled: scale.enabled,
+      staleAfterMs: Number(scale.config.stale_minutes ?? 30) * 60_000,
+      unavailableAfterMs: Number(scale.config.unavailable_minutes ?? 5) * 60_000
+    },
+    suspected_leak: {
+      enabled: leak.enabled,
+      lossOz: Number(leak.config.loss_oz ?? 8),
+      windowMs: Number(leak.config.window_minutes ?? 15) * 60_000,
+      pourGraceMs: Number(leak.config.pour_grace_minutes ?? 2) * 60_000,
+      settlingMs: Number(leak.config.settling_minutes ?? 10) * 60_000,
+      resetMovementOz: 32,
+      maxSamples: 64
+    },
+    serving_temperature: {
+      enabled: temperature.enabled,
+      minimumF: cToF(temperature.config.warning_min_c ?? 1.1),
+      maximumF: cToF(temperature.config.warning_max_c ?? 5.6),
+      criticalMinimumF: cToF(temperature.config.critical_min_c ?? -1.1),
+      criticalMaximumF: cToF(temperature.config.critical_max_c ?? 10),
+      durationMs: Number(temperature.config.duration_minutes ?? 15) * 60_000
+    },
+    line_cleaning_due: {
+      enabled: cleaning.enabled,
+      intervalDays: Number(cleaning.config.warning_days ?? 14),
+      criticalAfterDays: Math.max(
+        0,
+        Number(cleaning.config.critical_days ?? 21) - Number(cleaning.config.warning_days ?? 14)
+      )
+    }
+  });
+}
+
+function healthEngineForTap(tapId) {
+  const config = draftHealthEngineConfig(tapId);
+  const fingerprint = JSON.stringify(config);
+  const existing = healthEngines.get(tapId);
+  if (existing?.fingerprint === fingerprint) return existing.engine;
+  const engine = new DraftHealthEngine({ config });
+  healthEngines.set(tapId, { fingerprint, engine });
+  return engine;
+}
+
+function latestCleaningAt(tapId) {
+  return (
+    db
+      .prepare(
+        `SELECT m.completed_at FROM maintenance_records m
+         JOIN maintenance_record_taps mt ON mt.maintenance_id=m.maintenance_id
+         WHERE mt.tap_id=? ORDER BY m.completed_at DESC, m.maintenance_id DESC LIMIT 1`
+      )
+      .get(tapId)?.completed_at ?? null
+  );
+}
+
+function healthEventContext(tapId) {
+  const lifecycle = activeLifecycle(db, tapId);
+  const tap = db
+    .prepare(
+      `SELECT t.batch_id, t.override_name, t.override_style, b.recipe_name, b.style
+       FROM taps t LEFT JOIN batches b ON b.batch_id=t.batch_id WHERE t.tap_id=?`
+    )
+    .get(tapId);
+  return lifecycleEventContext({
+    tapId,
+    lifecycle,
+    batchId: lifecycle?.batch_id ?? tap?.batch_id ?? null,
+    displayName: tap?.override_name || tap?.recipe_name || null,
+    displayStyle: tap?.override_style || tap?.style || null
+  });
+}
+
+function healthTransition(previous, next) {
+  const previousActionable = previous && previous.state !== 'healthy' && previous.state !== 'not_configured';
+  const nextActionable = next.state !== 'healthy' && next.state !== 'not_configured';
+  if (!previousActionable && nextActionable) return 'opened';
+  if (nextActionable && !previous?.last_event_at) return 'opened';
+  if (previousActionable && !nextActionable) return 'resolved';
+  if (previousActionable && nextActionable && previous.severity !== next.severity) return 'escalated';
+  return null;
+}
+
+function persistHealthEvaluation(tapId, evaluation, { publish = true } = {}) {
+  const now = new Date(evaluation.evaluatedAt).toISOString();
+  const previousRows = new Map(
+    db
+      .prepare('SELECT * FROM health_check_state WHERE tap_id=?')
+      .all(tapId)
+      .map((row) => [row.check_id, row])
+  );
+  const upsert = db.prepare(
+    `INSERT INTO health_check_state
+      (check_id, tap_id, lifecycle_id, state, severity, code, evidence_json, incident_id,
+       transitioned_at, acknowledged_at, cooldown_until, last_event_at)
+     VALUES (@check_id, @tap_id, @lifecycle_id, @state, @severity, @code, @evidence_json, @incident_id,
+       @transitioned_at, @acknowledged_at, @cooldown_until, @last_event_at)
+     ON CONFLICT(check_id, tap_id) DO UPDATE SET
+       lifecycle_id=excluded.lifecycle_id, state=excluded.state, severity=excluded.severity,
+       code=excluded.code, evidence_json=excluded.evidence_json, incident_id=excluded.incident_id,
+       transitioned_at=excluded.transitioned_at, acknowledged_at=excluded.acknowledged_at,
+       cooldown_until=excluded.cooldown_until, last_event_at=excluded.last_event_at`
+  );
+  const lifecycle = activeLifecycle(db, tapId);
+  const projected = [];
+  const pendingEvents = [];
+  db.transaction(() => {
+    for (const check of evaluation.checks) {
+      const previous = previousRows.get(check.id) || null;
+      const transition = healthTransition(previous, check);
+      const actionable = check.state !== 'healthy' && check.state !== 'not_configured';
+      const sameIncident =
+        actionable &&
+        previous &&
+        previous.lifecycle_id === (lifecycle?.lifecycle_id ?? null) &&
+        previous.state !== 'healthy' &&
+        previous.state !== 'not_configured' &&
+        transition !== 'escalated';
+      const incidentId = actionable ? (sameIncident ? previous.incident_id : crypto.randomUUID()) : null;
+      const config = healthRowsForTap(tapId).get(check.id)?.config || {};
+      const cooldownMs = Number(config.cooldown_minutes ?? 360) * 60_000;
+      const mayPublish =
+        publish &&
+        transition &&
+        (check.state !== 'not_configured' || transition === 'resolved') &&
+        (transition !== 'resolved' || Boolean(previous?.last_event_at));
+      const row = {
+        check_id: check.id,
+        tap_id: tapId,
+        lifecycle_id: lifecycle?.lifecycle_id ?? null,
+        state: check.state,
+        severity: check.severity,
+        code: check.evidence?.reason || check.evidence?.label || null,
+        evidence_json: JSON.stringify(check.evidence || {}).slice(0, 4096),
+        incident_id: incidentId,
+        transitioned_at: transition ? now : previous?.transitioned_at || now,
+        acknowledged_at: sameIncident && transition !== 'escalated' ? (previous?.acknowledged_at ?? null) : null,
+        cooldown_until: mayPublish
+          ? new Date(evaluation.evaluatedAt + cooldownMs).toISOString()
+          : (previous?.cooldown_until ?? null),
+        last_event_at: mayPublish ? now : (previous?.last_event_at ?? null)
+      };
+      if (publish) upsert.run(row);
+      if (mayPublish) {
+        pendingEvents.push({
+          eventType: 'health_transition',
+          data: {
+            check_id: check.id,
+            transition,
+            state: transition === 'resolved' || check.state === 'healthy' ? 'healthy' : check.state,
+            severity: check.severity,
+            code: row.code
+          }
+        });
+        if (check.id === 'low_keg' && transition === 'opened') {
+          const threshold = Number(config.warning_percent ?? 20);
+          const current = Number(check.evidence?.volumeOz);
+          const capacity = Number(haClient.getPublicTapStates()?.[String(tapId)]?.capacityOz);
+          const currentPercent = capacity > 0 ? Math.max(0, Math.min(100, (current / capacity) * 100)) : 0;
+          pendingEvents.push({
+            eventType: 'low_keg',
+            data: {
+              current_percent: currentPercent,
+              threshold_percent: threshold
+            }
+          });
+        }
+      }
+      projected.push({
+        id: check.id,
+        tapId,
+        state: check.state,
+        severity: check.severity,
+        code: row.code,
+        evidence: check.evidence || {},
+        incidentId,
+        transitionedAt: row.transitioned_at,
+        acknowledged: Boolean(row.acknowledged_at),
+        acknowledgeable: actionable
+      });
+    }
+  })();
+  for (const event of pendingEvents) publishTapboardEvent(event.eventType, healthEventContext(tapId), event.data);
+  return projected;
+}
+
+function evaluateDraftHealth({ publish = true } = {}) {
+  const checks = [];
+  for (let tapId = 1; tapId <= 6; tapId++) {
+    const lifecycle = activeLifecycle(db, tapId);
+    const rows = healthRowsForTap(tapId);
+    const temperatureEntityId = rows.get('serving_temperature')?.config?.entity_id || null;
+    const evaluation = healthEngineForTap(tapId).evaluate({
+      tapId,
+      lifecycle,
+      connected: haClient.isConnected,
+      ...haClient.getTapHealthInput(tapId),
+      temperature: temperatureEntityId ? haClient.getEntityState(temperatureEntityId) : null,
+      lineCleanedAt: latestCleaningAt(tapId)
+    });
+    checks.push(...persistHealthEvaluation(tapId, evaluation, { publish }));
+  }
+  const active = checks.filter((check) => check.state === 'active' || check.state === 'degraded');
+  const severityRank = { none: 0, info: 1, warning: 2, critical: 3 };
+  const highestSeverity = active.reduce(
+    (highest, check) => (severityRank[check.severity] > severityRank[highest] ? check.severity : highest),
+    'none'
+  );
+  draftHealthProjection = {
+    schemaVersion: 1,
+    configured: true,
+    summary: active.length
+      ? `${active.length} draft health item${active.length === 1 ? '' : 's'} need attention.`
+      : 'Draft health is clear.',
+    attentionCount: active.length,
+    highestSeverity,
+    checks,
+    evaluatedAt: new Date().toISOString()
+  };
+  if (publish) sseHub.publishImmediate('health_updated', draftHealthProjection);
+  return draftHealthProjection;
+}
+
+function readinessPolicy() {
+  return db.prepare('SELECT * FROM readiness_policy WHERE id=1').get();
+}
+
+function planningCandidates(policy = readinessPolicy()) {
+  const rows = db
+    .prepare(
+      `SELECT b.*, p.visible, d.payload_json AS detail_json, o.earliest_date, o.latest_date, o.confirmed
+       FROM batches b
+       JOIN brewfather_ondeck_preferences p ON p.batch_id=b.batch_id
+       LEFT JOIN brewfather_batch_details d ON d.batch_id=b.batch_id
+       LEFT JOIN batch_readiness_overrides o ON o.batch_id=b.batch_id
+       JOIN settings s ON s.id=1
+       WHERE b.present=1 AND p.visible=1 AND s.show_ondeck=1
+       ORDER BY b.brew_date DESC, b.batch_id LIMIT 50`
+    )
+    .all();
+  const requirements = db.prepare('SELECT capability FROM batch_capability_requirements WHERE batch_id=?');
+  return rows.map((row) => {
+    const detail = parseBoundedJson(row.detail_json, {});
+    const fermentation = detail?.recipe?.profiles?.fermentation;
+    const minutes = Array.isArray(fermentation?.steps)
+      ? fermentation.steps.reduce(
+          (sum, step) =>
+            sum + Math.max(0, Number(step?.time_minutes) || 0) + Math.max(0, Number(step?.ramp_minutes) || 0),
+          0
+        )
+      : 0;
+    const fermentationDays = minutes > 0 ? [Math.ceil(minutes / 1_440), Math.ceil(minutes / 1_440)] : null;
+    return {
+      batchId: row.batch_id,
+      name: row.recipe_name || row.batch_name || 'On Deck batch',
+      style: row.style || '',
+      status: row.status,
+      brew_date: row.brew_date?.slice(0, 10) || null,
+      start_date: row.start_date?.slice(0, 10) || null,
+      fermentation_start_date: row.fermentation_start_date?.slice(0, 10) || null,
+      conditioning_date: row.conditioning_date?.slice(0, 10) || null,
+      packaging_date: row.packaging_date?.slice(0, 10) || null,
+      completed_date: row.completed_date?.slice(0, 10) || null,
+      fermentationDays,
+      detail: detail && Object.keys(detail).length ? { fermentation_profile: fermentation } : null,
+      override: {
+        earliest_date: row.earliest_date,
+        latest_date: row.latest_date,
+        confirmed: row.confirmed === 1
+      },
+      requiredCapabilities: requirements.all(row.batch_id).map((item) => item.capability),
+      syncFreshness: {
+        stale:
+          !row.last_success_at ||
+          Date.now() - Date.parse(row.last_success_at) > Number(policy.stale_after_hours ?? 12) * 60 * 60_000
+      }
+    };
+  });
+}
+
+function evaluatePlanning({ publish = true } = {}) {
+  const policyRow = readinessPolicy();
+  const policy = {
+    ...DEFAULT_TAP_PLANNING_POLICY,
+    fermentationDays: [policyRow.fallback_fermentation_min_days, policyRow.fallback_fermentation_max_days],
+    packagingDays: [policyRow.packaging_min_days, policyRow.packaging_max_days],
+    conditioningDays: [policyRow.conditioning_min_days, policyRow.conditioning_max_days],
+    planningLatestUncertaintyDays: policyRow.planning_uncertainty_days
+  };
+  const capabilityQuery = db.prepare('SELECT capability FROM tap_capabilities WHERE tap_id=? ORDER BY capability');
+  const taps = db
+    .prepare('SELECT tap_id, batch_id FROM taps WHERE enabled=1 ORDER BY tap_id')
+    .all()
+    .map((tap) => ({
+      tapId: tap.tap_id,
+      batchId: tap.batch_id,
+      capabilityTags: capabilityQuery.all(tap.tap_id).map((row) => row.capability),
+      forecast: calculateKegKickForecast(tap.tap_id)
+    }));
+  const raw = buildTapPlanningProjection({ taps, candidates: planningCandidates(policyRow), policy });
+  const plans = raw.map((plan) => {
+    const candidates = plan.candidates.slice(0, 3).map((candidate) => ({
+      batchId: candidate.batchId,
+      name: candidate.name,
+      style: candidate.style,
+      readiness: {
+        earliest: candidate.readiness.earliest,
+        latest: candidate.readiness.latest,
+        confidence: candidate.readiness.confidence,
+        source: candidate.readiness.source,
+        confirmed: candidate.override?.confirmed === true,
+        status: candidate.status === 'Completed' ? 'potential_completed' : 'potential'
+      },
+      compatibility: candidate.compatibility,
+      gap: candidate.gap
+    }));
+    const selected = candidates.find((candidate) => candidate.compatibility.status !== 'incompatible') || null;
+    return {
+      tapId: plan.tapId,
+      tapName: `Tap ${plan.tapId}`,
+      forecastAvailable: plan.forecastAvailable,
+      classification: selected?.gap?.classification || 'unknown',
+      candidateName: selected?.name || null,
+      confidence: selected?.readiness?.confidence || 'low',
+      compatibility: selected?.compatibility?.status || 'potential',
+      rangeText:
+        selected?.readiness?.earliest && selected?.readiness?.latest
+          ? `${selected.readiness.earliest} to ${selected.readiness.latest}`
+          : null,
+      assumptions: [
+        'Recommendations are timing estimates, not physical keg inventory.',
+        'Fermentation data is read-only and never declares completion.'
+      ],
+      noInventory: true,
+      candidates
+    };
+  });
+  const sync = getBrewfatherSyncStatus(db);
+  tapPlanningProjection = {
+    schemaVersion: 1,
+    configured: true,
+    stale: !['ok', 'running'].includes(sync.status),
+    taps: plans,
+    evaluatedAt: new Date().toISOString()
+  };
+  persistPlanningTransitions(plans, policyRow, { publish });
+  if (publish) sseHub.publishImmediate('planning_updated', tapPlanningProjection);
+  return tapPlanningProjection;
+}
+
+function persistPlanningTransitions(plans, policy, { publish = true } = {}) {
+  if (!publish) return;
+  const select = db.prepare('SELECT * FROM forecast_gap_state WHERE tap_id=?');
+  const upsert = db.prepare(
+    `INSERT INTO forecast_gap_state
+      (tap_id, lifecycle_id, state, candidate_batch_id, gap_min_days, gap_max_days, signature, last_event_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(tap_id) DO UPDATE SET lifecycle_id=excluded.lifecycle_id, state=excluded.state,
+       candidate_batch_id=excluded.candidate_batch_id, gap_min_days=excluded.gap_min_days,
+       gap_max_days=excluded.gap_max_days, signature=excluded.signature, last_event_at=excluded.last_event_at,
+       updated_at=strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`
+  );
+  const now = Date.now();
+  for (const plan of plans) {
+    const lifecycle = activeLifecycle(db, plan.tapId);
+    const candidate = plan.candidates.find((item) => item.compatibility.status !== 'incompatible') || null;
+    const classification = candidate?.gap?.classification || 'unknown';
+    const minGap = candidate?.gap?.earliestGapDays ?? null;
+    const maxGap = candidate?.gap?.latestGapDays ?? null;
+    const signature = crypto
+      .createHash('sha256')
+      .update(
+        JSON.stringify([lifecycle?.lifecycle_id ?? null, classification, candidate?.batchId ?? null, minGap, maxGap])
+      )
+      .digest('hex');
+    const previous = select.get(plan.tapId);
+    const opened = classification === 'forecast_gap' && previous?.state !== 'forecast_gap';
+    const resolved = previous?.state === 'forecast_gap' && classification !== 'forecast_gap';
+    const materiallyChanged =
+      classification === 'forecast_gap' &&
+      previous?.state === 'forecast_gap' &&
+      (previous.candidate_batch_id !== candidate?.batchId ||
+        Math.abs(Number(previous.gap_min_days) - Number(minGap)) >= 1 ||
+        Math.abs(Number(previous.gap_max_days) - Number(maxGap)) >= 1);
+    const cooldownElapsed =
+      !previous?.last_event_at || now - Date.parse(previous.last_event_at) >= policy.cooldown_hours * 60 * 60_000;
+    const transition = opened
+      ? 'opened'
+      : resolved
+        ? 'resolved'
+        : materiallyChanged && cooldownElapsed
+          ? 'updated'
+          : null;
+    const lastEventAt = publish && transition ? new Date(now).toISOString() : (previous?.last_event_at ?? null);
+    upsert.run(
+      plan.tapId,
+      lifecycle?.lifecycle_id ?? null,
+      classification,
+      candidate?.batchId ?? null,
+      minGap,
+      maxGap,
+      signature,
+      lastEventAt
+    );
+    if (publish && transition) {
+      publishTapboardEvent('forecast_gap', healthEventContext(plan.tapId), {
+        transition,
+        classification,
+        candidate_batch_id: candidate?.batchId ?? null,
+        gap_min_days: minGap,
+        gap_max_days: maxGap,
+        confidence: candidate?.readiness?.confidence || 'low',
+        compatibility: candidate?.compatibility?.status || 'potential'
+      });
+    }
+  }
 }
 
 function assignmentIdentity({ batchId, overrideEnabled, overrideName }) {
@@ -220,7 +738,10 @@ haClient.on('connection_change', (isConnected) => {
     isConnected,
     timestamp: new Date().toISOString()
   });
+  schedulePhase4Evaluation({ health: true });
 });
+
+haClient.on('source_state_changed', () => schedulePhase4Evaluation({ health: true }));
 
 haClient.on('state_changed', (data) => {
   sseHub.publish('state_changed', data);
@@ -237,6 +758,7 @@ haClient.on('pour_complete', (data) => {
     ...data,
     kegKickForecast: calculateKegKickForecast(data.tapId)
   });
+  schedulePhase4Evaluation({ health: true, planning: true });
 });
 
 haClient.on('pour_receipt', (data) => {
@@ -266,6 +788,7 @@ haClient.on('low_keg_alert', (data) => {
 });
 
 haClient.on('hydrated', () => {
+  evaluateDraftHealth();
   sseHub.publishImmediate('snapshot', getFullStateSnapshot());
 });
 
@@ -469,6 +992,8 @@ function getFullStateSnapshot() {
   `
     )
     .all();
+  const tapCapabilityQuery = db.prepare('SELECT capability FROM tap_capabilities WHERE tap_id=? ORDER BY capability');
+  for (const tap of taps) tap.capabilities = tapCapabilityQuery.all(tap.tap_id).map((row) => row.capability);
   const assignedIds = [...new Set(taps.map((tap) => tap.batch_id).filter((id) => id && !id.startsWith('custom:')))];
   const batches = assignedIds.map((batchId) => batchSummary(db, batchId)).filter(Boolean);
   const onDeckBatches = settings.show_ondeck ? onDeckBatchesForPublic().filter((batch) => batch.visible) : [];
@@ -480,7 +1005,7 @@ function getFullStateSnapshot() {
   }
 
   return {
-    schemaVersion: 8,
+    schemaVersion: 9,
     settings,
     taps,
     batches,
@@ -490,6 +1015,8 @@ function getFullStateSnapshot() {
     haConnected: haClient.isConnected,
     kegKickForecasts,
     lifecycleMilestones: activeLifecycleMilestones(),
+    draftHealth: draftHealthProjection,
+    tapPlanning: tapPlanningProjection,
     timestamp: new Date().toISOString()
   };
 }
@@ -862,6 +1389,7 @@ const server = http.createServer(async (req, res) => {
 
       console.log(`[SETTINGS ACTION] Global Studio Settings updated request_id=${requestId} client=${clientIp}`);
 
+      evaluatePlanning();
       sseHub.publishImmediate('settings_updated', getFullStateSnapshot());
       sendJson(res, 200, { success: true, settings: getFullStateSnapshot().settings });
     } catch (err) {
@@ -1005,6 +1533,27 @@ const server = http.createServer(async (req, res) => {
         } else {
           db.transaction(applyTapUpdate)();
         }
+        if (body.capabilities !== undefined) {
+          db.transaction(() => {
+            db.prepare('DELETE FROM tap_capabilities WHERE tap_id=?').run(tapId);
+            const insertCapability = db.prepare('INSERT INTO tap_capabilities (tap_id, capability) VALUES (?, ?)');
+            for (const capability of body.capabilities) insertCapability.run(tapId, capability);
+          })();
+        }
+        if (body.badge_low_keg !== undefined) {
+          db.prepare(
+            `INSERT INTO health_check_config (check_id, tap_id, enabled, config_json)
+             VALUES ('low_keg', ?, ?, ?)
+             ON CONFLICT(check_id, tap_id) DO UPDATE SET enabled=excluded.enabled,
+               config_json=json_patch(health_check_config.config_json, excluded.config_json),
+               updated_at=strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`
+          ).run(
+            tapId,
+            body.badge_low_keg > 0 ? 1 : 0,
+            JSON.stringify({ warning_percent: body.badge_low_keg > 0 ? body.badge_low_keg : 20 })
+          );
+          healthEngines.delete(tapId);
+        }
         if (lifecycleChanges) haClient.clearTapMeasurement(tapId);
 
         if (lifecycleChanges && currentLifecycle) {
@@ -1053,10 +1602,18 @@ const server = http.createServer(async (req, res) => {
             .catch((err) => console.warn(`[HA Warning] Enable boolean call failed:`, err.message));
         }
 
+        evaluateDraftHealth();
+        evaluatePlanning();
         sseHub.publishImmediate('settings_updated', getFullStateSnapshot());
         sendJson(res, 200, {
           success: true,
-          tap: db.prepare('SELECT * FROM taps WHERE tap_id = ?').get(tapId)
+          tap: {
+            ...db.prepare('SELECT * FROM taps WHERE tap_id = ?').get(tapId),
+            capabilities: db
+              .prepare('SELECT capability FROM tap_capabilities WHERE tap_id=? ORDER BY capability')
+              .all(tapId)
+              .map((row) => row.capability)
+          }
         });
       });
     } catch (err) {
@@ -1095,6 +1652,8 @@ const server = http.createServer(async (req, res) => {
         { reason: 'end_batch' }
       );
 
+      evaluateDraftHealth();
+      evaluatePlanning();
       sseHub.publishImmediate('settings_updated', getFullStateSnapshot());
       sendJson(res, 200, { success: true, message: `Batch completed and tap ${tapId} cleared.` });
     } catch (err) {
@@ -1155,6 +1714,8 @@ const server = http.createServer(async (req, res) => {
         });
       }
 
+      evaluateDraftHealth();
+      evaluatePlanning();
       sseHub.publishImmediate('settings_updated', getFullStateSnapshot());
       sendJson(res, 200, {
         success: true,
@@ -1203,6 +1764,7 @@ const server = http.createServer(async (req, res) => {
         body.batches.forEach((batch) => update.run(batch.visible ? 1 : 0, batch.batch_id));
         if (body.show_ondeck !== undefined) updateEnabled.run(body.show_ondeck ? 1 : 0);
       })();
+      evaluatePlanning();
       sseHub.publishImmediate('settings_updated', getFullStateSnapshot());
       sendJson(res, 200, {
         success: true,
@@ -1213,6 +1775,206 @@ const server = http.createServer(async (req, res) => {
       });
     } catch (err) {
       handleError(res, err, requestContext('update on deck'));
+    }
+    return;
+  }
+
+  if (url.pathname === '/api/draft-health/config' && req.method === 'GET') {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const configs = db
+        .prepare(
+          'SELECT check_id, tap_id, enabled, config_json, updated_at FROM health_check_config ORDER BY check_id, tap_id'
+        )
+        .all()
+        .map((row) => ({
+          check_id: row.check_id,
+          tap_id: row.tap_id,
+          enabled: row.enabled === 1,
+          config: parseBoundedJson(row.config_json),
+          updated_at: row.updated_at
+        }));
+      const maintenance = db
+        .prepare(
+          `SELECT m.maintenance_id, m.completed_at, m.method, m.notes, m.next_due_at,
+             group_concat(mt.tap_id) AS tap_ids
+           FROM maintenance_records m
+           JOIN maintenance_record_taps mt ON mt.maintenance_id=m.maintenance_id
+           GROUP BY m.maintenance_id ORDER BY m.completed_at DESC, m.maintenance_id DESC LIMIT 50`
+        )
+        .all()
+        .map((row) => ({ ...row, tap_ids: String(row.tap_ids).split(',').map(Number) }));
+      sendJson(res, 200, { schemaVersion: 1, configs, maintenance });
+    } catch (err) {
+      handleError(res, err, requestContext('read draft health configuration'));
+    }
+    return;
+  }
+
+  if (url.pathname === '/api/draft-health/config' && req.method === 'POST') {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const body = validateHealthConfig(await readJsonBody(req));
+      ensureServing();
+      const proposedConfig = proposedHealthConfig(body);
+      db.prepare(
+        `INSERT INTO health_check_config (check_id, tap_id, enabled, config_json)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(check_id, tap_id) DO UPDATE SET enabled=excluded.enabled,
+           config_json=excluded.config_json, updated_at=strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`
+      ).run(body.check_id, body.tap_id, body.enabled ? 1 : 0, JSON.stringify(proposedConfig));
+      if (body.check_id === 'low_keg' && body.tap_id > 0 && proposedConfig.warning_percent !== undefined) {
+        db.prepare('UPDATE taps SET badge_low_keg=? WHERE tap_id=?').run(
+          body.enabled ? proposedConfig.warning_percent : 0,
+          body.tap_id
+        );
+      }
+      healthEngines.delete(body.tap_id || 1);
+      if (body.tap_id === 0) healthEngines.clear();
+      evaluateDraftHealth();
+      sendJson(res, 200, { success: true, draftHealth: draftHealthProjection });
+    } catch (err) {
+      handleError(res, err, requestContext('update draft health configuration'));
+    }
+    return;
+  }
+
+  if (url.pathname === '/api/draft-health/acknowledge' && req.method === 'POST') {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const body = validateHealthAcknowledgement(await readJsonBody(req));
+      ensureServing();
+      const current = db
+        .prepare('SELECT incident_id, state FROM health_check_state WHERE check_id=? AND tap_id=?')
+        .get(body.check_id, body.tap_id);
+      if (
+        !current ||
+        current.incident_id !== body.incident_id ||
+        ['healthy', 'not_configured'].includes(current.state)
+      ) {
+        throw new HttpError(409, 'Health incident is no longer current');
+      }
+      const acknowledgedAt = new Date().toISOString();
+      db.prepare('UPDATE health_check_state SET acknowledged_at=? WHERE check_id=? AND tap_id=?').run(
+        acknowledgedAt,
+        body.check_id,
+        body.tap_id
+      );
+      const check = draftHealthProjection.checks.find(
+        (item) => item.id === body.check_id && item.tapId === body.tap_id && item.incidentId === body.incident_id
+      );
+      if (check) {
+        check.acknowledged = true;
+        sseHub.publishImmediate('health_updated', draftHealthProjection);
+      }
+      sendJson(res, 200, { success: true, acknowledged_at: acknowledgedAt });
+    } catch (err) {
+      handleError(res, err, requestContext('acknowledge draft health incident'));
+    }
+    return;
+  }
+
+  if (url.pathname === '/api/maintenance' && req.method === 'POST') {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const body = validateMaintenance(await readJsonBody(req));
+      ensureServing();
+      const maintenanceId = db.transaction(() => {
+        const result = db
+          .prepare(
+            `INSERT INTO maintenance_records (completed_at, method, notes, next_due_at)
+             VALUES (?, ?, ?, ?)`
+          )
+          .run(body.completed_at, body.method, body.notes, body.next_due_at);
+        const insertTap = db.prepare('INSERT INTO maintenance_record_taps (maintenance_id, tap_id) VALUES (?, ?)');
+        for (const tap of body.tap_ids) insertTap.run(result.lastInsertRowid, tap);
+        return Number(result.lastInsertRowid);
+      })();
+      evaluateDraftHealth();
+      sendJson(res, 201, { success: true, maintenance_id: maintenanceId });
+    } catch (err) {
+      handleError(res, err, requestContext('record line maintenance'));
+    }
+    return;
+  }
+
+  if (url.pathname === '/api/planning/config' && req.method === 'GET') {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const overrides = db
+        .prepare(
+          `SELECT o.batch_id, o.earliest_date, o.latest_date, o.confirmed, o.updated_at,
+             b.recipe_name, b.status
+           FROM batch_readiness_overrides o JOIN batches b ON b.batch_id=o.batch_id
+           ORDER BY b.recipe_name, o.batch_id`
+        )
+        .all()
+        .map((row) => ({ ...row, confirmed: row.confirmed === 1 }));
+      const requirements = db
+        .prepare('SELECT batch_id, capability FROM batch_capability_requirements ORDER BY batch_id, capability')
+        .all();
+      const tapCapabilities = db
+        .prepare('SELECT tap_id, capability FROM tap_capabilities ORDER BY tap_id, capability')
+        .all();
+      sendJson(res, 200, { schemaVersion: 1, policy: readinessPolicy(), overrides, requirements, tapCapabilities });
+    } catch (err) {
+      handleError(res, err, requestContext('read tap planning configuration'));
+    }
+    return;
+  }
+
+  if (url.pathname === '/api/planning/policy' && req.method === 'POST') {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const body = validateReadinessPolicy(await readJsonBody(req));
+      ensureServing();
+      const current = readinessPolicy();
+      const merged = { ...current, ...body };
+      for (const [minimum, maximum] of [
+        ['fallback_fermentation_min_days', 'fallback_fermentation_max_days'],
+        ['packaging_min_days', 'packaging_max_days'],
+        ['conditioning_min_days', 'conditioning_max_days']
+      ]) {
+        if (merged[minimum] > merged[maximum]) throw new ValidationError('Invalid readiness range');
+      }
+      const entries = Object.entries(body);
+      db.prepare(
+        `UPDATE readiness_policy SET ${entries.map(([key]) => `${key}=?`).join(', ')},
+          updated_at=strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id=1`
+      ).run(...entries.map(([, value]) => value));
+      evaluatePlanning();
+      sendJson(res, 200, { success: true, policy: readinessPolicy(), tapPlanning: tapPlanningProjection });
+    } catch (err) {
+      handleError(res, err, requestContext('update tap planning policy'));
+    }
+    return;
+  }
+
+  const readinessMatch = url.pathname.match(/^\/api\/batches\/([A-Za-z0-9_-]{1,256})\/readiness$/);
+  if (readinessMatch && req.method === 'POST') {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const batchId = readinessMatch[1];
+      const body = validateReadinessOverride(await readJsonBody(req));
+      ensureServing();
+      if (!db.prepare('SELECT 1 FROM batches WHERE batch_id=? AND present=1').get(batchId))
+        throw new HttpError(404, 'Brewfather batch is not available');
+      db.transaction(() => {
+        db.prepare(
+          `INSERT INTO batch_readiness_overrides (batch_id, earliest_date, latest_date, confirmed)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(batch_id) DO UPDATE SET earliest_date=excluded.earliest_date,
+             latest_date=excluded.latest_date, confirmed=excluded.confirmed,
+             updated_at=strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`
+        ).run(batchId, body.earliest_date, body.latest_date, body.confirmed ? 1 : 0);
+        db.prepare('DELETE FROM batch_capability_requirements WHERE batch_id=?').run(batchId);
+        const insert = db.prepare('INSERT INTO batch_capability_requirements (batch_id, capability) VALUES (?, ?)');
+        for (const capability of body.required_capabilities) insert.run(batchId, capability);
+      })();
+      evaluatePlanning();
+      sendJson(res, 200, { success: true, tapPlanning: tapPlanningProjection });
+    } catch (err) {
+      handleError(res, err, requestContext('update batch readiness'));
     }
     return;
   }
@@ -1328,6 +2090,14 @@ const server = http.createServer(async (req, res) => {
   });
 });
 
+evaluateDraftHealth({ publish: false });
+evaluatePlanning({ publish: false });
+healthEvaluationTimer = setInterval(() => {
+  evaluateDraftHealth();
+  evaluatePlanning();
+}, 60_000);
+healthEvaluationTimer.unref?.();
+
 server.listen(PORT, () => {
   console.log(`[Tapboard Server] Running on http://localhost:${PORT}`);
 });
@@ -1338,6 +2108,8 @@ function shutdown(signal) {
   shuttingDown = true;
   console.log(`[Tapboard Server] ${signal} received; shutting down cleanly.`);
   brewfatherSync.stop();
+  if (phase4DebounceTimer !== null) clearTimeout(phase4DebounceTimer);
+  if (healthEvaluationTimer !== null) clearInterval(healthEvaluationTimer);
   haClient.stop();
   sseHub.close();
   const forceExit = setTimeout(() => {

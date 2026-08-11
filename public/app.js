@@ -12,6 +12,7 @@ import {
   playCeremonySound,
   renderForecastDetails
 } from './phase3Ui.js';
+import { createTaproomStatusController, taproomHeaderBadgeText } from './taproomStatus.js';
 
 let appState = {
   settings: {},
@@ -22,7 +23,9 @@ let appState = {
   tapStates: {},
   haConnected: true,
   kegKickForecasts: {},
-  lifecycleMilestones: {}
+  lifecycleMilestones: {},
+  draftHealth: null,
+  tapPlanning: null
 };
 
 let editingTapId = null;
@@ -33,6 +36,7 @@ let brewfatherStatusRequestId = 0;
 let brewStory;
 let celebration;
 let tickerAutoScroller;
+let taproomStatus;
 let titleFitFrame = null;
 const simulatedPourTimers = new Map();
 const LONG_PRESS_MS = 600;
@@ -111,6 +115,151 @@ function applyFullSnapshot(snapshot) {
   hasRenderedSnapshot = true;
   updateClockStatus(appState.haConnected ? 'Live' : 'Disconnected');
   renderApp();
+  refreshTaproomStatusUi();
+}
+
+function taproomCallbacks() {
+  const actions = {
+    acknowledge: async (check) => {
+      if (!check?.incidentId) return;
+      await postTaproom('/api/draft-health/acknowledge', {
+        check_id: check.id,
+        tap_id: check.tapId,
+        incident_id: check.incidentId
+      });
+    },
+    saveConfig: async () => {
+      const checkId = prompt(
+        'Health check ID: low_keg, scale_availability, suspected_leak, serving_temperature, or line_cleaning_due'
+      );
+      if (!checkId) return;
+      const tapText = prompt('Tap number 1–6, or leave blank for the global default', '') ?? '';
+      const enabled = confirm('Enable this health check?');
+      const configText = prompt('Validated JSON configuration for this check', '{}');
+      if (configText === null) return;
+      await postTaproom('/api/draft-health/config', {
+        check_id: checkId,
+        tap_id: tapText.trim() ? Number(tapText) : null,
+        enabled,
+        config: JSON.parse(configText)
+      });
+    },
+    recordMaintenance: async () => {
+      const taps = prompt('Cleaned tap/line numbers, comma-separated', '1');
+      if (!taps) return;
+      const method = prompt('Cleaning method', 'Recirculated line cleaner');
+      if (!method) return;
+      const notes = prompt('Private maintenance notes (optional)', '') ?? '';
+      await postTaproom('/api/maintenance', {
+        completed_at: new Date().toISOString(),
+        tap_ids: taps.split(',').map((value) => Number(value.trim())),
+        method,
+        notes,
+        next_due_at: null
+      });
+    },
+    saveReadiness: async () => {
+      const batchId = prompt('Brewfather batch ID');
+      if (!batchId) return;
+      const earliest = prompt('Earliest serving date (YYYY-MM-DD), or leave blank', '') ?? '';
+      const latest = earliest ? prompt('Latest serving date (YYYY-MM-DD)', earliest) : '';
+      const capabilities = prompt(
+        'Required capabilities, comma-separated: standard, nitro, high_carbonation, custom_non_beer',
+        ''
+      );
+      await postTaproom(`/api/batches/${encodeURIComponent(batchId)}/readiness`, {
+        earliest_date: earliest || null,
+        latest_date: latest || null,
+        confirmed: confirm('Confirm this scheduling range? This does not confirm physical keg inventory.'),
+        required_capabilities: capabilities
+          ? capabilities
+              .split(',')
+              .map((value) => value.trim())
+              .filter(Boolean)
+          : []
+      });
+    },
+    savePolicy: async () => {
+      const conditioningMax = prompt('Maximum conditioning days', '14');
+      if (conditioningMax === null) return;
+      await postTaproom('/api/planning/policy', { conditioning_max_days: Number(conditioningMax) });
+    },
+    saveTapCapabilities: async () => {
+      const tapId = prompt('Tap number 1–6');
+      if (!tapId) return;
+      const tap = appState.taps.find((item) => item.tap_id === Number(tapId));
+      if (!tap) return;
+      const capabilities = prompt(
+        'Capabilities, comma-separated: standard, nitro, high_carbonation, custom_non_beer',
+        (tap.capabilities || []).join(',')
+      );
+      if (capabilities === null) return;
+      await postTaproom(`/api/taps/${tapId}`, {
+        capabilities: capabilities
+          .split(',')
+          .map((value) => value.trim())
+          .filter(Boolean)
+      });
+    }
+  };
+  return Object.fromEntries(
+    Object.entries(actions).map(([key, action]) => [
+      key,
+      async (...args) => {
+        try {
+          return await action(...args);
+        } catch (error) {
+          alert(error?.message || 'Taproom update failed');
+          return null;
+        }
+      }
+    ])
+  );
+}
+
+async function postTaproom(path, payload) {
+  const response = await fetch(path, {
+    method: 'POST',
+    headers: authHeaders(true),
+    body: JSON.stringify(payload)
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || 'Taproom update failed');
+  if (result.draftHealth) appState.draftHealth = result.draftHealth;
+  if (result.tapPlanning) appState.tapPlanning = result.tapPlanning;
+  showToast('Taproom Status updated.');
+  refreshTaproomStatusUi();
+  return result;
+}
+
+function refreshTaproomStatusUi() {
+  const badge = document.getElementById('taproomStatusBadge');
+  if (badge) badge.textContent = taproomHeaderBadgeText(appState.draftHealth);
+  const dialog = document.getElementById('taproomStatusDialog');
+  if (!dialog) return;
+  taproomStatus ||= createTaproomStatusController({ dialog });
+  if (dialog.open) {
+    taproomStatus.render({
+      dialog,
+      draftHealth: appState.draftHealth,
+      tapPlanning: appState.tapPlanning,
+      authenticated: Boolean(authToken),
+      callbacks: taproomCallbacks()
+    });
+  }
+}
+
+function openTaproomStatus() {
+  const dialog = document.getElementById('taproomStatusDialog');
+  if (!dialog) return;
+  taproomStatus ||= createTaproomStatusController({ dialog });
+  taproomStatus.open({
+    dialog,
+    draftHealth: appState.draftHealth,
+    tapPlanning: appState.tapPlanning,
+    authenticated: Boolean(authToken),
+    callbacks: taproomCallbacks()
+  });
 }
 
 async function loadInitialSnapshot() {
@@ -130,6 +279,7 @@ function updateAuthUI() {
   } else {
     document.body.classList.remove('is-authenticated');
   }
+  refreshTaproomStatusUi();
 }
 
 if (document.readyState === 'loading') {
@@ -204,6 +354,18 @@ function initSSE() {
   // 3. HA State Changed
   eventSource.addEventListener('state_changed', (e) => {
     liveUpdates.applyStateChanged(JSON.parse(e.data));
+  });
+
+  eventSource.addEventListener('health_updated', (e) => {
+    appState.draftHealth = JSON.parse(e.data);
+    refreshTaproomStatusUi();
+    scheduleTapUpdates(new Set(['1', '2', '3', '4', '5', '6']));
+  });
+
+  eventSource.addEventListener('planning_updated', (e) => {
+    appState.tapPlanning = JSON.parse(e.data);
+    refreshTaproomStatusUi();
+    scheduleTapUpdates(new Set(['1', '2', '3', '4', '5', '6']));
   });
 
   // 4. Instant Pour Animation Start
@@ -472,6 +634,32 @@ function scheduleTitleFits() {
   });
 }
 
+function updatePhase4Badges(card, tapId) {
+  const badges = card.querySelector('.tap-card-badges');
+  if (!badges) return;
+  const healthItems = (appState.draftHealth?.checks || []).filter(
+    (check) => check.tapId === tapId && ['active', 'degraded'].includes(check.state)
+  );
+  const healthBadge = badges.querySelector('.badge-health');
+  if (healthItems.length && !healthBadge) {
+    const badge = document.createElement('span');
+    badge.className = 'badge badge-health';
+    badge.textContent = 'HEALTH';
+    badge.title = `${healthItems.length} draft health item${healthItems.length === 1 ? '' : 's'}`;
+    badges.appendChild(badge);
+  } else if (!healthItems.length) healthBadge?.remove();
+
+  const planning = appState.tapPlanning?.taps?.find((plan) => plan.tapId === tapId);
+  const gapBadge = badges.querySelector('.badge-gap');
+  if (planning?.classification === 'forecast_gap' && !gapBadge) {
+    const badge = document.createElement('span');
+    badge.className = 'badge badge-gap';
+    badge.textContent = 'TAP GAP';
+    badge.title = 'A likely future tap gap needs planning';
+    badges.appendChild(badge);
+  } else if (planning?.classification !== 'forecast_gap') gapBadge?.remove();
+}
+
 // Main Render Function with In-Place Targeted DOM Preservation
 function renderApp() {
   const { taps } = appState;
@@ -621,6 +809,7 @@ function createTapCard(tap) {
       `tap_${tapId}`
     );
   }
+  updatePhase4Badges(card, tapId);
 
   // Cog Button Click: Open Per-Tap Settings
   const cogBtn = card.querySelector('.tap-cog-btn');
@@ -790,6 +979,7 @@ function updateTapCard(card, tap) {
       sensorBadge.remove();
     }
   }
+  updatePhase4Badges(card, tapId);
 
   const metrics = card.querySelectorAll('.metric-value');
   if (metrics.length >= 4) {
@@ -1922,6 +2112,8 @@ function initModalListeners() {
       }
     });
   }
+
+  document.getElementById('taproomStatusBtn')?.addEventListener('click', openTaproomStatus);
 
   document.getElementById('onDeckSettingsBtn')?.addEventListener('click', openOnDeckModal);
   document.getElementById('onDeckItems')?.addEventListener('click', (event) => {

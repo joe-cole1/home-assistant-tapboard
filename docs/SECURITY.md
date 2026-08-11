@@ -63,6 +63,8 @@ The only Brewfather write is the explicit End Batch request body `{"status":"Com
 
 Home Assistant outbound events are built from per-type allowlists. They never accept complete Brewfather objects, arbitrary notes, action targets, webhooks, notification destinations, generic service payloads, fermentation measurements, controller state, or credentials. Publishing happens after the associated local commit and is non-fatal if HA is disconnected.
 
+The public Taproom Status projection exposes only bounded health states/evidence and potential planning ranges. Exact serving-temperature entity IDs, maintenance notes, readiness policy controls, and full configuration are available only through authenticated endpoints and are absent from public HTTP/SSE snapshots. Health and forecast notifications use strict `health_transition` and `forecast_gap` event payloads; all notification services, webhook destinations, scripts, and credentials remain Home Assistant-owned.
+
 ## Database safety
 
 Production expects existing data and refuses an empty named volume. On startup, a database with an older supported schema is backed up and verified in the independent backup volume before its ordered migration runs transactionally. A backup-verification or migration failure aborts startup. A database from a future schema version is rejected rather than downgraded. Use the supported maintenance commands described in [Database operations](DATABASE-OPERATIONS.md); never copy only a live SQLite main database file while WAL writes may be active.

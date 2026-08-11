@@ -39,9 +39,68 @@ test('catalog covers the wired event types', () => {
     'low_keg',
     'first_pour',
     'keg_kicked',
-    'brewfather_sync_failed'
+    'brewfather_sync_failed',
+    'health_transition',
+    'forecast_gap'
   ]);
   assert.throws(() => buildTapboardEvent('fermentation_started', context, {}), /Unsupported/);
+});
+
+test('health and planning transitions expose only the strict HA automation contract', () => {
+  assert.deepEqual(
+    buildTapboardEvent('health_transition', context, {
+      check_id: 'line_cleaning_due',
+      transition: 'opened',
+      state: 'active',
+      severity: 'warning',
+      code: 'cleaning_due'
+    }).data,
+    {
+      check_id: 'line_cleaning_due',
+      transition: 'opened',
+      state: 'active',
+      severity: 'warning',
+      code: 'cleaning_due'
+    }
+  );
+  assert.deepEqual(
+    buildTapboardEvent('forecast_gap', context, {
+      transition: 'opened',
+      classification: 'forecast_gap',
+      candidate_batch_id: 'next-batch',
+      gap_min_days: 2,
+      gap_max_days: 6,
+      confidence: 'medium',
+      compatibility: 'compatible'
+    }).data.classification,
+    'forecast_gap'
+  );
+  assert.throws(
+    () =>
+      buildTapboardEvent('health_transition', context, {
+        check_id: 'line_cleaning_due',
+        transition: 'opened',
+        state: 'active',
+        severity: 'warning',
+        code: 'cleaning_due',
+        entity_id: 'sensor.private'
+      }),
+    /not allowed/
+  );
+  assert.throws(
+    () =>
+      buildTapboardEvent('forecast_gap', context, {
+        transition: 'opened',
+        classification: 'forecast_gap',
+        candidate_batch_id: 'next-batch',
+        gap_min_days: 2,
+        gap_max_days: 6,
+        confidence: 'medium',
+        compatibility: 'compatible',
+        gravity: 1.01
+      }),
+    /not allowed/
+  );
 });
 
 test('builds a safe Brewfather sync failure envelope from an internal result', () => {
