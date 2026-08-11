@@ -135,7 +135,7 @@ test('Brew Story routes enforce public visibility and authenticated sensory over
     database
       .prepare(
         `INSERT INTO brewfather_batch_details (batch_id, payload_json, fingerprint, fetched_at)
-       VALUES ('story-a', '{"batch":{},"recipe":{}}', 'v1', '2026-08-09T00:00:00.000Z')`
+       VALUES ('story-a', '{"batch":{"sensory_v2_souring":"Kettle sour"},"recipe":{"sensory_v2_souring":true}}', 'v1', '2026-08-09T00:00:00.000Z')`
       )
       .run();
 
@@ -152,8 +152,11 @@ test('Brew Story routes enforce public visibility and authenticated sensory over
     const storyText = await publicStory.text();
     assert.ok(Buffer.byteLength(storyText) < 512 * 1024);
     const publicPayload = JSON.parse(storyText);
-    assert.equal(publicPayload.schema_version, 4);
+    assert.equal(publicPayload.schema_version, 5);
     assert.equal('override' in publicPayload.sensory, false);
+    assert.equal('shadow' in publicPayload.sensory, false);
+    assert.equal('sensory_v2_souring' in (publicPayload.sections?.batch || {}), false);
+    assert.equal('sensory_v2_souring' in (publicPayload.sections?.recipe || {}), false);
 
     const sensory = await fetch(`${instance.baseUrl}/api/batches/story-a/sensory`, {
       method: 'POST',
@@ -168,6 +171,8 @@ test('Brew Story routes enforce public visibility and authenticated sensory over
       description_override: 'Manual public description',
       axis_overrides: { hops: 4.5 }
     });
+    assert.equal(adminPayload.sensory.shadow.rules_version, 'sensory-v2');
+    assert.equal(adminPayload.sensory.shadow.candidate.axes.hops.value, 4.5);
     assert.equal(
       (
         await fetch(`${instance.baseUrl}/api/batches/story-a/sensory`, {

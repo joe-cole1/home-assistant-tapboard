@@ -169,4 +169,20 @@ export function buildSensoryProfile({ summary = {}, detail = {}, override = {} }
   return Object.freeze({ rules_version: RULES_VERSION, axes: Object.freeze(axes), prose });
 }
 
+export const buildSensoryProfileV1 = buildSensoryProfile;
+
+export function buildSensoryModelV1({ summary = {}, detail = {} } = {}) {
+  const batch = firstObject(detail.batch);
+  return buildSensoryProfile({
+    summary,
+    detail: {
+      ...detail,
+      batch: { ...batch, taste_logs: [] },
+      tasting: null,
+      tasting_notes: null,
+      sensory: null
+    }
+  });
+}
+
 export { RULES_VERSION, SENSORY_AXES };

@@ -66,6 +66,11 @@ function object(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 }
 
+function souringSignal(value) {
+  if (value === true || value === false) return value;
+  return cleanText(value, 160);
+}
+
 function cleanTextList(value, { limit = 50, max = 160 } = {}) {
   return (Array.isArray(value) ? value : [])
     .slice(0, limit)
@@ -287,6 +292,7 @@ function boundedDetailJson(snapshot) {
       name: snapshot.recipe.name,
       description: snapshot.recipe.description,
       style: snapshot.recipe.style,
+      sensory_v2_souring: snapshot.recipe.sensory_v2_souring,
       ingredients: Object.fromEntries(
         Object.entries(snapshot.recipe.ingredients).map(([key, value]) => [key, value.slice(0, 20)])
       ),
@@ -318,6 +324,7 @@ export function sanitizeDetail(source) {
         .map(sanitizeTaste)
         .filter(Boolean),
       nutrition: sanitizeNutrition(source.nutrition),
+      sensory_v2_souring: souringSignal(source.souring),
       measurements: sanitizeMeasurements(source, recipe)
     },
     recipe: {
@@ -328,6 +335,7 @@ export function sanitizeDetail(source) {
       description: cleanText(recipe.description, 8_000),
       notes: cleanText(recipe.notes, 8_000),
       style: sanitizeStyle(recipe.style),
+      sensory_v2_souring: souringSignal(recipe.souring),
       ingredients: sanitizeIngredients(recipe),
       profiles: {
         mash: sanitizeProfile(recipe.mash),

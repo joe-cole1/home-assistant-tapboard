@@ -26,8 +26,9 @@ function database() {
   ).run(
     JSON.stringify({
       image_url: 'https://images.example/private.png',
-      batch: { taste_logs: [{ ratings: { bitterness: 4, alcohol: 3 } }] },
+      batch: { sensory_v2_souring: 'Kettle sour', taste_logs: [{ ratings: { bitterness: 4, alcohol: 3 } }] },
       recipe: {
+        sensory_v2_souring: true,
         style: { name: 'American IPA' },
         ingredients: { hops: [{ name: 'Citra', use: 'Dry Hop' }], fermentables: [{ name: 'Pale Malt' }] }
       }
@@ -84,9 +85,10 @@ test('story projection is bounded, stale-aware, lifecycle-scoped, and sensory-ve
       window: 'all',
       now: () => Date.parse('2026-08-10T00:00:00.000Z'),
       tapStates: { 1: { volumeOz: 400, fillPercent: 62.5, volumeStatus: 'measured' } },
-      forecastForTap: () => ({ estimatedDaysRemaining: 10 })
+      forecastForTap: () => ({ estimatedDaysRemaining: 10 }),
+      includeHiddenSensory: true
     });
-    assert.equal(story.schema_version, 4);
+    assert.equal(story.schema_version, 5);
     assert.equal(Object.hasOwn(story.tapboard, 'serving_glass'), false);
     assert.equal(story.telemetry.history.total_points, 800);
     assert.ok(story.telemetry.history.points.length <= 600);
@@ -97,7 +99,13 @@ test('story projection is bounded, stale-aware, lifecycle-scoped, and sensory-ve
     assert.equal(story.sensory.rules_version, 'sensory-v1');
     assert.equal(story.sensory.axes.hops.value, 4.5);
     assert.equal(story.sensory.description, 'Bright and bitter.');
+    assert.equal(story.sensory.shadow.rules_version, 'sensory-v2');
+    assert.equal(story.sensory.shadow.comparison.hops.v1, 4.5);
+    assert.equal(story.sensory.shadow.comparison.hops.v2, 4.5);
     assert.equal('image_url' in story.sections, false);
+    assert.equal('sensory_v2_souring' in story.sections, false);
+    assert.equal('sensory_v2_souring' in (story.sections.batch || {}), false);
+    assert.equal('sensory_v2_souring' in (story.sections.recipe || {}), false);
     assert.ok(Buffer.byteLength(JSON.stringify(story)) < 512 * 1024);
   } finally {
     db.close();
