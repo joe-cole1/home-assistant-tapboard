@@ -668,7 +668,16 @@ function validateLatestSchema(db) {
     tap_capabilities: ['tap_id', 'capability'],
     batch_capability_requirements: ['batch_id', 'capability'],
     forecast_gap_state: ['tap_id', 'lifecycle_id', 'state', 'signature', 'last_event_at'],
-    health_incident_actions: ['action_id', 'check_id', 'tap_id', 'incident_id', 'action_type', 'snooze_until', 'action_at', 'operator_notes'],
+    health_incident_actions: [
+      'action_id',
+      'check_id',
+      'tap_id',
+      'incident_id',
+      'action_type',
+      'snooze_until',
+      'action_at',
+      'operator_notes'
+    ],
     schema_migrations: ['version', 'name', 'applied_at']
   })) {
     if (!tableExists(db, table)) throw new Error(`Incompatible schema version ${SCHEMA_VERSION}: missing ${table}`);

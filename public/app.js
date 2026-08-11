@@ -324,7 +324,8 @@ function renderHealthOverview(data) {
     ];
     for (const item of kpis) {
       const card = document.createElement('div');
-      card.style.cssText = 'background: var(--bg-header); border: 1px solid var(--border-color); padding: 1rem; border-radius: 0.5rem; text-align: center;';
+      card.style.cssText =
+        'background: var(--bg-header); border: 1px solid var(--border-color); padding: 1rem; border-radius: 0.5rem; text-align: center;';
       const label = document.createElement('div');
       label.style.cssText = 'font-size: 0.8rem; color: var(--text-muted);';
       label.textContent = item.label;
@@ -349,7 +350,8 @@ function renderHealthOverview(data) {
     } else {
       for (const r of records) {
         const item = document.createElement('div');
-        item.style.cssText = 'display: flex; justify-content: space-between; font-size: 0.85rem; padding: 0.4rem 0; border-bottom: 1px dashed var(--border-color);';
+        item.style.cssText =
+          'display: flex; justify-content: space-between; font-size: 0.85rem; padding: 0.4rem 0; border-bottom: 1px dashed var(--border-color);';
         const left = document.createElement('div');
         left.textContent = `Tap ${r.tap_ids?.join(', ') || 'All'} — ${r.method || 'Cleaned'}${r.notes ? ` (${r.notes})` : ''}`;
         const right = document.createElement('div');
@@ -735,7 +737,7 @@ function scheduleTitleFits() {
   });
 }
 
-function updatePhase4Badges(card, tapId) {
+function updatePhase4Badges(card, _tapId) {
   const badges = card.querySelector('.tap-card-badges');
   if (!badges) return;
   const healthBadge = badges.querySelector('.badge-health');
@@ -1778,7 +1780,8 @@ function renderOnDeckManager(batches) {
 
     const tapSelect = document.createElement('select');
     tapSelect.className = 'form-select ondeck-target-tap-select';
-    tapSelect.style.cssText = 'padding: 0.25rem 0.5rem; font-size: 0.8rem; width: auto; background-color: var(--bg-dark); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 0.4rem; margin-right: 0.5rem;';
+    tapSelect.style.cssText =
+      'padding: 0.25rem 0.5rem; font-size: 0.8rem; width: auto; background-color: var(--bg-dark); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 0.4rem; margin-right: 0.5rem;';
     tapSelect.dataset.batchId = checkbox.dataset.batchId;
     const optAny = document.createElement('option');
     optAny.value = '';
@@ -2378,7 +2381,10 @@ function initModalListeners() {
     const method = prompt('Cleaning method (Caustic, Acid, Water Flush)', 'Caustic');
     if (!method) return;
     const notes = prompt('Maintenance notes (optional)', 'Routine line cleaning') ?? '';
-    const tapIds = tapsInput.split(',').map((val) => Number(val.trim())).filter((n) => !isNaN(n) && n > 0);
+    const tapIds = tapsInput
+      .split(',')
+      .map((val) => Number(val.trim()))
+      .filter((n) => !isNaN(n) && n > 0);
     if (!tapIds.length) {
       alert('Please enter valid tap numbers');
       return;

@@ -279,7 +279,8 @@ export class DraftHealthEngine {
         else if (value < config.minimumPsi || value > config.maximumPsi) {
           record.pressureOutsideSince ??= now;
           const durationMs = now - record.pressureOutsideSince;
-          const severity = value < config.criticalMinimumPsi || value > config.criticalMaximumPsi ? 'critical' : 'warning';
+          const severity =
+            value < config.criticalMinimumPsi || value > config.criticalMaximumPsi ? 'critical' : 'warning';
           check =
             durationMs >= config.durationMs
               ? result(

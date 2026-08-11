@@ -566,7 +566,11 @@ export function onDeckBatches(db, { limit = MAX_PUBLIC_BATCHES } = {}) {
     `
     )
     .all(boundedLimit)
-    .map((row) => ({ ...row, visible: row.visible === 1, target_tap_id: row.target_tap_id ? Number(row.target_tap_id) : null }));
+    .map((row) => ({
+      ...row,
+      visible: row.visible === 1,
+      target_tap_id: row.target_tap_id ? Number(row.target_tap_id) : null
+    }));
 }
 
 export function detailCandidates(db, changedIds = [], limit = 12) {
