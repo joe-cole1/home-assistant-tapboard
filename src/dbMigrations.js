@@ -1,5 +1,5 @@
 const BASE_SCHEMA_VERSION = 1;
-export const SCHEMA_VERSION = 9;
+export const SCHEMA_VERSION = 10;
 
 function tableExists(db, name) {
   return Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name));
@@ -421,6 +421,146 @@ function migrateLifecycleExperienceSchema(db) {
   `);
 }
 
+function migrateDraftHealthAndPlanningSchema(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS health_check_config (
+      check_id TEXT NOT NULL,
+      tap_id INTEGER NOT NULL DEFAULT 0 CHECK(tap_id BETWEEN 0 AND 6),
+      enabled INTEGER NOT NULL CHECK(enabled IN (0, 1)),
+      config_json TEXT NOT NULL DEFAULT '{}' CHECK(length(config_json) <= 4096),
+      updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+      PRIMARY KEY(check_id, tap_id)
+    );
+    CREATE TABLE IF NOT EXISTS health_check_state (
+      check_id TEXT NOT NULL,
+      tap_id INTEGER NOT NULL DEFAULT 0 CHECK(tap_id BETWEEN 0 AND 6),
+      lifecycle_id INTEGER,
+      state TEXT NOT NULL CHECK(state IN ('not_configured', 'healthy', 'degraded', 'active')),
+      severity TEXT NOT NULL CHECK(severity IN ('none', 'info', 'warning', 'critical')),
+      code TEXT,
+      evidence_json TEXT NOT NULL DEFAULT '{}' CHECK(length(evidence_json) <= 4096),
+      incident_id TEXT,
+      transitioned_at TEXT NOT NULL,
+      acknowledged_at TEXT,
+      cooldown_until TEXT,
+      last_event_at TEXT,
+      PRIMARY KEY(check_id, tap_id)
+    );
+    CREATE TABLE IF NOT EXISTS maintenance_records (
+      maintenance_id INTEGER PRIMARY KEY,
+      completed_at TEXT NOT NULL,
+      method TEXT NOT NULL CHECK(length(method) BETWEEN 1 AND 160),
+      notes TEXT NOT NULL DEFAULT '' CHECK(length(notes) <= 1000),
+      next_due_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+    );
+    CREATE TABLE IF NOT EXISTS maintenance_record_taps (
+      maintenance_id INTEGER NOT NULL,
+      tap_id INTEGER NOT NULL CHECK(tap_id BETWEEN 1 AND 6),
+      PRIMARY KEY(maintenance_id, tap_id),
+      FOREIGN KEY(maintenance_id) REFERENCES maintenance_records(maintenance_id)
+        ON UPDATE RESTRICT ON DELETE CASCADE,
+      FOREIGN KEY(tap_id) REFERENCES taps(tap_id) ON UPDATE RESTRICT ON DELETE RESTRICT
+    );
+    CREATE TABLE IF NOT EXISTS readiness_policy (
+      id INTEGER PRIMARY KEY CHECK(id = 1),
+      fallback_fermentation_min_days INTEGER NOT NULL DEFAULT 10 CHECK(fallback_fermentation_min_days BETWEEN 0 AND 365),
+      fallback_fermentation_max_days INTEGER NOT NULL DEFAULT 21 CHECK(fallback_fermentation_max_days BETWEEN 0 AND 365),
+      packaging_min_days INTEGER NOT NULL DEFAULT 1 CHECK(packaging_min_days BETWEEN 0 AND 365),
+      packaging_max_days INTEGER NOT NULL DEFAULT 3 CHECK(packaging_max_days BETWEEN 0 AND 365),
+      conditioning_min_days INTEGER NOT NULL DEFAULT 7 CHECK(conditioning_min_days BETWEEN 0 AND 365),
+      conditioning_max_days INTEGER NOT NULL DEFAULT 14 CHECK(conditioning_max_days BETWEEN 0 AND 365),
+      planning_uncertainty_days INTEGER NOT NULL DEFAULT 7 CHECK(planning_uncertainty_days BETWEEN 0 AND 365),
+      stale_after_hours INTEGER NOT NULL DEFAULT 12 CHECK(stale_after_hours BETWEEN 1 AND 720),
+      cooldown_hours INTEGER NOT NULL DEFAULT 6 CHECK(cooldown_hours BETWEEN 1 AND 168),
+      updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+      CHECK(fallback_fermentation_min_days <= fallback_fermentation_max_days),
+      CHECK(packaging_min_days <= packaging_max_days),
+      CHECK(conditioning_min_days <= conditioning_max_days)
+    );
+    INSERT OR IGNORE INTO readiness_policy (id) VALUES (1);
+    CREATE TABLE IF NOT EXISTS batch_readiness_overrides (
+      batch_id TEXT PRIMARY KEY,
+      earliest_date TEXT,
+      latest_date TEXT,
+      confirmed INTEGER NOT NULL DEFAULT 0 CHECK(confirmed IN (0, 1)),
+      updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+      FOREIGN KEY(batch_id) REFERENCES batches(batch_id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+      CHECK((earliest_date IS NULL AND latest_date IS NULL) OR
+            (earliest_date IS NOT NULL AND latest_date IS NOT NULL AND earliest_date <= latest_date))
+    );
+    CREATE TABLE IF NOT EXISTS tap_capabilities (
+      tap_id INTEGER NOT NULL CHECK(tap_id BETWEEN 1 AND 6),
+      capability TEXT NOT NULL CHECK(capability IN ('standard', 'nitro', 'high_carbonation', 'custom_non_beer')),
+      PRIMARY KEY(tap_id, capability),
+      FOREIGN KEY(tap_id) REFERENCES taps(tap_id) ON UPDATE RESTRICT ON DELETE RESTRICT
+    );
+    CREATE TABLE IF NOT EXISTS batch_capability_requirements (
+      batch_id TEXT NOT NULL,
+      capability TEXT NOT NULL CHECK(capability IN ('standard', 'nitro', 'high_carbonation', 'custom_non_beer')),
+      PRIMARY KEY(batch_id, capability),
+      FOREIGN KEY(batch_id) REFERENCES batches(batch_id) ON UPDATE RESTRICT ON DELETE RESTRICT
+    );
+    CREATE TABLE IF NOT EXISTS forecast_gap_state (
+      tap_id INTEGER PRIMARY KEY CHECK(tap_id BETWEEN 1 AND 6),
+      lifecycle_id INTEGER,
+      state TEXT NOT NULL CHECK(state IN ('unknown', 'covered', 'possible_gap', 'forecast_gap')),
+      candidate_batch_id TEXT,
+      gap_min_days REAL,
+      gap_max_days REAL,
+      signature TEXT NOT NULL,
+      last_event_at TEXT,
+      updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+      FOREIGN KEY(tap_id) REFERENCES taps(tap_id) ON UPDATE RESTRICT ON DELETE RESTRICT
+    );
+    CREATE INDEX IF NOT EXISTS health_check_state_severity
+      ON health_check_state(severity, state, tap_id, check_id);
+    CREATE INDEX IF NOT EXISTS maintenance_record_taps_tap_completed
+      ON maintenance_record_taps(tap_id, maintenance_id);
+  `);
+
+  const globalConfigs = [
+    ['low_keg', 1, { warning_percent: 20, critical_percent: 5, cooldown_minutes: 360 }],
+    ['scale_availability', 1, { stale_minutes: 30, unavailable_minutes: 5, cooldown_minutes: 360 }],
+    [
+      'suspected_leak',
+      0,
+      { loss_oz: 8, window_minutes: 15, pour_grace_minutes: 2, settling_minutes: 10, cooldown_minutes: 360 }
+    ],
+    [
+      'serving_temperature',
+      0,
+      {
+        entity_id: null,
+        warning_min_c: 1.1,
+        warning_max_c: 5.6,
+        critical_min_c: -1.1,
+        critical_max_c: 10,
+        duration_minutes: 15,
+        cooldown_minutes: 360
+      }
+    ],
+    ['line_cleaning_due', 0, { warning_days: 14, critical_days: 21, cooldown_minutes: 360 }]
+  ];
+  const insertGlobal = db.prepare(
+    `INSERT OR IGNORE INTO health_check_config (check_id, tap_id, enabled, config_json) VALUES (?, 0, ?, ?)`
+  );
+  for (const [checkId, enabled, config] of globalConfigs) insertGlobal.run(checkId, enabled, JSON.stringify(config));
+
+  const insertLowKegOverride = db.prepare(
+    `INSERT OR IGNORE INTO health_check_config (check_id, tap_id, enabled, config_json)
+     VALUES ('low_keg', ?, ?, ?)`
+  );
+  for (const tap of db.prepare('SELECT tap_id, badge_low_keg FROM taps ORDER BY tap_id').all()) {
+    const threshold = Number(tap.badge_low_keg);
+    insertLowKegOverride.run(
+      tap.tap_id,
+      threshold > 0 ? 1 : 0,
+      JSON.stringify({ warning_percent: threshold > 0 ? threshold : 20 })
+    );
+  }
+}
+
 function validateLatestSchema(db) {
   for (const [table, required] of Object.entries({
     settings: ['id', 'admin_pin_hash', 'admin_pin_initialized'],
@@ -470,6 +610,24 @@ function validateLatestSchema(db) {
       'kick_pour_id',
       'kick_threshold_oz'
     ],
+    health_check_config: ['check_id', 'tap_id', 'enabled', 'config_json', 'updated_at'],
+    health_check_state: [
+      'check_id',
+      'tap_id',
+      'state',
+      'severity',
+      'evidence_json',
+      'transitioned_at',
+      'acknowledged_at',
+      'cooldown_until'
+    ],
+    maintenance_records: ['maintenance_id', 'completed_at', 'method', 'notes', 'next_due_at'],
+    maintenance_record_taps: ['maintenance_id', 'tap_id'],
+    readiness_policy: ['id', 'fallback_fermentation_min_days', 'conditioning_max_days', 'cooldown_hours'],
+    batch_readiness_overrides: ['batch_id', 'earliest_date', 'latest_date', 'confirmed', 'updated_at'],
+    tap_capabilities: ['tap_id', 'capability'],
+    batch_capability_requirements: ['batch_id', 'capability'],
+    forecast_gap_state: ['tap_id', 'lifecycle_id', 'state', 'signature', 'last_event_at'],
     schema_migrations: ['version', 'name', 'applied_at']
   })) {
     if (!tableExists(db, table)) throw new Error(`Incompatible schema version ${SCHEMA_VERSION}: missing ${table}`);
@@ -507,7 +665,9 @@ function validateLatestSchema(db) {
     'batches_brewfather_last_seen',
     'brewfather_batch_readings_batch_time',
     'brewfather_history_sync_due',
-    'lifecycle_milestones_kicked_at'
+    'lifecycle_milestones_kicked_at',
+    'health_check_state_severity',
+    'maintenance_record_taps_tap_completed'
   ]) {
     if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ?").get(index)) {
       throw new Error(`Incompatible schema version ${SCHEMA_VERSION}: missing ${index}`);
@@ -618,6 +778,14 @@ export function migrateDatabase(db) {
           'remove-serving-glass-recommendations'
         );
         db.pragma('user_version = 9');
+      }
+      if (version < 10) {
+        migrateDraftHealthAndPlanningSchema(db);
+        db.prepare('INSERT OR IGNORE INTO schema_migrations (version, name) VALUES (?, ?)').run(
+          10,
+          'draft-health-and-tap-planning'
+        );
+        db.pragma('user_version = 10');
       }
       // Validation is part of the migration transaction. A malformed legacy
       // table or missing constraint must roll back schema changes, ledger rows,

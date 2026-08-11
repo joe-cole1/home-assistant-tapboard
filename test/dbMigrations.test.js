@@ -36,7 +36,8 @@ test('migrates legacy pour rows without changing IDs, volumes, or timestamps', (
       { version: 6, name: 'brew-story' },
       { version: 7, name: 'serving-glass-recommendations' },
       { version: 8, name: 'lifecycle-experiences' },
-      { version: 9, name: 'remove-serving-glass-recommendations' }
+      { version: 9, name: 'remove-serving-glass-recommendations' },
+      { version: 10, name: 'draft-health-and-tap-planning' }
     ]);
     const settingColumns = db.prepare("SELECT name, dflt_value FROM pragma_table_info('settings')").all();
     assert.deepEqual(
@@ -187,6 +188,29 @@ test('fresh database migration is re-entrant and passes integrity and foreign-ke
     assert.equal(db.prepare('SELECT COUNT(*) AS count FROM brewfather_sync_state').get().count, 1);
     assert.equal(db.prepare('SELECT COUNT(*) AS count FROM brewfather_history_sync_state').get().count, 0);
     assert.ok(db.prepare("SELECT 1 FROM pragma_table_info('brewfather_batch_readings') WHERE name='ph'").get());
+    for (const table of [
+      'health_check_config',
+      'health_check_state',
+      'maintenance_records',
+      'maintenance_record_taps',
+      'readiness_policy',
+      'batch_readiness_overrides',
+      'tap_capabilities',
+      'batch_capability_requirements',
+      'forecast_gap_state'
+    ]) {
+      assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table), table);
+    }
+    assert.equal(db.prepare('SELECT COUNT(*) AS count FROM health_check_config').get().count, 5);
+    assert.deepEqual(
+      db
+        .prepare(
+          "SELECT check_id, enabled, json_extract(config_json, '$.entity_id') AS entity_id FROM health_check_config WHERE check_id='serving_temperature'"
+        )
+        .get(),
+      { check_id: 'serving_temperature', enabled: 0, entity_id: null }
+    );
+    assert.equal(db.prepare('SELECT COUNT(*) AS count FROM readiness_policy').get().count, 1);
   } finally {
     db.close();
   }

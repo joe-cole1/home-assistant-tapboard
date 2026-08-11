@@ -74,6 +74,7 @@ export class HAClient extends EventEmitter {
     this.primaryTapSensors = new Map();
     this.unitWarnings = new Map();
     this.activePourContexts = new Map();
+    this.lastPourEndedAt = new Map();
     this.kickCandidates = new Map();
     this.pendingReceipts = new Map();
     this.displayUpdateCoalescer =
@@ -450,6 +451,7 @@ export class HAClient extends EventEmitter {
     const { entity_id, new_state } = data;
     if (!new_state) {
       this.statesMap.delete(entity_id);
+      this.emit('source_state_changed', { entityId: entity_id, state: null, timestamp: this.now() });
       const displayChange = enqueueDisplay
         ? projectTapStateChange(entity_id, null, {
             statesMap: this.statesMap,
@@ -462,6 +464,11 @@ export class HAClient extends EventEmitter {
     }
 
     this.statesMap.set(entity_id, new_state);
+    this.emit('source_state_changed', {
+      entityId: entity_id,
+      state: new_state,
+      timestamp: this.stateTimestamp(new_state)
+    });
 
     // Apply 4-Stage Noise Filtering strictly to each tap's designated primary scale sensor
     for (let tapId = 1; ingestDetector && tapId <= 6; tapId++) {
@@ -551,6 +558,7 @@ export class HAClient extends EventEmitter {
     if (event.type === 'cancel') {
       const context = this.activePourContexts.get(event.tapId) || null;
       this.activePourContexts.delete(event.tapId);
+      this.lastPourEndedAt.set(event.tapId, event.timestamp ?? this.now());
       console.log(`[POUR EVENT] 🚫 Tap ${event.tapId} pour cancelled: ${event.reason}`);
       this.publishTapboardEvent('pour_cancelled', event.tapId, context, { reason: event.reason });
       this.emit('pour_cancel', event);
@@ -580,6 +588,7 @@ export class HAClient extends EventEmitter {
         timestamp: event.timestamp
       });
       this.activePourContexts.delete(tapId);
+      this.lastPourEndedAt.set(tapId, event.timestamp ?? this.now());
       const pourId = Number.isSafeInteger(recorded?.pourId) ? recorded.pourId : null;
       const firstPourClaimed = recorded?.firstPourClaimed === true;
 
@@ -657,8 +666,6 @@ export class HAClient extends EventEmitter {
           thresholdOz: tapSettings.kick_threshold_oz
         });
       }
-
-      this.checkLowKegAlert(tapId);
     }
   }
 
@@ -808,6 +815,25 @@ export class HAClient extends EventEmitter {
       isAssigned: this.isTapAssigned,
       lastValidMeasurements: this.lastValidMeasurements
     });
+  }
+
+  getEntityState(entityId) {
+    if (typeof entityId !== 'string' || !entityId) return null;
+    return this.statesMap.get(entityId) || null;
+  }
+
+  getTapHealthInput(tapId) {
+    const primaryId = this.getPrimaryTapSensor(tapId);
+    const source = this.statesMap.get(primaryId) || null;
+    const measurement = this.getPublicTapStates()[String(tapId)] || {};
+    return {
+      measurement: {
+        ...measurement,
+        freshAt: source ? this.stateTimestamp(source) : null
+      },
+      pourActive: this.activePourContexts.has(tapId),
+      lastPourAt: this.lastPourEndedAt.get(tapId) ?? null
+    };
   }
 
   clearTapMeasurement(tapId) {

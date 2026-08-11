@@ -17,6 +17,7 @@ Tapboard is a containerized dashboard for six Home Assistant-connected beer taps
 - Native Brewfather v2 cache for Planning, Brewing, Fermenting, Conditioning, and Completed batches, with durable On Deck preferences and stale-cache operation.
 - Cache-only Brew Stories for assigned and visible On Deck batches, including recipe intent, planned-versus-actual measurements, bounded telemetry, keg chapters, and deterministic sensory guidance.
 - Versioned, allowlisted `tapboard_event` delivery to Home Assistant after durable Tapboard actions.
+- A public Taproom Status dialog, opened from the header health badge, with per-tap draft-health checks and probabilistic replacement planning; authenticated administrators get configuration, acknowledgement, maintenance, readiness, and capability controls in the same dialog.
 - One Tapboard-owned custom beverage whose display metadata is editable without Home Assistant hard-coding.
 - Hardened Docker Compose deployment with loopback-only access and independent named data and backup volumes.
 
@@ -79,7 +80,7 @@ For each tap `N` (1–6), Tapboard reads exactly these entities:
 - `sensor.tap_N_fl_oz`: remaining measured volume in fluid ounces.
 - `input_number.tap_N_keg_capacity_oz`: authoritative per-tap capacity, an integer from 16 through 2048 fluid ounces.
 
-Tapboard publishes the coherent measurement tuple `volumeOz`, `capacityOz`, `fillPercent`, `pintsRemaining`, and `volumeStatus` in snapshot schema version 6 and in incremental SSE updates. It does not consume `sensor.tap_N_fill`, `sensor.tap_N_pints_remaining`, or HA-projected Brewfather entities.
+Tapboard publishes the coherent measurement tuple `volumeOz`, `capacityOz`, `fillPercent`, `pintsRemaining`, and `volumeStatus` in public snapshot schema version 9 and in incremental SSE updates. It does not consume `sensor.tap_N_fill`, `sensor.tap_N_pints_remaining`, or HA-projected Brewfather entities.
 
 `volumeStatus` is `measured` for a fresh valid scale reading, `stale` when the last valid in-process reading is retained after an existing source becomes unavailable, `assumed_full` only when the exact volume entity is absent and a batch is assigned, or `unavailable` on a cold start without a valid measurement (and for unassigned/sensor-unavailable taps). Low-keg alerts and low-keg badges are limited to fresh `measured` readings. Forecasts use the same server-derived tuple.
 
@@ -115,6 +116,14 @@ End Batch validates the current non-custom assignment, sends exactly `PATCH /v2/
 Selecting an assigned tap card or public On Deck item opens a full-screen Brew Story. Public access is limited to currently assigned batches and On Deck batches that are both visible and globally enabled. An authenticated administrator can open any present cached candidate and set per-axis half-step sensory overrides, replace the generated description, or hide sensory guidance from public viewers. Unknown traits remain unknown; the radar appears only when at least three axes have evidence.
 
 Home Assistant receives the versioned `tapboard_event` contract on a best-effort basis. See [Home Assistant event examples](docs/HOME-ASSISTANT-EVENTS.md). No HA configuration is created or changed automatically.
+
+## Taproom Status and Home Assistant actions
+
+Select the health badge in the main Tapboard header to open the full-screen **Taproom Status** dialog. Its **Draft Health** tab evaluates low keg, scale availability, suspected leak, serving temperature, and line-cleaning due status for taps 1–6. Low-keg and scale checks are enabled by default; conservative leak, temperature, and cleaning policies are opt-in. The **Tap Planning** tab compares lifecycle-scoped depletion ranges with visible On Deck readiness ranges and tap capabilities. Planning always labels its results as estimates and never claims that a physical spare keg exists or that fermentation is complete.
+
+The status view is public and contains only bounded display-safe projections. Sign in with the administrator PIN to acknowledge a current incident, configure a check, record maintenance, set readiness dates and confirmation, or maintain capability tags. Serving-temperature checks accept an exact HA entity ID in the private admin configuration; that identifier and maintenance notes are excluded from public HTTP and SSE state.
+
+Health changes and forecast-gap changes use the existing Home Assistant WebSocket connection and emit `tapboard_event` records with `event_type: health_transition` or `event_type: forecast_gap`. Home Assistant owns the action target, so an HA automation can filter `trigger.event.data.data.check_id == 'line_cleaning_due'` and call a mobile notifier, Discord notifier, webhook, script, light, or any other HA action. Tapboard never stores notification destinations or credentials. See the complete [event contract and cleaning-notification example](docs/HOME-ASSISTANT-EVENTS.md).
 
 ## Lifecycle experience
 

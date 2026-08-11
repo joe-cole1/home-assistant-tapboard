@@ -31,7 +31,7 @@ async function waitForServer(url, child) {
   throw new Error('server did not become ready');
 }
 
-test('healthcheck is lightweight and public HTTP/SSE snapshots use schema v8 native-cache state', async () => {
+test('healthcheck is lightweight and public HTTP/SSE snapshots use schema v9 health and planning state', async () => {
   const port = await reservePort();
   const dataDir = mkdtempSync(path.join(os.tmpdir(), 'tapboard-server-smoke-'));
   const child = spawn(process.execPath, ['src/server.js'], {
@@ -59,7 +59,7 @@ test('healthcheck is lightweight and public HTTP/SSE snapshots use schema v8 nat
     const stateResponse = await fetch(`${baseUrl}/api/state`);
     const stateText = await stateResponse.text();
     const snapshot = JSON.parse(stateText);
-    assert.equal(snapshot.schemaVersion, 8);
+    assert.equal(snapshot.schemaVersion, 9);
     assert.deepEqual(snapshot.settings, {
       id: 1,
       theme: 'modern_dark',
@@ -91,8 +91,14 @@ test('healthcheck is lightweight and public HTTP/SSE snapshots use schema v8 nat
     });
     assert.deepEqual(Object.keys(snapshot.tapStates), ['1', '2', '3', '4', '5', '6']);
     assert.deepEqual(snapshot.lifecycleMilestones, {});
+    assert.equal(snapshot.draftHealth.schemaVersion, 1);
+    assert.equal(snapshot.draftHealth.checks.length, 30);
+    assert.equal(snapshot.tapPlanning.schemaVersion, 1);
+    assert.equal(snapshot.tapPlanning.taps.length, snapshot.taps.filter((tap) => tap.enabled === 1).length);
     assert.equal(Object.hasOwn(snapshot, 'haStates'), false);
     assert.equal(stateText.includes('person.'), false);
+    assert.equal(stateText.includes('entity_id'), false);
+    assert.equal(stateText.includes('maintenance_note'), false);
     assert.ok(Buffer.byteLength(stateText) < 32 * 1024);
 
     const controller = new AbortController();
@@ -109,8 +115,10 @@ test('healthcheck is lightweight and public HTTP/SSE snapshots use schema v8 nat
     }
     controller.abort();
     assert.match(eventText, /event: snapshot\n/);
-    assert.match(eventText, /"schemaVersion":8/);
+    assert.match(eventText, /"schemaVersion":9/);
     assert.match(eventText, /"tapStates":/);
+    assert.match(eventText, /"draftHealth":/);
+    assert.match(eventText, /"tapPlanning":/);
     assert.doesNotMatch(eventText, /"haStates":/);
 
     console.log(`seeded public snapshot measurement: ${Buffer.byteLength(stateText)} bytes`);

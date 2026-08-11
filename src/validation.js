@@ -16,6 +16,14 @@ const CEREMONY_SOUNDS = new Set(['pub_bell', 'fanfare', 'last_call']);
 const DISPLAY_UNITS = new Set(['percent', 'pints', 'oz', 'pours_12', 'pours_custom']);
 const VOLUME_FORMATS = new Set(['oz', 'pints']);
 const LAYOUT_MODES = new Set(['cozy', 'compact']);
+export const HEALTH_CHECK_IDS = new Set([
+  'low_keg',
+  'scale_availability',
+  'suspected_leak',
+  'serving_temperature',
+  'line_cleaning_due'
+]);
+export const TAP_CAPABILITIES = new Set(['standard', 'nitro', 'high_carbonation', 'custom_non_beer']);
 const SENSORY_AXES = new Set([
   'malt',
   'hops',
@@ -87,6 +95,35 @@ function choice(value, allowed) {
   if (value === undefined) return undefined;
   if (typeof value !== 'string' || !allowed.has(value)) throw new ValidationError();
   return value;
+}
+
+function dateOnly(value, { allowNull = false } = {}) {
+  if (value === null && allowNull) return null;
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new ValidationError('Invalid date');
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value)
+    throw new ValidationError('Invalid date');
+  return value;
+}
+
+function canonicalIso(value, { allowNull = false } = {}) {
+  if (value === null && allowNull) return null;
+  if (typeof value !== 'string') throw new ValidationError('Invalid timestamp');
+  const parsed = new Date(value);
+  if (!Number.isFinite(parsed.getTime()) || parsed.toISOString() !== value)
+    throw new ValidationError('Invalid timestamp');
+  return value;
+}
+
+function capabilities(value) {
+  if (!Array.isArray(value) || value.length > TAP_CAPABILITIES.size) throw new ValidationError('Invalid capabilities');
+  const output = [];
+  for (const item of value) {
+    const normalized = choice(item, TAP_CAPABILITIES);
+    if (output.includes(normalized)) throw new ValidationError('Duplicate capability');
+    output.push(normalized);
+  }
+  return output;
 }
 
 function assignIfDefined(output, key, value) {
@@ -243,7 +280,8 @@ export function validateTap(body) {
     'display_unit',
     'custom_pour_size',
     'capacity_oz',
-    'kick_threshold_oz'
+    'kick_threshold_oz',
+    'capabilities'
   ]);
   assertObject(body);
   rejectUnknown(body, allowed);
@@ -266,7 +304,163 @@ export function validateTap(body) {
   assignIfDefined(output, 'custom_pour_size', numeric(body.custom_pour_size, 0.5, 128));
   assignIfDefined(output, 'capacity_oz', numeric(body.capacity_oz, 16, 2048, { integer: true }));
   assignIfDefined(output, 'kick_threshold_oz', numeric(body.kick_threshold_oz, 0, 128, { allowNull: true }));
+  if (body.capabilities !== undefined) output.capabilities = capabilities(body.capabilities);
   return output;
+}
+
+const HEALTH_CONFIG_FIELDS = {
+  low_keg: {
+    warning_percent: [0, 100],
+    critical_percent: [0, 100],
+    cooldown_minutes: [1, 10_080]
+  },
+  scale_availability: {
+    stale_minutes: [1, 10_080],
+    unavailable_minutes: [1, 10_080],
+    cooldown_minutes: [1, 10_080]
+  },
+  suspected_leak: {
+    loss_oz: [1, 128],
+    window_minutes: [1, 1_440],
+    pour_grace_minutes: [0, 120],
+    settling_minutes: [1, 1_440],
+    cooldown_minutes: [1, 10_080]
+  },
+  serving_temperature: {
+    warning_min_c: [-50, 100],
+    warning_max_c: [-50, 100],
+    critical_min_c: [-50, 100],
+    critical_max_c: [-50, 100],
+    duration_minutes: [1, 1_440],
+    cooldown_minutes: [1, 10_080]
+  },
+  line_cleaning_due: {
+    warning_days: [1, 365],
+    critical_days: [1, 730],
+    cooldown_minutes: [1, 10_080]
+  }
+};
+
+export function validateEffectiveHealthConfig(checkId, config) {
+  if (checkId === 'low_keg') {
+    if (config.critical_percent === undefined || config.warning_percent === undefined) return;
+    if (config.critical_percent > config.warning_percent) throw new ValidationError('Invalid low-keg thresholds');
+  }
+  if (checkId === 'serving_temperature') {
+    const values = [config.critical_min_c, config.warning_min_c, config.warning_max_c, config.critical_max_c];
+    if (values.some((value) => value === undefined)) return;
+    if (!(values[0] <= values[1] && values[1] < values[2] && values[2] <= values[3]))
+      throw new ValidationError('Invalid temperature thresholds');
+  }
+  if (checkId === 'line_cleaning_due') {
+    if (config.warning_days === undefined || config.critical_days === undefined) return;
+    if (config.warning_days > config.critical_days) throw new ValidationError('Invalid cleaning thresholds');
+  }
+}
+
+export function validateHealthConfig(body) {
+  assertObject(body);
+  rejectUnknown(body, new Set(['check_id', 'tap_id', 'enabled', 'config']));
+  const check_id = choice(body.check_id, HEALTH_CHECK_IDS);
+  if (!check_id) throw new ValidationError('Invalid health check');
+  const effectiveTapId = body.tap_id === null || body.tap_id === undefined ? 0 : tapId(body.tap_id);
+  const enabled = boolean(body.enabled);
+  assertObject(body.config);
+  const fields = HEALTH_CONFIG_FIELDS[check_id];
+  rejectUnknown(
+    body.config,
+    new Set([...Object.keys(fields), ...(check_id === 'serving_temperature' ? ['entity_id'] : [])])
+  );
+  const config = {};
+  for (const [key, [min, max]] of Object.entries(fields)) {
+    if (body.config[key] !== undefined) config[key] = numeric(body.config[key], min, max);
+  }
+  if (check_id === 'serving_temperature' && body.config.entity_id !== undefined) {
+    if (body.config.entity_id === null || body.config.entity_id === '') config.entity_id = null;
+    else {
+      const entity = text(body.config.entity_id, 255, { allowEmpty: false }).toLowerCase();
+      if (!/^[a-z0-9_]+\.[a-z0-9_]+$/.test(entity)) throw new ValidationError('Invalid entity ID');
+      config.entity_id = entity;
+    }
+  }
+  validateEffectiveHealthConfig(check_id, config);
+  return { check_id, tap_id: effectiveTapId, enabled, config };
+}
+
+export function validateHealthAcknowledgement(body) {
+  assertObject(body);
+  rejectUnknown(body, new Set(['check_id', 'tap_id', 'incident_id']));
+  return {
+    check_id: choice(body.check_id, HEALTH_CHECK_IDS),
+    tap_id: tapId(body.tap_id),
+    incident_id: text(body.incident_id, 128, { required: true, allowEmpty: false })
+  };
+}
+
+export function validateMaintenance(body) {
+  assertObject(body);
+  rejectUnknown(body, new Set(['completed_at', 'tap_ids', 'method', 'notes', 'next_due_at']));
+  if (!Array.isArray(body.tap_ids) || body.tap_ids.length < 1 || body.tap_ids.length > 6)
+    throw new ValidationError('Invalid affected taps');
+  const tap_ids = body.tap_ids.map(tapId);
+  if (new Set(tap_ids).size !== tap_ids.length) throw new ValidationError('Duplicate affected tap');
+  return {
+    completed_at: canonicalIso(body.completed_at),
+    tap_ids,
+    method: text(body.method, 160, { required: true, allowEmpty: false }),
+    notes: text(body.notes ?? '', 1_000),
+    next_due_at: body.next_due_at === undefined ? null : canonicalIso(body.next_due_at, { allowNull: true })
+  };
+}
+
+export function validateReadinessPolicy(body) {
+  assertObject(body);
+  const fields = new Set([
+    'fallback_fermentation_min_days',
+    'fallback_fermentation_max_days',
+    'packaging_min_days',
+    'packaging_max_days',
+    'conditioning_min_days',
+    'conditioning_max_days',
+    'planning_uncertainty_days',
+    'stale_after_hours',
+    'cooldown_hours'
+  ]);
+  rejectUnknown(body, fields);
+  const output = {};
+  for (const key of fields) {
+    if (body[key] !== undefined)
+      output[key] = numeric(body[key], key.includes('hours') ? 1 : 0, key.includes('hours') ? 720 : 365, {
+        integer: true
+      });
+  }
+  if (Object.keys(output).length === 0) throw new ValidationError();
+  for (const [minKey, maxKey] of [
+    ['fallback_fermentation_min_days', 'fallback_fermentation_max_days'],
+    ['packaging_min_days', 'packaging_max_days'],
+    ['conditioning_min_days', 'conditioning_max_days']
+  ]) {
+    if (output[minKey] !== undefined && output[maxKey] !== undefined && output[minKey] > output[maxKey])
+      throw new ValidationError('Invalid readiness range');
+  }
+  return output;
+}
+
+export function validateReadinessOverride(body) {
+  assertObject(body);
+  rejectUnknown(body, new Set(['earliest_date', 'latest_date', 'confirmed', 'required_capabilities']));
+  const earliest_date = dateOnly(body.earliest_date, { allowNull: true });
+  const latest_date = dateOnly(body.latest_date, { allowNull: true });
+  if ((earliest_date === null) !== (latest_date === null) || (earliest_date && earliest_date > latest_date))
+    throw new ValidationError('Invalid readiness range');
+  const confirmed = boolean(body.confirmed);
+  if (confirmed && earliest_date === null) throw new ValidationError('A confirmed readiness requires a date range');
+  return {
+    earliest_date,
+    latest_date,
+    confirmed,
+    required_capabilities: capabilities(body.required_capabilities)
+  };
 }
 
 export function validateEndKeg(body) {

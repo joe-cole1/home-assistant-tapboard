@@ -120,6 +120,93 @@ test('server applies exact headers, strict origin checks, and OPTIONS behavior',
   }
 });
 
+test('Taproom Status configuration is admin-only and private fields stay out of public snapshots', async () => {
+  const instance = await startServer();
+  try {
+    for (const pathname of ['/api/draft-health/config', '/api/planning/config']) {
+      const response = await fetch(`${instance.baseUrl}${pathname}`);
+      assert.equal(response.status, 401);
+    }
+    const unauthorizedWrite = await fetch(`${instance.baseUrl}/api/maintenance`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    });
+    assert.equal(unauthorizedWrite.status, 401);
+
+    const { token } = await authenticate(instance.baseUrl);
+    const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+    const temperatureEntity = 'sensor.tap_1_private_temperature';
+    const maintenanceNote = 'private caustic concentration note';
+    const healthUpdate = await fetch(`${instance.baseUrl}/api/draft-health/config`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        check_id: 'serving_temperature',
+        tap_id: 1,
+        enabled: true,
+        config: {
+          entity_id: temperatureEntity,
+          warning_min_c: 1,
+          warning_max_c: 6,
+          critical_min_c: -1,
+          critical_max_c: 10,
+          duration_minutes: 15,
+          cooldown_minutes: 360
+        }
+      })
+    });
+    assert.equal(healthUpdate.status, 200);
+    const maintenance = await fetch(`${instance.baseUrl}/api/maintenance`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        completed_at: '2026-08-11T12:00:00.000Z',
+        tap_ids: [1],
+        method: 'Recirculated cleaner',
+        notes: maintenanceNote,
+        next_due_at: null
+      })
+    });
+    assert.equal(maintenance.status, 201);
+
+    const privateConfig = await (
+      await fetch(`${instance.baseUrl}/api/draft-health/config`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+    ).text();
+    assert.ok(privateConfig.includes(temperatureEntity));
+    assert.ok(privateConfig.includes(maintenanceNote));
+
+    const publicState = await (await fetch(`${instance.baseUrl}/api/state`)).text();
+    assert.equal(publicState.includes(temperatureEntity), false);
+    assert.equal(publicState.includes(maintenanceNote), false);
+    const parsed = JSON.parse(publicState);
+    assert.ok(parsed.draftHealth.checks.every((check) => !Object.hasOwn(check, 'entity_id')));
+
+    const rejected = await fetch(`${instance.baseUrl}/api/draft-health/config`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ check_id: 'line_cleaning_due', tap_id: 1, enabled: true, config: { webhook: 'x' } })
+    });
+    assert.equal(rejected.status, 400);
+    const invalidPartialThreshold = await fetch(`${instance.baseUrl}/api/draft-health/config`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        check_id: 'serving_temperature',
+        tap_id: 1,
+        enabled: true,
+        config: { warning_min_c: 10 }
+      })
+    });
+    assert.equal(invalidPartialThreshold.status, 400);
+    assert.equal((await fetch(`${instance.baseUrl}/healthz`)).status, 200);
+  } finally {
+    await stopServer(instance.child);
+  }
+});
+
 test('Brew Story routes enforce public visibility and authenticated sensory overrides', async () => {
   const instance = await startServer();
   const database = new Database(path.join(instance.dataDir, 'tapboard.db'));
@@ -927,7 +1014,7 @@ test('On Deck and custom beverage APIs require authentication, validate strictly
       400
     );
     const snapshot = await (await fetch(`${instance.baseUrl}/api/state`)).json();
-    assert.equal(snapshot.schemaVersion, 8);
+    assert.equal(snapshot.schemaVersion, 9);
     assert.deepEqual(snapshot.customBeverage, {
       id: 'custom:topo_chico',
       ...custom,

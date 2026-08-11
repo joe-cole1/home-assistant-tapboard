@@ -23,6 +23,164 @@
   --font-body: 'Inter', sans-serif;
 }
 
+.taproom-status-trigger {
+  appearance: none;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+
+.taproom-status-dialog {
+  width: min(1100px, calc(100vw - 2rem));
+  height: min(820px, calc(100vh - 2rem));
+  max-width: none;
+  max-height: none;
+  padding: 0;
+  color: var(--text-main);
+  background: var(--bg-main);
+  border: 1px solid var(--border-color);
+  border-radius: 1rem;
+  overflow: auto;
+}
+
+.taproom-status-dialog::backdrop {
+  background: rgb(0 0 0 / 78%);
+  backdrop-filter: blur(6px);
+}
+
+.taproom-status-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  background: var(--bg-header);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.taproom-status-header h1,
+.taproom-status-heading {
+  margin: 0;
+  font-family: var(--font-title);
+  color: var(--accent-color);
+}
+
+.taproom-status-close,
+.taproom-status-tab,
+.taproom-admin-action,
+.taproom-acknowledge {
+  border: 1px solid var(--border-color);
+  border-radius: 0.6rem;
+  padding: 0.6rem 0.85rem;
+  color: inherit;
+  background: var(--bg-card);
+  cursor: pointer;
+}
+
+.taproom-status-tabs {
+  display: flex;
+  gap: 0.5rem;
+  padding: 1rem 1.25rem 0;
+}
+
+.taproom-status-tab[aria-selected='true'] {
+  color: var(--bg-main);
+  background: var(--accent-color);
+  border-color: var(--accent-color);
+  font-weight: 700;
+}
+
+.taproom-status-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.taproom-status-panel {
+  display: grid;
+  gap: 1rem;
+  padding: 1.25rem;
+}
+
+.taproom-health-checks {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 0.75rem;
+  padding: 0;
+  list-style: none;
+}
+
+.taproom-health-check,
+.taproom-plan-card,
+.taproom-admin-controls {
+  display: grid;
+  gap: 0.65rem;
+  padding: 1rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 0.8rem;
+}
+
+.taproom-health-detail {
+  color: var(--text-muted);
+}
+
+.taproom-status-warning,
+.taproom-plan-warning,
+.taproom-no-inventory {
+  padding: 0.75rem;
+  color: var(--text-main);
+  background: color-mix(in srgb, var(--accent-color) 12%, transparent);
+  border-left: 3px solid var(--accent-color);
+}
+
+.taproom-status-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.35rem 0.75rem;
+  margin: 0;
+}
+
+.taproom-status-facts dt {
+  color: var(--text-muted);
+}
+
+.taproom-status-facts dd {
+  margin: 0;
+}
+
+.taproom-candidate {
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.taproom-admin-controls {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.taproom-admin-controls h3 {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+@media (max-width: 720px) {
+  .taproom-status-dialog {
+    width: 100vw;
+    height: 100vh;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .taproom-status-trigger span:first-child {
+    display: none;
+  }
+}
+
 /* ---------------------------------------------------------------------
  * THEME PRESETS
  * --------------------------------------------------------------------- */

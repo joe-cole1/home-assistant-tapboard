@@ -26,6 +26,8 @@ Tapboard -- SSE/API --> browser
 ```
 src/
   server.js               HTTP API, session checks, SSE wiring, snapshots
+  draftHealth.js          Pure per-tap health checks and bounded incident evidence
+  tapPlanning.js          Pure readiness, compatibility, and gap projections
   haClient.js             HA WebSocket, bounded hydration, detector adapter
   brewfatherClient.js     bounded native Brewfather v2 transport and budget
   brewfatherCache.js      sanitized durable cache queries and writes
@@ -59,13 +61,13 @@ The HA client authenticates over `/api/websocket`, subscribes to `state_changed`
 
 Only each tap’s designated primary volume sensor is used for pour detection. Values must declare a supported unit and are converted explicitly to fluid ounces; missing or unsupported units are ignored. The detector rejects stale/duplicate timestamps and implausible jumps, establishes settled baselines, arbitrates simultaneous candidates, permits only one active tap, and finalizes after a quiet period or cancels a hard-timeout session. It emits `pour_start`, `pour_complete`, or `pour_cancel`; completion records only qualifying pours.
 
-The canonical measurement contract is `sensor.tap_N_fl_oz` plus `input_number.tap_N_keg_capacity_oz`. The public snapshot uses schema version 8 and exposes one coherent tuple per tap: `volumeOz`, `capacityOz`, `fillPercent`, `pintsRemaining`, and `volumeStatus`, plus native-cache batch metadata and selection options. Settings also expose nullable `primary_color` and `secondary_color` overrides; `null` selects the active preset default. `sensor.tap_N_fill`, `sensor.tap_N_pints_remaining`, `sensor.brewfather_active_batches`, `sensor.tap_N_batch_info`, and the HA batch selectors are deliberately excluded from Tapboard reads.
+The canonical measurement contract is `sensor.tap_N_fl_oz` plus `input_number.tap_N_keg_capacity_oz`. The public snapshot uses schema version 9 and exposes one coherent tuple per tap: `volumeOz`, `capacityOz`, `fillPercent`, `pintsRemaining`, and `volumeStatus`, plus native-cache batch metadata, selection options, bounded `draftHealth`, and bounded `tapPlanning` projections. Settings also expose nullable `primary_color` and `secondary_color` overrides; `null` selects the active preset default. `sensor.tap_N_fill`, `sensor.tap_N_pints_remaining`, `sensor.brewfather_active_batches`, `sensor.tap_N_batch_info`, the HA batch selectors, configured temperature entity IDs, and maintenance notes are deliberately excluded from public state.
 
 `volumeStatus` is `measured` for a fresh scale reading; `stale` when a previously valid in-process scale source becomes unavailable; `assumed_full` only when the exact volume entity is absent while the tap has an active assignment; or `unavailable` when there is no valid measurement to retain. Ounces are clamped to capacity and pints/percent are derived on the server. The browser renders this tuple directly and may draw an empty graphic for unavailable data, but does not fabricate a numeric readout. Low-keg alerts and badges require `measured`; forecasts use the same derived tuple.
 
 ## SQLite schema and lifecycle ownership
 
-Startup enforces `foreign_keys=ON` and validates the database. It rejects a future schema version and, for an older supported schema, creates and verifies a fresh backup in `tapboard_backups` before running all ordered migrations in one transaction. Backup verification or migration failure aborts startup; no manual restore marker or empty-volume approval is required. The production empty-volume guard remains separate. The current schema is version 9. Version 9 removes the obsolete serving-glass setting; assigning a recognized non-custom Brewfather batch now stores the reviewed style match in the existing display-fill `graphic` field, while unmatched and custom assignments preserve the current graphic.
+Startup enforces `foreign_keys=ON` and validates the database. It rejects a future schema version and, for an older supported schema, creates and verifies a fresh backup in `tapboard_backups` before running all ordered migrations in one transaction. Backup verification or migration failure aborts startup; no manual restore marker or empty-volume approval is required. The production empty-volume guard remains separate. The current schema is version 10. Version 10 adds bounded health configuration/state, maintenance records, readiness policy/overrides, capability tags, and forecast-gap transition state. Version 9 removed the obsolete serving-glass setting.
 
 - A tap assignment opens one immutable keg lifecycle; reassignment or an end action closes the existing lifecycle.
 - A pour captures the open lifecycle at pour start. Historical and unassigned pours may have no lifecycle and cannot affect an active keg forecast.
@@ -90,7 +92,11 @@ Tapboard owns assignments and lifecycle state. It does not write HA batch select
 
 ## Home Assistant event bridge
 
-Outbound operational events use one HA WebSocket `fire_event` type, `tapboard_event`. The envelope is schema version 1 and contains a unique ID, occurrence time, nullable tap/lifecycle/batch IDs, bounded display metadata, and a strict type-specific data object. Batch 7 publishes `keg_assigned`, `keg_ended`, `pour_start`, `pour_complete`, `pour_cancelled`, and `low_keg` only.
+Outbound operational events use one HA WebSocket `fire_event` type, `tapboard_event`. The envelope is schema version 1 and contains a unique ID, occurrence time, nullable tap/lifecycle/batch IDs, bounded display metadata, and a strict type-specific data object. In addition to lifecycle, pour, low-keg, and Brewfather-sync events, draft-health state changes publish `health_transition` and material replacement gaps publish `forecast_gap`. Destinations remain Home Assistant-owned; Tapboard never receives arbitrary action payloads, webhook URLs, notifier targets, or credentials.
+
+Draft health is evaluated on startup, source changes, pours, configuration or maintenance changes, and a bounded periodic pass. Each tap has five stable check IDs: `low_keg`, `scale_availability`, `suspected_leak`, `serving_temperature`, and `line_cleaning_due`. Leak, temperature, and cleaning checks are opt-in. Incidents, acknowledgement, transition timestamps, cooldowns, and bounded evidence are durable; raw measurement history is not accumulated in SQLite. Configured temperature entities are exact-ID backend reads and are never part of the public projection.
+
+Tap planning compares the open lifecycle's depletion interval with potential readiness ranges for visible On Deck batches. Manual readiness is a date range plus an explicit confirmation bit. Capability compatibility uses a fixed allowlist. Gravity cannot declare fermentation complete, covered timing does not imply physical inventory, stale inputs lower confidence, and only opened/resolved/materially changed forecast gaps cross the HA event boundary.
 
 Durable events are published after their SQLite transaction or pour insert succeeds. Delivery is best effort: a WebSocket failure never rolls back or fails the primary action, and operational events are not replayed after a disconnection. The common request path has a 64-request pending ceiling and settles requests on result, timeout, disconnect, authentication failure, send failure, or shutdown. No event contains gravity, fermentation temperature/status/progress, controller state, complete Brewfather objects, arbitrary notes, service targets, credentials, or generic webhook payloads.
 
@@ -124,25 +130,31 @@ Display controls remain behind administrator authentication. Normal theme, font,
 
 All API JSON responses are `no-store`. Mutation bodies must be JSON and are limited to 16 KiB; validation rejects unknown fields and invalid values before database or Home Assistant mutation. Origin checks allow the configured public origin or, for direct access, the request host.
 
-| Endpoint                   | Method | Purpose                                             |
-| -------------------------- | ------ | --------------------------------------------------- |
-| `/healthz`                 | `GET`  | Health response for the container health check.     |
-| `/events`                  | `GET`  | Public live SSE stream.                             |
-| `/api/state`               | `GET`  | Public formatted snapshot.                          |
-| `/api/batches/:id/story`   | `GET`  | Eligible public or administrator cached Brew Story. |
-| `/api/batches/:id/image`   | `GET`  | Eligible bounded same-origin cached artwork proxy.  |
-| `/api/batches/:id/sensory` | `POST` | Administrator sensory guidance override.            |
-| `/api/auth`                | `POST` | Administrator PIN authentication.                   |
-| `/api/settings`            | `POST` | Administrator settings update.                      |
-| `/api/admin/pin`           | `POST` | Verify and replace the administrator PIN.           |
-| `/api/taps/:id`            | `POST` | Administrator tap configuration/assignment update.  |
-| `/api/taps/:id/end-batch`  | `POST` | Administrator batch end and lifecycle close.        |
-| `/api/taps/:id/end-keg`    | `POST` | Administrator keg end and lifecycle close.          |
-| `/api/ondeck`              | `GET`  | Administrator Brewfather On Deck preferences.       |
-| `/api/ondeck`              | `POST` | Administrator Brewfather visibility update.         |
-| `/api/brewfather/status`   | `GET`  | Administrator Brewfather sync and cache status.     |
-| `/api/brewfather/refresh`  | `POST` | Native coalesced Brewfather refresh and outcome.    |
-| `/api/custom-beverage`     | `POST` | Administrator custom-beverage metadata update.      |
+| Endpoint                        | Method        | Purpose                                                                 |
+| ------------------------------- | ------------- | ----------------------------------------------------------------------- |
+| `/healthz`                      | `GET`         | Health response for the container health check.                         |
+| `/api/draft-health/config`      | `GET`, `POST` | Authenticated health policy and private maintenance configuration.      |
+| `/api/draft-health/acknowledge` | `POST`        | Authenticated current-incident acknowledgement.                         |
+| `/api/maintenance`              | `POST`        | Authenticated append-only line-maintenance record.                      |
+| `/api/planning/config`          | `GET`         | Authenticated readiness policy, overrides, and capabilities.            |
+| `/api/planning/policy`          | `POST`        | Authenticated readiness-policy update.                                  |
+| `/api/batches/:id/readiness`    | `POST`        | Authenticated readiness range, confirmation, and required capabilities. |
+| `/events`                       | `GET`         | Public live SSE stream.                                                 |
+| `/api/state`                    | `GET`         | Public formatted snapshot.                                              |
+| `/api/batches/:id/story`        | `GET`         | Eligible public or administrator cached Brew Story.                     |
+| `/api/batches/:id/image`        | `GET`         | Eligible bounded same-origin cached artwork proxy.                      |
+| `/api/batches/:id/sensory`      | `POST`        | Administrator sensory guidance override.                                |
+| `/api/auth`                     | `POST`        | Administrator PIN authentication.                                       |
+| `/api/settings`                 | `POST`        | Administrator settings update.                                          |
+| `/api/admin/pin`                | `POST`        | Verify and replace the administrator PIN.                               |
+| `/api/taps/:id`                 | `POST`        | Administrator tap configuration/assignment update.                      |
+| `/api/taps/:id/end-batch`       | `POST`        | Administrator batch end and lifecycle close.                            |
+| `/api/taps/:id/end-keg`         | `POST`        | Administrator keg end and lifecycle close.                              |
+| `/api/ondeck`                   | `GET`         | Administrator Brewfather On Deck preferences.                           |
+| `/api/ondeck`                   | `POST`        | Administrator Brewfather visibility update.                             |
+| `/api/brewfather/status`        | `GET`         | Administrator Brewfather sync and cache status.                         |
+| `/api/brewfather/refresh`       | `POST`        | Native coalesced Brewfather refresh and outcome.                        |
+| `/api/custom-beverage`          | `POST`        | Administrator custom-beverage metadata update.                          |
 
 `POST /api/auth` returns an opaque random bearer token. The database stores only `sha256:` token digests and expiry timestamps; it does not use JWTs. Sessions expire after 24 hours, expired sessions are pruned, and a PIN change revokes all existing sessions. PIN changes use a separate authenticated endpoint and require the current PIN plus matching new values; failed current-PIN verification is separately limited. A newly initialized database fails closed for administrator actions until a deliberate non-default PIN has been configured.
 
