@@ -117,10 +117,12 @@ test('details are allowlisted and bounded without leaking arbitrary keys', () =>
       events: [{ id: 'event-1', name: 'Dry hop', description: 'Added hops', secret: 'no' }],
       tags: ['competition', '<script>text only</script>'],
       measuredPh: 4.4,
+      souring: 'Kettle sour',
       recipe: {
         _id: 'recipe-a',
         name: 'Privacy IPA',
         notes: 'recipe note',
+        souring: true,
         fermentables: Array.from({ length: 150 }, (_, index) => ({
           name: `Malt ${index}`,
           amount: 1,
@@ -134,6 +136,11 @@ test('details are allowlisted and bounded without leaking arbitrary keys', () =>
     assert.equal(sanitized.payload_json.includes('"secret"'), false);
     assert.equal(JSON.parse(sanitized.payload_json).recipe.ingredients.fermentables.length, 100);
     assert.equal(JSON.parse(sanitized.payload_json).batch.measurements.measured_ph, 4.4);
+    const sanitizedDetail = JSON.parse(sanitized.payload_json);
+    assert.equal(sanitizedDetail.batch.sensory_v2_souring, 'Kettle sour');
+    assert.equal(sanitizedDetail.recipe.sensory_v2_souring, true);
+    assert.equal('souring' in sanitizedDetail.batch, false);
+    assert.equal('souring' in sanitizedDetail.recipe, false);
     upsertDetail(db, 'batch-a', detail, { now: () => 2_000 });
     upsertDetail(db, 'batch-a', detail, { now: () => 3_000 });
     assert.equal(db.prepare('SELECT COUNT(*) AS count FROM brewfather_batch_details').get().count, 1);

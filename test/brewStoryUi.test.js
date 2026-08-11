@@ -173,6 +173,7 @@ test('authenticated controller renders and submits complete sensory overrides', 
     await new Promise((resolve) => setTimeout(resolve, 0));
     const form = body.querySelector('.brew-story-override-form');
     assert.ok(form, `${status.textContent}\n${body.innerHTML}`);
+    assert.equal(body.querySelector('.brew-story-sensory-shadow'), null);
     form.querySelector('textarea').value = 'Manual description';
     form.querySelector('select[data-axis="roast"] option[value="3.5"]').selected = true;
     form.dispatchEvent(new document.defaultView.Event('submit', { bubbles: true, cancelable: true }));
@@ -181,4 +182,66 @@ test('authenticated controller renders and submits complete sensory overrides', 
     assert.equal(saves[0].payload.description_override, 'Manual description');
     assert.equal(saves[0].payload.axis_overrides.hops, 4.5);
     assert.equal(saves[0].payload.axis_overrides.roast, 3.5);
+  }));
+
+test('sensory v2 shadow comparison is rendered only for authenticated viewers', () =>
+  withDocument(async (document) => {
+    const shadowStory = {
+      ...story,
+      sensory: {
+        ...story.sensory,
+        shadow: {
+          rules_version: 'sensory-v2',
+          candidate: {
+            known_axis_count: 2,
+            prose: 'Brighter citrus with a softer finish.',
+            axes: { hops: { evidence: 'Citra dry hop' }, roast: { evidence: 'No roast malt' } }
+          },
+          comparison: {
+            hops: { v1: 5, v2: 4, delta: -1, coverage: 'same' },
+            roast: { v1: null, v2: null, delta: null, coverage: 'unknown' }
+          }
+        }
+      }
+    };
+    const adminDialog = document.createElement('dialog');
+    adminDialog.showModal = () => {
+      adminDialog.open = true;
+    };
+    const adminBody = document.createElement('div');
+    const admin = createBrewStoryController({
+      dialog: adminDialog,
+      title: document.createElement('h2'),
+      body: adminBody,
+      status: document.createElement('p'),
+      canEdit: () => true,
+      fetchStory: async () => ({ ok: true, json: async () => shadowStory }),
+      saveSensory: async () => ({ ok: true, json: async () => ({ success: true }) })
+    });
+    admin.open({ batchId: 'one', title: 'One', fallback: {} });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const shadow = adminBody.querySelector('.brew-story-sensory-shadow');
+    assert.ok(shadow);
+    assert.equal(shadow.querySelectorAll('.brew-story-radar').length, 0);
+    assert.ok(shadow.textContent.includes('Hops'));
+    assert.ok(shadow.textContent.includes('-1'));
+    assert.ok(shadow.textContent.includes('Unavailable'));
+    assert.ok(shadow.textContent.includes('Citra dry hop'));
+
+    const publicDialog = document.createElement('dialog');
+    publicDialog.showModal = () => {
+      publicDialog.open = true;
+    };
+    const publicBody = document.createElement('div');
+    const publicController = createBrewStoryController({
+      dialog: publicDialog,
+      title: document.createElement('h2'),
+      body: publicBody,
+      status: document.createElement('p'),
+      canEdit: () => false,
+      fetchStory: async () => ({ ok: true, json: async () => shadowStory })
+    });
+    publicController.open({ batchId: 'one', title: 'One', fallback: {} });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(publicBody.querySelector('.brew-story-sensory-shadow'), null);
   }));
