@@ -71,6 +71,7 @@ test('stored-XSS values stay inert text in cards, recipe, catalog, options, and 
 
       [card, modal, ticker, toast, option].forEach((node) => assertInertText(node, payload));
       assert.equal(card.querySelector('.beer-title')?.title, payload);
+      assert.equal(card.querySelector('.beer-style')?.title, payload);
       assert.equal(option.value, payload);
       assert.equal(option.textContent, payload);
     });
@@ -240,7 +241,11 @@ test('unavailable and assumed-full states are explicit, and low-keg is fresh-mea
         forecastText: ''
       })
     );
-    assert.equal(assumed.querySelector('.volume-status')?.textContent, 'Assumed full — not measured');
+    assert.equal(assumed.querySelector('.volume-status')?.textContent, '');
+    assert.equal(assumed.querySelector('.volume-status')?.hidden, true);
+    assert.equal(assumed.querySelector('.badge-sensor-problem')?.textContent, '!');
+    assert.equal(assumed.querySelector('.badge-sensor-problem')?.getAttribute('role'), 'img');
+    assert.equal(assumed.querySelector('.badge-sensor-problem')?.getAttribute('aria-label'), 'Sensor problem');
     assert.equal(assumed.querySelector('.badge-low'), null);
   }));
 

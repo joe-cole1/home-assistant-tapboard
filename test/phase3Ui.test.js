@@ -15,17 +15,44 @@ const forecast = {
 test('lifecycle line and dialog expose tapped age, uncertainty, and evidence', () => {
   const { document } = parseHTML('<h2 id="title"></h2><div id="body"></div>');
   globalThis.document = document;
-  const line = formatLifecycleLine(forecast);
-  assert.match(line, /Tapped Aug 1/);
-  assert.match(line, /broadly 3–8d left/);
-  renderForecastDetails({
-    title: document.getElementById('title'),
-    body: document.getElementById('body'),
-    forecast
-  });
-  assert.equal(document.getElementById('title').textContent, 'Tap 2 forecast');
-  assert.match(document.getElementById('body').textContent, /Confidence/);
-  assert.match(document.getElementById('body').textContent, /broad fallback/i);
+  const originalNow = Date.now;
+  Date.now = () => Date.parse('2026-08-10T12:00:00.000Z');
+  try {
+    const line = formatLifecycleLine({
+      ...forecast,
+      lifecycle: { ...forecast.lifecycle, startedAt: '2026-08-01T12:00:00.000Z' }
+    });
+    assert.equal(line, 'Tapped Aug 1 (9d ago)\n3-8 days left');
+    assert.equal(
+      formatLifecycleLine({
+        ...forecast,
+        lifecycle: { ...forecast.lifecycle, startedAt: '2026-08-01T12:00:00.000Z' },
+        depletion: {},
+        status: 'unavailable'
+      }),
+      'Tapped Aug 1 (9d ago)'
+    );
+    renderForecastDetails({
+      title: document.getElementById('title'),
+      body: document.getElementById('body'),
+      forecast
+    });
+    assert.equal(document.getElementById('title').textContent, 'Tap 2 forecast');
+    assert.match(document.getElementById('body').textContent, /Confidence/);
+    assert.match(document.getElementById('body').textContent, /broad fallback/i);
+    const facts = document.querySelector('.forecast-dialog-facts');
+    assert.deepEqual(
+      [...facts.children].slice(0, 4).map((node) => [node.localName, node.textContent]),
+      [
+        ['dt', 'Confidence'],
+        ['dd', 'low'],
+        ['dt', 'Data span'],
+        ['dd', '18 days']
+      ]
+    );
+  } finally {
+    Date.now = originalNow;
+  }
 });
 
 test('receipt UI deduplicates durable IDs and gates lifecycle ceremonies', () => {
@@ -64,4 +91,7 @@ test('Phase 3 animation selectors honor reduced-motion preferences', () => {
   assert.match(reduced, /\.first-pour-banner/);
   assert.match(reduced, /\.keg-kick-ceremony/);
   assert.match(css, /\.lifecycle-forecast-btn:focus-visible/);
+  assert.match(css, /\.forecast-dialog-facts\s*\{[^}]*grid-template-columns:/s);
+  assert.match(css, /\.forecast-dialog-facts dt\s*\{[^}]*font-weight:\s*800;/s);
+  assert.match(css, /\.forecast-dialog-facts dd\s*\{[^}]*color:\s*var\(--text-muted\);/s);
 });
