@@ -149,12 +149,14 @@ body {
 .header-info-badge {
   display: flex;
   align-items: center;
+  min-width: 0;
   gap: 0.5rem;
   background: rgba(255, 255, 255, 0.08);
   padding: 0.4rem 0.9rem;
   border-radius: 9999px;
   font-size: 0.9rem;
   color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .btn-icon {
@@ -561,6 +563,7 @@ body {
 
 .tap-card-content {
   order: 1;
+  min-width: 0;
 }
 
 .tap-card-graphic-column {
@@ -621,6 +624,14 @@ body.is-authenticated .tap-cog-btn {
   color: #ffffff;
 }
 
+.badge-sensor-problem {
+  min-width: 1.65rem;
+  padding-inline: 0.45rem;
+  background-color: #fb8c00;
+  color: #1e2530;
+  text-align: center;
+}
+
 @keyframes pulseLowKeg {
   0% {
     opacity: 1;
@@ -647,6 +658,7 @@ body.is-authenticated .tap-cog-btn {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
 }
 .tap-story-btn {
   appearance: none;
@@ -667,6 +679,10 @@ body.is-authenticated .tap-cog-btn {
   color: #fbc02d;
   font-weight: 700;
   margin-bottom: 1.25rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Metrics Row (ABV, IBU, OG, FG with dashed dividers) */
@@ -1232,9 +1248,18 @@ body.is-authenticated .ondeck-cog-btn {
 }
 
 .ondeck-items {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow-x: auto;
   white-space: nowrap;
   color: var(--text-muted);
+  touch-action: pan-x;
+}
+
+.ondeck-track {
+  display: inline-flex;
+  align-items: center;
+  min-width: max-content;
 }
 
 .ondeck-item {
@@ -1257,6 +1282,7 @@ body.is-authenticated .ondeck-cog-btn {
   margin-top: 0.6rem;
   font-weight: 600;
   text-align: center;
+  white-space: pre-line;
 }
 
 .forecast-button,
@@ -1305,11 +1331,59 @@ body.is-authenticated .ondeck-cog-btn {
 }
 
 .forecast-dialog-details,
-.forecast-detail-list,
-.forecast-dialog-facts {
+.forecast-detail-list {
   display: grid;
   gap: 0.75rem;
   margin-top: 0.9rem;
+}
+
+.forecast-dialog-summary {
+  margin-top: 0.85rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: 0.65rem;
+  background: color-mix(in srgb, var(--accent-color) 10%, transparent);
+  font-weight: 700;
+  line-height: 1.4;
+  white-space: pre-line;
+}
+
+.forecast-dialog-facts {
+  display: grid;
+  grid-template-columns: minmax(7.5rem, 40%) minmax(0, 1fr);
+  margin-top: 0.9rem;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--border-color) 72%, transparent);
+  border-radius: 0.65rem;
+}
+
+.forecast-dialog-facts dt,
+.forecast-dialog-facts dd {
+  padding: 0.62rem 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.forecast-dialog-facts dt {
+  background: color-mix(in srgb, var(--text-main) 6%, transparent);
+  color: var(--text-main);
+  font-weight: 800;
+}
+
+.forecast-dialog-facts dd {
+  margin: 0;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.forecast-dialog-facts dt:not(:first-of-type),
+.forecast-dialog-facts dd:not(:first-of-type) {
+  border-top: 1px solid color-mix(in srgb, var(--border-color) 50%, transparent);
+}
+
+.forecast-dialog-note {
+  margin-top: 0.9rem;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
 }
 
 .badge-kicked,
@@ -1789,6 +1863,20 @@ body.is-authenticated .ondeck-cog-btn {
   outline-offset: 2px;
 }
 @media (max-width: 600px) {
+  #headerClock {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .header-info-badge {
+    padding-inline: 0.65rem;
+  }
   .brew-story-dialog {
     width: 100vw;
     height: 100vh;

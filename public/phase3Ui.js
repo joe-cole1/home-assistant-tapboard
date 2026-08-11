@@ -24,11 +24,11 @@ export function formatLifecycleLine(forecast, milestone) {
   const tapped = localDate(tappedAt);
   const range =
     Number.isFinite(earliest) && Number.isFinite(latest)
-      ? `${forecast.isFallback ? 'broadly' : 'likely'} ${Math.max(0, Math.ceil(earliest))}–${Math.max(0, Math.ceil(latest))}d left`
+      ? `${Math.max(0, Math.ceil(earliest))}-${Math.max(0, Math.ceil(latest))} days left`
       : forecast?.status === 'depleted'
-        ? 'depleted'
-        : 'forecast unavailable';
-  return `Tapped ${tapped || 'unknown'} · ${daysOn}d on · ${range}`;
+        ? 'Depleted'
+        : '';
+  return [`Tapped ${tapped || 'unknown'} (${daysOn}d ago)`, range].filter(Boolean).join('\n');
 }
 
 export function renderForecastDetails({ title, body, forecast, milestone }) {

@@ -23,8 +23,15 @@
         <h1 class="header-title" id="headerTitle">Hazardous Brews</h1>
       </div>
       <div class="header-right">
-        <div class="header-info-badge" id="liveStatusBadge" title="Connection Status">
-          <span style="font-size: 1.1rem">⚡</span>
+        <div
+          class="header-info-badge"
+          id="liveStatusBadge"
+          title="Connection Status"
+          role="status"
+          aria-live="polite"
+          aria-label="Connection status: Live"
+        >
+          <span style="font-size: 1.1rem" aria-hidden="true">⚡</span>
           <span id="headerClock">Live</span>
         </div>
         <button class="btn-icon" id="settingsBtn" title="Global Settings">⚙️</button>
@@ -664,10 +671,10 @@
           <div class="form-group">
             <label class="form-label">Volume Display Readout</label>
             <select class="form-control" id="tapSettingsDisplayUnitSelect">
-              <option value="percent">% Remaining</option>
-              <option value="pints">Pints Remaining</option>
-              <option value="oz">Ounces (oz) Remaining</option>
-              <option value="pours_12">Standard 12oz Pours</option>
+              <option value="percent">% Left</option>
+              <option value="pints">Pints Left</option>
+              <option value="oz">Ounces (oz) Left</option>
+              <option value="pours_12">Standard 12 oz Pours</option>
               <option value="pours_custom">Custom Pour Size</option>
             </select>
             <span class="setting-save-status" id="tapSettingsDisplayUnitSaveStatus" aria-live="polite"></span>

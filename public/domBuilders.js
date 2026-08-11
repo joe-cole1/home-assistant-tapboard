@@ -57,7 +57,9 @@ export function buildTapCardContent({
   fragment.appendChild(header);
 
   const details = element('div', 'tap-card-content');
-  details.appendChild(element('div', 'beer-style', style));
+  const styleName = element('div', 'beer-style', style);
+  styleName.title = String(style || '');
+  details.appendChild(styleName);
   if (description) details.appendChild(element('p', 'beer-description', description));
   const metrics = element('div', 'metrics-row');
   metrics.append(metric('ABV', abv), metric('IBU', ibu), metric('OG', og), metric('FG', fg));
@@ -69,6 +71,12 @@ export function buildTapCardContent({
   }
   if (fresh) badges.appendChild(element('span', 'badge badge-fresh', 'NEW'));
   if (kicked) badges.appendChild(element('span', 'badge badge-kicked', 'KICKED'));
+  if (volumeStatus === 'assumed_full') {
+    const sensorBadge = element('span', 'badge badge-sensor-problem', '!');
+    sensorBadge.setAttribute('role', 'img');
+    sensorBadge.setAttribute('aria-label', 'Sensor problem');
+    badges.appendChild(sensorBadge);
+  }
   graphicColumn.appendChild(badges);
   const graphic = element('div', 'graphic-container');
   const graphicWrapper = element('div', 'tap-graphic-wrapper');
@@ -84,13 +92,7 @@ export function buildTapCardContent({
   forecast.hidden = !forecastText;
   graphic.append(graphicWrapper, element('div', 'floating-pour-badge', '🍺 NOW POURING'), volumeReadout, forecast);
   const statusText =
-    volumeStatus === 'stale'
-      ? 'Stale measurement'
-      : volumeStatus === 'assumed_full'
-        ? 'Assumed full — not measured'
-        : volumeStatus === 'unavailable'
-          ? 'Unavailable'
-          : '';
+    volumeStatus === 'stale' ? 'Stale measurement' : volumeStatus === 'unavailable' ? 'Unavailable' : '';
   const status = element('div', `volume-status volume-status-${volumeStatus}`, statusText);
   status.hidden = !statusText;
   graphic.appendChild(status);

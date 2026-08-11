@@ -388,6 +388,9 @@ function renderWheatGlass(pct, color, isPouring, id) {
         <clipPath id="wheatGlassClip_${id}">
           <path d="M 30 0 L 130 0 L 110 30 Q 130 110, 98 170 L 100 220 Q 80 225, 60 220 L 62 170 Q 30 110, 50 30 Z" />
         </clipPath>
+        <clipPath id="wheatFoamClip_${id}">
+          <path d="M 50 30 Q 30 110, 62 170 L 60 220 Q 80 225, 100 220 L 98 170 Q 130 110, 110 30 Z" />
+        </clipPath>
       </defs>
 
       <path d="M 50 30 Q 30 110, 62 170 L 60 220 Q 80 225, 100 220 L 98 170 Q 130 110, 110 30 Z" 
@@ -406,13 +409,15 @@ function renderWheatGlass(pct, color, isPouring, id) {
         ${
           !isWater
             ? `
-          <g class="beer-cloud-foam" data-base-y="${liquidY}">
-            <rect x="25" y="${liquidY - 8}" width="110" height="16" fill="${foamColor}" opacity="0.9" />
-            <circle cx="48" cy="${liquidY - 5}" r="11" fill="${foamColor}" />
-            <circle cx="68" cy="${liquidY - 8}" r="14" fill="${foamColor}" />
-            <circle cx="88" cy="${liquidY - 7}" r="13" fill="${foamColor}" />
-            <circle cx="106" cy="${liquidY - 5}" r="10" fill="${foamColor}" />
-            <circle cx="72" cy="${liquidY - 9}" r="9" fill="#FFFFFF" opacity="0.5" />
+          <g class="beer-foam-contour" clip-path="url(#wheatFoamClip_${id})">
+            <g class="beer-cloud-foam" data-base-y="${liquidY}">
+              <rect x="25" y="${liquidY - 8}" width="110" height="16" fill="${foamColor}" opacity="0.9" />
+              <circle cx="48" cy="${liquidY - 5}" r="11" fill="${foamColor}" />
+              <circle cx="68" cy="${liquidY - 8}" r="14" fill="${foamColor}" />
+              <circle cx="88" cy="${liquidY - 7}" r="13" fill="${foamColor}" />
+              <circle cx="106" cy="${liquidY - 5}" r="10" fill="${foamColor}" />
+              <circle cx="72" cy="${liquidY - 9}" r="9" fill="#FFFFFF" opacity="0.5" />
+            </g>
           </g>
         `
             : ''
@@ -441,6 +446,9 @@ function renderTulipGlass(pct, color, isPouring, id) {
         <clipPath id="tulipGlassClip_${id}">
           <path d="M 30 0 L 130 0 L 108 40 C 120 90, 130 150, 80 170 C 30 150, 40 90, 52 40 Z" />
         </clipPath>
+        <clipPath id="tulipFoamClip_${id}">
+          <path d="M 52 40 C 40 90, 30 150, 80 170 C 130 150, 120 90, 108 40 Z" />
+        </clipPath>
       </defs>
 
       <ellipse cx="80" cy="235" rx="34" ry="7" fill="#E2E8F0" opacity="0.4" stroke="#CBD5E0" stroke-width="1.5" />
@@ -462,13 +470,15 @@ function renderTulipGlass(pct, color, isPouring, id) {
         ${
           !isWater
             ? `
-          <g class="beer-cloud-foam" data-base-y="${liquidY}">
-            <rect x="25" y="${liquidY - 8}" width="110" height="16" fill="${foamColor}" opacity="0.9" />
-            <circle cx="48" cy="${liquidY - 5}" r="11" fill="${foamColor}" />
-            <circle cx="68" cy="${liquidY - 8}" r="14" fill="${foamColor}" />
-            <circle cx="88" cy="${liquidY - 7}" r="13" fill="${foamColor}" />
-            <circle cx="106" cy="${liquidY - 5}" r="10" fill="${foamColor}" />
-            <circle cx="72" cy="${liquidY - 9}" r="9" fill="#FFFFFF" opacity="0.5" />
+          <g class="beer-foam-contour" clip-path="url(#tulipFoamClip_${id})">
+            <g class="beer-cloud-foam" data-base-y="${liquidY}">
+              <rect x="25" y="${liquidY - 8}" width="110" height="16" fill="${foamColor}" opacity="0.9" />
+              <circle cx="48" cy="${liquidY - 5}" r="11" fill="${foamColor}" />
+              <circle cx="68" cy="${liquidY - 8}" r="14" fill="${foamColor}" />
+              <circle cx="88" cy="${liquidY - 7}" r="13" fill="${foamColor}" />
+              <circle cx="106" cy="${liquidY - 5}" r="10" fill="${foamColor}" />
+              <circle cx="72" cy="${liquidY - 9}" r="9" fill="#FFFFFF" opacity="0.5" />
+            </g>
           </g>
         `
             : ''
@@ -555,6 +565,9 @@ function renderStoutGlass(pct, color, isPouring, id) {
         <clipPath id="stoutGlassClip_${id}">
           <path d="M 30 0 L 130 0 L 108 45 C 116 80, 120 120, 102 175 L 104 220 Q 80 225, 56 220 L 58 175 C 40 120, 44 80, 52 45 Z" />
         </clipPath>
+        <clipPath id="stoutFoamClip_${id}">
+          <path d="M 52 45 C 44 80, 40 120, 58 175 L 56 220 Q 80 225, 104 220 L 102 175 C 120 120, 116 80, 108 45 Z" />
+        </clipPath>
       </defs>
 
       <path d="M 52 45 C 44 80, 40 120, 58 175 L 56 220 Q 80 225, 104 220 L 102 175 C 120 120, 116 80, 108 45 Z" 
@@ -573,13 +586,15 @@ function renderStoutGlass(pct, color, isPouring, id) {
         ${
           !isWater
             ? `
-          <g class="beer-cloud-foam" data-base-y="${liquidY}">
-            <rect x="25" y="${liquidY - 8}" width="110" height="16" fill="${foamColor}" opacity="0.9" />
-            <circle cx="48" cy="${liquidY - 5}" r="11" fill="${foamColor}" />
-            <circle cx="68" cy="${liquidY - 8}" r="14" fill="${foamColor}" />
-            <circle cx="88" cy="${liquidY - 7}" r="13" fill="${foamColor}" />
-            <circle cx="106" cy="${liquidY - 5}" r="10" fill="${foamColor}" />
-            <circle cx="72" cy="${liquidY - 9}" r="9" fill="#FFFFFF" opacity="0.5" />
+          <g class="beer-foam-contour" clip-path="url(#stoutFoamClip_${id})">
+            <g class="beer-cloud-foam" data-base-y="${liquidY}">
+              <rect x="25" y="${liquidY - 8}" width="110" height="16" fill="${foamColor}" opacity="0.9" />
+              <circle cx="48" cy="${liquidY - 5}" r="11" fill="${foamColor}" />
+              <circle cx="68" cy="${liquidY - 8}" r="14" fill="${foamColor}" />
+              <circle cx="88" cy="${liquidY - 7}" r="13" fill="${foamColor}" />
+              <circle cx="106" cy="${liquidY - 5}" r="10" fill="${foamColor}" />
+              <circle cx="72" cy="${liquidY - 9}" r="9" fill="#FFFFFF" opacity="0.5" />
+            </g>
           </g>
         `
             : ''
@@ -608,6 +623,9 @@ function renderSnifter(pct, color, isPouring, id) {
         <clipPath id="snifterGlassClip_${id}">
           <path d="M 30 0 L 130 0 L 102 55 C 128 105, 128 155, 80 175 C 32 155, 32 105, 58 55 Z" />
         </clipPath>
+        <clipPath id="snifterFoamClip_${id}">
+          <path d="M 58 55 C 32 105, 32 155, 80 175 C 128 155, 128 105, 102 55 Z" />
+        </clipPath>
       </defs>
 
       <ellipse cx="80" cy="235" rx="35" ry="7" fill="#E2E8F0" opacity="0.4" stroke="#CBD5E0" stroke-width="1.5" />
@@ -629,13 +647,15 @@ function renderSnifter(pct, color, isPouring, id) {
         ${
           !isWater
             ? `
-          <g class="beer-cloud-foam" data-base-y="${liquidY}">
-            <rect x="20" y="${liquidY - 8}" width="120" height="16" fill="${foamColor}" opacity="0.9" />
-            <circle cx="48" cy="${liquidY - 5}" r="11" fill="${foamColor}" />
-            <circle cx="68" cy="${liquidY - 8}" r="14" fill="${foamColor}" />
-            <circle cx="88" cy="${liquidY - 7}" r="13" fill="${foamColor}" />
-            <circle cx="106" cy="${liquidY - 5}" r="10" fill="${foamColor}" />
-            <circle cx="72" cy="${liquidY - 9}" r="9" fill="#FFFFFF" opacity="0.5" />
+          <g class="beer-foam-contour" clip-path="url(#snifterFoamClip_${id})">
+            <g class="beer-cloud-foam" data-base-y="${liquidY}">
+              <rect x="20" y="${liquidY - 8}" width="120" height="16" fill="${foamColor}" opacity="0.9" />
+              <circle cx="48" cy="${liquidY - 5}" r="11" fill="${foamColor}" />
+              <circle cx="68" cy="${liquidY - 8}" r="14" fill="${foamColor}" />
+              <circle cx="88" cy="${liquidY - 7}" r="13" fill="${foamColor}" />
+              <circle cx="106" cy="${liquidY - 5}" r="10" fill="${foamColor}" />
+              <circle cx="72" cy="${liquidY - 9}" r="9" fill="#FFFFFF" opacity="0.5" />
+            </g>
           </g>
         `
             : ''

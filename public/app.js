@@ -4,6 +4,8 @@ import { buildOnDeckItems, buildTapCardContent, createSelectOption, createToast 
 import { createBrewStoryController } from './brewStory.js';
 import { shouldShowNewBadge } from './freshness.js';
 import { createAutosaveController } from './autosave.js';
+import { fitSingleLineText, formatVolumeReadout } from './cardPresentation.js';
+import { createTickerAutoScroller } from './tickerScroll.js';
 import {
   createCelebrationController,
   formatLifecycleLine,
@@ -30,6 +32,8 @@ let hasRenderedSnapshot = false;
 let brewfatherStatusRequestId = 0;
 let brewStory;
 let celebration;
+let tickerAutoScroller;
+let titleFitFrame = null;
 const simulatedPourTimers = new Map();
 const LONG_PRESS_MS = 600;
 const SIMULATED_POUR_MS = 8000;
@@ -268,13 +272,16 @@ function initSSE() {
 
 function updateClockStatus(text) {
   const clockEl = document.getElementById('headerClock');
+  const statusBadge = document.getElementById('liveStatusBadge');
   if (clockEl) {
     if (text.includes('Disconnected') || text.includes('Reconnecting') || text.includes('Offline')) {
       clockEl.textContent = 'Disconnected';
       clockEl.style.color = '#ffa726';
+      statusBadge?.setAttribute('aria-label', 'Connection status: Disconnected');
     } else {
       clockEl.textContent = 'Live';
       clockEl.style.color = '';
+      statusBadge?.setAttribute('aria-label', 'Connection status: Live');
     }
   }
 }
@@ -437,7 +444,8 @@ function getMeasurementView(tapState) {
   const volumeStatus = tapState.volumeStatus || 'unavailable';
   const volumeOz = Number(tapState.volumeOz);
   const fillPercent = Number(tapState.fillPercent);
-  const pintsRemaining = Number(tapState.pintsRemaining);
+  const pintsRemaining =
+    tapState.pintsRemaining === null || tapState.pintsRemaining === undefined ? null : Number(tapState.pintsRemaining);
   const available = volumeStatus !== 'unavailable' && Number.isFinite(volumeOz) && Number.isFinite(fillPercent);
 
   return {
@@ -452,31 +460,16 @@ function getMeasurementView(tapState) {
 
 function volumeStatusText(status) {
   if (status === 'stale') return 'Stale measurement';
-  if (status === 'assumed_full') return 'Assumed full — not measured';
   if (status === 'unavailable') return 'Unavailable';
   return '';
 }
 
-function formatVolumeReadout(tap, measurement) {
-  if (!measurement.available) return 'Unavailable';
-  const unit = tap.display_unit || 'percent';
-  const customSize = Math.max(0.5, parseFloat(tap.custom_pour_size) || 12.0);
-
-  switch (unit) {
-    case 'pints':
-      return Number.isFinite(measurement.pintsRemaining)
-        ? `${measurement.pintsRemaining.toFixed(1)} Pints Remaining`
-        : 'Unavailable';
-    case 'oz':
-      return `${measurement.volumeOz.toFixed(0)} oz Remaining`;
-    case 'pours_12':
-      return `${(measurement.volumeOz / 12.0).toFixed(1)} Pours (12oz)`;
-    case 'pours_custom':
-      return `${(measurement.volumeOz / customSize).toFixed(1)} Pours (${customSize}oz)`;
-    case 'percent':
-    default:
-      return `${measurement.fillPercent.toFixed(1)}% Remaining`;
-  }
+function scheduleTitleFits() {
+  if (titleFitFrame !== null) return;
+  titleFitFrame = requestAnimationFrame(() => {
+    titleFitFrame = null;
+    document.querySelectorAll('.tap-card .beer-title').forEach((title) => fitSingleLineText(title));
+  });
 }
 
 // Main Render Function with In-Place Targeted DOM Preservation
@@ -512,6 +505,7 @@ function renderApp() {
 
   // Render On-Deck Ticker
   renderOnDeckTicker();
+  scheduleTitleFits();
 }
 
 // Create Tap Card Element (Initial creation)
@@ -742,6 +736,7 @@ function updateTapCard(card, tap) {
 
   const styleEl = card.querySelector('.beer-style');
   if (styleEl && styleEl.textContent !== style) styleEl.textContent = style;
+  if (styleEl) styleEl.title = style;
 
   let descriptionEl = card.querySelector('.beer-description');
   const description =
@@ -781,6 +776,19 @@ function updateTapCard(card, tap) {
     } else if (!isNew && newBadge) {
       newBadge.remove();
     }
+
+    let sensorBadge = badges.querySelector('.badge-sensor-problem');
+    const hasSensorProblem = measurement.volumeStatus === 'assumed_full';
+    if (hasSensorProblem && !sensorBadge) {
+      sensorBadge = document.createElement('span');
+      sensorBadge.className = 'badge badge-sensor-problem';
+      sensorBadge.textContent = '!';
+      sensorBadge.setAttribute('role', 'img');
+      sensorBadge.setAttribute('aria-label', 'Sensor problem');
+      badges.appendChild(sensorBadge);
+    } else if (!hasSensorProblem && sensorBadge) {
+      sensorBadge.remove();
+    }
   }
 
   const metrics = card.querySelectorAll('.metric-value');
@@ -810,6 +818,8 @@ function updateTapCard(card, tap) {
     forecastEl.hidden = !forecastText;
     forecastEl.setAttribute('aria-label', `${forecastText}. Open forecast details.`);
   }
+
+  scheduleTitleFits();
 
   let kickedBadge = badges?.querySelector('.badge-kicked');
   if (milestone.kickedAt && !kickedBadge) {
@@ -1230,10 +1240,17 @@ function renderOnDeckTicker() {
   const showOnDeck = appState.settings.show_ondeck !== false && appState.settings.show_ondeck !== 0;
   ticker.hidden = !showOnDeck;
   itemsContainer.replaceChildren();
-  if (!showOnDeck) return;
+  if (!showOnDeck) {
+    tickerAutoScroller?.refresh();
+    return;
+  }
 
   const onDeckBrews = Array.isArray(appState.onDeckBatches) ? appState.onDeckBatches : [];
-  itemsContainer.replaceChildren(buildOnDeckItems(onDeckBrews));
+  const track = document.createElement('div');
+  track.className = 'ondeck-track';
+  track.appendChild(buildOnDeckItems(onDeckBrews));
+  itemsContainer.replaceChildren(track);
+  tickerAutoScroller?.refresh();
 }
 
 // Live Font Previews in Global Studio Settings
@@ -2103,6 +2120,22 @@ function initDisplayPreferenceSync() {
 
 // Initialize Client Engine
 window.addEventListener('DOMContentLoaded', () => {
+  const onDeckItems = document.getElementById('onDeckItems');
+  if (onDeckItems) tickerAutoScroller = createTickerAutoScroller({ element: onDeckItems });
+  window.addEventListener(
+    'resize',
+    () => {
+      scheduleTitleFits();
+      tickerAutoScroller?.refresh({ reset: false });
+    },
+    { passive: true }
+  );
+  document.fonts?.ready
+    .then(() => {
+      scheduleTitleFits();
+      tickerAutoScroller?.refresh({ reset: false });
+    })
+    .catch(() => {});
   celebration = createCelebrationController({
     layer: document.getElementById('celebrationLayer'),
     getSettings: () => appState.settings,
