@@ -1,12 +1,10 @@
 import Database from 'better-sqlite3';
-import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
 export const DEFAULT_DAILY_BACKUPS = 14;
 export const DEFAULT_WEEKLY_BACKUPS = 8;
 export const POUR_RETENTION_YEARS = 2;
-export const MIGRATION_APPROVAL_FILE = '.tapboard-migration-approved.json';
 
 function quoteIdentifier(value) {
   return `"${String(value).replaceAll('"', '""')}"`;
@@ -41,21 +39,6 @@ function removeSQLiteSidecars(file) {
 
 function backupStamp(date) {
   return date.toISOString().replace(/[-:.]/g, '');
-}
-
-export function databaseFileSha256(file) {
-  const hash = crypto.createHash('sha256');
-  const descriptor = fs.openSync(file, 'r');
-  const buffer = Buffer.allocUnsafe(1024 * 1024);
-  try {
-    let bytesRead;
-    while ((bytesRead = fs.readSync(descriptor, buffer, 0, buffer.length, null)) > 0) {
-      hash.update(buffer.subarray(0, bytesRead));
-    }
-    return hash.digest('hex');
-  } finally {
-    fs.closeSync(descriptor);
-  }
 }
 
 function isoWeekKey(date) {
@@ -132,7 +115,12 @@ export function verifyDatabaseFile(file, { expectedVersion, expectedCounts } = {
   }
 }
 
-export async function createOnlineBackup({ sourceFile, backupDirectory, now = new Date() }) {
+export async function createOnlineBackup({
+  sourceFile,
+  backupDirectory,
+  now = new Date(),
+  setFileMode = fs.chmodSync
+}) {
   ensureDirectory(backupDirectory);
   const filename = `tapboard-${backupStamp(now)}.db`;
   const finalPath = path.join(backupDirectory, filename);
@@ -162,11 +150,16 @@ export async function createOnlineBackup({ sourceFile, backupDirectory, now = ne
     } finally {
       standalone.close();
     }
-    fs.chmodSync(temporaryPath, 0o600);
+    setFileMode(temporaryPath, 0o600);
     const summary = verifyDatabaseFile(temporaryPath);
     removeSQLiteSidecars(temporaryPath);
     fs.renameSync(temporaryPath, finalPath);
-    fs.chmodSync(finalPath, 0o600);
+    try {
+      setFileMode(finalPath, 0o600);
+    } catch (error) {
+      fs.unlinkSync(finalPath);
+      throw error;
+    }
     return { file: finalPath, summary };
   } catch (error) {
     try {
@@ -184,6 +177,41 @@ export async function createOnlineBackup({ sourceFile, backupDirectory, now = ne
     } catch {
       // The final backup was not published, or its sidecars are unavailable.
     }
+    throw error;
+  }
+}
+
+export async function backupThenMigrateDatabase({
+  database,
+  sourceFile,
+  backupDirectory,
+  fromVersion,
+  toVersion,
+  migrate
+}) {
+  database.exec('BEGIN IMMEDIATE');
+  try {
+    const lockedVersion = database.pragma('user_version', { simple: true });
+    if (lockedVersion > toVersion) {
+      throw new Error(`Unsupported database schema version: ${lockedVersion}`);
+    }
+    if (lockedVersion !== fromVersion) {
+      throw new Error(`Database schema changed during startup: expected ${fromVersion}, found ${lockedVersion}`);
+    }
+    let backup;
+    try {
+      backup = await createOnlineBackup({ sourceFile, backupDirectory });
+    } catch (error) {
+      throw new Error(`Automatic pre-migration backup failed: ${error.message}`, { cause: error });
+    }
+    if (backup.summary.userVersion !== fromVersion) {
+      throw new Error('Automatic pre-migration backup does not match the source schema version');
+    }
+    await migrate(database);
+    database.exec('COMMIT');
+    return backup;
+  } catch (error) {
+    if (database.inTransaction) database.exec('ROLLBACK');
     throw error;
   }
 }
@@ -227,8 +255,7 @@ export async function restoreBackup({ backupFile, targetDataDirectory }) {
   ensureDirectory(targetDataDirectory);
   const targetFile = path.join(targetDataDirectory, 'tapboard.db');
   const temporaryPath = `${targetFile}.partial-${process.pid}`;
-  const approvalFile = path.join(targetDataDirectory, MIGRATION_APPROVAL_FILE);
-  for (const candidate of [targetFile, `${targetFile}-wal`, `${targetFile}-shm`, temporaryPath, approvalFile]) {
+  for (const candidate of [targetFile, `${targetFile}-wal`, `${targetFile}-shm`, temporaryPath]) {
     if (fs.existsSync(candidate)) throw new Error(`Restore target is not empty: ${path.basename(candidate)}`);
   }
 
@@ -247,33 +274,12 @@ export async function restoreBackup({ backupFile, targetDataDirectory }) {
       expectedCounts: sourceSummary.counts
     });
     removeSQLiteSidecars(targetFile);
-    fs.writeFileSync(
-      approvalFile,
-      `${JSON.stringify(
-        {
-          verifiedAt: new Date().toISOString(),
-          backupFile: path.basename(backupFile),
-          databaseSha256: databaseFileSha256(targetFile),
-          userVersion: summary.userVersion,
-          counts: summary.counts
-        },
-        null,
-        2
-      )}\n`,
-      { encoding: 'utf8', flag: 'wx', mode: 0o600 }
-    );
-    fs.chmodSync(approvalFile, 0o600);
-    return { file: targetFile, approvalFile, summary };
+    return { file: targetFile, summary };
   } catch (error) {
     try {
       fs.unlinkSync(temporaryPath);
     } catch {
       // The partial restore may not have been created.
-    }
-    try {
-      fs.unlinkSync(approvalFile);
-    } catch {
-      // The approval marker was not written.
     }
     try {
       fs.unlinkSync(targetFile);

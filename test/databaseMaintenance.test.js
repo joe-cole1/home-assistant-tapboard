@@ -5,9 +5,9 @@ import path from 'node:path';
 import test from 'node:test';
 import Database from 'better-sqlite3';
 import {
+  backupThenMigrateDatabase,
   backupThenPrunePourHistory,
   createOnlineBackup,
-  MIGRATION_APPROVAL_FILE,
   restoreBackup,
   retentionCutoffEpoch,
   verifyDatabaseFile
@@ -76,17 +76,85 @@ test('online backup and disposable restore preserve schema, counts, integrity, a
   assert.equal(restored.summary.counts.pour_logs, 1);
   assert.equal(restored.summary.adminPinInitialized, 1);
   assert.equal(restored.summary.invalidSessionDigests, 0);
-  assert.equal(path.basename(restored.approvalFile), MIGRATION_APPROVAL_FILE);
-  assert.equal(fs.statSync(restored.approvalFile).mode & 0o777, 0o600);
-  const approval = JSON.parse(fs.readFileSync(restored.approvalFile, 'utf8'));
-  assert.deepEqual(approval.counts, backup.summary.counts);
-  assert.match(approval.databaseSha256, /^[a-f0-9]{64}$/);
+  assert.deepEqual(Object.keys(restored).sort(), ['file', 'summary']);
   assert.equal(fs.existsSync(`${restored.file}-wal`), false);
   assert.equal(fs.existsSync(`${restored.file}-shm`), false);
   assert.deepEqual(
     verifyDatabaseFile(restored.file, { expectedVersion: 2, expectedCounts: backup.summary.counts }),
     restored.summary
   );
+});
+
+test('a startup migration lock keeps the verified backup and migrated state on one write boundary', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tapboard-migration-boundary-'));
+  const source = makeDatabase(path.join(root, 'source'));
+  const competingWriter = new Database(source.file, { timeout: 0 });
+
+  const backup = await backupThenMigrateDatabase({
+    database: source.database,
+    sourceFile: source.file,
+    backupDirectory: path.join(root, 'backups'),
+    fromVersion: 2,
+    toVersion: 2,
+    migrate(database) {
+      assert.equal(database.inTransaction, true);
+      assert.throws(() => competingWriter.prepare('INSERT INTO taps (tap_id) VALUES (2)').run(), {
+        code: 'SQLITE_BUSY'
+      });
+      database.prepare('INSERT INTO taps (tap_id) VALUES (2)').run();
+    }
+  });
+
+  competingWriter.prepare('INSERT INTO taps (tap_id) VALUES (3)').run();
+  assert.equal(verifyDatabaseFile(backup.file).counts.taps, 1);
+  assert.equal(source.database.prepare('SELECT COUNT(*) AS count FROM taps').get().count, 3);
+  competingWriter.close();
+  source.database.close();
+});
+
+test('a schema changed after the readonly probe is rejected under lock before backup publication', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tapboard-migration-version-race-'));
+  const source = makeDatabase(path.join(root, 'source'));
+  const backupDirectory = path.join(root, 'backups');
+
+  await assert.rejects(
+    backupThenMigrateDatabase({
+      database: source.database,
+      sourceFile: source.file,
+      backupDirectory,
+      fromVersion: 1,
+      toVersion: 1,
+      migrate() {
+        assert.fail('future schema must be rejected before migration');
+      }
+    }),
+    /Unsupported database schema version: 2/
+  );
+  assert.equal(source.database.inTransaction, false);
+  assert.equal(fs.existsSync(backupDirectory), false);
+  assert.equal(source.database.pragma('journal_mode', { simple: true }), 'delete');
+  source.database.close();
+});
+
+test('backup publication removes the final file when its restrictive mode cannot be confirmed', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tapboard-backup-mode-failure-'));
+  const source = makeDatabase(path.join(root, 'source'));
+  source.database.close();
+  const backupDirectory = path.join(root, 'backups');
+
+  await assert.rejects(
+    createOnlineBackup({
+      sourceFile: source.file,
+      backupDirectory,
+      now: new Date('2026-08-01T16:00:00.000Z'),
+      setFileMode(file, mode) {
+        if (file.endsWith('.db')) throw new Error('simulated final chmod failure');
+        fs.chmodSync(file, mode);
+      }
+    }),
+    /simulated final chmod failure/
+  );
+  assert.deepEqual(fs.readdirSync(backupDirectory), []);
 });
 
 test('two-calendar-year pruning is backup-gated and preserves recent pours', async () => {

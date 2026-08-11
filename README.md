@@ -96,6 +96,8 @@ When running against the Compose service, use `docker compose exec -T tapboard` 
 
 The repository does not install a backup scheduler. Run the supported backup command from an operator-owned scheduler after verifying the deployment.
 
+On a normal production startup, Tapboard rejects an empty data volume and any database schema newer than it supports. When it detects an older supported schema, it automatically creates and verifies a new backup in the independent backup volume before applying the transactional migration. A backup or migration failure stops startup without approving or partially continuing the upgrade.
+
 ## Native Brewfather synchronization
 
 Tapboard refreshes at startup and every six hours, with bounded retry backoff after failures. An authenticated manual refresh uses the same coordinator and the same rolling request budget, so overlapping startup, scheduled, and manual refreshes coalesce into one cycle.

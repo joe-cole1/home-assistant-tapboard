@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import bcrypt from 'bcryptjs';
 import Database from 'better-sqlite3';
-import { createOnlineBackup, MIGRATION_APPROVAL_FILE, restoreBackup } from '../src/databaseMaintenance.js';
+import { verifyDatabaseFile } from '../src/databaseMaintenance.js';
 import { SCHEMA_VERSION } from '../src/dbMigrations.js';
 import {
   tapId,
@@ -28,8 +28,8 @@ function initialize(dataDir, initialPin = '') {
       env: {
         ...process.env,
         DATA_DIR: dataDir,
+        BACKUP_DIR: path.join(dataDir, 'backups'),
         TAPBOARD_EXPECT_EXISTING_DATA: 'false',
-        TAPBOARD_REQUIRE_MIGRATION_APPROVAL: 'false',
         TAPBOARD_INITIAL_ADMIN_PIN: initialPin,
         DOTENV_CONFIG_PATH: path.join(dataDir, '.env-unused')
       },
@@ -45,7 +45,13 @@ function startDatabase(dataDir, environment = {}) {
     ['--input-type=module', '-e', "import('./src/db.js').then(({default:db}) => db.close())"],
     {
       cwd: process.cwd(),
-      env: { ...process.env, DATA_DIR: dataDir, DOTENV_CONFIG_PATH: path.join(dataDir, '.env-unused'), ...environment },
+      env: {
+        ...process.env,
+        DATA_DIR: dataDir,
+        BACKUP_DIR: path.join(dataDir, 'backups'),
+        DOTENV_CONFIG_PATH: path.join(dataDir, '.env-unused'),
+        ...environment
+      },
       encoding: 'utf8'
     }
   );
@@ -81,6 +87,13 @@ function makeRestorableLegacyDatabase(dataDir, timestamp = '2026-08-01 01:02:03'
   database.prepare('INSERT INTO taps (tap_id) VALUES (1)').run();
   database.prepare('INSERT INTO pour_logs VALUES (1, 1, 6, ?)').run(timestamp);
   database.close();
+}
+
+function backupFiles(backupDir) {
+  if (!existsSync(backupDir)) return [];
+  return readdirSync(backupDir)
+    .filter((name) => /^tapboard-\d{8}T\d{9}Z\.db$/.test(name))
+    .map((name) => path.join(backupDir, name));
 }
 
 test('validation preserves client numeric strings while enforcing every approved boundary', () => {
@@ -191,126 +204,140 @@ test('production startup refuses an unexpectedly empty data volume', () => {
   assert.match(result.stderr, /data volume is empty/);
 });
 
-test('production startup refuses a legacy schema without a verified restore marker', () => {
-  const dataDir = mkdtempSync(path.join(os.tmpdir(), 'tapboard-db-no-marker-'));
+test('production startup rejects a future schema without creating a migration backup', () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'tapboard-db-future-schema-'));
+  const dataDir = path.join(root, 'data');
+  const backupDir = path.join(root, 'backups');
+  mkdirSync(dataDir);
   const database = open(dataDir);
-  database.exec('CREATE TABLE settings (id INTEGER PRIMARY KEY); CREATE TABLE taps (tap_id INTEGER PRIMARY KEY);');
+  database.exec(`
+    CREATE TABLE settings (id INTEGER PRIMARY KEY);
+    CREATE TABLE taps (tap_id INTEGER PRIMARY KEY);
+    PRAGMA user_version = ${SCHEMA_VERSION + 1};
+  `);
   database.close();
 
   const result = startDatabase(dataDir, {
-    TAPBOARD_EXPECT_EXISTING_DATA: 'true',
-    TAPBOARD_REQUIRE_MIGRATION_APPROVAL: 'true'
+    BACKUP_DIR: backupDir,
+    TAPBOARD_EXPECT_EXISTING_DATA: 'true'
   });
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /requires a verified restore marker/);
-  const unchanged = open(dataDir);
-  assert.equal(unchanged.pragma('user_version', { simple: true }), 0);
-  assert.equal(unchanged.prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'table'").get().count, 2);
+  assert.match(result.stderr, new RegExp(`Unsupported database schema version: ${SCHEMA_VERSION + 1}`));
+  assert.deepEqual(backupFiles(backupDir), []);
+  assert.equal(existsSync(path.join(dataDir, 'tapboard.db-wal')), false);
+  assert.equal(existsSync(path.join(dataDir, 'tapboard.db-shm')), false);
+
+  const unchanged = new Database(path.join(dataDir, 'tapboard.db'), { readonly: true, fileMustExist: true });
+  assert.equal(unchanged.pragma('user_version', { simple: true }), SCHEMA_VERSION + 1);
+  assert.equal(unchanged.pragma('journal_mode', { simple: true }), 'delete');
   unchanged.close();
 });
 
-test('verified restore marker permits migration, is consumed after success, and is not needed on restart', async () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), 'tapboard-db-approved-migration-'));
-  const sourceDir = path.join(root, 'source');
-  const restoredDir = path.join(root, 'restored');
+test('production startup automatically backs up and migrates an older supported schema once', () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'tapboard-db-auto-migration-'));
+  const dataDir = path.join(root, 'data');
   const backupDir = path.join(root, 'backups');
-  makeRestorableLegacyDatabase(sourceDir);
-  const backup = await createOnlineBackup({
-    sourceFile: path.join(sourceDir, 'tapboard.db'),
-    backupDirectory: backupDir
-  });
-  await restoreBackup({ backupFile: backup.file, targetDataDirectory: restoredDir });
-  const approvalFile = path.join(restoredDir, MIGRATION_APPROVAL_FILE);
-  assert.equal(existsSync(approvalFile), true);
+  makeRestorableLegacyDatabase(dataDir);
 
-  let result = startDatabase(restoredDir, {
-    TAPBOARD_EXPECT_EXISTING_DATA: 'true',
-    TAPBOARD_REQUIRE_MIGRATION_APPROVAL: 'true'
+  let result = startDatabase(dataDir, {
+    BACKUP_DIR: backupDir,
+    TAPBOARD_EXPECT_EXISTING_DATA: 'true'
   });
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(existsSync(approvalFile), false);
-  assert.equal(existsSync(path.join(restoredDir, `.tapboard-migration-v${SCHEMA_VERSION}.json`)), true);
-  let migrated = open(restoredDir);
+  assert.match(result.stdout, /Verified tapboard-\d{8}T\d{9}Z\.db before schema 0 -> 6/);
+
+  const backups = backupFiles(backupDir);
+  assert.equal(backups.length, 1);
+  const backupSummary = verifyDatabaseFile(backups[0]);
+  assert.equal(backupSummary.userVersion, 0);
+  assert.equal(backupSummary.counts.pour_logs, 1);
+
+  const migrated = open(dataDir);
   assert.equal(migrated.pragma('user_version', { simple: true }), SCHEMA_VERSION);
   assert.equal(migrated.prepare('SELECT COUNT(*) AS count FROM pour_logs').get().count, 1);
   migrated.close();
 
-  result = startDatabase(restoredDir, {
-    TAPBOARD_EXPECT_EXISTING_DATA: 'true',
-    TAPBOARD_REQUIRE_MIGRATION_APPROVAL: 'true'
+  result = startDatabase(dataDir, {
+    BACKUP_DIR: backupDir,
+    TAPBOARD_EXPECT_EXISTING_DATA: 'true'
   });
   assert.equal(result.status, 0, result.stderr);
+  assert.equal(backupFiles(backupDir).length, 1);
 });
 
-test('restore marker is rejected when same-count database contents change', async () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), 'tapboard-db-marker-binding-'));
-  const sourceDir = path.join(root, 'source');
-  const restoredDir = path.join(root, 'restored');
-  makeRestorableLegacyDatabase(sourceDir);
-  const backup = await createOnlineBackup({
-    sourceFile: path.join(sourceDir, 'tapboard.db'),
-    backupDirectory: path.join(root, 'backups')
-  });
-  await restoreBackup({ backupFile: backup.file, targetDataDirectory: restoredDir });
-  const changed = open(restoredDir);
-  changed.prepare('UPDATE pour_logs SET volume_poured_oz = 7 WHERE id = 1').run();
-  changed.close();
+test('an unusable backup directory aborts startup before migration', () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'tapboard-db-backup-failure-'));
+  const dataDir = path.join(root, 'data');
+  const backupTarget = path.join(root, 'not-a-directory');
+  makeRestorableLegacyDatabase(dataDir);
+  writeFileSync(backupTarget, 'occupied');
 
-  const result = startDatabase(restoredDir, {
-    TAPBOARD_EXPECT_EXISTING_DATA: 'true',
-    TAPBOARD_REQUIRE_MIGRATION_APPROVAL: 'true'
+  const result = startDatabase(dataDir, {
+    BACKUP_DIR: backupTarget,
+    TAPBOARD_EXPECT_EXISTING_DATA: 'true'
   });
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /restore marker does not match/);
-  assert.equal(existsSync(path.join(restoredDir, MIGRATION_APPROVAL_FILE)), true);
+  assert.match(result.stderr, /Automatic pre-migration backup failed/);
+
+  const unchanged = open(dataDir);
+  assert.equal(unchanged.pragma('user_version', { simple: true }), 0);
+  assert.equal(unchanged.prepare('SELECT COUNT(*) AS count FROM pour_logs').get().count, 1);
+  assert.equal(
+    unchanged
+      .prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'table' AND name = 'schema_migrations'")
+      .get().count,
+    0
+  );
+  unchanged.close();
 });
 
-test('restore marker is rejected when a same-count change exists only in WAL state', async () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), 'tapboard-db-marker-wal-binding-'));
-  const sourceDir = path.join(root, 'source');
-  const restoredDir = path.join(root, 'restored');
-  makeRestorableLegacyDatabase(sourceDir);
-  const backup = await createOnlineBackup({
-    sourceFile: path.join(sourceDir, 'tapboard.db'),
-    backupDirectory: path.join(root, 'backups')
-  });
-  await restoreBackup({ backupFile: backup.file, targetDataDirectory: restoredDir });
-  const changed = open(restoredDir);
+test('automatic pre-migration backup captures committed WAL state', () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'tapboard-db-wal-backup-'));
+  const dataDir = path.join(root, 'data');
+  const backupDir = path.join(root, 'backups');
+  makeRestorableLegacyDatabase(dataDir);
+  const changed = open(dataDir);
   changed.pragma('journal_mode = WAL');
   changed.pragma('wal_autocheckpoint = 0');
   changed.prepare('UPDATE pour_logs SET volume_poured_oz = 7 WHERE id = 1').run();
-  assert.equal(existsSync(path.join(restoredDir, 'tapboard.db-wal')), true);
+  assert.equal(existsSync(path.join(dataDir, 'tapboard.db-wal')), true);
 
-  const result = startDatabase(restoredDir, {
-    TAPBOARD_EXPECT_EXISTING_DATA: 'true',
-    TAPBOARD_REQUIRE_MIGRATION_APPROVAL: 'true'
+  const result = startDatabase(dataDir, {
+    BACKUP_DIR: backupDir,
+    TAPBOARD_EXPECT_EXISTING_DATA: 'true'
   });
   changed.close();
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /restore marker does not match/);
-  assert.equal(existsSync(path.join(restoredDir, MIGRATION_APPROVAL_FILE)), true);
+  assert.equal(result.status, 0, result.stderr);
+
+  const backups = backupFiles(backupDir);
+  assert.equal(backups.length, 1);
+  const backup = new Database(backups[0], { readonly: true, fileMustExist: true });
+  assert.equal(backup.prepare('SELECT volume_poured_oz FROM pour_logs WHERE id = 1').get().volume_poured_oz, 7);
+  backup.close();
+  assert.equal(existsSync(`${backups[0]}-wal`), false);
+  assert.equal(existsSync(`${backups[0]}-shm`), false);
 });
 
-test('failed approved migration remains uncommitted and retains its restore marker', async () => {
+test('failed migration remains uncommitted and retains its verified automatic backup', () => {
   const root = mkdtempSync(path.join(os.tmpdir(), 'tapboard-db-failed-migration-'));
-  const sourceDir = path.join(root, 'source');
-  const restoredDir = path.join(root, 'restored');
+  const dataDir = path.join(root, 'data');
   const backupDir = path.join(root, 'backups');
-  makeRestorableLegacyDatabase(sourceDir, 'not-a-timestamp');
-  const backup = await createOnlineBackup({
-    sourceFile: path.join(sourceDir, 'tapboard.db'),
-    backupDirectory: backupDir
-  });
-  await restoreBackup({ backupFile: backup.file, targetDataDirectory: restoredDir });
+  makeRestorableLegacyDatabase(dataDir, 'not-a-timestamp');
 
-  const result = startDatabase(restoredDir, {
-    TAPBOARD_EXPECT_EXISTING_DATA: 'true',
-    TAPBOARD_REQUIRE_MIGRATION_APPROVAL: 'true'
+  const result = startDatabase(dataDir, {
+    BACKUP_DIR: backupDir,
+    TAPBOARD_EXPECT_EXISTING_DATA: 'true'
   });
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /normalize 1 pour timestamp/);
-  assert.equal(existsSync(path.join(restoredDir, MIGRATION_APPROVAL_FILE)), true);
-  const unchanged = open(restoredDir);
+
+  const backups = backupFiles(backupDir);
+  assert.equal(backups.length, 1);
+  const backupSummary = verifyDatabaseFile(backups[0]);
+  assert.equal(backupSummary.userVersion, 0);
+  assert.equal(backupSummary.counts.pour_logs, 1);
+
+  const unchanged = open(dataDir);
   assert.equal(unchanged.pragma('user_version', { simple: true }), 0);
   assert.equal(unchanged.prepare('SELECT COUNT(*) AS count FROM pour_logs').get().count, 1);
   unchanged.close();

@@ -5,7 +5,7 @@ import fs from 'fs';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
 import { migrateDatabase, SCHEMA_VERSION } from './dbMigrations.js';
-import { databaseFileSha256, MIGRATION_APPROVAL_FILE, summarizeDatabase } from './databaseMaintenance.js';
+import { backupThenMigrateDatabase } from './databaseMaintenance.js';
 
 dotenv.config({
   quiet: true,
@@ -13,72 +13,69 @@ dotenv.config({
 });
 
 const dataDir = process.env.DATA_DIR || path.join(process.cwd(), 'data');
+const backupDir = process.env.BACKUP_DIR || path.join(process.cwd(), 'backups');
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 const dbPath = path.join(dataDir, 'tapboard.db');
 const expectExistingData = process.env.TAPBOARD_EXPECT_EXISTING_DATA === 'true';
 if (expectExistingData && (!fs.existsSync(dbPath) || fs.statSync(dbPath).size === 0)) {
   throw new Error('Expected an existing Tapboard database, but the data volume is empty');
 }
-const preOpenDatabaseSha256 = fs.existsSync(dbPath) ? databaseFileSha256(dbPath) : null;
-const preOpenHasSQLiteSidecar = [`${dbPath}-wal`, `${dbPath}-shm`].some((file) => fs.existsSync(file));
 
-const db = new Database(dbPath);
-db.pragma('journal_mode = WAL');
-db.pragma('synchronous = NORMAL');
+function inspectExistingDatabase() {
+  if (!fs.existsSync(dbPath) || fs.statSync(dbPath).size === 0) {
+    return { appSchemaExists: false, version: 0 };
+  }
+  const probe = new Database(dbPath, { readonly: true, fileMustExist: true });
+  try {
+    const appSchemaExists = Boolean(
+      probe.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'settings'").get() &&
+      probe.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'taps'").get()
+    );
+    return { appSchemaExists, version: probe.pragma('user_version', { simple: true }) };
+  } finally {
+    probe.close();
+  }
+}
 
-const appSchemaExists = Boolean(
-  db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'settings'").get() &&
-  db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'taps'").get()
-);
-if (expectExistingData && !appSchemaExists) {
-  db.close();
+const inspected = inspectExistingDatabase();
+if (expectExistingData && !inspected.appSchemaExists) {
   throw new Error('Expected an existing Tapboard database, but the application schema is missing');
 }
-
-const preMigrationVersion = db.pragma('user_version', { simple: true });
-const approvalFile = path.join(dataDir, MIGRATION_APPROVAL_FILE);
-const migrationNeedsApproval =
-  appSchemaExists && preMigrationVersion < SCHEMA_VERSION && process.env.TAPBOARD_REQUIRE_MIGRATION_APPROVAL === 'true';
-if (migrationNeedsApproval) {
-  let approval;
-  try {
-    approval = JSON.parse(fs.readFileSync(approvalFile, 'utf8'));
-  } catch {
-    db.close();
-    throw new Error(`Schema migration requires a verified restore marker (${MIGRATION_APPROVAL_FILE})`);
-  }
-  const current = summarizeDatabase(db);
-  const countsMatch =
-    Object.entries(current.counts).every(([table, count]) => approval.counts?.[table] === count) &&
-    Object.keys(approval.counts || {}).length === Object.keys(current.counts).length;
-  if (
-    current.integrity !== 'ok' ||
-    current.foreignKeyViolations !== 0 ||
-    preOpenHasSQLiteSidecar ||
-    approval.databaseSha256 !== preOpenDatabaseSha256 ||
-    approval.userVersion !== current.userVersion ||
-    !countsMatch
-  ) {
-    db.close();
-    throw new Error('Schema migration restore marker does not match the current database');
-  }
+if (inspected.version > SCHEMA_VERSION) {
+  throw new Error(`Unsupported database schema version: ${inspected.version}`);
 }
+const migrationNeedsBackup = inspected.appSchemaExists && inspected.version < SCHEMA_VERSION;
+
+const db = new Database(dbPath);
+db.pragma('foreign_keys = ON');
 
 // This is recorded before migration so a pre-v1 configured PIN can be
 // distinguished from the deliberately disabled first-run credential.
 const settingsHadPinInitializationState = Boolean(
   db.prepare("SELECT 1 FROM pragma_table_info('settings') WHERE name = 'admin_pin_initialized'").get()
 );
-migrateDatabase(db);
-if (migrationNeedsApproval) {
-  try {
-    fs.renameSync(approvalFile, path.join(dataDir, `.tapboard-migration-v${SCHEMA_VERSION}.json`));
-  } catch (error) {
-    console.warn(
-      `[Database migration] Schema migration succeeded, but the approval marker could not be archived: ${error.message}`
+try {
+  if (migrationNeedsBackup) {
+    const backup = await backupThenMigrateDatabase({
+      database: db,
+      sourceFile: dbPath,
+      backupDirectory: backupDir,
+      fromVersion: inspected.version,
+      toVersion: SCHEMA_VERSION,
+      migrate: migrateDatabase
+    });
+    console.log(
+      `[Database migration] Verified ${path.basename(backup.file)} before schema ${inspected.version} -> ${SCHEMA_VERSION}`
     );
+  } else {
+    migrateDatabase(db);
   }
+} catch (error) {
+  db.close();
+  throw error;
 }
+db.pragma('journal_mode = WAL');
+db.pragma('synchronous = NORMAL');
 
 const unusablePinHash = bcrypt.hashSync(crypto.randomBytes(32).toString('hex'), 10);
 const existingSettings = db.prepare('SELECT id FROM settings WHERE id = 1').get();

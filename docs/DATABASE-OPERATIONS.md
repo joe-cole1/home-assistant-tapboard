@@ -45,7 +45,7 @@ The command first creates and verifies a new online backup. It then deletes, in 
 
 ## Disposable restore rehearsal
 
-Before a production storage or schema migration:
+Use a disposable restore rehearsal to test recovery or a candidate image before a production rollout. It is optional: normal startup handles supported schema upgrades automatically.
 
 1. Create a disposable empty data volume; never reuse the live `tapboard_data` volume.
 2. Restore a verified backup into it:
@@ -54,23 +54,24 @@ Before a production storage or schema migration:
    npm run db:restore -- <backup-file> <empty-data-directory>
    ```
 
-   Restore rejects non-quiescent WAL/SHM sidecars and writes a mode-`0600` approval marker containing the verified pre-migration schema version, table counts, and database digest. Do not create or edit this marker manually.
+   Restore verifies the backup and produces a standalone restored database without WAL/SHM sidecars. It is a recovery and testing mechanism, not a migration-approval step.
 
-3. Start the candidate against that disposable volume with `HA_TOKEN` empty, a random loopback port, the read-only root filesystem, and the approved hardening.
+3. Start the candidate against that disposable volume with `HA_TOKEN` empty, a random loopback port, the read-only root filesystem, and the approved hardening. If its schema is older but supported, startup creates and verifies its own pre-migration backup before applying the transactional migration.
 4. Verify `integrity_check`, `foreign_key_check`, schema version 6 and migration ledger (including `brewfather-cache` and `brew-story`), durable counts, lifecycle relationships, Brewfather cache/On Deck/custom-beverage records, reading pH and history-sync state, sensory overrides, nullable accent overrides, administrator initialization, digest-only sessions, HA hydration where appropriate, and HTTP 200 from `/healthz`.
 5. Remove only the disposable container. Keep a useful rehearsal volume until the rollout is complete.
 
 ## Live named-volume migration and rollback
 
-Keep a migration window within ten minutes:
+For a supported schema upgrade, use the live named volume in place. Normal startup provides the migration gate:
 
 1. Record the running image, Compose revision, health, loopback binding, mounts, schema, integrity result, and durable counts.
 2. Retain the current image as a rollback image and keep the pre-migration Compose definition.
-3. Create and verify an online preflight backup.
-4. Stop Tapboard to establish a quiesce boundary, then create and verify the final backup from the source database.
-5. Restore the final backup into an empty `tapboard_data` volume. Start the candidate so it validates and consumes the restore approval marker while applying any approved schema migration. Never overwrite the original source database.
-6. Verify schema version, migration ledger, `integrity_check`, zero foreign-key violations, durable counts, open lifecycle count, forecast index, administrator initialization, container hardening, named volumes, loopback port `3005`, HA hydration, and `/healthz` HTTP 200.
+3. Optionally create and verify a preflight backup or complete a disposable restore rehearsal before the rollout.
+4. Start the candidate against the existing data volume. If it finds an older supported schema, it first creates and verifies a fresh backup in `tapboard_backups`, then applies all ordered migrations in one transaction. The application does not start if that backup fails verification or the migration fails.
+5. Verify schema version, migration ledger, `integrity_check`, zero foreign-key violations, durable counts, open lifecycle count, forecast index, administrator initialization, container hardening, named volumes, loopback port `3005`, HA hydration, and `/healthz` HTTP 200.
 
-Rollback immediately if migration/integrity checks fail, durable counts change unexpectedly, the container is unhealthy, hydration cannot recover, port scope is wrong, or required paths are not writable. Stop the candidate and restore the retained Compose definition and rollback image against the untouched source database. Retain the failed new volume for diagnosis.
+Tapboard rejects a database from a future schema version rather than attempting to open or downgrade it. The production empty-volume guard remains in effect; do not bypass it by creating an empty volume for an existing deployment.
 
-The original OneDrive database, final quiesced backup, rollback image, and rehearsal volumes are retained rollback artifacts. Do not retire them without separate destructive approval and an observation period.
+Rollback immediately if startup/migration checks fail, durable counts change unexpectedly, the container is unhealthy, hydration cannot recover, port scope is wrong, or required paths are not writable. Stop the candidate, restore the retained Compose definition and rollback image, and use the verified pre-migration backup to restore into a separate empty recovery volume if the original database needs replacement. Do not overwrite the original source volume; retain it and any failed candidate volume for diagnosis.
+
+The verified pre-migration backup, rollback image, and rehearsal or recovery volumes are rollback artifacts. Do not retire them without separate destructive approval and an observation period.

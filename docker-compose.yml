@@ -22,7 +22,7 @@ services:
       - TAPBOARD_PUBLIC_ORIGIN=${TAPBOARD_PUBLIC_ORIGIN:-}
       - TAPBOARD_INITIAL_ADMIN_PIN=${TAPBOARD_INITIAL_ADMIN_PIN:-}
       - TAPBOARD_EXPECT_EXISTING_DATA=${TAPBOARD_EXPECT_EXISTING_DATA:-true}
-      - TAPBOARD_REQUIRE_MIGRATION_APPROVAL=true
+      - BACKUP_DIR=/app/backups
     volumes:
       - tapboard_data:/app/data
       - tapboard_backups:/app/backups
