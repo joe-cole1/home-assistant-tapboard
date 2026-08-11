@@ -57,7 +57,7 @@ Use a disposable restore rehearsal to test recovery or a candidate image before 
    Restore verifies the backup and produces a standalone restored database without WAL/SHM sidecars. It is a recovery and testing mechanism, not a migration-approval step.
 
 3. Start the candidate against that disposable volume with `HA_TOKEN` empty, a random loopback port, the read-only root filesystem, and the approved hardening. If its schema is older but supported, startup creates and verifies its own pre-migration backup before applying the transactional migration.
-4. Verify `integrity_check`, `foreign_key_check`, schema version 6 and migration ledger (including `brewfather-cache` and `brew-story`), durable counts, lifecycle relationships, Brewfather cache/On Deck/custom-beverage records, reading pH and history-sync state, sensory overrides, nullable accent overrides, administrator initialization, digest-only sessions, HA hydration where appropriate, and HTTP 200 from `/healthz`.
+4. Verify `integrity_check`, `foreign_key_check`, schema version 8 and the migration ledger (including `serving-glass-recommendations` and `lifecycle-experiences`), durable counts, lifecycle relationships and milestones, Brewfather cache/On Deck/custom-beverage records, reading pH and history-sync state, sensory overrides, nullable accent overrides, administrator initialization, digest-only sessions, HA hydration where appropriate, and HTTP 200 from `/healthz`.
 5. Remove only the disposable container. Keep a useful rehearsal volume until the rollout is complete.
 
 ## Live named-volume migration and rollback
@@ -75,3 +75,9 @@ Tapboard rejects a database from a future schema version rather than attempting 
 Rollback immediately if startup/migration checks fail, durable counts change unexpectedly, the container is unhealthy, hydration cannot recover, port scope is wrong, or required paths are not writable. Stop the candidate, restore the retained Compose definition and rollback image, and use the verified pre-migration backup to restore into a separate empty recovery volume if the original database needs replacement. Do not overwrite the original source volume; retain it and any failed candidate volume for diagnosis.
 
 The verified pre-migration backup, rollback image, and rehearsal or recovery volumes are rollback artifacts. Do not retire them without separate destructive approval and an observation period.
+
+## Schema 8 lifecycle experience data
+
+Schema version 7 adds `taps.serving_glass` (default `auto`). Schema version 8 adds `taps.kick_threshold_oz`, shared celebration settings, and `lifecycle_milestones`. A milestone row is keyed by immutable `lifecycle_id`; it can reference one first-pour and one kick-pour record. Deleting a retained pour clears only the optional milestone reference, while lifecycle deletion remains restricted. Migration ledger rows are `serving-glass-recommendations` (7) and `lifecycle-experiences` (8).
+
+Treat milestone timestamps and trigger values as durable public-history data. Do not edit them by hand to replay a first-pour receipt or kick ceremony. Use the normal UI and maintenance commands; a restore rehearsal is the supported way to validate an upgrade or recovery.

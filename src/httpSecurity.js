@@ -116,6 +116,18 @@ export async function readEmptyJsonBody(req) {
   return parsed;
 }
 
+export async function readOptionalJsonBody(req) {
+  const declared = declaredLength(req);
+  const hasTransferEncoding = req.headers['transfer-encoding'] !== undefined;
+  if ((declared === null || declared === 0) && !hasTransferEncoding) return {};
+  if (!isJsonContentType(req.headers['content-type'])) {
+    throw new HttpError(415, 'Content-Type must be application/json');
+  }
+  const body = await collectBody(req);
+  if (body.length === 0) return {};
+  return parseJson(body);
+}
+
 export function publicError(error) {
   if (error instanceof HttpError) return { status: error.status, message: error.message };
   return { status: 500, message: 'Internal server error' };

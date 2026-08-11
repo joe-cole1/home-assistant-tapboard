@@ -59,7 +59,7 @@ test('healthcheck is lightweight and public HTTP/SSE snapshots use schema v6 nat
     const stateResponse = await fetch(`${baseUrl}/api/state`);
     const stateText = await stateResponse.text();
     const snapshot = JSON.parse(stateText);
-    assert.equal(snapshot.schemaVersion, 6);
+    assert.equal(snapshot.schemaVersion, 7);
     assert.deepEqual(snapshot.settings, {
       id: 1,
       theme: 'modern_dark',
@@ -71,7 +71,10 @@ test('healthcheck is lightweight and public HTTP/SSE snapshots use schema v6 nat
       layout_mode: 'cozy',
       ondeck_new_batch_default: 1,
       primary_color: null,
-      secondary_color: null
+      secondary_color: null,
+      first_pour_effects: 1,
+      kick_effects: 1,
+      ceremony_sound: 'pub_bell'
     });
     assert.deepEqual(snapshot.onDeckBatches, []);
     assert.deepEqual(snapshot.customBeverage, {
@@ -87,6 +90,7 @@ test('healthcheck is lightweight and public HTTP/SSE snapshots use schema v6 nat
       assignmentOption: 'custom:topo_chico | Tapboard Custom Beverage'
     });
     assert.deepEqual(Object.keys(snapshot.tapStates), ['1', '2', '3', '4', '5', '6']);
+    assert.deepEqual(snapshot.lifecycleMilestones, {});
     assert.equal(Object.hasOwn(snapshot, 'haStates'), false);
     assert.equal(stateText.includes('person.'), false);
     assert.ok(Buffer.byteLength(stateText) < 32 * 1024);
@@ -105,7 +109,7 @@ test('healthcheck is lightweight and public HTTP/SSE snapshots use schema v6 nat
     }
     controller.abort();
     assert.match(eventText, /event: snapshot\n/);
-    assert.match(eventText, /"schemaVersion":6/);
+    assert.match(eventText, /"schemaVersion":7/);
     assert.match(eventText, /"tapStates":/);
     assert.doesNotMatch(eventText, /"haStates":/);
 

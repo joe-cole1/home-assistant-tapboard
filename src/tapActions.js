@@ -1,5 +1,6 @@
 import { HttpError } from './httpSecurity.js';
 import { activeLifecycle, closeKegLifecycle } from './kegLifecycle.js';
+import { claimKickMilestone } from './lifecycleExperience.js';
 
 const CLEAR_TAP_SQL = `
   UPDATE taps SET
@@ -118,25 +119,43 @@ export class TapMutationCoordinator {
     });
   }
 
-  async endKeg(tapId) {
+  async endKeg(tapId, { reason = 'end_keg' } = {}) {
     return await this.runExclusive(tapId, async () => {
       const before = currentTap(this.db, tapId);
       const lifecycle = activeLifecycle(this.db, tapId);
       if (!lifecycle && !before?.batch_id && !before?.override_enabled) {
         throw new HttpError(409, 'Tap has no active keg');
       }
+      if (reason === 'kicked' && !lifecycle) throw new HttpError(409, 'Tap has no active keg lifecycle');
       const metadata = displayMetadata(this.db, before);
-      const closed = closeKegLifecycle(this.db, {
-        tapId,
-        closedAt: this.timestamp(),
-        closeReason: 'end_keg',
-        updateTap: () => this.clearTap.run(tapId)
-      });
+      const closedAt = this.timestamp();
+      let kick = null;
+      let closed = lifecycle;
+      if (reason === 'kicked') {
+        kick = claimKickMilestone(this.db, {
+          tapId,
+          lifecycleId: lifecycle.lifecycle_id,
+          trigger: 'manual',
+          timestamp: closedAt,
+          closeLifecycle: true,
+          closeReason: 'kicked',
+          clearTap: (id) => this.clearTap.run(id)
+        });
+      } else {
+        closed = closeKegLifecycle(this.db, {
+          tapId,
+          closedAt,
+          closeReason: reason,
+          updateTap: () => this.clearTap.run(tapId)
+        });
+      }
       return {
         tapId,
         batchId: before?.batch_id ?? null,
         lifecycle: closed,
-        closeReason: 'end_keg',
+        closeReason: reason,
+        kickClaimed: kick?.claimed === true,
+        kickMilestone: kick?.milestone ?? null,
         ...metadata
       };
     });

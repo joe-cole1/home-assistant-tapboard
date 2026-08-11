@@ -4,7 +4,12 @@ import db from './db.js';
 import { PourDetector, normalizeVolumeToOz } from './pourDetector.js';
 import { DisplayUpdateCoalescer } from './displayUpdateCoalescer.js';
 import { createTapStatesProjection, projectTapStateChange } from './tapboardProjection.js';
-import { captureActiveLifecycle, recordPour } from './kegLifecycle.js';
+import { captureActiveLifecycle } from './kegLifecycle.js';
+import {
+  calculateConservativeReceipt,
+  claimKickMilestone,
+  recordQualifyingPourWithMilestones
+} from './lifecycleExperience.js';
 import { buildTapboardEvent } from './tapboardEvents.js';
 
 export class HAClient extends EventEmitter {
@@ -19,9 +24,13 @@ export class HAClient extends EventEmitter {
     now = () => Date.now(),
     requestTimeoutMs = 10_000,
     maxPendingRequests = 64,
+    kickStabilityMs = 30_000,
+    kickCandidateTtlMs = 5 * 60_000,
     captureLifecycle = (tapId) => captureActiveLifecycle(db, tapId),
     isTapAssigned = (tapId) => Boolean(captureActiveLifecycle(db, tapId)),
-    recordPourFn = (pour) => recordPour(db, pour)
+    recordPourFn = (pour) => recordQualifyingPourWithMilestones(db, pour),
+    claimKickFn = (kick) => claimKickMilestone(db, kick),
+    receiptBuilder = calculateConservativeReceipt
   } = {}) {
     super();
     this.WebSocket = WebSocketImpl;
@@ -36,6 +45,10 @@ export class HAClient extends EventEmitter {
     this.captureLifecycle = captureLifecycle;
     this.isTapAssigned = isTapAssigned;
     this.recordPour = recordPourFn;
+    this.claimKick = claimKickFn;
+    this.receiptBuilder = receiptBuilder;
+    this.kickStabilityMs = kickStabilityMs;
+    this.kickCandidateTtlMs = kickCandidateTtlMs;
     this.haUrl = process.env.HA_URL || 'http://192.168.0.35:8123';
     this.haToken = process.env.HA_TOKEN || '';
     this.wsUrl = this.haUrl.replace(/^http/i, 'ws').replace(/\/$/, '') + '/api/websocket';
@@ -61,6 +74,8 @@ export class HAClient extends EventEmitter {
     this.primaryTapSensors = new Map();
     this.unitWarnings = new Map();
     this.activePourContexts = new Map();
+    this.kickCandidates = new Map();
+    this.pendingReceipts = new Map();
     this.displayUpdateCoalescer =
       displayUpdateCoalescer ||
       new DisplayUpdateCoalescer({
@@ -176,6 +191,10 @@ export class HAClient extends EventEmitter {
     const wasConnected = this.isConnected;
     this.connectionState = state;
     this.isConnected = state === 'connected';
+    if (!this.isConnected) {
+      this.clearKickCandidates();
+      this.pendingReceipts.clear();
+    }
     if (wasConnected !== this.isConnected) this.emit('connection_change', this.isConnected);
   }
 
@@ -230,6 +249,7 @@ export class HAClient extends EventEmitter {
     this.stopped = true;
     this.authInvalid = false;
     this.clearReconnectTimer();
+    this.clearKickCandidates();
     const socket = this.ws;
     this.failSocket(socket, new Error('HA client stopped'), 'shutdown', { reconnect: false });
     this.displayUpdateCoalescer.dispose?.();
@@ -454,6 +474,8 @@ export class HAClient extends EventEmitter {
       this.primaryTapSensors.set(tapId, primaryId);
       if (ingestDetector && entity_id === primaryId) {
         this.apply4StageNoiseFilter(tapId, new_state);
+        this.reconcileReceipt(tapId);
+        this.evaluateKickCandidate(tapId);
       }
     }
 
@@ -516,7 +538,8 @@ export class HAClient extends EventEmitter {
         lifecycleId: lifecycle?.lifecycle_id ?? null,
         batchId: lifecycle?.batch_id ?? null,
         beerName: outboundContext.metadata.display_name || `Tap ${event.tapId}`,
-        beerStyle: outboundContext.metadata.display_style || null
+        beerStyle: outboundContext.metadata.display_style || null,
+        startVolumeOz: event.startVolume
       });
       console.log(`[POUR EVENT] 🍺 Tap ${event.tapId} POUR STARTED! Baseline: ${event.startVolume.toFixed(1)} oz`);
       this.publishTapboardEvent('pour_start', event.tapId, lifecycle, {
@@ -538,7 +561,7 @@ export class HAClient extends EventEmitter {
     const { tapId, volumePouredOz: finalPouredOz } = event;
 
     const measurement = this.getPublicTapStates()[String(tapId)];
-    const currentPercent = measurement?.fillPercent === null ? 'N/A' : measurement.fillPercent.toFixed(1);
+    const currentPercent = Number.isFinite(measurement?.fillPercent) ? measurement.fillPercent.toFixed(1) : 'N/A';
 
     console.log(
       `[POUR EVENT] ✅ Tap ${tapId} POUR FINALIZED! Total Dispensed: ${finalPouredOz} oz. Remaining Keg Fill: ${currentPercent}%`
@@ -550,13 +573,15 @@ export class HAClient extends EventEmitter {
         batchId: null,
         beerName: `Tap ${tapId}`
       };
-      this.recordPour({
+      const recorded = this.recordPour({
         tapId,
         lifecycleId: context.lifecycleId,
         volumePouredOz: finalPouredOz,
         timestamp: event.timestamp
       });
       this.activePourContexts.delete(tapId);
+      const pourId = Number.isSafeInteger(recorded?.pourId) ? recorded.pourId : null;
+      const firstPourClaimed = recorded?.firstPourClaimed === true;
 
       // The durable pour write is the commit boundary for outbound completion.
       // Publishing remains best effort so HA transport failures cannot affect
@@ -565,15 +590,189 @@ export class HAClient extends EventEmitter {
         volume_poured_oz: finalPouredOz
       });
 
+      const tapSettings = db
+        .prepare('SELECT display_unit, custom_pour_size, kick_threshold_oz FROM taps WHERE tap_id = ?')
+        .get(tapId) || { display_unit: 'oz', custom_pour_size: 12, kick_threshold_oz: null };
+      const receiptMeasurement = this.getPublicTapStates()[String(tapId)];
+      const receipt = this.receiptBuilder({
+        startVolumeOz: context.startVolumeOz,
+        volumePouredOz: finalPouredOz,
+        currentMeasuredOz: receiptMeasurement?.volumeStatus === 'measured' ? receiptMeasurement.volumeOz : null,
+        capacityOz: receiptMeasurement?.capacityOz,
+        displayUnit: tapSettings.display_unit,
+        customServingSizeOz: tapSettings.custom_pour_size
+      });
+      const receiptPayload = {
+        receiptId: pourId,
+        tapId,
+        lifecycleId: context.lifecycleId,
+        beerName: context.beerName,
+        beerStyle: context.beerStyle,
+        volumePouredOz: finalPouredOz,
+        timestamp: new Date(event.timestamp).toISOString(),
+        firstPour: firstPourClaimed,
+        remaining: receipt.final.remainingOz === null ? receipt.provisional : receipt.final,
+        provisional: receipt.final.remainingOz === null,
+        displayUnit: receipt.displayUnit,
+        servingSizeOz: receipt.servingSizeOz
+      };
+      if (receiptPayload.provisional && pourId !== null) {
+        this.pendingReceipts.set(tapId, {
+          payload: receiptPayload,
+          input: {
+            startVolumeOz: context.startVolumeOz,
+            volumePouredOz: finalPouredOz,
+            capacityOz: receiptMeasurement?.capacityOz,
+            displayUnit: tapSettings.display_unit,
+            customServingSizeOz: tapSettings.custom_pour_size
+          }
+        });
+      }
+
       this.emit('pour_complete', {
         tapId,
         volumePouredOz: finalPouredOz,
         beerName: context.beerName,
-        timestamp: new Date(event.timestamp).toISOString()
+        timestamp: new Date(event.timestamp).toISOString(),
+        receipt: receiptPayload
       });
+      this.emit('pour_receipt', receiptPayload);
+
+      if (firstPourClaimed && pourId !== null) {
+        this.publishTapboardEvent('first_pour', tapId, context, {
+          receipt_id: pourId,
+          volume_poured_oz: finalPouredOz
+        });
+        this.emit('first_pour', receiptPayload);
+      }
+
+      if (context.lifecycleId && pourId !== null && Number.isFinite(tapSettings.kick_threshold_oz)) {
+        this.beginKickCandidate({
+          tapId,
+          lifecycleId: context.lifecycleId,
+          batchId: context.batchId,
+          beerName: context.beerName,
+          beerStyle: context.beerStyle,
+          pourId,
+          thresholdOz: tapSettings.kick_threshold_oz
+        });
+      }
 
       this.checkLowKegAlert(tapId);
     }
+  }
+
+  clearKickCandidates() {
+    for (const candidate of this.kickCandidates.values()) {
+      if (candidate.timer !== null) this.clearTimeout(candidate.timer);
+    }
+    this.kickCandidates.clear();
+  }
+
+  reconcileReceipt(tapId) {
+    const pending = this.pendingReceipts.get(tapId);
+    if (!pending) return;
+    const measurement = this.getPublicTapStates()[String(tapId)];
+    if (measurement?.volumeStatus !== 'measured' || !Number.isFinite(measurement.volumeOz)) return;
+    const receipt = this.receiptBuilder({
+      ...pending.input,
+      capacityOz: measurement.capacityOz ?? pending.input.capacityOz,
+      currentMeasuredOz: measurement.volumeOz
+    });
+    if (receipt.final.remainingOz === null) return;
+    const payload = {
+      ...pending.payload,
+      remaining: receipt.final,
+      provisional: false,
+      reconciledAt: new Date(this.now()).toISOString()
+    };
+    this.pendingReceipts.delete(tapId);
+    this.emit('pour_receipt_updated', payload);
+  }
+
+  beginKickCandidate(candidate) {
+    const existing = this.kickCandidates.get(candidate.tapId);
+    if (existing && existing.timer !== null) this.clearTimeout(existing.timer);
+    this.kickCandidates.set(candidate.tapId, {
+      ...candidate,
+      createdAt: this.now(),
+      timer: null
+    });
+    this.evaluateKickCandidate(candidate.tapId);
+  }
+
+  evaluateKickCandidate(tapId) {
+    const candidate = this.kickCandidates.get(tapId);
+    if (!candidate) return;
+    if (this.now() - candidate.createdAt > this.kickCandidateTtlMs) {
+      if (candidate.timer !== null) this.clearTimeout(candidate.timer);
+      this.kickCandidates.delete(tapId);
+      return;
+    }
+    const lifecycle = this.captureLifecycle(tapId);
+    const lifecycleId = lifecycle?.lifecycle_id ?? lifecycle?.lifecycleId ?? null;
+    const measurement = this.getPublicTapStates()[String(tapId)];
+    const eligible =
+      lifecycleId === candidate.lifecycleId &&
+      measurement?.volumeStatus === 'measured' &&
+      Number.isFinite(measurement.volumeOz) &&
+      measurement.volumeOz <= candidate.thresholdOz;
+    if (!eligible) {
+      if (candidate.timer !== null) this.clearTimeout(candidate.timer);
+      candidate.timer = null;
+      if (lifecycleId !== candidate.lifecycleId) this.kickCandidates.delete(tapId);
+      return;
+    }
+    if (candidate.timer !== null) return;
+    candidate.timer = this.setTimeout(() => {
+      candidate.timer = null;
+      const currentLifecycle = this.captureLifecycle(tapId);
+      const currentLifecycleId = currentLifecycle?.lifecycle_id ?? currentLifecycle?.lifecycleId ?? null;
+      const current = this.getPublicTapStates()[String(tapId)];
+      if (
+        currentLifecycleId !== candidate.lifecycleId ||
+        current?.volumeStatus !== 'measured' ||
+        !Number.isFinite(current.volumeOz) ||
+        current.volumeOz > candidate.thresholdOz
+      ) {
+        this.evaluateKickCandidate(tapId);
+        return;
+      }
+      let result;
+      try {
+        result = this.claimKick({
+          tapId,
+          lifecycleId: candidate.lifecycleId,
+          trigger: 'automatic',
+          pourId: candidate.pourId,
+          thresholdOz: candidate.thresholdOz,
+          timestamp: new Date(this.now()).toISOString()
+        });
+      } catch (error) {
+        console.warn(`[HAClient] Could not claim automatic kick for tap ${tapId}:`, error.message);
+        this.kickCandidates.delete(tapId);
+        return;
+      }
+      this.kickCandidates.delete(tapId);
+      if (!result?.claimed) return;
+      const payload = {
+        tapId,
+        lifecycleId: candidate.lifecycleId,
+        beerName: candidate.beerName,
+        trigger: 'automatic',
+        receiptId: candidate.pourId,
+        remainingVolumeOz: current.volumeOz,
+        thresholdOz: candidate.thresholdOz,
+        kickedAt: result.milestone?.kicked_at ?? new Date(this.now()).toISOString()
+      };
+      this.publishTapboardEvent('keg_kicked', tapId, candidate, {
+        trigger: 'automatic',
+        receipt_id: candidate.pourId,
+        remaining_volume_oz: current.volumeOz,
+        threshold_oz: candidate.thresholdOz
+      });
+      this.emit('keg_kicked', payload);
+    }, this.kickStabilityMs);
   }
 
   checkLowKegAlert(tapId) {

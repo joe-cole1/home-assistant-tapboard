@@ -8,7 +8,9 @@ Tapboard is a containerized dashboard for six Home Assistant-connected beer taps
 - Allowlisted public tap-state projection, bounded Home Assistant hydration, and compact/coalesced browser state updates.
 - Immediate SSE notifications for pour starts, completions, cancellations, low-keg alerts, HA connection status, and settings changes.
 - Immutable keg lifecycles: a pour is attributed to the lifecycle active at its start, even if the tap is reassigned before completion.
-- Lifecycle-scoped lifetime forecast based on average consumption and cadence on drinking days, with a clearly labeled 24 oz every 4 days default until usage is recorded.
+- Lifecycle-scoped forecast uses UTC lifecycle days (including no-pour days), a deterministic uncertainty range, and a clearly labeled 24 oz every 4 days fallback until enough history exists.
+- Per-tap serving-glass guidance can match a known beer style automatically or use an administrator-selected glass; custom beverages require a manual choice.
+- Durable first-pour receipts and one-time keg-kick milestones, with optional automatic kick confirmation from a fresh scale reading.
 - Canonical, capacity-aware keg measurements sourced from Home Assistant scales; the browser never estimates volume from a percentage.
 - Cozy horizontal-swipe and compact 3-by-2 layouts sized for a six-tap landscape display.
 - Per-browser display profiles for theme, title/body fonts, accent colours, and cozy/compact layout; shared SQLite settings remain the default for new or reset displays.
@@ -113,6 +115,16 @@ End Batch validates the current non-custom assignment, sends exactly `PATCH /v2/
 Selecting an assigned tap card or public On Deck item opens a full-screen Brew Story. Public access is limited to currently assigned batches and On Deck batches that are both visible and globally enabled. An authenticated administrator can open any present cached candidate and set per-axis half-step sensory overrides, replace the generated description, or hide sensory guidance from public viewers. Unknown traits remain unknown; the radar appears only when at least three axes have evidence.
 
 Home Assistant receives the versioned `tapboard_event` contract on a best-effort basis. See [Home Assistant event examples](docs/HOME-ASSISTANT-EVENTS.md). No HA configuration is created or changed automatically.
+
+## Lifecycle experience
+
+Each assignment creates an immutable keg lifecycle. Forecasts consider only that lifecycle and group valid completed pours by UTC calendar day, including zero-pour days. With at least 14 observed days and three qualifying pours, Tapboard reports a deterministic central 80% depletion interval using seven-day moving-block bootstrap samples. Before that, it reports a low-confidence, broad fallback based on 24 oz every four days. Stale measurements, capacity inconsistencies, invalid timestamps, and future-dated pours are explicitly marked rather than silently treated as normal history.
+
+The tap’s **Serving glass** may be `Auto` or a manual glass. Auto maps recognized non-custom beer styles to a reviewed glass; a manual setting always wins, while unmatched and custom beverages ask for a manual choice.
+
+A qualifying first pour is recorded once per lifecycle and produces a receipt. The receipt starts with a capacity-bounded post-pour estimate, then reconciles only after a fresh scale reading; it never reports more remaining beer than either source supports. Marking an End Keg action as **Kicked** claims the manual kick milestone once, closes that lifecycle, and clears the tap together. An automatic kick is only considered after a qualifying pour when the per-tap threshold is configured, the scale reports a fresh reading at or below it, and that reading stays eligible through the confirmation window; it records the milestone and ceremony but does not itself clear the tap. A kick milestone is idempotent, so it cannot repeat the ceremony or replace its first trigger.
+
+Celebration effects are shared administrator settings. Receipt and ceremony announcements are dismissible and exposed to assistive technology; reduced-motion preferences suppress nonessential motion. Sound is deliberately off by default and must be enabled separately for each browser display.
 
 ## Development
 

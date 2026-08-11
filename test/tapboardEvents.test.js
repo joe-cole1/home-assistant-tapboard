@@ -37,6 +37,8 @@ test('catalog covers the wired event types', () => {
     'pour_complete',
     'pour_cancelled',
     'low_keg',
+    'first_pour',
+    'keg_kicked',
     'brewfather_sync_failed'
   ]);
   assert.throws(() => buildTapboardEvent('fermentation_started', context, {}), /Unsupported/);
@@ -185,5 +187,32 @@ test('enforces strict per-type data and safe display bounds', () => {
   assert.throws(
     () => buildTapboardEvent('low_keg', context, { current_percent: 101, threshold_percent: 20 }),
     /invalid/
+  );
+});
+
+test('lifecycle ceremony events carry only bounded receipt and measurement facts', () => {
+  assert.deepEqual(buildTapboardEvent('first_pour', context, { receipt_id: 12, volume_poured_oz: 8 }).data, {
+    receipt_id: 12,
+    volume_poured_oz: 8
+  });
+  assert.deepEqual(
+    buildTapboardEvent('keg_kicked', context, {
+      trigger: 'automatic',
+      receipt_id: 12,
+      remaining_volume_oz: 1.5,
+      threshold_oz: 2
+    }).data,
+    { trigger: 'automatic', receipt_id: 12, remaining_volume_oz: 1.5, threshold_oz: 2 }
+  );
+  assert.throws(
+    () =>
+      buildTapboardEvent('keg_kicked', context, {
+        trigger: 'automatic',
+        receipt_id: 12,
+        remaining_volume_oz: 1,
+        threshold_oz: 2,
+        sound_url: 'https://example.invalid/bell.mp3'
+      }),
+    /not allowed/
   );
 });

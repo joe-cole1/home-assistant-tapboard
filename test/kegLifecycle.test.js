@@ -106,17 +106,18 @@ test('forecast includes only the open lifecycle, even for successive same-batch 
       volumePouredOz: 12,
       timestamp: '2026-08-01T12:00:00.000Z'
     });
-    assert.deepEqual(
-      calculateKegKickForecast({ db, tapId: 1, currentOz: 120, nowMs: Date.parse('2026-08-02T00:00:00.000Z') }),
-      {
-        avgDailyOz: 3,
-        avgDrinkingDayOz: 12,
-        avgDrinkingIntervalDays: 4,
-        estimatedDaysRemaining: 40,
-        hasUsageData: true,
-        isFallback: false
-      }
-    );
+    const forecast = calculateKegKickForecast({
+      db,
+      tapId: 1,
+      currentOz: 120,
+      nowMs: Date.parse('2026-08-02T00:00:00.000Z')
+    });
+    assert.equal(forecast.schemaVersion, 1);
+    assert.equal(forecast.lifecycle.id, activeLifecycle(db, 1).lifecycle_id);
+    assert.equal(forecast.evidence.qualifyingPours, 1);
+    assert.equal(forecast.evidence.method, 'fallback_24oz_per_4d');
+    assert.equal(forecast.estimatedDaysRemaining, 20);
+    assert.equal(forecast.isFallback, true);
     assert.match(
       db
         .prepare(

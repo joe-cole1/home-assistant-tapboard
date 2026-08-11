@@ -126,7 +126,7 @@ test('a sensitive unrelated HA entity is absent from HTTP and SSE public seriali
   };
   client.processStateUpdate({ entity_id: privateEntity.entity_id, new_state: privateEntity });
 
-  const snapshot = { schemaVersion: 6, tapStates: client.getPublicTapStates() };
+  const snapshot = { schemaVersion: 7, tapStates: client.getPublicTapStates() };
   const httpJson = JSON.stringify(snapshot);
   const sseFrame = formatSSEFrame('snapshot', snapshot);
   for (const output of [httpJson, sseFrame]) {
@@ -229,4 +229,53 @@ test('hydration never emits synthetic outbound pour events', () => {
   client.statesMap.set(entityId, state(entityId, 100, 1_000));
   client.rehydrateDetectorFromCurrentPrimaries('hydrate');
   assert.equal(fires, 0);
+});
+
+test('automatic kick requires a stable measured threshold and emits once after its durable claim', () => {
+  let scheduled;
+  let now = Date.parse('2026-08-11T00:00:00.000Z');
+  let measurement = { volumeStatus: 'measured', volumeOz: 1.5 };
+  const claims = [];
+  const events = [];
+  const detector = { onEvent: null, ingest() {}, hydrate() {}, reset() {} };
+  const client = new HAClient({
+    detector,
+    displayUpdateCoalescer: { enqueue() {} },
+    captureLifecycle: () => ({ lifecycle_id: 31 }),
+    now: () => now,
+    setTimeout: (callback) => {
+      scheduled = callback;
+      return 1;
+    },
+    clearTimeout() {},
+    kickStabilityMs: 30_000,
+    claimKickFn: (claim) => {
+      claims.push(claim);
+      return { claimed: true, milestone: { kicked_at: claim.timestamp } };
+    }
+  });
+  client.getPublicTapStates = () => ({ 1: measurement });
+  client.fireEvent = () => Promise.resolve();
+  client.on('keg_kicked', (event) => events.push(event));
+
+  client.beginKickCandidate({
+    tapId: 1,
+    lifecycleId: 31,
+    beerName: 'Test IPA',
+    pourId: 8,
+    thresholdOz: 2
+  });
+  assert.equal(typeof scheduled, 'function');
+  measurement = { volumeStatus: 'measured', volumeOz: 2.5 };
+  scheduled();
+  assert.equal(claims.length, 0);
+
+  measurement = { volumeStatus: 'measured', volumeOz: 1.25 };
+  client.evaluateKickCandidate(1);
+  now += 30_000;
+  scheduled();
+  assert.equal(claims.length, 1);
+  assert.equal(events.length, 1);
+  assert.equal(events[0].trigger, 'automatic');
+  assert.equal(events[0].remainingVolumeOz, 1.25);
 });

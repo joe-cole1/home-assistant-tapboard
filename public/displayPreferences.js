@@ -6,8 +6,9 @@
 (function installDisplayPreferences(global) {
   'use strict';
 
-  const STORAGE_KEY = 'tapboard.display-preferences.v1';
-  const VERSION = 1;
+  const STORAGE_KEY = 'tapboard.display-preferences.v2';
+  const LEGACY_STORAGE_KEY = 'tapboard.display-preferences.v1';
+  const VERSION = 2;
   const THEMES = new Set(['modern_dark', 'warm_pub', 'cyberpunk', 'light_minimal']);
   const TITLE_FONTS = new Set([
     'Outfit',
@@ -21,7 +22,15 @@
   const BODY_FONTS = new Set(['Inter', 'Roboto', 'Balsamiq Sans', 'Outfit', 'Fredoka', 'Montserrat']);
   const LAYOUTS = new Set(['cozy', 'compact']);
   const COLOR_FIELDS = new Set(['primary_color', 'secondary_color']);
-  const FIELDS = new Set(['theme', 'font_title', 'font_body', 'primary_color', 'secondary_color', 'layout_mode']);
+  const FIELDS = new Set([
+    'theme',
+    'font_title',
+    'font_body',
+    'primary_color',
+    'secondary_color',
+    'layout_mode',
+    'sound_enabled'
+  ]);
   let memoryOverrides = {};
   let storageDegraded = false;
 
@@ -40,6 +49,7 @@
     if (field === 'font_title') return TITLE_FONTS.has(value) ? value : undefined;
     if (field === 'font_body') return BODY_FONTS.has(value) ? value : undefined;
     if (field === 'layout_mode') return LAYOUTS.has(value) ? value : undefined;
+    if (field === 'sound_enabled') return typeof value === 'boolean' ? value : undefined;
     return undefined;
   }
 
@@ -87,7 +97,22 @@
       return { overrides: clone(memoryOverrides), persistence: 'memory' };
     }
     try {
-      const overrides = parse(local.getItem(STORAGE_KEY));
+      let overrides = parse(local.getItem(STORAGE_KEY));
+      if (!local.getItem(STORAGE_KEY)) {
+        const legacyRaw = local.getItem(LEGACY_STORAGE_KEY);
+        if (legacyRaw) {
+          try {
+            const legacy = JSON.parse(legacyRaw);
+            if (isPlainObject(legacy) && legacy.version === 1) {
+              overrides = validateOverrides(legacy.overrides);
+              local.setItem(STORAGE_KEY, JSON.stringify({ version: VERSION, overrides }));
+              local.removeItem(LEGACY_STORAGE_KEY);
+            }
+          } catch (_error) {
+            overrides = {};
+          }
+        }
+      }
       memoryOverrides = overrides;
       return { overrides: clone(overrides), persistence: 'persistent' };
     } catch (_error) {
@@ -139,6 +164,7 @@
     }
     try {
       local.removeItem(STORAGE_KEY);
+      local.removeItem(LEGACY_STORAGE_KEY);
       return { ok: true, overrides: {}, persistence: 'persistent' };
     } catch (_error) {
       storageDegraded = true;
@@ -232,6 +258,7 @@
 
   const api = Object.freeze({
     STORAGE_KEY,
+    LEGACY_STORAGE_KEY,
     VERSION,
     read,
     getState: read,

@@ -3,6 +3,7 @@ import test from 'node:test';
 import Database from 'better-sqlite3';
 import { migrateDatabase } from '../src/dbMigrations.js';
 import { assignKegLifecycle } from '../src/kegLifecycle.js';
+import { claimKickMilestone } from '../src/lifecycleExperience.js';
 import { TapMutationCoordinator } from '../src/tapActions.js';
 
 function database() {
@@ -108,6 +109,61 @@ test('custom beverages can end locally but can never invoke Brewfather completio
     assert.equal(completionCalls, 0);
     await actions.endKeg(1);
     assert.equal(completionCalls, 0);
+  } finally {
+    db.close();
+  }
+});
+
+test('manual kicked reason claims one milestone and clears the lifecycle atomically', async () => {
+  const db = database();
+  const active = assign(db);
+  try {
+    const actions = new TapMutationCoordinator({
+      db,
+      completeBatch: async () => {},
+      now: () => new Date('2026-08-11T00:00:00.000Z')
+    });
+    const result = await actions.endKeg(1, { reason: 'kicked' });
+    assert.equal(result.kickClaimed, true);
+    assert.equal(db.prepare('SELECT batch_id FROM taps WHERE tap_id=1').get().batch_id, null);
+    assert.deepEqual(
+      db
+        .prepare('SELECT kicked_at, kick_trigger FROM lifecycle_milestones WHERE lifecycle_id=?')
+        .get(active.lifecycle_id),
+      { kicked_at: '2026-08-11T00:00:00.000Z', kick_trigger: 'manual' }
+    );
+    assert.equal(
+      db.prepare('SELECT close_reason FROM keg_lifecycles WHERE lifecycle_id=?').get(active.lifecycle_id).close_reason,
+      'kicked'
+    );
+  } finally {
+    db.close();
+  }
+});
+
+test('manual removal still clears a lifecycle already marked kicked automatically', async () => {
+  const db = database();
+  const active = assign(db);
+  try {
+    claimKickMilestone(db, {
+      tapId: 1,
+      lifecycleId: active.lifecycle_id,
+      trigger: 'automatic',
+      thresholdOz: 2,
+      timestamp: '2026-08-10T23:59:00.000Z'
+    });
+    const actions = new TapMutationCoordinator({
+      db,
+      completeBatch: async () => {},
+      now: () => new Date('2026-08-11T00:00:00.000Z')
+    });
+    const result = await actions.endKeg(1, { reason: 'kicked' });
+    assert.equal(result.kickClaimed, false);
+    assert.equal(db.prepare('SELECT batch_id FROM taps WHERE tap_id=1').get().batch_id, null);
+    assert.equal(
+      db.prepare('SELECT close_reason FROM keg_lifecycles WHERE lifecycle_id=?').get(active.lifecycle_id).close_reason,
+      'kicked'
+    );
   } finally {
     db.close();
   }

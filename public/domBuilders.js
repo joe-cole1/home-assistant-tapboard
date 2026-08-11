@@ -23,6 +23,24 @@ export function createSelectOption(value, label, selected = false) {
   return option;
 }
 
+function servingGlassText(servingGlass) {
+  return `Serve in: ${servingGlass.label}${servingGlass.source === 'auto' ? ' · Tapboard recommendation' : ' · Brewer selected'}`;
+}
+
+export function syncServingGlassReadout(card, servingGlass) {
+  let readout = card.querySelector('.serving-glass-readout');
+  if (!servingGlass?.id) {
+    readout?.remove();
+    return null;
+  }
+  if (!readout) {
+    readout = element('div', 'serving-glass-readout');
+    card.querySelector('.tap-card-content')?.appendChild(readout);
+  }
+  readout.textContent = servingGlassText(servingGlass);
+  return readout;
+}
+
 export function buildTapCardContent({
   tapId,
   fillPercent,
@@ -37,7 +55,9 @@ export function buildTapCardContent({
   og,
   fg,
   volumeReadoutText,
-  forecastText
+  forecastText,
+  servingGlass,
+  kicked = false
 }) {
   const fragment = document.createDocumentFragment();
   const header = element('div', 'tap-card-header');
@@ -67,12 +87,19 @@ export function buildTapCardContent({
     badges.appendChild(element('span', 'badge badge-low', 'LOW KEG!'));
   }
   if (fresh) badges.appendChild(element('span', 'badge badge-fresh', 'NEW'));
+  if (kicked) badges.appendChild(element('span', 'badge badge-kicked', 'KICKED'));
   graphicColumn.appendChild(badges);
   const graphic = element('div', 'graphic-container');
   const graphicWrapper = element('div', 'tap-graphic-wrapper');
   graphicWrapper.id = `graphic-tap-${tapId}`;
   const volumeReadout = element('div', 'volume-readout', volumeReadoutText);
-  const forecast = element('div', 'forecast-readout', forecastText);
+  const forecast = element('button', 'forecast-readout lifecycle-forecast-btn', forecastText);
+  forecast.type = 'button';
+  forecast.setAttribute('aria-haspopup', 'dialog');
+  forecast.setAttribute(
+    'aria-label',
+    forecastText ? `${forecastText}. Open forecast details.` : 'Forecast unavailable'
+  );
   forecast.hidden = !forecastText;
   graphic.append(graphicWrapper, element('div', 'floating-pour-badge', '🍺 NOW POURING'), volumeReadout, forecast);
   const statusText =
@@ -87,6 +114,9 @@ export function buildTapCardContent({
   status.hidden = !statusText;
   graphic.appendChild(status);
   graphicColumn.appendChild(graphic);
+  if (servingGlass?.id) {
+    details.appendChild(element('div', 'serving-glass-readout', servingGlassText(servingGlass)));
+  }
   fragment.append(graphicColumn, details);
   return fragment;
 }
