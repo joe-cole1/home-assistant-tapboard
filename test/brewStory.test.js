@@ -88,7 +88,7 @@ test('story projection is bounded, stale-aware, lifecycle-scoped, and sensory-ve
       forecastForTap: () => ({ estimatedDaysRemaining: 10 }),
       includeHiddenSensory: true
     });
-    assert.equal(story.schema_version, 5);
+    assert.equal(story.schema_version, 6);
     assert.equal(Object.hasOwn(story.tapboard, 'serving_glass'), false);
     assert.equal(story.telemetry.history.total_points, 800);
     assert.ok(story.telemetry.history.points.length <= 600);
@@ -96,17 +96,43 @@ test('story projection is bounded, stale-aware, lifecycle-scoped, and sensory-ve
     assert.equal(story.freshness.stale, true);
     assert.equal(story.tapboard.lifecycles[0].pours.total_oz, 12);
     assert.equal(story.tapboard.lifecycles[0].remaining.volume_oz, 400);
-    assert.equal(story.sensory.rules_version, 'sensory-v1');
+    assert.equal(story.sensory.rules_version, 'sensory-v2');
     assert.equal(story.sensory.axes.hops.value, 4.5);
+    assert.equal(story.sensory.axes.tartness.value, 4);
     assert.equal(story.sensory.description, 'Bright and bitter.');
-    assert.equal(story.sensory.shadow.rules_version, 'sensory-v2');
-    assert.equal(story.sensory.shadow.comparison.hops.v1, 4.5);
-    assert.equal(story.sensory.shadow.comparison.hops.v2, 4.5);
+    assert.equal('shadow' in story.sensory, false);
     assert.equal('image_url' in story.sections, false);
     assert.equal('sensory_v2_souring' in story.sections, false);
     assert.equal('sensory_v2_souring' in (story.sections.batch || {}), false);
     assert.equal('sensory_v2_souring' in (story.sections.recipe || {}), false);
     assert.ok(Buffer.byteLength(JSON.stringify(story)) < 512 * 1024);
+  } finally {
+    db.close();
+  }
+});
+
+test('hidden v2 sensory stays concealed publicly and remains available to authenticated admins', () => {
+  const db = database();
+  try {
+    saveSensoryOverride(db, 'batch-a', {
+      hidden: true,
+      description_override: 'Private brewer notes.',
+      axis_overrides: { hops: 4.5 }
+    });
+
+    const publicStory = buildBrewStory({ db, batchId: 'batch-a' });
+    assert.equal(publicStory.sensory.rules_version, 'sensory-v2');
+    assert.equal(publicStory.sensory.hidden, true);
+    assert.equal(publicStory.sensory.description, null);
+    assert.deepEqual(publicStory.sensory.axes, {});
+    assert.equal('override' in publicStory.sensory, false);
+
+    const adminStory = buildBrewStory({ db, batchId: 'batch-a', includeHiddenSensory: true });
+    assert.equal(adminStory.sensory.rules_version, 'sensory-v2');
+    assert.equal(adminStory.sensory.description, 'Private brewer notes.');
+    assert.equal(adminStory.sensory.axes.hops.value, 4.5);
+    assert.equal(adminStory.sensory.override.hidden, true);
+    assert.deepEqual(adminStory.sensory.override.axis_overrides, { hops: 4.5 });
   } finally {
     db.close();
   }

@@ -448,55 +448,6 @@ function sensorySection(sensory) {
   return node;
 }
 
-function sensoryShadowSection(sensory) {
-  const shadow = sensory?.shadow;
-  if (!shadow || shadow.rules_version !== 'sensory-v2' || typeof shadow !== 'object') return null;
-  const candidate = shadow.candidate || {};
-  const comparison = shadow.comparison || {};
-  const axes = AXIS_ORDER.filter((name) => Object.hasOwn(comparison, name));
-  if (!axes.length) return null;
-
-  const node = section('Sensory v2 comparison', 'Authenticated shadow');
-  node.classList.add('brew-story-admin', 'brew-story-sensory-shadow');
-  if (finitePresent(candidate.known_axis_count)) {
-    node.appendChild(
-      el('p', 'brew-story-shadow-summary', `V2 candidate · ${candidate.known_axis_count} evidenced axes`)
-    );
-  }
-  if (present(candidate.prose)) appendParagraph(node, 'V2 candidate profile', candidate.prose, 'Prediction');
-
-  const wrap = el('div', 'brew-story-shadow-table-wrap');
-  const table = el('table', 'brew-story-shadow-table');
-  const caption = el('caption', null, 'Sensory v1 and v2 axis comparison');
-  const head = document.createElement('thead');
-  const headerRow = document.createElement('tr');
-  ['Axis', 'V1', 'V2', 'Delta', 'Coverage', 'V2 evidence'].forEach((label) =>
-    headerRow.appendChild(el('th', null, label))
-  );
-  head.appendChild(headerRow);
-  const body = document.createElement('tbody');
-  axes.forEach((name) => {
-    const values = comparison[name] || {};
-    const delta = finitePresent(values.delta)
-      ? `${Number(values.delta) > 0 ? '+' : ''}${Number(values.delta).toFixed(1)}`
-      : 'Unavailable';
-    const row = document.createElement('tr');
-    [
-      humanize(name),
-      finitePresent(values.v1) ? Number(values.v1).toFixed(1) : 'Unavailable',
-      finitePresent(values.v2) ? Number(values.v2).toFixed(1) : 'Unavailable',
-      delta,
-      display(values.coverage),
-      display(candidate.axes?.[name]?.evidence)
-    ].forEach((value) => row.appendChild(el('td', null, value)));
-    body.appendChild(row);
-  });
-  table.append(caption, head, body);
-  wrap.appendChild(table);
-  node.appendChild(wrap);
-  return node;
-}
-
 function sensoryEditor(story, onSave, onError) {
   const override = story?.sensory?.override;
   if (!override || typeof onSave !== 'function') return null;
@@ -618,10 +569,6 @@ export function createBrewStoryController({ dialog, title, body, status, fetchSt
       title.textContent = story?.batch?.recipe_name || story?.batch?.batch_name || current.title || 'Brew Story';
       const content = buildBrewStoryContent(story, current.fallback);
       body.replaceChildren(content);
-      if (canEdit?.()) {
-        const shadow = sensoryShadowSection(story?.sensory);
-        if (shadow) body.appendChild(shadow);
-      }
       if (canEdit?.() && typeof saveSensory === 'function') {
         const editor = sensoryEditor(
           story,

@@ -152,7 +152,8 @@ test('Brew Story routes enforce public visibility and authenticated sensory over
     const storyText = await publicStory.text();
     assert.ok(Buffer.byteLength(storyText) < 512 * 1024);
     const publicPayload = JSON.parse(storyText);
-    assert.equal(publicPayload.schema_version, 5);
+    assert.equal(publicPayload.schema_version, 6);
+    assert.equal(publicPayload.sensory.rules_version, 'sensory-v2');
     assert.equal('override' in publicPayload.sensory, false);
     assert.equal('shadow' in publicPayload.sensory, false);
     assert.equal('sensory_v2_souring' in (publicPayload.sections?.batch || {}), false);
@@ -171,8 +172,9 @@ test('Brew Story routes enforce public visibility and authenticated sensory over
       description_override: 'Manual public description',
       axis_overrides: { hops: 4.5 }
     });
-    assert.equal(adminPayload.sensory.shadow.rules_version, 'sensory-v2');
-    assert.equal(adminPayload.sensory.shadow.candidate.axes.hops.value, 4.5);
+    assert.equal(adminPayload.sensory.rules_version, 'sensory-v2');
+    assert.equal(adminPayload.sensory.axes.hops.value, 4.5);
+    assert.equal('shadow' in adminPayload.sensory, false);
     assert.equal(
       (
         await fetch(`${instance.baseUrl}/api/batches/story-a/sensory`, {

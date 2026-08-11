@@ -1,8 +1,6 @@
 import { buildSensoryProfile, SENSORY_AXES } from './sensoryEngine.js';
-import { buildSensoryProfileV2 } from './sensoryEngineV2.js';
-import { compareSensoryProfiles } from './sensoryShadowReport.js';
 
-export const BREW_STORY_SCHEMA_VERSION = 5;
+export const BREW_STORY_SCHEMA_VERSION = 6;
 export const BREW_STORY_WINDOWS = Object.freeze(['24h', '7d', 'all']);
 export const MAX_STORY_POINTS = 600;
 const STALE_AFTER_MS = 12 * 60 * 60 * 1_000;
@@ -216,7 +214,6 @@ export function buildBrewStory({
   const latest = rawReadings.at(-1) || null;
   const override = sensoryOverride(db, batchId);
   const generatedSensory = buildSensoryProfile({ summary: batch, detail, override });
-  const shadowSensory = buildSensoryProfileV2({ summary: batch, detail, override });
   if (detail.batch && typeof detail.batch === 'object') delete detail.batch.sensory_v2_souring;
   if (detail.recipe && typeof detail.recipe === 'object') delete detail.recipe.sensory_v2_souring;
   delete detail.sensory_v2_souring;
@@ -232,15 +229,6 @@ export function buildBrewStory({
       hidden: override.hidden,
       description_override: override.description_override,
       axis_overrides: override.axes
-    };
-    sensory.shadow = {
-      rules_version: shadowSensory.rules_version,
-      candidate: {
-        axes: shadowSensory.axes,
-        prose: shadowSensory.prose,
-        known_axis_count: Object.values(shadowSensory.axes).filter((axis) => axis.value !== null).length
-      },
-      comparison: compareSensoryProfiles(generatedSensory, shadowSensory)
     };
   }
   if (override.hidden && !includeHiddenSensory) {
