@@ -734,8 +734,10 @@ body {
   align-items: center;
   gap: 0.5rem;
   position: absolute;
-  top: 1.85rem;
-  right: 5rem;
+  top: 1.75rem;
+  right: 4.5rem;
+  max-width: calc(100% - 8rem);
+  z-index: 2;
 }
 
 .tap-number-badge {
@@ -848,16 +850,21 @@ body.is-authenticated .tap-cog-btn {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 0.25rem;
   padding: 0.75rem 0;
   margin-bottom: 1.25rem;
   border-top: 1px dashed rgba(255, 255, 255, 0.2);
   border-bottom: 1px dashed rgba(255, 255, 255, 0.2);
+  min-width: 0;
+  overflow: hidden;
 }
 
 .metric-item {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .metric-label {
@@ -869,9 +876,13 @@ body.is-authenticated .tap-cog-btn {
 }
 
 .metric-value {
-  font-size: 1.15rem;
+  font-size: clamp(0.85rem, 1.1vw, 1.15rem);
   font-weight: 800;
   color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 /* Graphic Area & Volume Readout */
@@ -1455,6 +1466,11 @@ body.is-authenticated .ondeck-cog-btn {
   font-weight: 700;
   padding: 0.3rem 0.6rem;
   cursor: pointer;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .forecast-button:hover,

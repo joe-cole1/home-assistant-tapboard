@@ -6,11 +6,13 @@ export const DRAFT_HEALTH_CHECKS = Object.freeze([
   'scale_availability',
   'suspected_leak',
   'serving_temperature',
-  'line_cleaning_due'
+  'serving_pressure',
+  'line_cleaning_due',
+  'tap_gap_predicted'
 ]);
 
 export const DEFAULT_DRAFT_HEALTH_CONFIG = Object.freeze({
-  low_keg: { enabled: true, thresholdOz: 0, thresholdPercent: 20, criticalPercent: 5 },
+  low_keg: { enabled: true, thresholdOz: 0, thresholdPercent: 20, criticalPercent: 5, settlingMs: 30_000 },
   scale_availability: { enabled: true, staleAfterMs: 30 * 60_000, unavailableAfterMs: 5 * 60_000 },
   suspected_leak: {
     enabled: false,
@@ -29,7 +31,16 @@ export const DEFAULT_DRAFT_HEALTH_CONFIG = Object.freeze({
     criticalMaximumF: 50,
     durationMs: 15 * 60_000
   },
-  line_cleaning_due: { enabled: false, intervalDays: 14, criticalAfterDays: 7 }
+  serving_pressure: {
+    enabled: false,
+    minimumPsi: 10,
+    maximumPsi: 14,
+    criticalMinimumPsi: 5,
+    criticalMaximumPsi: 20,
+    durationMs: 15 * 60_000
+  },
+  line_cleaning_due: { enabled: false, intervalDays: 14, intervalKegs: 3, criticalAfterDays: 7, criticalAfterKegs: 1 },
+  tap_gap_predicted: { enabled: true }
 });
 
 const STATES = new Set(['not_configured', 'healthy', 'degraded', 'active']);
@@ -257,30 +268,61 @@ export class DraftHealthEngine {
           check = result(id, 'healthy', 'none', { temperatureF: value });
         }
       }
+    } else if (id === 'serving_pressure') {
+      const entity = input.pressure ?? input.pressureEntity;
+      if (!entity) check = result(id, 'not_configured', 'none');
+      else if (!connected || entity?.state === 'unavailable' || entity?.state === 'unknown') {
+        check = result(id, 'degraded', 'warning', { reason: !connected ? 'ha_disconnected' : 'pressure_unavailable' });
+      } else {
+        const value = finite(entityValue(entity));
+        if (value === null) check = result(id, 'degraded', 'info', { reason: 'pressure_invalid' });
+        else if (value < config.minimumPsi || value > config.maximumPsi) {
+          record.pressureOutsideSince ??= now;
+          const durationMs = now - record.pressureOutsideSince;
+          const severity =
+            value < config.criticalMinimumPsi || value > config.criticalMaximumPsi ? 'critical' : 'warning';
+          check =
+            durationMs >= config.durationMs
+              ? result(
+                  id,
+                  'active',
+                  severity,
+                  {
+                    pressurePsi: value,
+                    minimumPsi: config.minimumPsi,
+                    maximumPsi: config.maximumPsi,
+                    durationMinutes: durationMs / 60_000
+                  },
+                  incidentKey(id, input)
+                )
+              : result(id, 'degraded', 'info', { reason: 'pressure_excursion_settling', pressurePsi: value });
+        } else {
+          record.pressureOutsideSince = null;
+          check = result(id, 'healthy', 'none', { pressurePsi: value });
+        }
+      }
     } else if (id === 'line_cleaning_due') {
       const baseline = timestamp(
         input.lineCleanedAt ?? input.maintenance?.lineCleanedAt ?? input.maintenance?.baselineAt
       );
+      const kegsServed = finite(input.kegsServed ?? input.maintenance?.kegsServed) ?? 0;
       if (!life || baseline === null) check = result(id, 'not_configured', 'none');
       else {
         const ageDays = Math.max(0, (now - baseline) / 86_400_000);
-        if (ageDays >= config.intervalDays + config.criticalAfterDays)
+        const daysOver = ageDays >= config.intervalDays;
+        const kegsOver = config.intervalKegs > 0 && kegsServed >= config.intervalKegs;
+        const isCritical =
+          ageDays >= config.intervalDays + config.criticalAfterDays ||
+          (config.intervalKegs > 0 && kegsServed >= config.intervalKegs + (config.criticalAfterKegs || 1));
+        if (daysOver || kegsOver)
           check = result(
             id,
             'active',
-            'critical',
-            { ageDays: Math.floor(ageDays), dueDays: config.intervalDays },
+            isCritical ? 'critical' : 'warning',
+            { ageDays: Math.floor(ageDays), dueDays: config.intervalDays, kegsServed, dueKegs: config.intervalKegs },
             incidentKey(id, input)
           );
-        else if (ageDays >= config.intervalDays)
-          check = result(
-            id,
-            'active',
-            'warning',
-            { ageDays: Math.floor(ageDays), dueDays: config.intervalDays },
-            incidentKey(id, input)
-          );
-        else check = result(id, 'healthy', 'none', { ageDays: Math.floor(ageDays) });
+        else check = result(id, 'healthy', 'none', { ageDays: Math.floor(ageDays), kegsServed });
       }
     } else check = this.#leak(input, record, now, measured, life);
     return this.#effectiveAcknowledgement(check, record, now);

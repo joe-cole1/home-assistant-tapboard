@@ -14,10 +14,10 @@ const base = (tapId = 1) => ({
 });
 const byId = (answer, id) => answer.checks.find((check) => check.id === id);
 
-test('all five registered checks evaluate for each supported tap', () => {
+test('all seven registered checks evaluate for each supported tap', () => {
   for (let tapId = 1; tapId <= 6; tapId++) {
     const answer = new DraftHealthEngine({ now: () => NOW }).evaluate(base(tapId));
-    assert.equal(answer.checks.length, 5);
+    assert.equal(answer.checks.length, 7);
     assert.equal(byId(answer, 'low_keg').state, 'healthy');
   }
 });

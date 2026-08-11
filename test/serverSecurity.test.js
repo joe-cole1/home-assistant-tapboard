@@ -1014,7 +1014,7 @@ test('On Deck and custom beverage APIs require authentication, validate strictly
       400
     );
     const snapshot = await (await fetch(`${instance.baseUrl}/api/state`)).json();
-    assert.equal(snapshot.schemaVersion, 9);
+    assert.equal(snapshot.schemaVersion, 11);
     assert.deepEqual(snapshot.customBeverage, {
       id: 'custom:topo_chico',
       ...custom,

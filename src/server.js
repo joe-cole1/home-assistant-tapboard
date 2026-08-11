@@ -31,6 +31,7 @@ import { buildBrewfatherSyncFailureEvent, buildTapboardEvent } from './tapboardE
 import { TapMutationCoordinator } from './tapActions.js';
 import { DraftHealthEngine, mergeDraftHealthConfig } from './draftHealth.js';
 import { DEFAULT_TAP_PLANNING_POLICY, buildTapPlanningProjection } from './tapPlanning.js';
+import { SCHEMA_VERSION } from './dbMigrations.js';
 import {
   HttpError,
   applySecurityHeaders,
@@ -491,6 +492,19 @@ function evaluateDraftHealth({ publish = true } = {}) {
       lineCleanedAt: latestCleaningAt(tapId)
     });
     checks.push(...persistHealthEvaluation(tapId, evaluation, { publish }));
+  }
+  const gaps = db.prepare("SELECT * FROM forecast_gap_state WHERE state = 'forecast_gap'").all();
+  for (const gap of gaps) {
+    checks.push({
+      check_id: 'tap_gap_predicted',
+      tap_id: gap.tap_id,
+      state: 'degraded',
+      severity: 'warning',
+      title: 'Tap Gap Warning',
+      message: `Tap ${gap.tap_id} is low/kicked and no compatible replacement batch is ready within lead time.`,
+      acknowledged_at: null,
+      updated_at: gap.updated_at
+    });
   }
   const active = checks.filter((check) => check.state === 'active' || check.state === 'degraded');
   const severityRank = { none: 0, info: 1, warning: 2, critical: 3 };
@@ -1005,7 +1019,7 @@ function getFullStateSnapshot() {
   }
 
   return {
-    schemaVersion: 9,
+    schemaVersion: SCHEMA_VERSION,
     settings,
     taps,
     batches,
@@ -1757,11 +1771,11 @@ const server = http.createServer(async (req, res) => {
         throw new ValidationError('Invalid Brewfather batch');
       const update = db.prepare(
         `UPDATE brewfather_ondeck_preferences
-         SET visible = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE batch_id = ?`
+         SET visible = ?, target_tap_id = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE batch_id = ?`
       );
       const updateEnabled = db.prepare('UPDATE settings SET show_ondeck = ? WHERE id = 1');
       db.transaction(() => {
-        body.batches.forEach((batch) => update.run(batch.visible ? 1 : 0, batch.batch_id));
+        body.batches.forEach((batch) => update.run(batch.visible ? 1 : 0, batch.target_tap_id ?? null, batch.batch_id));
         if (body.show_ondeck !== undefined) updateEnabled.run(body.show_ondeck ? 1 : 0);
       })();
       evaluatePlanning();
