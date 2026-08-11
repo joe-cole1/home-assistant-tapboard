@@ -86,7 +86,8 @@ test('story projection is bounded, stale-aware, lifecycle-scoped, and sensory-ve
       tapStates: { 1: { volumeOz: 400, fillPercent: 62.5, volumeStatus: 'measured' } },
       forecastForTap: () => ({ estimatedDaysRemaining: 10 })
     });
-    assert.equal(story.schema_version, 3);
+    assert.equal(story.schema_version, 4);
+    assert.equal(Object.hasOwn(story.tapboard, 'serving_glass'), false);
     assert.equal(story.telemetry.history.total_points, 800);
     assert.ok(story.telemetry.history.points.length <= 600);
     assert.equal(story.telemetry.history.downsampled, true);

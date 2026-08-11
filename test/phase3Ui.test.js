@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { parseHTML } from 'linkedom';
-import { syncServingGlassReadout } from '../public/domBuilders.js';
 import { createCelebrationController, formatLifecycleLine, renderForecastDetails } from '../public/phase3Ui.js';
 
 const forecast = {
@@ -57,19 +56,6 @@ test('receipt UI deduplicates durable IDs and gates lifecycle ceremonies', () =>
   controller.kegKicked({ ...receipt, kickedAt: '2026-08-11T00:00:00.000Z' });
   assert.equal(document.querySelector('.keg-kick-ceremony').getAttribute('role'), 'status');
   document.querySelectorAll('.celebration-dismiss').forEach((button) => button.click());
-});
-
-test('serving-glass live updates insert, replace, and remove the recommendation', () => {
-  const { document } = parseHTML('<article><div class="tap-card-content"></div></article>');
-  globalThis.document = document;
-  const card = document.querySelector('article');
-  syncServingGlassReadout(card, { id: 'teku', label: 'Teku', source: 'manual' });
-  assert.match(card.textContent, /Teku · Brewer selected/);
-  syncServingGlassReadout(card, { id: 'stange', label: 'Stange', source: 'auto' });
-  assert.equal(card.querySelectorAll('.serving-glass-readout').length, 1);
-  assert.match(card.textContent, /Stange · Tapboard recommendation/);
-  syncServingGlassReadout(card, null);
-  assert.equal(card.querySelector('.serving-glass-readout'), null);
 });
 
 test('Phase 3 animation selectors honor reduced-motion preferences', () => {

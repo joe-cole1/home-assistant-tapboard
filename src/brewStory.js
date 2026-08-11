@@ -1,6 +1,6 @@
 import { buildSensoryProfile, SENSORY_AXES } from './sensoryEngine.js';
 
-export const BREW_STORY_SCHEMA_VERSION = 3;
+export const BREW_STORY_SCHEMA_VERSION = 4;
 export const BREW_STORY_WINDOWS = Object.freeze(['24h', '7d', 'all']);
 export const MAX_STORY_POINTS = 600;
 const STALE_AFTER_MS = 12 * 60 * 60 * 1_000;
@@ -199,7 +199,6 @@ export function buildBrewStory({
   now = Date.now,
   tapStates = {},
   forecastForTap,
-  servingGlass = null,
   includeHiddenSensory = false
 } = {}) {
   if (!BREW_STORY_WINDOWS.includes(window)) throw new TypeError('Invalid story window');
@@ -263,7 +262,7 @@ export function buildBrewStory({
       latest,
       history: { window, downsampled: points.length < rawReadings.length, total_points: rawReadings.length, points }
     },
-    tapboard: { lifecycles: lifecycleChapters(db, batchId, tapStates, forecastForTap), serving_glass: servingGlass },
+    tapboard: { lifecycles: lifecycleChapters(db, batchId, tapStates, forecastForTap) },
     sensory
   };
 }

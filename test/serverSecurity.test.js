@@ -152,7 +152,7 @@ test('Brew Story routes enforce public visibility and authenticated sensory over
     const storyText = await publicStory.text();
     assert.ok(Buffer.byteLength(storyText) < 512 * 1024);
     const publicPayload = JSON.parse(storyText);
-    assert.equal(publicPayload.schema_version, 3);
+    assert.equal(publicPayload.schema_version, 4);
     assert.equal('override' in publicPayload.sensory, false);
 
     const sensory = await fetch(`${instance.baseUrl}/api/batches/story-a/sensory`, {
@@ -695,6 +695,47 @@ test('native cached batches assign without HA projections and failed End Batch p
   }
 });
 
+test('Brewfather assignments choose matching fill graphics while custom, unknown, and explicit values preserve intent', async () => {
+  const instance = await startServer();
+  const database = new Database(path.join(instance.dataDir, 'tapboard.db'));
+  try {
+    database
+      .prepare(
+        `INSERT INTO batches(batch_id, recipe_name, style, status, present)
+         VALUES
+          ('fill-ipa', 'Fill IPA', 'American IPA', 'Conditioning', 1),
+          ('fill-unknown', 'Fill Unknown', 'Mystery Beverage', 'Conditioning', 1)`
+      )
+      .run();
+    database.prepare("UPDATE taps SET graphic='mug' WHERE tap_id IN (1, 2, 3)").run();
+    const { token } = await authenticate(instance.baseUrl);
+    const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+    const updateTap = async (tapId, body) => {
+      const response = await fetch(`${instance.baseUrl}/api/taps/${tapId}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body)
+      });
+      assert.equal(response.status, 200);
+    };
+
+    await updateTap(1, { batch_option: 'fill-ipa | Fill IPA (Conditioning)' });
+    assert.equal(database.prepare('SELECT graphic FROM taps WHERE tap_id=1').get().graphic, 'ipa_glass');
+
+    await updateTap(1, { batch_option: 'fill-ipa | Fill IPA (Conditioning)', graphic: 'teku' });
+    assert.equal(database.prepare('SELECT graphic FROM taps WHERE tap_id=1').get().graphic, 'teku');
+
+    await updateTap(2, { batch_option: 'fill-unknown | Fill Unknown (Conditioning)' });
+    assert.equal(database.prepare('SELECT graphic FROM taps WHERE tap_id=2').get().graphic, 'mug');
+
+    await updateTap(3, { batch_option: 'custom:topo_chico | Tapboard Custom Beverage' });
+    assert.equal(database.prepare('SELECT graphic FROM taps WHERE tap_id=3').get().graphic, 'mug');
+  } finally {
+    database.close();
+    await stopServer(instance.child);
+  }
+});
+
 test('override-only beverages own one lifecycle until explicitly cleared', async () => {
   const instance = await startServer();
   const database = new Database(path.join(instance.dataDir, 'tapboard.db'));
@@ -879,7 +920,7 @@ test('On Deck and custom beverage APIs require authentication, validate strictly
       400
     );
     const snapshot = await (await fetch(`${instance.baseUrl}/api/state`)).json();
-    assert.equal(snapshot.schemaVersion, 7);
+    assert.equal(snapshot.schemaVersion, 8);
     assert.deepEqual(snapshot.customBeverage, {
       id: 'custom:topo_chico',
       ...custom,

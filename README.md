@@ -9,7 +9,7 @@ Tapboard is a containerized dashboard for six Home Assistant-connected beer taps
 - Immediate SSE notifications for pour starts, completions, cancellations, low-keg alerts, HA connection status, and settings changes.
 - Immutable keg lifecycles: a pour is attributed to the lifecycle active at its start, even if the tap is reassigned before completion.
 - Lifecycle-scoped forecast uses UTC lifecycle days (including no-pour days), a deterministic uncertainty range, and a clearly labeled 24 oz every 4 days fallback until enough history exists.
-- Per-tap serving-glass guidance can match a known beer style automatically or use an administrator-selected glass; custom beverages require a manual choice.
+- Per-tap display fill graphics are auto-selected for recognized Brewfather batch styles and remain manually configurable by administrators.
 - Durable first-pour receipts and one-time keg-kick milestones, with optional automatic kick confirmation from a fresh scale reading.
 - Canonical, capacity-aware keg measurements sourced from Home Assistant scales; the browser never estimates volume from a percentage.
 - Cozy horizontal-swipe and compact 3-by-2 layouts sized for a six-tap landscape display.
@@ -120,7 +120,7 @@ Home Assistant receives the versioned `tapboard_event` contract on a best-effort
 
 Each assignment creates an immutable keg lifecycle. Forecasts consider only that lifecycle and group valid completed pours by UTC calendar day, including zero-pour days. With at least 14 observed days and three qualifying pours, Tapboard reports a deterministic central 80% depletion interval using seven-day moving-block bootstrap samples. Before that, it reports a low-confidence, broad fallback based on 24 oz every four days. Stale measurements, capacity inconsistencies, invalid timestamps, and future-dated pours are explicitly marked rather than silently treated as normal history.
 
-The tap’s **Serving glass** may be `Auto` or a manual glass. Auto maps recognized non-custom beer styles to a reviewed glass; a manual setting always wins, while unmatched and custom beverages ask for a manual choice.
+The tap’s **Display Fill Graphic** is auto-selected for recognized Brewfather batch styles. Administrators can always choose a different graphic manually.
 
 A qualifying first pour is recorded once per lifecycle and produces a receipt. The receipt starts with a capacity-bounded post-pour estimate, then reconciles only after a fresh scale reading; it never reports more remaining beer than either source supports. Marking an End Keg action as **Kicked** claims the manual kick milestone once, closes that lifecycle, and clears the tap together. An automatic kick is only considered after a qualifying pour when the per-tap threshold is configured, the scale reports a fresh reading at or below it, and that reading stays eligible through the confirmation window; it records the milestone and ceremony but does not itself clear the tap. A kick milestone is idempotent, so it cannot repeat the ceremony or replace its first trigger.
 

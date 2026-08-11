@@ -23,24 +23,6 @@ export function createSelectOption(value, label, selected = false) {
   return option;
 }
 
-function servingGlassText(servingGlass) {
-  return `Serve in: ${servingGlass.label}${servingGlass.source === 'auto' ? ' · Tapboard recommendation' : ' · Brewer selected'}`;
-}
-
-export function syncServingGlassReadout(card, servingGlass) {
-  let readout = card.querySelector('.serving-glass-readout');
-  if (!servingGlass?.id) {
-    readout?.remove();
-    return null;
-  }
-  if (!readout) {
-    readout = element('div', 'serving-glass-readout');
-    card.querySelector('.tap-card-content')?.appendChild(readout);
-  }
-  readout.textContent = servingGlassText(servingGlass);
-  return readout;
-}
-
 export function buildTapCardContent({
   tapId,
   fillPercent,
@@ -56,7 +38,6 @@ export function buildTapCardContent({
   fg,
   volumeReadoutText,
   forecastText,
-  servingGlass,
   kicked = false
 }) {
   const fragment = document.createDocumentFragment();
@@ -114,9 +95,6 @@ export function buildTapCardContent({
   status.hidden = !statusText;
   graphic.appendChild(status);
   graphicColumn.appendChild(graphic);
-  if (servingGlass?.id) {
-    details.appendChild(element('div', 'serving-glass-readout', servingGlassText(servingGlass)));
-  }
   fragment.append(graphicColumn, details);
   return fragment;
 }

@@ -1,12 +1,6 @@
 import { renderTapGraphic, srmToHex } from './graphics.js';
 import { createLiveUpdateController, updateGraphicFill } from './liveUpdates.js';
-import {
-  buildOnDeckItems,
-  buildTapCardContent,
-  createSelectOption,
-  createToast,
-  syncServingGlassReadout
-} from './domBuilders.js';
+import { buildOnDeckItems, buildTapCardContent, createSelectOption, createToast } from './domBuilders.js';
 import { createBrewStoryController } from './brewStory.js';
 import { shouldShowNewBadge } from './freshness.js';
 import { createAutosaveController } from './autosave.js';
@@ -618,7 +612,6 @@ function createTapCard(tap) {
       fg,
       volumeReadoutText,
       forecastText,
-      servingGlass: tap.serving_recommendation,
       kicked: Boolean(milestone.kickedAt)
     })
   );
@@ -817,8 +810,6 @@ function updateTapCard(card, tap) {
     forecastEl.hidden = !forecastText;
     forecastEl.setAttribute('aria-label', `${forecastText}. Open forecast details.`);
   }
-
-  syncServingGlassReadout(card, tap.serving_recommendation);
 
   let kickedBadge = badges?.querySelector('.badge-kicked');
   if (milestone.kickedAt && !kickedBadge) {
@@ -1148,9 +1139,8 @@ function openTapSettings(tapId) {
   };
   batchSelect.dataset.confirmedValue = batchSelect.value;
 
-  // Set Graphic & Enabled
+  // Set display fill graphic and enabled state.
   document.getElementById('tapSettingsGraphicSelect').value = tap.graphic || 'corny_keg';
-  document.getElementById('tapSettingsServingGlassSelect').value = tap.serving_glass || 'auto';
 
   const isEnabled = tap.enabled === 1 || batchSelect.value !== '';
   document.getElementById('tapSettingsEnabledCheckbox').checked = isEnabled;
@@ -1290,7 +1280,6 @@ function updateSaveStatus(key, { state, error }) {
     pin: 'pinChangeSaveStatus',
     'tap-assignment': 'tapSettingsBatchSaveStatus',
     tapSettingsGraphicSelect: 'tapSettingsGraphicSaveStatus',
-    tapSettingsServingGlassSelect: 'tapSettingsServingGlassSaveStatus',
     tapSettingsDisplayUnitSelect: 'tapSettingsDisplayUnitSaveStatus',
     tapSettingsCustomPourInput: 'tapSettingsCustomPourSaveStatus',
     tapSettingsCapacityInput: 'tapSettingsCapacitySaveStatus',
@@ -1777,7 +1766,6 @@ function setupAutosaveListeners() {
   });
 
   bindTapField('tapSettingsGraphicSelect', 'graphic', { immediate: true });
-  bindTapField('tapSettingsServingGlassSelect', 'serving_glass', { immediate: true });
   bindTapField('tapSettingsEnabledCheckbox', 'enabled', { immediate: true });
   bindTapField('tapSettingsDisplayUnitSelect', 'display_unit', { immediate: true });
   bindTapField('tapSettingsCustomPourInput', 'custom_pour_size', { transform: Number });
@@ -1969,13 +1957,9 @@ function initModalListeners() {
       pinSubmitBtn.disabled = false;
     }
   };
-  if (pinSubmitBtn) {
-    pinSubmitBtn.addEventListener('click', submitPin);
-  }
-  document.getElementById('pinInput')?.addEventListener('keydown', (event) => {
-    if (event.key !== 'Enter') return;
+  document.getElementById('pinForm')?.addEventListener('submit', (event) => {
     event.preventDefault();
-    submitPin();
+    void submitPin();
   });
 
   // Display Unit Selector Change Listener

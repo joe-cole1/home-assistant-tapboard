@@ -5,19 +5,34 @@ import { parseHTML } from 'linkedom';
 
 const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
 
-test('General Settings is an accessible full-page disclosure workspace', () => {
+test('General Settings is an accessible, collapsed disclosure workspace with the required section layout', () => {
   const { document } = parseHTML(html);
   const dialog = document.getElementById('globalSettingsModal');
   const disclosures = [...dialog.querySelectorAll(':scope details.settings-disclosure')];
 
   assert.equal(dialog.localName, 'dialog');
   assert.equal(dialog.getAttribute('aria-labelledby'), 'generalSettingsTitle');
-  assert.equal(disclosures.length, 7);
-  assert.equal(disclosures[0].hasAttribute('open'), true);
-  assert.ok(disclosures.slice(1).every((details) => !details.hasAttribute('open')));
+  assert.equal(disclosures.length, 6);
+  assert.ok(disclosures.every((details) => !details.hasAttribute('open')));
   assert.deepEqual(
     disclosures.map((details) => details.querySelector('summary')?.firstChild?.textContent.trim()),
-    ['Appearance', 'Dashboard', 'On Deck', 'Celebrations', 'Brewfather', 'Custom Beverage', 'Security']
+    ['Dashboard', 'Appearance', 'Celebrations', 'Custom Beverage', 'Brewfather', 'Security']
+  );
+  const dashboard = disclosures[0];
+  const appearance = disclosures[1];
+  const layout = document.getElementById('layoutModeSelect');
+  const onDeckFooter = document.getElementById('showOnDeckCheckbox');
+  const onDeckDefault = document.getElementById('onDeckNewBatchDefaultCheckbox');
+
+  assert.equal(appearance.querySelector('.settings-disclosure-content').firstElementChild, layout.parentElement);
+  assert.equal(dashboard.contains(layout), false);
+  assert.ok(dashboard.contains(document.querySelector('.tap-visibility-fieldset')));
+  assert.equal(dashboard.querySelector('.settings-disclosure-content').lastElementChild, onDeckDefault.parentElement);
+  assert.ok(dashboard.contains(onDeckFooter));
+  assert.ok(dashboard.contains(onDeckDefault));
+  assert.equal(
+    [...dialog.querySelectorAll('summary')].some((summary) => /^On Deck\b/.test(summary.textContent.trim())),
+    false
   );
   for (const removedId of ['saveGlobalSettingsBtn', 'saveCustomBeverageBtn', 'saveTapSettingsBtn', 'saveOnDeckBtn']) {
     assert.equal(document.getElementById(removedId), null);
@@ -66,6 +81,26 @@ test('theme and PIN controls expose reset, warning, verification, and inline sta
   assert.match(document.querySelector('.pin-warning').textContent, /signs out every administrator/i);
   assert.ok(document.getElementById('changePinBtn'));
   assert.ok(document.getElementById('pinChangeSaveStatus'));
+});
+
+test('PIN unlock uses a numeric masked form that submits from the keyboard', () => {
+  const { document } = parseHTML(html);
+  const form = document.getElementById('pinForm');
+  const input = document.getElementById('pinInput');
+  const submit = document.getElementById('pinSubmitBtn');
+
+  assert.equal(form.localName, 'form');
+  assert.equal(form.parentElement.parentElement.id, 'pinModal');
+  assert.equal(input.getAttribute('type'), 'password');
+  assert.equal(input.getAttribute('aria-label'), '4-digit administrator PIN');
+  assert.equal(input.getAttribute('inputmode'), 'numeric');
+  assert.equal(input.getAttribute('pattern'), '[0-9]{4}');
+  assert.equal(input.getAttribute('autocomplete'), 'current-password');
+  assert.equal(input.getAttribute('enterkeyhint'), 'done');
+  assert.equal(input.hasAttribute('required'), true);
+  assert.equal(submit.getAttribute('type'), 'submit');
+  assert.equal(form.contains(input), true);
+  assert.equal(form.contains(submit), true);
 });
 
 test('per-browser display controls load before visible content and communicate their scope', () => {
@@ -153,4 +188,9 @@ test('tap and custom-beverage settings provide an inline autosave result beside 
     assert.equal(status.getAttribute('aria-live'), 'polite');
     assert.ok(control.parentElement.contains(status), `${statusId} is not inline with ${controlId}`);
   }
+  assert.equal(document.getElementById('tapSettingsServingGlassSelect'), null);
+  assert.match(
+    document.getElementById('tapSettingsGraphicSelect').parentElement.textContent,
+    /auto-selects a display fill glass/i
+  );
 });
