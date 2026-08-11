@@ -65,6 +65,23 @@ function sourceLayerLabel(value) {
   );
 }
 
+function roundedSensoryValue(value) {
+  if (!finitePresent(value)) return null;
+  const score = Math.max(0, Math.min(5, Number(value)));
+  return Math.round((score + Number.EPSILON) * 10) / 10;
+}
+
+function sensoryRank(value) {
+  const score = roundedSensoryValue(value);
+  if (score === null) return '—';
+  return ['Low', 'Med-Low', 'Med', 'Med-High', 'High'][Math.min(4, Math.floor(score))];
+}
+
+function roundedSensoryScore(value) {
+  const score = roundedSensoryValue(value);
+  return score === null ? '—' : score.toFixed(1);
+}
+
 function telemetryChart(points) {
   if (!Array.isArray(points) || !points.length)
     return el('p', 'brew-story-empty', 'No telemetry readings in this window.');
@@ -152,7 +169,7 @@ function sensoryRadar(axes) {
     );
     svg.appendChild(spoke);
     if (finitePresent(axis.value)) {
-      const score = Math.max(0, Math.min(5, Number(axis.value)));
+      const score = roundedSensoryValue(axis.value);
       const point = {
         x: center + Math.cos(angle) * radius * (score / 5),
         y: center + Math.sin(angle) * radius * (score / 5)
@@ -421,30 +438,57 @@ function lifecycleSection(lifecycles) {
   return node;
 }
 
-function sensorySection(sensory) {
-  if (!sensory || sensory.hidden) return null;
-  const node = section('Flavor guidance', `Deterministic ${sensory.rules_version || ''}`.trim());
-  if (sensory.description) appendParagraph(node, 'Plain-English profile', sensory.description, 'Prediction');
+function sensorySection(sensory, showDetails = false) {
+  if (!sensory || (sensory.hidden && !showDetails)) return null;
+  const node = section('Flavor guidance');
   const graphic = sensoryRadar(sensory.axes);
   if (graphic) node.appendChild(graphic);
   else
     node.appendChild(
       el('p', 'brew-story-empty', 'A radar needs at least three evidenced axes. Unknown axes are not filled.')
     );
-  const evidence = el('dl', 'brew-story-sensory-evidence');
+
+  const tableWrap = el('div', 'brew-story-sensory-table-wrap');
+  const table = el('table', 'brew-story-sensory-table');
+  const head = el('thead');
+  const headings = el('tr');
+  const categoryHeading = el('th', null, 'Category');
+  const rankingHeading = el('th', null, 'Ranking');
+  categoryHeading.scope = 'col';
+  rankingHeading.scope = 'col';
+  headings.append(categoryHeading, rankingHeading);
+  if (showDetails) {
+    const scoreHeading = el('th', null, 'Score');
+    const calculationHeading = el('th', null, 'Calculation');
+    scoreHeading.scope = 'col';
+    calculationHeading.scope = 'col';
+    headings.append(scoreHeading, calculationHeading);
+  }
+  head.appendChild(headings);
+  const body = el('tbody');
   AXIS_ORDER.forEach((name) => {
-    const axis = sensory.axes?.[name];
-    if (!axis || !present(axis.value)) return;
-    evidence.append(
-      el('dt', null, `${humanize(name)} · ${axis.value}/5`),
-      el(
-        'dd',
-        null,
-        `${sourceLayerLabel(axis.source_layer)} · ${axis.confidence || 'unknown confidence'} · ${display(axis.evidence)}`
-      )
-    );
+    const axis = sensory.axes?.[name] || {};
+    const row = el('tr');
+    const category = el('th', null, humanize(name));
+    category.scope = 'row';
+    row.append(category, el('td', 'brew-story-sensory-rank', sensoryRank(axis.value)));
+    if (showDetails) {
+      row.append(
+        el('td', 'brew-story-sensory-score', roundedSensoryScore(axis.value)),
+        el(
+          'td',
+          'brew-story-sensory-calculation',
+          finitePresent(axis.value)
+            ? `${sourceLayerLabel(axis.source_layer)} · ${axis.confidence || 'unknown confidence'} · ${display(axis.evidence)}`
+            : display(axis.evidence, 'No supported evidence')
+        )
+      );
+    }
+    body.appendChild(row);
   });
-  if (evidence.childElementCount) node.appendChild(evidence);
+  table.append(head, body);
+  tableWrap.appendChild(table);
+  node.appendChild(tableWrap);
   return node;
 }
 
@@ -461,16 +505,6 @@ function sensoryEditor(story, onSave, onError) {
   hidden.checked = override.hidden === true;
   hiddenLabel.append(hidden, document.createTextNode(' Hide sensory guidance from public viewers'));
   form.appendChild(hiddenLabel);
-
-  const descriptionLabel = el('label', 'brew-story-field');
-  descriptionLabel.appendChild(el('span', null, 'Plain-English description'));
-  const description = el('textarea');
-  description.rows = 4;
-  description.maxLength = 2000;
-  description.placeholder = 'Leave blank to use deterministic guidance';
-  description.value = override.description_override || '';
-  descriptionLabel.appendChild(description);
-  form.appendChild(descriptionLabel);
 
   const axes = el('div', 'brew-story-axis-controls');
   AXIS_ORDER.forEach((name) => {
@@ -510,7 +544,6 @@ function sensoryEditor(story, onSave, onError) {
     try {
       await onSave({
         hidden: hidden.checked,
-        description_override: description.value.trim() || null,
         axis_overrides: axisOverrides
       });
     } catch (error) {
@@ -523,12 +556,12 @@ function sensoryEditor(story, onSave, onError) {
   return node;
 }
 
-export function buildBrewStoryContent(story, fallback = {}) {
+export function buildBrewStoryContent(story, fallback = {}, { showSensoryDetails = false } = {}) {
   const fragment = document.createDocumentFragment();
   const detail = story?.sections || {};
   for (const node of [
     lifecycleSection(story?.tapboard?.lifecycles),
-    sensorySection(story?.sensory),
+    sensorySection(story?.sensory, showSensoryDetails),
     identitySection(story, fallback),
     styleSection(detail.recipe),
     recipeSection(detail.recipe),
@@ -567,9 +600,10 @@ export function createBrewStoryController({ dialog, title, body, status, fetchSt
       const story = await response.json();
       if (id !== requestId) return;
       title.textContent = story?.batch?.recipe_name || story?.batch?.batch_name || current.title || 'Brew Story';
-      const content = buildBrewStoryContent(story, current.fallback);
+      const showSensoryDetails = canEdit?.() === true;
+      const content = buildBrewStoryContent(story, current.fallback, { showSensoryDetails });
       body.replaceChildren(content);
-      if (canEdit?.() && typeof saveSensory === 'function') {
+      if (showSensoryDetails && typeof saveSensory === 'function') {
         const editor = sensoryEditor(
           story,
           async (payload) => {

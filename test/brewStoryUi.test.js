@@ -69,9 +69,14 @@ test('Brew Story renders telemetry and partial radar without interpreting remote
     assert.equal(wrapper.querySelectorAll('.brew-story-chart polyline').length, 2);
     assert.ok(wrapper.querySelector('.brew-story-radar-shape'));
     assert.equal(wrapper.querySelectorAll('.brew-story-radar-marker').length, 3);
-    assert.ok(wrapper.textContent.includes('Style baseline'));
-    assert.ok(wrapper.textContent.includes('Prediction'));
-    assert.ok(wrapper.textContent.includes('Brewer tasting'));
+    assert.equal(wrapper.querySelectorAll('.brew-story-sensory-table tbody tr').length, 8);
+    assert.ok(wrapper.textContent.includes('Med'));
+    assert.ok(wrapper.textContent.includes('High'));
+    assert.equal(wrapper.textContent.includes('Hoppy and firm.'), false);
+    assert.equal(wrapper.textContent.includes('Prediction'), false);
+    assert.equal(wrapper.textContent.includes('Brewer tasting'), false);
+    assert.equal(wrapper.textContent.includes('Score'), false);
+    assert.equal(wrapper.textContent.includes('Calculation'), false);
   }));
 
 test('Tap Details starts with the Tapboard chapter and Flavor guidance', () =>
@@ -100,6 +105,44 @@ test('Tap Details starts with the Tapboard chapter and Flavor guidance', () =>
       heading.textContent.trim()
     );
     assert.deepEqual(headings.slice(0, 3), ['Tapboard chapter', 'Flavor guidance', 'Identity']);
+  }));
+
+test('public sensory rankings use the five simple bands without exposing numeric detail', () =>
+  withDocument((document) => {
+    const wrapper = document.createElement('div');
+    wrapper.appendChild(
+      buildBrewStoryContent(
+        {
+          ...story,
+          sensory: {
+            ...story.sensory,
+            axes: {
+              malt: { value: 0.94 },
+              hops: { value: 0.95 },
+              bitterness: { value: 1.94 },
+              sweetness: { value: 1.95 },
+              roast: { value: 2.94 },
+              tartness: { value: 2.95 },
+              body: { value: 3.94 },
+              perceived_strength: { value: 3.95 }
+            }
+          }
+        },
+        {}
+      )
+    );
+    const rankings = Array.from(wrapper.querySelectorAll('.brew-story-sensory-rank'), (cell) => cell.textContent);
+    assert.deepEqual(rankings, ['Low', 'Med-Low', 'Med-Low', 'Med', 'Med', 'Med-High', 'Med-High', 'High']);
+    assert.equal(wrapper.textContent.includes('0.94'), false);
+    assert.equal(wrapper.textContent.includes('3.95'), false);
+  }));
+
+test('hidden sensory guidance stays absent publicly', () =>
+  withDocument((document) => {
+    const wrapper = document.createElement('div');
+    wrapper.appendChild(buildBrewStoryContent({ ...story, sensory: { ...story.sensory, hidden: true } }, {}));
+    assert.equal(wrapper.querySelector('.brew-story-sensory-table'), null);
+    assert.equal(wrapper.textContent.includes('Flavor guidance'), false);
   }));
 
 test('controller loads on demand, switches windows, and suppresses stale responses', () =>
@@ -154,7 +197,9 @@ test('authenticated controller renders and submits complete sensory overrides', 
       ...story,
       sensory: {
         ...story.sensory,
-        override: { hidden: false, description_override: null, axis_overrides: { hops: 4.5 } }
+        hidden: true,
+        axes: { ...story.sensory.axes, hops: { ...story.sensory.axes.hops, value: 1.96 } },
+        override: { hidden: true, description_override: null, axis_overrides: { hops: 4.5 } }
       }
     };
     const controller = createBrewStoryController({
@@ -173,12 +218,23 @@ test('authenticated controller renders and submits complete sensory overrides', 
     await new Promise((resolve) => setTimeout(resolve, 0));
     const form = body.querySelector('.brew-story-override-form');
     assert.ok(form, `${status.textContent}\n${body.innerHTML}`);
-    form.querySelector('textarea').value = 'Manual description';
+    const sensoryTable = body.querySelector('.brew-story-sensory-table');
+    assert.ok(sensoryTable);
+    assert.ok(sensoryTable.textContent.includes('Score'));
+    assert.ok(sensoryTable.textContent.includes('Calculation'));
+    const hopsRow = Array.from(sensoryTable.querySelectorAll('tbody tr')).find((row) =>
+      row.textContent.includes('Hops')
+    );
+    assert.ok(hopsRow.textContent.includes('Med'));
+    assert.ok(hopsRow.textContent.includes('2.0'));
+    assert.ok(sensoryTable.textContent.includes('Prediction · medium · Dry hop'));
+    assert.equal(form.querySelector('textarea'), null);
     form.querySelector('select[data-axis="roast"] option[value="3.5"]').selected = true;
     form.dispatchEvent(new document.defaultView.Event('submit', { bubbles: true, cancelable: true }));
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.equal(saves[0].id, 'one');
-    assert.equal(saves[0].payload.description_override, 'Manual description');
+    assert.equal('description_override' in saves[0].payload, false);
+    assert.equal(saves[0].payload.hidden, true);
     assert.equal(saves[0].payload.axis_overrides.hops, 4.5);
     assert.equal(saves[0].payload.axis_overrides.roast, 3.5);
   }));
