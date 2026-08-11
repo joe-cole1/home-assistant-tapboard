@@ -1588,7 +1588,6 @@ body.is-authenticated .ondeck-cog-btn {
   margin: 0;
   font-weight: 600;
 }
-.brew-story-description,
 .brew-story-empty,
 .brew-story-freshness,
 .brew-story-text-block p {
@@ -1663,17 +1662,38 @@ body.is-authenticated .ondeck-cog-btn {
   fill: currentColor;
   font-size: 9px;
 }
-.brew-story-sensory-evidence {
-  display: grid;
-  grid-template-columns: minmax(8rem, auto) 1fr;
-  gap: 0.35rem 0.8rem;
+.brew-story-sensory-table-wrap {
+  margin-top: 0.75rem;
+  overflow-x: auto;
+}
+.brew-story-sensory-table {
+  width: 100%;
+  border-collapse: collapse;
   font-size: 0.82rem;
 }
-.brew-story-sensory-evidence dt {
+.brew-story-sensory-table th,
+.brew-story-sensory-table td {
+  padding: 0.45rem 0.55rem;
+  border-bottom: 1px solid var(--border-color);
+  text-align: left;
+  vertical-align: top;
+}
+.brew-story-sensory-table thead th {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.brew-story-sensory-table tbody th,
+.brew-story-sensory-rank {
   font-weight: 700;
 }
-.brew-story-sensory-evidence dd {
-  margin: 0;
+.brew-story-sensory-score {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.brew-story-sensory-calculation {
+  min-width: 15rem;
   color: var(--text-muted);
 }
 .brew-story-lifecycle {
