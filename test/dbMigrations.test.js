@@ -35,7 +35,8 @@ test('migrates legacy pour rows without changing IDs, volumes, or timestamps', (
       { version: 5, name: 'brewfather-cache' },
       { version: 6, name: 'brew-story' },
       { version: 7, name: 'serving-glass-recommendations' },
-      { version: 8, name: 'lifecycle-experiences' }
+      { version: 8, name: 'lifecycle-experiences' },
+      { version: 9, name: 'remove-serving-glass-recommendations' }
     ]);
     const settingColumns = db.prepare("SELECT name, dflt_value FROM pragma_table_info('settings')").all();
     assert.deepEqual(
@@ -63,11 +64,11 @@ test('migrates legacy pour rows without changing IDs, volumes, or timestamps', (
     assert.deepEqual(
       db
         .prepare(
-          "SELECT name, dflt_value FROM pragma_table_info('taps') WHERE name IN ('serving_glass', 'kick_threshold_oz')"
+          "SELECT name, dflt_value FROM pragma_table_info('taps') WHERE name IN ('graphic', 'kick_threshold_oz')"
         )
         .all(),
       [
-        { name: 'serving_glass', dflt_value: "'auto'" },
+        { name: 'graphic', dflt_value: "'corny_keg'" },
         { name: 'kick_threshold_oz', dflt_value: null }
       ]
     );
@@ -103,6 +104,32 @@ test('migrates legacy pour rows without changing IDs, volumes, or timestamps', (
       /FOREIGN KEY/
     );
     migrateDatabase(db);
+  } finally {
+    db.close();
+  }
+});
+
+test('removes the legacy serving_glass column without changing tap data', () => {
+  const db = new Database(':memory:');
+  try {
+    migrateDatabase(db);
+    db.prepare("INSERT INTO taps(tap_id, batch_id, graphic, enabled) VALUES(1, 'batch-a', 'ipa_glass', 0)").run();
+    db.exec("ALTER TABLE taps ADD COLUMN serving_glass TEXT NOT NULL DEFAULT 'auto'; PRAGMA user_version = 8");
+
+    migrateDatabase(db);
+
+    assert.equal(db.pragma('user_version', { simple: true }), SCHEMA_VERSION);
+    assert.equal(db.prepare("SELECT 1 FROM pragma_table_info('taps') WHERE name='serving_glass'").get(), undefined);
+    assert.deepEqual(db.prepare('SELECT tap_id, batch_id, graphic, enabled FROM taps WHERE tap_id=1').get(), {
+      tap_id: 1,
+      batch_id: 'batch-a',
+      graphic: 'ipa_glass',
+      enabled: 0
+    });
+    assert.deepEqual(db.prepare('SELECT version, name FROM schema_migrations WHERE version=9').get(), {
+      version: 9,
+      name: 'remove-serving-glass-recommendations'
+    });
   } finally {
     db.close();
   }

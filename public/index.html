@@ -113,22 +113,30 @@
         <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1.25rem">
           Enter 4-Digit PIN to unlock settings:
         </p>
-        <input
-          type="password"
-          id="pinInput"
-          class="form-control"
-          maxlength="4"
-          placeholder="••••"
-          style="
-            width: 100%;
-            box-sizing: border-box;
-            font-size: 1.75rem;
-            text-align: center;
-            letter-spacing: 0.4em;
-            margin-bottom: 1.25rem;
-          "
-        />
-        <button id="pinSubmitBtn" class="btn-primary" style="width: 100%">Unlock</button>
+        <form id="pinForm">
+          <input
+            type="password"
+            id="pinInput"
+            class="form-control"
+            aria-label="4-digit administrator PIN"
+            inputmode="numeric"
+            pattern="[0-9]{4}"
+            autocomplete="current-password"
+            enterkeyhint="done"
+            maxlength="4"
+            required
+            placeholder="••••"
+            style="
+              width: 100%;
+              box-sizing: border-box;
+              font-size: 1.75rem;
+              text-align: center;
+              letter-spacing: 0.4em;
+              margin-bottom: 1.25rem;
+            "
+          />
+          <button id="pinSubmitBtn" class="btn-primary" type="submit" style="width: 100%">Unlock</button>
+        </form>
       </div>
     </div>
 
@@ -152,11 +160,60 @@
         </header>
 
         <div class="general-settings-content">
-          <details class="settings-disclosure" open>
+          <details class="settings-disclosure">
             <summary>
-              Appearance <span class="settings-summary-help">This browser · theme, colors, and typography</span>
+              Dashboard <span class="settings-summary-help">Shared visible taps · On Deck defaults</span>
             </summary>
             <div class="settings-disclosure-content">
+              <fieldset class="tap-visibility-fieldset">
+                <legend>Active Dashboard Taps</legend>
+                <p class="settings-help">Check taps to display on the dashboard. Changes save automatically.</p>
+                <div class="tap-visibility-grid">
+                  <label class="settings-check-row"
+                    ><input type="checkbox" id="globalTapCheck_1" /> Tap 1
+                    <span class="setting-save-status" id="globalTapCheck_1SaveStatus" aria-live="polite"></span></label
+                  ><label class="settings-check-row"
+                    ><input type="checkbox" id="globalTapCheck_2" /> Tap 2
+                    <span class="setting-save-status" id="globalTapCheck_2SaveStatus" aria-live="polite"></span></label
+                  ><label class="settings-check-row"
+                    ><input type="checkbox" id="globalTapCheck_3" /> Tap 3
+                    <span class="setting-save-status" id="globalTapCheck_3SaveStatus" aria-live="polite"></span></label
+                  ><label class="settings-check-row"
+                    ><input type="checkbox" id="globalTapCheck_4" /> Tap 4
+                    <span class="setting-save-status" id="globalTapCheck_4SaveStatus" aria-live="polite"></span></label
+                  ><label class="settings-check-row"
+                    ><input type="checkbox" id="globalTapCheck_5" /> Tap 5
+                    <span class="setting-save-status" id="globalTapCheck_5SaveStatus" aria-live="polite"></span></label
+                  ><label class="settings-check-row"
+                    ><input type="checkbox" id="globalTapCheck_6" /> Tap 6
+                    <span class="setting-save-status" id="globalTapCheck_6SaveStatus" aria-live="polite"></span
+                  ></label>
+                </div>
+              </fieldset>
+              <label class="settings-check-row settings-field" data-setting="show_ondeck"
+                ><input type="checkbox" id="showOnDeckCheckbox" /> Show the On Deck footer
+                <span class="setting-save-status" id="showOnDeckSaveStatus" aria-live="polite"></span
+              ></label>
+              <label class="settings-check-row settings-field" data-setting="ondeck_new_batch_default"
+                ><input type="checkbox" id="onDeckNewBatchDefaultCheckbox" /> Show newly discovered batches on On Deck
+                <span class="setting-save-status" id="onDeckNewBatchDefaultSaveStatus" aria-live="polite"></span
+              ></label>
+            </div>
+          </details>
+
+          <details class="settings-disclosure">
+            <summary>
+              Appearance <span class="settings-summary-help">This browser · layout, theme, colors, and typography</span>
+            </summary>
+            <div class="settings-disclosure-content">
+              <div class="form-group settings-field" data-setting="layout_mode">
+                <label class="form-label" for="layoutModeSelect"
+                  >Dashboard Layout <span class="browser-setting-scope">This browser</span></label
+                ><select class="form-control" id="layoutModeSelect">
+                  <option value="cozy">Cozy — scroll through tap cards</option>
+                  <option value="compact">Compact — six taps at a glance</option></select
+                ><span class="setting-save-status" id="layoutModeSaveStatus" aria-live="polite"></span>
+              </div>
               <p class="display-preferences-help">
                 These display choices save only in this browser. Other screens keep their own appearance.
               </p>
@@ -290,64 +347,6 @@
 
           <details class="settings-disclosure">
             <summary>
-              Dashboard <span class="settings-summary-help">This browser layout · shared visible taps</span>
-            </summary>
-            <div class="settings-disclosure-content">
-              <p class="display-preferences-help">
-                Layout saves in this browser. Which taps are visible remains shared across all displays.
-              </p>
-              <div class="form-group settings-field" data-setting="layout_mode">
-                <label class="form-label" for="layoutModeSelect"
-                  >Dashboard Layout <span class="browser-setting-scope">This browser</span></label
-                ><select class="form-control" id="layoutModeSelect">
-                  <option value="cozy">Cozy — scroll through tap cards</option>
-                  <option value="compact">Compact — six taps at a glance</option></select
-                ><span class="setting-save-status" id="layoutModeSaveStatus" aria-live="polite"></span>
-              </div>
-              <fieldset class="tap-visibility-fieldset">
-                <legend>Active Dashboard Taps</legend>
-                <p class="settings-help">Check taps to display on the dashboard. Changes save automatically.</p>
-                <div class="tap-visibility-grid">
-                  <label class="settings-check-row"
-                    ><input type="checkbox" id="globalTapCheck_1" /> Tap 1
-                    <span class="setting-save-status" id="globalTapCheck_1SaveStatus" aria-live="polite"></span></label
-                  ><label class="settings-check-row"
-                    ><input type="checkbox" id="globalTapCheck_2" /> Tap 2
-                    <span class="setting-save-status" id="globalTapCheck_2SaveStatus" aria-live="polite"></span></label
-                  ><label class="settings-check-row"
-                    ><input type="checkbox" id="globalTapCheck_3" /> Tap 3
-                    <span class="setting-save-status" id="globalTapCheck_3SaveStatus" aria-live="polite"></span></label
-                  ><label class="settings-check-row"
-                    ><input type="checkbox" id="globalTapCheck_4" /> Tap 4
-                    <span class="setting-save-status" id="globalTapCheck_4SaveStatus" aria-live="polite"></span></label
-                  ><label class="settings-check-row"
-                    ><input type="checkbox" id="globalTapCheck_5" /> Tap 5
-                    <span class="setting-save-status" id="globalTapCheck_5SaveStatus" aria-live="polite"></span></label
-                  ><label class="settings-check-row"
-                    ><input type="checkbox" id="globalTapCheck_6" /> Tap 6
-                    <span class="setting-save-status" id="globalTapCheck_6SaveStatus" aria-live="polite"></span
-                  ></label>
-                </div>
-              </fieldset>
-            </div>
-          </details>
-
-          <details class="settings-disclosure">
-            <summary>On Deck <span class="settings-summary-help">Footer and new-batch defaults</span></summary>
-            <div class="settings-disclosure-content">
-              <label class="settings-check-row settings-field" data-setting="show_ondeck"
-                ><input type="checkbox" id="showOnDeckCheckbox" /> Show the On Deck footer
-                <span class="setting-save-status" id="showOnDeckSaveStatus" aria-live="polite"></span
-              ></label>
-              <label class="settings-check-row settings-field" data-setting="ondeck_new_batch_default"
-                ><input type="checkbox" id="onDeckNewBatchDefaultCheckbox" /> Show newly discovered batches on On Deck
-                <span class="setting-save-status" id="onDeckNewBatchDefaultSaveStatus" aria-live="polite"></span
-              ></label>
-            </div>
-          </details>
-
-          <details class="settings-disclosure">
-            <summary>
               Celebrations <span class="settings-summary-help">Shared effects · this browser’s sound</span>
             </summary>
             <div class="settings-disclosure-content">
@@ -374,32 +373,6 @@
                 <span class="setting-save-status" id="browserSoundEnabledSaveStatus" aria-live="polite"></span
               ></label>
               <p class="settings-help">Sound remains off until an administrator enables it on this display.</p>
-            </div>
-          </details>
-
-          <details class="settings-disclosure" id="brewfatherStatusSection">
-            <summary>
-              Brewfather <span class="settings-summary-help">Connection, cache health, and refresh</span>
-            </summary>
-            <div class="settings-disclosure-content">
-              <dl class="brewfather-status-list" aria-label="Brewfather synchronization status">
-                <div class="brewfather-status-row">
-                  <dt>Connection</dt>
-                  <dd id="brewfatherConnectionStatus">Checking connection status…</dd>
-                </div>
-                <div class="brewfather-status-row">
-                  <dt>Cache</dt>
-                  <dd id="brewfatherCacheStatus">Checking cache status…</dd>
-                </div>
-                <div class="brewfather-status-row">
-                  <dt>Last successful refresh</dt>
-                  <dd><time id="brewfatherLastSuccess" datetime="">Not available</time></dd>
-                </div>
-              </dl>
-              <div class="settings-inline-actions">
-                <button id="refreshBrewfatherBtn" class="btn-secondary" type="button">Refresh now</button>
-                <span id="brewfatherRefreshStatus" class="setting-save-status" aria-live="polite"></span>
-              </div>
             </div>
           </details>
 
@@ -493,6 +466,32 @@
                 ><span class="setting-save-status" id="customBeverageDescriptionSaveStatus" aria-live="polite"></span>
               </div>
               <span class="setting-save-status" id="customBeverageSaveStatus" aria-live="polite"></span>
+            </div>
+          </details>
+
+          <details class="settings-disclosure" id="brewfatherStatusSection">
+            <summary>
+              Brewfather <span class="settings-summary-help">Connection, cache health, and refresh</span>
+            </summary>
+            <div class="settings-disclosure-content">
+              <dl class="brewfather-status-list" aria-label="Brewfather synchronization status">
+                <div class="brewfather-status-row">
+                  <dt>Connection</dt>
+                  <dd id="brewfatherConnectionStatus">Checking connection status…</dd>
+                </div>
+                <div class="brewfather-status-row">
+                  <dt>Cache</dt>
+                  <dd id="brewfatherCacheStatus">Checking cache status…</dd>
+                </div>
+                <div class="brewfather-status-row">
+                  <dt>Last successful refresh</dt>
+                  <dd><time id="brewfatherLastSuccess" datetime="">Not available</time></dd>
+                </div>
+              </dl>
+              <div class="settings-inline-actions">
+                <button id="refreshBrewfatherBtn" class="btn-secondary" type="button">Refresh now</button>
+                <span id="brewfatherRefreshStatus" class="setting-save-status" aria-live="polite"></span>
+              </div>
             </div>
           </details>
 
@@ -633,7 +632,7 @@
         </div>
 
         <div class="form-group">
-          <label class="form-label" for="tapSettingsGraphicSelect">Fill Graphic</label>
+          <label class="form-label" for="tapSettingsGraphicSelect">Display Fill Graphic</label>
           <select class="form-control" id="tapSettingsGraphicSelect">
             <option value="corny_keg">Corny Keg</option>
             <option value="pint_glass">Pint Glass</option>
@@ -653,32 +652,11 @@
             <option value="tasting_glass">Tasting Glass</option>
             <option value="stemmed_lager">Stemmed Lager</option>
           </select>
+          <p class="settings-help">
+            Tapboard auto-selects a display fill glass for recognized Brewfather batch styles. Administrators can still
+            choose any graphic manually.
+          </p>
           <span class="setting-save-status" id="tapSettingsGraphicSaveStatus" aria-live="polite"></span>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label" for="tapSettingsServingGlassSelect">Serving Glass Recommendation</label>
-          <select class="form-control" id="tapSettingsServingGlassSelect">
-            <option value="auto">Auto from style</option>
-            <option value="pint_glass">Pint Glass</option>
-            <option value="tulip_glass">Tulip Glass</option>
-            <option value="wheat_glass">Wheat Glass</option>
-            <option value="mug">Beer Mug</option>
-            <option value="stout_glass">Stout Glass</option>
-            <option value="snifter">Snifter</option>
-            <option value="nonic_pint">Nonic Pint</option>
-            <option value="shaker_pint">Shaker Pint</option>
-            <option value="pilsner_flute">Pilsner Flute</option>
-            <option value="stange">Stange</option>
-            <option value="goblet">Goblet / Chalice</option>
-            <option value="teku">Teku</option>
-            <option value="thistle">Thistle</option>
-            <option value="ipa_glass">IPA Glass</option>
-            <option value="tasting_glass">Tasting Glass</option>
-            <option value="stemmed_lager">Stemmed Lager</option>
-          </select>
-          <p class="settings-help" id="servingGlassHelp">Auto uses Tapboard’s reviewed local style mapping.</p>
-          <span class="setting-save-status" id="tapSettingsServingGlassSaveStatus" aria-live="polite"></span>
         </div>
 
         <!-- Volume Readout Display Unit Options -->

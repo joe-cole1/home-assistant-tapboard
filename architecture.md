@@ -40,7 +40,8 @@ src/
   sensoryEngine.js        deterministic versioned sensory precedence engine
   sensoryMappings.js      reviewed local style and ingredient mappings
   imageProxy.js           pinned-resolution, bounded HTTPS image retrieval
-  db.js / dbMigrations.js SQLite startup and schema-v6 migrations
+  fillGraphic.js          reviewed style-to-display-fill mapping
+  db.js / dbMigrations.js SQLite startup and schema-v9 migrations
   kegLifecycle.js         immutable lifecycle assignment and attribution
   kegForecast.js          active-lifecycle forecast calculation
   databaseMaintenance.js  verified backup, restore, rotation, and retention
@@ -48,7 +49,7 @@ public/
   app.js                  SSE client, browser display profiles, targeted DOM updates
   brewStory.js            safe full-screen story rendering and override controls
   displayPreferences.js  validated local storage, precedence, and pre-paint display bootstrap
-  graphics.js             SVG glassware and SRM colour rendering
+  graphics.js             SVG fill graphics and SRM colour rendering
   styles.css              dashboard styles
 ```
 
@@ -58,13 +59,13 @@ The HA client authenticates over `/api/websocket`, subscribes to `state_changed`
 
 Only each tap’s designated primary volume sensor is used for pour detection. Values must declare a supported unit and are converted explicitly to fluid ounces; missing or unsupported units are ignored. The detector rejects stale/duplicate timestamps and implausible jumps, establishes settled baselines, arbitrates simultaneous candidates, permits only one active tap, and finalizes after a quiet period or cancels a hard-timeout session. It emits `pour_start`, `pour_complete`, or `pour_cancel`; completion records only qualifying pours.
 
-The canonical measurement contract is `sensor.tap_N_fl_oz` plus `input_number.tap_N_keg_capacity_oz`. The public snapshot uses schema version 6 and exposes one coherent tuple per tap: `volumeOz`, `capacityOz`, `fillPercent`, `pintsRemaining`, and `volumeStatus`, plus native-cache batch metadata and selection options. Settings also expose nullable `primary_color` and `secondary_color` overrides; `null` selects the active preset default. `sensor.tap_N_fill`, `sensor.tap_N_pints_remaining`, `sensor.brewfather_active_batches`, `sensor.tap_N_batch_info`, and the HA batch selectors are deliberately excluded from Tapboard reads.
+The canonical measurement contract is `sensor.tap_N_fl_oz` plus `input_number.tap_N_keg_capacity_oz`. The public snapshot uses schema version 8 and exposes one coherent tuple per tap: `volumeOz`, `capacityOz`, `fillPercent`, `pintsRemaining`, and `volumeStatus`, plus native-cache batch metadata and selection options. Settings also expose nullable `primary_color` and `secondary_color` overrides; `null` selects the active preset default. `sensor.tap_N_fill`, `sensor.tap_N_pints_remaining`, `sensor.brewfather_active_batches`, `sensor.tap_N_batch_info`, and the HA batch selectors are deliberately excluded from Tapboard reads.
 
 `volumeStatus` is `measured` for a fresh scale reading; `stale` when a previously valid in-process scale source becomes unavailable; `assumed_full` only when the exact volume entity is absent while the tap has an active assignment; or `unavailable` when there is no valid measurement to retain. Ounces are clamped to capacity and pints/percent are derived on the server. The browser renders this tuple directly and may draw an empty graphic for unavailable data, but does not fabricate a numeric readout. Low-keg alerts and badges require `measured`; forecasts use the same derived tuple.
 
 ## SQLite schema and lifecycle ownership
 
-Startup enforces `foreign_keys=ON` and validates the database. It rejects a future schema version and, for an older supported schema, creates and verifies a fresh backup in `tapboard_backups` before running all ordered migrations in one transaction. Backup verification or migration failure aborts startup; no manual restore marker or empty-volume approval is required. The production empty-volume guard remains separate. The current schema is version 6. Version 3 adds the display-layout and On Deck defaults, per-Brewfather-batch visibility preferences, and the singleton custom-beverage record; version 4 adds nullable primary and secondary accent overrides; version 5 extends the existing batch table with indexed native summaries and adds bounded detail snapshots, idempotent readings, and singleton sync metadata. Version 6 adds reading pH, per-batch history-sync state, and authenticated per-batch sensory overrides.
+Startup enforces `foreign_keys=ON` and validates the database. It rejects a future schema version and, for an older supported schema, creates and verifies a fresh backup in `tapboard_backups` before running all ordered migrations in one transaction. Backup verification or migration failure aborts startup; no manual restore marker or empty-volume approval is required. The production empty-volume guard remains separate. The current schema is version 9. Version 9 removes the obsolete serving-glass setting; assigning a recognized non-custom Brewfather batch now stores the reviewed style match in the existing display-fill `graphic` field, while unmatched and custom assignments preserve the current graphic.
 
 - A tap assignment opens one immutable keg lifecycle; reassignment or an end action closes the existing lifecycle.
 - A pour captures the open lifecycle at pour start. Historical and unassigned pours may have no lifecycle and cannot affect an active keg forecast.

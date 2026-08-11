@@ -352,20 +352,6 @@ function tastingSection(logs) {
   return node;
 }
 
-function servingGlassSummary(servingGlass) {
-  if (!servingGlass || typeof servingGlass !== 'object') return null;
-  const label = typeof servingGlass.label === 'string' ? servingGlass.label : null;
-  if (!label) return null;
-  const summary = el('div', 'brew-story-serving-glass');
-  summary.append(
-    el('span', 'brew-story-serving-icon', '◒'),
-    el('strong', null, 'Serving glass'),
-    el('span', null, label)
-  );
-  if (servingGlass.source === 'auto') summary.appendChild(el('span', 'brew-story-serving-source', 'Style-guided'));
-  return summary;
-}
-
 function forecastDetails(forecast) {
   if (!forecast || typeof forecast !== 'object') return null;
   const depletion = forecast.depletion || {};
@@ -405,11 +391,9 @@ function milestoneList(entry) {
   return list;
 }
 
-function lifecycleSection(lifecycles, servingGlass) {
+function lifecycleSection(lifecycles) {
   if (!Array.isArray(lifecycles) || !lifecycles.length) return null;
   const node = section('Tapboard chapter', 'Tapboard lifecycle');
-  const serving = servingGlassSummary(servingGlass);
-  if (serving) node.appendChild(serving);
   lifecycles.forEach((entry, index) => {
     const chapter = el('article', 'brew-story-lifecycle');
     chapter.appendChild(
@@ -550,7 +534,7 @@ export function buildBrewStoryContent(story, fallback = {}) {
     timelineSection(detail.batch?.events),
     telemetrySection(story),
     tastingSection(detail.batch?.taste_logs),
-    lifecycleSection(story?.tapboard?.lifecycles, story?.tapboard?.serving_glass),
+    lifecycleSection(story?.tapboard?.lifecycles),
     sensorySection(story?.sensory)
   ]) {
     if (node) fragment.appendChild(node);

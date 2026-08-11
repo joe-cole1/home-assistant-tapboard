@@ -1,4 +1,4 @@
-import { FILL_GRAPHICS, SERVING_GLASS_OPTIONS } from './servingGlass.js';
+import { FILL_GRAPHICS } from './fillGraphic.js';
 
 const THEMES = new Set(['modern_dark', 'warm_pub', 'cyberpunk', 'light_minimal']);
 const TITLE_FONTS = new Set([
@@ -12,7 +12,6 @@ const TITLE_FONTS = new Set([
 ]);
 const BODY_FONTS = new Set(['Inter', 'Roboto', 'Balsamiq Sans', 'Outfit', 'Fredoka', 'Montserrat']);
 const GRAPHICS = new Set(FILL_GRAPHICS);
-const SERVING_GLASSES = new Set(SERVING_GLASS_OPTIONS);
 const CEREMONY_SOUNDS = new Set(['pub_bell', 'fanfare', 'last_call']);
 const DISPLAY_UNITS = new Set(['percent', 'pints', 'oz', 'pours_12', 'pours_custom']);
 const VOLUME_FORMATS = new Set(['oz', 'pints']);
@@ -230,7 +229,6 @@ export function validateTap(body) {
     'enabled',
     'batch_option',
     'graphic',
-    'serving_glass',
     'override_enabled',
     'override_name',
     'override_style',
@@ -254,7 +252,6 @@ export function validateTap(body) {
   if (body.override_enabled !== undefined) output.override_enabled = boolean(body.override_enabled);
   if (body.badge_fresh !== undefined) output.badge_fresh = boolean(body.badge_fresh);
   assignIfDefined(output, 'graphic', choice(body.graphic, GRAPHICS));
-  assignIfDefined(output, 'serving_glass', choice(body.serving_glass, SERVING_GLASSES));
   assignIfDefined(output, 'display_unit', choice(body.display_unit, DISPLAY_UNITS));
   assignIfDefined(output, 'batch_option', text(body.batch_option, 512));
   assignIfDefined(output, 'override_name', text(body.override_name, 120));

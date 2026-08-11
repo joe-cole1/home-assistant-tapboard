@@ -1,5 +1,5 @@
 const BASE_SCHEMA_VERSION = 1;
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 9;
 
 function tableExists(db, name) {
   return Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name));
@@ -377,6 +377,10 @@ function migrateServingGlassSchema(db) {
   addColumnIfMissing(db, 'taps', 'serving_glass', "TEXT NOT NULL DEFAULT 'auto'");
 }
 
+function migrateRemoveServingGlassSchema(db) {
+  if (columns(db, 'taps').has('serving_glass')) db.exec('ALTER TABLE taps DROP COLUMN serving_glass');
+}
+
 function migrateLifecycleExperienceSchema(db) {
   addColumnIfMissing(
     db,
@@ -420,7 +424,7 @@ function migrateLifecycleExperienceSchema(db) {
 function validateLatestSchema(db) {
   for (const [table, required] of Object.entries({
     settings: ['id', 'admin_pin_hash', 'admin_pin_initialized'],
-    taps: ['tap_id', 'batch_id', 'on_tap_at', 'serving_glass', 'kick_threshold_oz'],
+    taps: ['tap_id', 'batch_id', 'on_tap_at', 'graphic', 'kick_threshold_oz'],
     batches: ['batch_id'],
     pour_logs: ['id', 'tap_id', 'batch_id', 'volume_poured_oz', 'timestamp', 'lifecycle_id', 'timestamp_epoch'],
     keg_lifecycles: [
@@ -470,6 +474,9 @@ function validateLatestSchema(db) {
   })) {
     if (!tableExists(db, table)) throw new Error(`Incompatible schema version ${SCHEMA_VERSION}: missing ${table}`);
     requireColumns(db, table, required);
+  }
+  if (columns(db, 'taps').has('serving_glass')) {
+    throw new Error(`Incompatible schema version ${SCHEMA_VERSION}: legacy serving_glass column remains`);
   }
   requireColumns(db, 'settings', [
     'layout_mode',
@@ -603,6 +610,14 @@ export function migrateDatabase(db) {
           'lifecycle-experiences'
         );
         db.pragma('user_version = 8');
+      }
+      if (version < 9) {
+        migrateRemoveServingGlassSchema(db);
+        db.prepare('INSERT OR IGNORE INTO schema_migrations (version, name) VALUES (?, ?)').run(
+          9,
+          'remove-serving-glass-recommendations'
+        );
+        db.pragma('user_version = 9');
       }
       // Validation is part of the migration transaction. A malformed legacy
       // table or missing constraint must roll back schema changes, ledger rows,

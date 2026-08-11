@@ -193,6 +193,42 @@ body {
 
 /* Cozy intentionally favors a readable card and manual, snap-aligned browsing. */
 @media (min-width: 900px) and (orientation: landscape) {
+  /* Cozy shares the viewport contract with compact, but keeps its larger cards
+   * and horizontal snap browsing. The footer is a flex sibling, so its native
+   * [hidden] display:none state immediately returns its space to the grid. */
+  body[data-layout-mode='cozy'] {
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  body[data-layout-mode='cozy'] .app-header,
+  body[data-layout-mode='cozy'] .ondeck-ticker-container {
+    flex: 0 0 auto;
+  }
+
+  body[data-layout-mode='cozy'] .main-content {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  body[data-layout-mode='cozy'] .tap-grid {
+    flex: 1 1 0;
+    min-height: 0;
+  }
+
+  /* Let an exceptionally short viewport scroll within a card instead of
+   * clipping its controls or graphic outside the available grid area. */
+  body[data-layout-mode='cozy'] .tap-card {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
   body[data-layout-mode='compact'] .tap-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     grid-template-rows: repeat(2, minmax(0, 1fr));
@@ -1063,24 +1099,6 @@ body.is-authenticated .ondeck-cog-btn {
   text-align: center;
 }
 
-/* Phase 3 serving and keg-finish presentation. These selectors are shared by
- * the card, forecast dialog, and lifecycle story so live updates stay calm. */
-.serving-recommendation,
-.serving-glass-recommendation,
-.serving-glass-readout {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin-top: 0.45rem;
-  color: var(--text-muted);
-  font-size: 0.78rem;
-}
-
-.serving-recommendation strong,
-.serving-glass-recommendation strong {
-  color: var(--text-main);
-}
-
 .forecast-button,
 .forecast-details-button,
 .lifecycle-forecast-btn {
@@ -1505,26 +1523,6 @@ body.is-authenticated .ondeck-cog-btn {
 }
 .brew-story-lifecycle h4 {
   margin: 0 0 0.5rem;
-}
-.brew-story-serving-glass {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem;
-  margin: 0 0 0.75rem;
-  padding: 0.65rem 0.75rem;
-  border: 1px solid color-mix(in srgb, var(--accent-color) 45%, var(--border-color));
-  border-radius: 0.6rem;
-  background: color-mix(in srgb, var(--accent-color) 10%, transparent);
-}
-.brew-story-serving-icon {
-  color: var(--accent-color);
-  font-size: 1.2rem;
-  line-height: 1;
-}
-.brew-story-serving-source {
-  color: var(--text-muted);
-  font-size: 0.75rem;
 }
 .brew-story-milestones {
   display: grid;

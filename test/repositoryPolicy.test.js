@@ -122,3 +122,23 @@ test('compact dashboard reserves the dynamic viewport for header, cards, and On 
   assert.match(styles, /body\[data-layout-mode='compact'\] \.tap-grid\s*\{[^}]*height:\s*100%;[^}]*min-height:\s*0;/s);
   assert.match(styles, /\.ondeck-ticker-container\[hidden\]\s*\{[^}]*display:\s*none;/s);
 });
+
+test('cozy landscape uses a shrinkable dynamic-viewport flex chain and preserves card content', () => {
+  const styles = readRepositoryFile('public/styles.css');
+
+  assert.match(
+    styles,
+    /body\[data-layout-mode='cozy'\]\s*\{[^}]*height:\s*100dvh;[^}]*min-height:\s*0;[^}]*overflow:\s*hidden;/s
+  );
+  assert.match(
+    styles,
+    /body\[data-layout-mode='cozy'\] \.main-content\s*\{[^}]*display:\s*flex;[^}]*flex:\s*1 1 0;[^}]*flex-direction:\s*column;[^}]*min-height:\s*0;[^}]*overflow:\s*hidden;/s
+  );
+  assert.match(styles, /body\[data-layout-mode='cozy'\] \.tap-grid\s*\{[^}]*flex:\s*1 1 0;[^}]*min-height:\s*0;/s);
+  assert.match(styles, /body\[data-layout-mode='cozy'\] \.tap-card\s*\{[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;/s);
+  assert.match(
+    styles,
+    /body\[data-layout-mode='cozy'\] \.app-header,\s*body\[data-layout-mode='cozy'\] \.ondeck-ticker-container\s*\{[^}]*flex:\s*0 0 auto;/s
+  );
+  assert.match(styles, /\.ondeck-ticker-container\[hidden\]\s*\{[^}]*display:\s*none;/s);
+});

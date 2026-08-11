@@ -166,6 +166,7 @@ test('compact-card semantics keep the header, graphic badges, and right-side det
     assert.equal(volumeReadout?.nextElementSibling, forecastReadout);
     assert.equal(directChild(details, '.forecast-readout'), null);
     assert.equal(details.querySelector('.graphic-container'), null);
+    assert.equal(details.querySelector('.serving-glass-readout'), null);
 
     // Existing app live-update selectors remain meaningful after the restructuring.
     assert.ok(card.querySelector('.tap-card-actions .tap-cog-btn'));

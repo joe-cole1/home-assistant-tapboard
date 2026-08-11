@@ -9,7 +9,7 @@ import { HAClient } from './haClient.js';
 import { SSEHub } from './sseHub.js';
 import { calculateKegKickForecast as calculateForecast } from './kegForecast.js';
 import { activeLifecycle, assignKegLifecycle, closeKegLifecycle } from './kegLifecycle.js';
-import { resolveServingGlass } from './servingGlass.js';
+import { fillGraphicForStyle } from './fillGraphic.js';
 import { createBrewfatherClientFromEnv } from './brewfatherClient.js';
 import {
   assignmentOptions,
@@ -425,13 +425,6 @@ function lifecycleEventContext({ tapId, lifecycle, batchId, displayName, display
   };
 }
 
-function servingRecommendationForTap(tap) {
-  const isCustom = Boolean(tap.batch_id?.startsWith('custom:'));
-  const source = isCustom ? customBeverage() : batchSummary(db, tap.batch_id);
-  const style = tap.override_enabled === 1 && tap.override_style ? tap.override_style : source?.style;
-  return resolveServingGlass({ selection: tap.serving_glass || 'auto', style, isCustom });
-}
-
 function activeLifecycleMilestones() {
   return Object.fromEntries(
     db
@@ -467,7 +460,7 @@ function getFullStateSnapshot() {
   const taps = db
     .prepare(
       `
-    SELECT tap_id, enabled, batch_id, graphic, serving_glass, kick_threshold_oz,
+    SELECT tap_id, enabled, batch_id, graphic, kick_threshold_oz,
       override_enabled, override_name,
       override_style, override_abv, override_ibu, override_og, override_fg,
       override_srm, override_description, badge_low_keg, badge_fresh,
@@ -475,8 +468,7 @@ function getFullStateSnapshot() {
     FROM taps ORDER BY tap_id ASC
   `
     )
-    .all()
-    .map((tap) => ({ ...tap, serving_recommendation: servingRecommendationForTap(tap) }));
+    .all();
   const assignedIds = [...new Set(taps.map((tap) => tap.batch_id).filter((id) => id && !id.startsWith('custom:')))];
   const batches = assignedIds.map((batchId) => batchSummary(db, batchId)).filter(Boolean);
   const onDeckBatches = settings.show_ondeck ? onDeckBatchesForPublic().filter((batch) => batch.visible) : [];
@@ -488,7 +480,7 @@ function getFullStateSnapshot() {
   }
 
   return {
-    schemaVersion: 7,
+    schemaVersion: 8,
     settings,
     taps,
     batches,
@@ -666,12 +658,7 @@ const server = http.createServer(async (req, res) => {
       const storyTap =
         storyTapId === null
           ? null
-          : db
-              .prepare(
-                `SELECT tap_id, batch_id, override_enabled, override_style, serving_glass
-                 FROM taps WHERE tap_id=? AND batch_id=?`
-              )
-              .get(storyTapId, batchId);
+          : db.prepare('SELECT tap_id, batch_id FROM taps WHERE tap_id=? AND batch_id=?').get(storyTapId, batchId);
       if (storyTapId !== null && !storyTap) throw new ValidationError('Tap does not have this batch assigned');
       const story = buildBrewStory({
         db,
@@ -679,9 +666,6 @@ const server = http.createServer(async (req, res) => {
         window,
         tapStates: haClient.getPublicTapStates(),
         forecastForTap: calculateKegKickForecast,
-        servingGlass: storyTap
-          ? servingRecommendationForTap(storyTap)
-          : resolveServingGlass({ selection: 'auto', style: batchSummary(db, batchId)?.style, isCustom: false }),
         includeHiddenSensory: authorized
       });
       if (!story) sendError(res, 404, 'Brew story not found');
@@ -969,9 +953,12 @@ const server = http.createServer(async (req, res) => {
         if (shouldEnable !== null) addTapUpdate('enabled', shouldEnable);
         if (body.batch_option !== undefined) addTapUpdate('batch_id', extractedBatchId);
         if (body.batch_option !== undefined || lifecycleChanges) addTapUpdate('on_tap_at', onTapAt);
+        const assignedBatchGraphic =
+          body.batch_option !== undefined && extractedBatchId && !extractedBatchId.startsWith('custom:')
+            ? fillGraphicForStyle(batchSummary(db, extractedBatchId)?.style)
+            : null;
         const directColumns = {
-          graphic: body.graphic,
-          serving_glass: body.serving_glass,
+          graphic: body.graphic === undefined ? (assignedBatchGraphic ?? undefined) : body.graphic,
           kick_threshold_oz: body.kick_threshold_oz,
           override_enabled: body.override_enabled === undefined ? undefined : body.override_enabled ? 1 : 0,
           override_name: body.override_name,

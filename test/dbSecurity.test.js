@@ -244,7 +244,7 @@ test('production startup automatically backs up and migrates an older supported 
     TAPBOARD_EXPECT_EXISTING_DATA: 'true'
   });
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /Verified tapboard-\d{8}T\d{9}Z\.db before schema 0 -> 8/);
+  assert.match(result.stdout, /Verified tapboard-\d{8}T\d{9}Z\.db before schema 0 -> 9/);
 
   const backups = backupFiles(backupDir);
   assert.equal(backups.length, 1);
