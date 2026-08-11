@@ -558,7 +558,7 @@ export function onDeckBatches(db, { limit = MAX_PUBLIC_BATCHES } = {}) {
       `
       SELECT b.batch_id, b.batch_name, b.recipe_name, b.style, b.status,
         COALESCE(b.measured_abv, b.estimated_abv, b.abv) AS abv,
-        b.brew_date, b.image_url, p.visible
+        b.brew_date, b.image_url, p.visible, p.target_tap_id AS target_tap_id
       FROM batches b
       JOIN brewfather_ondeck_preferences p ON p.batch_id=b.batch_id
       WHERE b.present=1
@@ -566,7 +566,7 @@ export function onDeckBatches(db, { limit = MAX_PUBLIC_BATCHES } = {}) {
     `
     )
     .all(boundedLimit)
-    .map((row) => ({ ...row, visible: row.visible === 1 }));
+    .map((row) => ({ ...row, visible: row.visible === 1, target_tap_id: row.target_tap_id ? Number(row.target_tap_id) : null }));
 }
 
 export function detailCandidates(db, changedIds = [], limit = 12) {

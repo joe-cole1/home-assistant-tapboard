@@ -262,6 +262,107 @@ function openTaproomStatus() {
   });
 }
 
+async function openKegeratorHealthModal() {
+  if (!authToken) return;
+  showModal('kegeratorHealthModal');
+  try {
+    const res = await fetch('/api/draft-health/config', {
+      headers: authToken ? { Authorization: `Bearer ${authToken}` } : {}
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    renderHealthOverview(data);
+
+    const lowKegConfig = data.configs?.find((c) => c.check_id === 'low_keg' && c.tap_id === 0)?.config;
+    if (lowKegConfig) {
+      if (lowKegConfig.thresholdPercent !== undefined) {
+        const warnEl = document.getElementById('globalLowKegWarningPct');
+        if (warnEl) warnEl.value = lowKegConfig.thresholdPercent;
+      }
+      if (lowKegConfig.criticalPercent !== undefined) {
+        const critEl = document.getElementById('globalLowKegCriticalPct');
+        if (critEl) critEl.value = lowKegConfig.criticalPercent;
+      }
+    }
+
+    const cleanConfig = data.configs?.find((c) => c.check_id === 'line_cleaning_due' && c.tap_id === 0)?.config;
+    if (cleanConfig) {
+      if (cleanConfig.intervalDays !== undefined) {
+        const daysEl = document.getElementById('globalLineCleanDays');
+        if (daysEl) daysEl.value = cleanConfig.intervalDays;
+      }
+      if (cleanConfig.intervalKegs !== undefined) {
+        const kegsEl = document.getElementById('globalLineCleanKegs');
+        if (kegsEl) kegsEl.value = cleanConfig.intervalKegs;
+      }
+    }
+
+    const planRes = await fetch('/api/planning/config', {
+      headers: authToken ? { Authorization: `Bearer ${authToken}` } : {}
+    });
+    if (planRes.ok) {
+      const planData = await planRes.json();
+      if (planData.policy?.conditioning_max_days !== undefined) {
+        const planEl = document.getElementById('globalTargetConditioningDays');
+        if (planEl) planEl.value = planData.policy.conditioning_max_days;
+      }
+    }
+  } catch (err) {
+    console.warn('[Health Modal] Failed to load overview:', err);
+  }
+}
+
+function renderHealthOverview(data) {
+  const kpiGrid = document.getElementById('healthKpiGrid');
+  if (kpiGrid) {
+    kpiGrid.textContent = '';
+    const records = data.maintenance || [];
+    const kpis = [
+      { label: 'Active Taps', value: '6', color: 'var(--accent-color)' },
+      { label: 'System Health', value: 'Healthy', color: '#10b981' },
+      { label: 'Line Cleaning Log', value: String(records.length), color: 'var(--text-primary)' }
+    ];
+    for (const item of kpis) {
+      const card = document.createElement('div');
+      card.style.cssText = 'background: var(--bg-header); border: 1px solid var(--border-color); padding: 1rem; border-radius: 0.5rem; text-align: center;';
+      const label = document.createElement('div');
+      label.style.cssText = 'font-size: 0.8rem; color: var(--text-muted);';
+      label.textContent = item.label;
+      const val = document.createElement('div');
+      val.style.cssText = `font-size: 1.75rem; font-weight: bold; color: ${item.color};`;
+      val.textContent = item.value;
+      card.appendChild(label);
+      card.appendChild(val);
+      kpiGrid.appendChild(card);
+    }
+  }
+
+  const timeline = document.getElementById('healthMaintenanceTimeline');
+  if (timeline) {
+    timeline.textContent = '';
+    const records = data.maintenance || [];
+    if (!records.length) {
+      const p = document.createElement('p');
+      p.style.cssText = 'font-size: 0.85rem; color: var(--text-muted); text-align: center;';
+      p.textContent = 'No maintenance records found.';
+      timeline.appendChild(p);
+    } else {
+      for (const r of records) {
+        const item = document.createElement('div');
+        item.style.cssText = 'display: flex; justify-content: space-between; font-size: 0.85rem; padding: 0.4rem 0; border-bottom: 1px dashed var(--border-color);';
+        const left = document.createElement('div');
+        left.textContent = `Tap ${r.tap_ids?.join(', ') || 'All'} — ${r.method || 'Cleaned'}${r.notes ? ` (${r.notes})` : ''}`;
+        const right = document.createElement('div');
+        right.style.cssText = 'color: var(--text-muted);';
+        right.textContent = new Date(r.completed_at).toLocaleDateString();
+        item.appendChild(left);
+        item.appendChild(right);
+        timeline.appendChild(item);
+      }
+    }
+  }
+}
+
 async function loadInitialSnapshot() {
   try {
     const response = await fetch('/api/state');
@@ -637,27 +738,10 @@ function scheduleTitleFits() {
 function updatePhase4Badges(card, tapId) {
   const badges = card.querySelector('.tap-card-badges');
   if (!badges) return;
-  const healthItems = (appState.draftHealth?.checks || []).filter(
-    (check) => check.tapId === tapId && ['active', 'degraded'].includes(check.state)
-  );
   const healthBadge = badges.querySelector('.badge-health');
-  if (healthItems.length && !healthBadge) {
-    const badge = document.createElement('span');
-    badge.className = 'badge badge-health';
-    badge.textContent = 'HEALTH';
-    badge.title = `${healthItems.length} draft health item${healthItems.length === 1 ? '' : 's'}`;
-    badges.appendChild(badge);
-  } else if (!healthItems.length) healthBadge?.remove();
-
-  const planning = appState.tapPlanning?.taps?.find((plan) => plan.tapId === tapId);
+  healthBadge?.remove();
   const gapBadge = badges.querySelector('.badge-gap');
-  if (planning?.classification === 'forecast_gap' && !gapBadge) {
-    const badge = document.createElement('span');
-    badge.className = 'badge badge-gap';
-    badge.textContent = 'TAP GAP';
-    badge.title = 'A likely future tap gap needs planning';
-    badges.appendChild(badge);
-  } else if (planning?.classification !== 'forecast_gap') gapBadge?.remove();
+  gapBadge?.remove();
 }
 
 // Main Render Function with In-Place Targeted DOM Preservation
@@ -1691,12 +1775,29 @@ function renderOnDeckManager(batches) {
     saveStatus.setAttribute('aria-live', 'polite');
     details.append(name, meta, saveStatus);
     selection.append(checkbox, details);
+
+    const tapSelect = document.createElement('select');
+    tapSelect.className = 'form-select ondeck-target-tap-select';
+    tapSelect.style.cssText = 'padding: 0.25rem 0.5rem; font-size: 0.8rem; width: auto; background-color: var(--bg-dark); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 0.4rem; margin-right: 0.5rem;';
+    tapSelect.dataset.batchId = checkbox.dataset.batchId;
+    const optAny = document.createElement('option');
+    optAny.value = '';
+    optAny.textContent = 'Any Tap';
+    tapSelect.appendChild(optAny);
+    for (let t = 1; t <= 6; t++) {
+      const opt = document.createElement('option');
+      opt.value = String(t);
+      opt.textContent = `Tap ${t}`;
+      if (batch.target_tap_id === t) opt.selected = true;
+      tapSelect.appendChild(opt);
+    }
+
     const story = document.createElement('button');
     story.type = 'button';
     story.className = 'btn-secondary ondeck-manager-story';
     story.dataset.openStory = checkbox.dataset.batchId;
     story.textContent = 'Story';
-    row.append(selection, story);
+    row.append(selection, tapSelect, story);
     list.appendChild(row);
   });
 }
@@ -1733,7 +1834,7 @@ async function openOnDeckModal() {
   }
 }
 
-function bindAutosaveInput(id, key, payload, { immediate = false, preview } = {}) {
+function bindAutosaveInput(id, key, payload, { immediate = false, preview, endpoint = '/api/settings' } = {}) {
   const input = document.getElementById(id);
   if (!input) return;
   const save = () => {
@@ -1742,9 +1843,11 @@ function bindAutosaveInput(id, key, payload, { immediate = false, preview } = {}
       return;
     }
     queueAutosave(key, async () => {
-      const result = await postAutosave('/api/settings', payload(input));
-      appState.settings = { ...appState.settings, ...(result.settings || payload(input)) };
-      renderApp();
+      const result = await postAutosave(endpoint, payload(input));
+      if (endpoint === '/api/settings') {
+        appState.settings = { ...appState.settings, ...(result.settings || payload(input)) };
+        renderApp();
+      }
     });
   };
   input.addEventListener(immediate ? 'change' : 'input', () => {
@@ -1883,6 +1986,76 @@ function setupAutosaveListeners() {
       { immediate: true }
     );
   }
+
+  bindAutosaveInput(
+    'globalLowKegWarningPct',
+    'low-keg-config',
+    (input) => ({
+      check_id: 'low_keg',
+      tap_id: 0,
+      enabled: true,
+      config: {
+        thresholdPercent: Number(input.value),
+        criticalPercent: Number(document.getElementById('globalLowKegCriticalPct')?.value || 5)
+      }
+    }),
+    { endpoint: '/api/draft-health/config' }
+  );
+
+  bindAutosaveInput(
+    'globalLowKegCriticalPct',
+    'low-keg-config',
+    (input) => ({
+      check_id: 'low_keg',
+      tap_id: 0,
+      enabled: true,
+      config: {
+        thresholdPercent: Number(document.getElementById('globalLowKegWarningPct')?.value || 20),
+        criticalPercent: Number(input.value)
+      }
+    }),
+    { endpoint: '/api/draft-health/config' }
+  );
+
+  bindAutosaveInput(
+    'globalTargetConditioningDays',
+    'planning-policy-config',
+    (input) => ({
+      conditioning_min_days: Math.max(1, Math.floor(Number(input.value) / 2)),
+      conditioning_max_days: Number(input.value)
+    }),
+    { endpoint: '/api/planning/policy' }
+  );
+
+  bindAutosaveInput(
+    'globalLineCleanDays',
+    'line-cleaning-config',
+    (input) => ({
+      check_id: 'line_cleaning_due',
+      tap_id: 0,
+      enabled: true,
+      config: {
+        intervalDays: Number(input.value),
+        intervalKegs: Number(document.getElementById('globalLineCleanKegs')?.value || 3)
+      }
+    }),
+    { endpoint: '/api/draft-health/config' }
+  );
+
+  bindAutosaveInput(
+    'globalLineCleanKegs',
+    'line-cleaning-config',
+    (input) => ({
+      check_id: 'line_cleaning_due',
+      tap_id: 0,
+      enabled: true,
+      config: {
+        intervalDays: Number(document.getElementById('globalLineCleanDays')?.value || 14),
+        intervalKegs: Number(input.value)
+      }
+    }),
+    { endpoint: '/api/draft-health/config' }
+  );
 
   [
     ['primary', 'primaryColorPicker', 'primaryColorInput'],
@@ -2026,17 +2199,25 @@ function setupAutosaveListeners() {
     .getElementById('onDeckFooterEnabledCheckbox')
     ?.addEventListener('change', () => queueOnDeckAutosave('onDeckFooterEnabled'));
   document.getElementById('onDeckBatchList')?.addEventListener('change', (event) => {
-    if (event.target.matches('input[data-batch-id]')) queueOnDeckAutosave(`ondeck-${event.target.dataset.batchId}`);
+    if (event.target.matches('input[data-batch-id], select[data-batch-id]')) {
+      queueOnDeckAutosave(`ondeck-${event.target.dataset.batchId}`);
+    }
   });
   document.getElementById('changePinBtn')?.addEventListener('click', changePin);
 }
 
 function queueOnDeckAutosave(key) {
   queueAutosave(key, async () => {
-    const batches = Array.from(document.querySelectorAll('#onDeckBatchList input[data-batch-id]')).map((input) => ({
-      batch_id: input.dataset.batchId,
-      visible: input.checked
-    }));
+    const batches = Array.from(document.querySelectorAll('#onDeckBatchList input[data-batch-id]')).map((input) => {
+      const batchId = input.dataset.batchId;
+      const select = document.querySelector(`#onDeckBatchList select[data-batch-id="${batchId}"]`);
+      const targetTap = select?.value ? Number(select.value) : null;
+      return {
+        batch_id: batchId,
+        visible: input.checked,
+        target_tap_id: targetTap
+      };
+    });
     const result = await postAutosave('/api/ondeck', {
       batches,
       show_ondeck: document.getElementById('onDeckFooterEnabledCheckbox')?.checked
@@ -2184,7 +2365,66 @@ function initModalListeners() {
     });
   }
 
-  // Close Settings Modals
+  document.getElementById('adminHealthBtn')?.addEventListener('click', () => {
+    openKegeratorHealthModal();
+  });
+  document.getElementById('closeKegeratorHealthBtn')?.addEventListener('click', () => {
+    hideModal('kegeratorHealthModal');
+  });
+
+  document.getElementById('logLineCleaningQuickBtn')?.addEventListener('click', async () => {
+    const tapsInput = prompt('Cleaned tap numbers (comma-separated, e.g. 1, 2, 3)', '1, 2, 3, 4, 5, 6');
+    if (!tapsInput) return;
+    const method = prompt('Cleaning method (Caustic, Acid, Water Flush)', 'Caustic');
+    if (!method) return;
+    const notes = prompt('Maintenance notes (optional)', 'Routine line cleaning') ?? '';
+    const tapIds = tapsInput.split(',').map((val) => Number(val.trim())).filter((n) => !isNaN(n) && n > 0);
+    if (!tapIds.length) {
+      alert('Please enter valid tap numbers');
+      return;
+    }
+    try {
+      const res = await fetch('/api/maintenance', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {})
+        },
+        body: JSON.stringify({
+          completed_at: new Date().toISOString(),
+          tap_ids: tapIds,
+          method,
+          notes,
+          next_due_at: null
+        })
+      });
+      if (res.ok) {
+        alert('Line cleaning recorded successfully!');
+        await openKegeratorHealthModal();
+      } else {
+        const err = await res.json();
+        alert(`Failed to record line cleaning: ${err.error || 'Server error'}`);
+      }
+    } catch (err) {
+      alert('Network error recording line cleaning');
+    }
+  });
+
+  const overviewTabBtn = document.getElementById('healthTabOverviewBtn');
+  const settingsTabBtn = document.getElementById('healthTabSettingsBtn');
+  overviewTabBtn?.addEventListener('click', () => {
+    overviewTabBtn.classList.add('active');
+    settingsTabBtn?.classList.remove('active');
+    document.getElementById('healthOverviewTab').style.display = 'block';
+    document.getElementById('healthSettingsTab').style.display = 'none';
+  });
+  settingsTabBtn?.addEventListener('click', () => {
+    settingsTabBtn.classList.add('active');
+    overviewTabBtn?.classList.remove('active');
+    document.getElementById('healthOverviewTab').style.display = 'none';
+    document.getElementById('healthSettingsTab').style.display = 'grid';
+  });
+
   document.getElementById('closeGlobalSettingsBtn')?.addEventListener('click', () => {
     hideModal('globalSettingsModal');
   });

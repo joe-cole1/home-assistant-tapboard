@@ -213,11 +213,15 @@ export function validateOndeck(body) {
   const seen = new Set();
   const batches = body.batches.map((entry) => {
     assertObject(entry);
-    rejectUnknown(entry, new Set(['batch_id', 'visible']));
+    rejectUnknown(entry, new Set(['batch_id', 'visible', 'target_tap_id']));
     const batch_id = text(entry.batch_id, 256, { required: true, allowEmpty: false });
     if (seen.has(batch_id)) throw new ValidationError();
     seen.add(batch_id);
-    return { batch_id, visible: boolean(entry.visible) };
+    let target_tap_id = null;
+    if (entry.target_tap_id !== undefined && entry.target_tap_id !== null && entry.target_tap_id !== '') {
+      target_tap_id = tapId(entry.target_tap_id);
+    }
+    return { batch_id, visible: boolean(entry.visible), target_tap_id };
   });
   return {
     batches,

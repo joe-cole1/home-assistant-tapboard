@@ -59,7 +59,7 @@ test('healthcheck is lightweight and public HTTP/SSE snapshots use schema v9 hea
     const stateResponse = await fetch(`${baseUrl}/api/state`);
     const stateText = await stateResponse.text();
     const snapshot = JSON.parse(stateText);
-    assert.equal(snapshot.schemaVersion, 9);
+    assert.equal(snapshot.schemaVersion, 11);
     assert.deepEqual(snapshot.settings, {
       id: 1,
       theme: 'modern_dark',
@@ -92,7 +92,7 @@ test('healthcheck is lightweight and public HTTP/SSE snapshots use schema v9 hea
     assert.deepEqual(Object.keys(snapshot.tapStates), ['1', '2', '3', '4', '5', '6']);
     assert.deepEqual(snapshot.lifecycleMilestones, {});
     assert.equal(snapshot.draftHealth.schemaVersion, 1);
-    assert.equal(snapshot.draftHealth.checks.length, 30);
+    assert.equal(snapshot.draftHealth.checks.length, 42);
     assert.equal(snapshot.tapPlanning.schemaVersion, 1);
     assert.equal(snapshot.tapPlanning.taps.length, snapshot.taps.filter((tap) => tap.enabled === 1).length);
     assert.equal(Object.hasOwn(snapshot, 'haStates'), false);
@@ -115,7 +115,7 @@ test('healthcheck is lightweight and public HTTP/SSE snapshots use schema v9 hea
     }
     controller.abort();
     assert.match(eventText, /event: snapshot\n/);
-    assert.match(eventText, /"schemaVersion":9/);
+    assert.match(eventText, /"schemaVersion":11/);
     assert.match(eventText, /"tapStates":/);
     assert.match(eventText, /"draftHealth":/);
     assert.match(eventText, /"tapPlanning":/);

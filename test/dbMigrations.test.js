@@ -37,7 +37,8 @@ test('migrates legacy pour rows without changing IDs, volumes, or timestamps', (
       { version: 7, name: 'serving-glass-recommendations' },
       { version: 8, name: 'lifecycle-experiences' },
       { version: 9, name: 'remove-serving-glass-recommendations' },
-      { version: 10, name: 'draft-health-and-tap-planning' }
+      { version: 10, name: 'draft-health-and-tap-planning' },
+      { version: 11, name: 'health-redesign-v11' }
     ]);
     const settingColumns = db.prepare("SELECT name, dflt_value FROM pragma_table_info('settings')").all();
     assert.deepEqual(
@@ -77,6 +78,7 @@ test('migrates legacy pour rows without changing IDs, volumes, or timestamps', (
     assert.deepEqual(db.prepare("SELECT name FROM pragma_table_info('brewfather_ondeck_preferences')").all(), [
       { name: 'batch_id' },
       { name: 'visible' },
+      { name: 'target_tap_id' },
       { name: 'first_seen_at' },
       { name: 'updated_at' }
     ]);
@@ -306,6 +308,18 @@ test('a failed v5 migration rolls back its schema and version atomically', () =>
     assert.equal(db.prepare("SELECT 1 FROM sqlite_master WHERE name='brewfather_batch_details'").get(), undefined);
     assert.equal(db.prepare('SELECT COUNT(*) AS count FROM brewfather_sync_state').get().count, 0);
     assert.equal(db.prepare('SELECT COUNT(*) AS count FROM schema_migrations WHERE version=5').get().count, 0);
+  } finally {
+    db.close();
+  }
+});
+
+test('v11 migration is idempotent when run twice consecutively', () => {
+  const db = new Database(':memory:');
+  try {
+    migrateDatabase(db);
+    assert.equal(db.pragma('user_version', { simple: true }), 11);
+    assert.doesNotThrow(() => migrateDatabase(db));
+    assert.equal(db.pragma('user_version', { simple: true }), 11);
   } finally {
     db.close();
   }

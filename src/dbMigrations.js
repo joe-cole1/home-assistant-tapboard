@@ -1,5 +1,5 @@
 const BASE_SCHEMA_VERSION = 1;
-export const SCHEMA_VERSION = 10;
+export const SCHEMA_VERSION = 11;
 
 function tableExists(db, name) {
   return Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name));
@@ -56,6 +56,10 @@ function migrateBaseSchema(db) {
       token TEXT PRIMARY KEY, created_at TEXT DEFAULT CURRENT_TIMESTAMP, expires_at TEXT NOT NULL
     );
   `);
+  addColumnIfMissing(db, 'taps', 'batch_id', 'TEXT');
+  addColumnIfMissing(db, 'taps', 'graphic', "TEXT DEFAULT 'corny_keg'");
+  addColumnIfMissing(db, 'taps', 'on_tap_at', 'TEXT');
+  addColumnIfMissing(db, 'taps', 'kick_threshold_oz', 'REAL');
   requireColumns(db, 'settings', ['id', 'admin_pin_hash']);
   requireColumns(db, 'taps', ['tap_id']);
   requireColumns(db, 'batches', ['batch_id']);
@@ -222,9 +226,13 @@ function migrateTapboardContentSchema(db) {
     CREATE TABLE IF NOT EXISTS brewfather_ondeck_preferences (
       batch_id TEXT PRIMARY KEY,
       visible INTEGER NOT NULL CHECK(visible IN (0, 1)),
+      target_tap_id INTEGER DEFAULT NULL,
       first_seen_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
       updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
     );
+  `);
+  addColumnIfMissing(db, 'brewfather_ondeck_preferences', 'target_tap_id', 'INTEGER DEFAULT NULL');
+  db.exec(`
     CREATE TABLE IF NOT EXISTS custom_beverage (
       id TEXT PRIMARY KEY CHECK(id = 'custom:topo_chico'),
       name TEXT NOT NULL,
@@ -561,6 +569,38 @@ function migrateDraftHealthAndPlanningSchema(db) {
   }
 }
 
+function migrateHealthRedesignV11(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS health_incident_actions (
+      action_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      check_id TEXT NOT NULL,
+      tap_id INTEGER DEFAULT 0,
+      incident_id TEXT NOT NULL,
+      action_type TEXT NOT NULL CHECK(action_type IN ('acknowledge', 'snooze', 'clear', 'redact')),
+      snooze_until TEXT,
+      action_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+      operator_notes TEXT DEFAULT '',
+      FOREIGN KEY(tap_id) REFERENCES taps(tap_id) ON UPDATE RESTRICT ON DELETE SET NULL
+    );
+  `);
+
+  if (!columns(db, 'health_check_state').has('current_incident_id')) {
+    db.exec(`ALTER TABLE health_check_state ADD COLUMN current_incident_id TEXT;`);
+  }
+
+  if (!columns(db, 'maintenance_records').has('cleaning_type')) {
+    db.exec(`ALTER TABLE maintenance_records ADD COLUMN cleaning_type TEXT NOT NULL DEFAULT 'Caustic';`);
+  }
+  if (!columns(db, 'maintenance_records').has('style_swap')) {
+    db.exec(`ALTER TABLE maintenance_records ADD COLUMN style_swap INTEGER NOT NULL DEFAULT 0;`);
+  }
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_mrt_tap_completed ON maintenance_record_taps(tap_id, maintenance_id);
+    CREATE INDEX IF NOT EXISTS idx_kl_tap_started ON keg_lifecycles(tap_id, started_at);
+  `);
+}
+
 function validateLatestSchema(db) {
   for (const [table, required] of Object.entries({
     settings: ['id', 'admin_pin_hash', 'admin_pin_initialized'],
@@ -628,6 +668,7 @@ function validateLatestSchema(db) {
     tap_capabilities: ['tap_id', 'capability'],
     batch_capability_requirements: ['batch_id', 'capability'],
     forecast_gap_state: ['tap_id', 'lifecycle_id', 'state', 'signature', 'last_event_at'],
+    health_incident_actions: ['action_id', 'check_id', 'tap_id', 'incident_id', 'action_type', 'snooze_until', 'action_at', 'operator_notes'],
     schema_migrations: ['version', 'name', 'applied_at']
   })) {
     if (!tableExists(db, table)) throw new Error(`Incompatible schema version ${SCHEMA_VERSION}: missing ${table}`);
@@ -786,6 +827,14 @@ export function migrateDatabase(db) {
           'draft-health-and-tap-planning'
         );
         db.pragma('user_version = 10');
+      }
+      if (version < 11) {
+        migrateHealthRedesignV11(db);
+        db.prepare('INSERT OR IGNORE INTO schema_migrations (version, name) VALUES (?, ?)').run(
+          11,
+          'health-redesign-v11'
+        );
+        db.pragma('user_version = 11');
       }
       // Validation is part of the migration transaction. A malformed legacy
       // table or missing constraint must roll back schema changes, ledger rows,
