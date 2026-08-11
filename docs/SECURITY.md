@@ -65,4 +65,4 @@ Home Assistant outbound events are built from per-type allowlists. They never ac
 
 ## Database safety
 
-Production expects existing data and refuses an empty named volume. An older schema is accepted only after a verified restore has written the one-time migration approval marker tied to the source schema, table counts, and database digest. Use the supported maintenance commands described in [Database operations](DATABASE-OPERATIONS.md); never copy only a live SQLite main database file while WAL writes may be active.
+Production expects existing data and refuses an empty named volume. On startup, a database with an older supported schema is backed up and verified in the independent backup volume before its ordered migration runs transactionally. A backup-verification or migration failure aborts startup. A database from a future schema version is rejected rather than downgraded. Use the supported maintenance commands described in [Database operations](DATABASE-OPERATIONS.md); never copy only a live SQLite main database file while WAL writes may be active.
