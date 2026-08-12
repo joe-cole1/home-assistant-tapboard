@@ -2277,7 +2277,7 @@ body.is-authenticated .ondeck-cog-btn {
 .settings-disclosure-content {
   display: grid;
   gap: 1rem;
-  padding: 0.25rem 1.15rem 1.25rem;
+  padding: 0.75rem 1.15rem 1.25rem;
   border-top: 1px solid color-mix(in srgb, var(--secondary-color) 25%, transparent);
 }
 
