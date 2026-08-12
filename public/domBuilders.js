@@ -56,6 +56,10 @@ export function buildTapCardContent({
   header.appendChild(actions);
   fragment.appendChild(header);
 
+  const forecastLines = (forecastText || '').split('\n').filter(Boolean);
+  const tappedDateText = forecastLines[0] || '';
+  const daysLeftText = forecastLines.length > 1 ? forecastLines[1] : '';
+
   const details = element('div', 'tap-card-content');
   const styleName = element('div', 'beer-style', style);
   styleName.title = String(style || '');
@@ -63,9 +67,9 @@ export function buildTapCardContent({
 
   const badges = element('div', 'tap-card-badges');
   if (lowThreshold !== null && lowThreshold !== undefined && fillPercent <= lowThreshold) {
-    badges.appendChild(element('span', 'badge badge-low', 'LOW KEG!'));
+    badges.appendChild(element('span', 'badge badge-low', 'Low'));
   }
-  if (fresh) badges.appendChild(element('span', 'badge badge-fresh', 'NEW'));
+  if (fresh) badges.appendChild(element('span', 'badge badge-fresh', 'New'));
   if (kicked) badges.appendChild(element('span', 'badge badge-kicked', 'KICKED'));
   if (volumeStatus === 'assumed_full') {
     const sensorBadge = element('span', 'badge badge-sensor-problem', '!');
@@ -75,24 +79,31 @@ export function buildTapCardContent({
   }
   details.appendChild(badges);
 
-  if (description) details.appendChild(element('p', 'beer-description', description));
+  const tappedDateEl = element('div', 'tapped-date-line text-muted', tappedDateText);
+  tappedDateEl.hidden = !tappedDateText;
+  details.appendChild(tappedDateEl);
+
   const metrics = element('div', 'metrics-row');
   metrics.append(metric('ABV', abv), metric('IBU', ibu), metric('OG', og), metric('FG', fg));
   details.appendChild(metrics);
+
+  if (description) details.appendChild(element('p', 'beer-description', description));
+
   const graphicColumn = element('div', 'tap-card-graphic-column');
   const graphic = element('div', 'graphic-container');
   const graphicWrapper = element('div', 'tap-graphic-wrapper');
   graphicWrapper.id = `graphic-tap-${tapId}`;
   const volumeReadout = element('div', 'volume-readout', volumeReadoutText);
-  const forecast = element('button', 'forecast-readout lifecycle-forecast-btn', forecastText);
-  forecast.type = 'button';
-  forecast.setAttribute('aria-haspopup', 'dialog');
-  forecast.setAttribute(
-    'aria-label',
-    forecastText ? `${forecastText}. Open forecast details.` : 'Forecast unavailable'
+
+  const daysLeftEl = element('div', 'days-left-line text-muted', daysLeftText);
+  daysLeftEl.hidden = !daysLeftText;
+
+  graphic.append(
+    graphicWrapper,
+    element('div', 'floating-pour-badge', '🍺 NOW POURING'),
+    volumeReadout,
+    daysLeftEl
   );
-  forecast.hidden = !forecastText;
-  graphic.append(graphicWrapper, element('div', 'floating-pour-badge', '🍺 NOW POURING'), volumeReadout, forecast);
   const statusText =
     volumeStatus === 'stale' ? 'Stale measurement' : volumeStatus === 'unavailable' ? 'Unavailable' : '';
   const status = element('div', `volume-status volume-status-${volumeStatus}`, statusText);
