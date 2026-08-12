@@ -168,23 +168,23 @@ function pctToBounds(pct, topY, bottomY) {
 }
 
 const SERVING_GLASS_SHAPES = {
-  nonic_pint: { path: 'M 48 45 L 112 45 L 116 90 L 108 225 L 52 225 L 44 90 Z', rim: 45, bottom: 225 },
-  shaker_pint: { path: 'M 44 45 L 116 45 L 108 225 L 52 225 Z', rim: 45, bottom: 225 },
-  pilsner_flute: { path: 'M 58 30 L 102 30 L 112 220 L 48 220 Z', rim: 30, bottom: 220 },
-  stange: { path: 'M 55 40 L 105 40 L 105 220 L 55 220 Z', rim: 40, bottom: 220 },
+  nonic_pint: { path: 'M 38 45 L 122 45 L 126 90 L 108 225 L 52 225 L 34 90 Z', rim: 45, bottom: 225 },
+  shaker_pint: { path: 'M 36 45 L 124 45 L 108 225 L 52 225 Z', rim: 45, bottom: 225 },
+  pilsner_flute: { path: 'M 54 45 L 106 45 L 112 220 L 48 220 Z', rim: 45, bottom: 220 },
+  stange: { path: 'M 52 45 L 108 45 L 108 220 L 52 220 Z', rim: 45, bottom: 220 },
   goblet: { path: 'M 48 45 C 42 95, 48 145, 80 170 C 112 145, 118 95, 112 45 Z', rim: 45, bottom: 170, stem: true },
   teku: { path: 'M 55 45 L 105 45 L 115 120 L 80 170 L 45 120 Z', rim: 45, bottom: 170, stem: true },
   thistle: { path: 'M 58 45 C 45 95, 48 145, 80 170 C 112 145, 115 95, 102 45 Z', rim: 45, bottom: 170, stem: true },
-  ipa_glass: { path: 'M 50 35 L 110 35 L 105 105 L 115 220 L 45 220 L 55 105 Z', rim: 35, bottom: 220 },
+  ipa_glass: { path: 'M 48 45 L 112 45 L 105 105 L 115 220 L 45 220 L 55 105 Z', rim: 45, bottom: 220 },
   tasting_glass: {
-    path: 'M 58 55 L 102 55 C 118 110, 110 150, 80 165 C 50 150, 42 110, 58 55 Z',
-    rim: 55,
+    path: 'M 56 45 L 104 45 C 118 105, 110 150, 80 165 C 50 150, 42 105, 56 45 Z',
+    rim: 45,
     bottom: 165,
     stem: true
   },
   stemmed_lager: {
-    path: 'M 52 40 L 108 40 L 105 125 C 102 155, 92 170, 80 175 C 68 170, 58 155, 55 125 Z',
-    rim: 40,
+    path: 'M 50 45 L 110 45 L 105 125 C 102 155, 92 170, 80 175 C 68 170, 58 155, 55 125 Z',
+    rim: 45,
     bottom: 175,
     stem: true
   }
@@ -198,12 +198,16 @@ function renderServingGlass(style, bounds, color, isPouring, id) {
   const fill = isWater ? 'rgba(224, 247, 250, 0.25)' : color;
 
   return `
-    <svg viewBox="0 0 160 260" data-bottom-y="${bottomY}" data-top-rim-y="${topY}" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" role="img" aria-label="Beer serving glass" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 25 160 200" preserveAspectRatio="xMidYMax meet" data-bottom-y="${bottomY}" data-top-rim-y="${topY}" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" role="img" aria-label="Beer serving glass" xmlns="http://www.w3.org/2000/svg">
       <defs><clipPath id="${style}Clip_${id}"><path d="${shape.path}" /></clipPath></defs>
-      ${shape.stem ? `<ellipse cx="80" cy="235" rx="34" ry="7" fill="#E2E8F0" opacity="0.4" stroke="#CBD5E0" stroke-width="1.5" /><rect x="76" y="${bottomY}" width="8" height="${235 - bottomY}" fill="#E2E8F0" opacity="0.4" />` : ''}
+      ${shape.stem ? `<ellipse cx="80" cy="220" rx="34" ry="7" fill="#E2E8F0" opacity="0.4" stroke="#CBD5E0" stroke-width="1.5" /><rect x="76" y="${bottomY}" width="8" height="${220 - bottomY}" fill="#E2E8F0" opacity="0.4" />` : ''}
       <path d="${shape.path}" fill="#1A202C" opacity="0.6" stroke="#CBD5E0" stroke-width="2" />
+      <!-- Pour Stream Group (Flows from y=0 down into glass rim, unclipped) -->
+      <g class="pour-stream-group ${isPouring ? 'is-active' : ''}">
+        <rect x="76" y="0" width="8" height="${bottomY}" fill="${isWater ? 'rgba(224, 247, 250, 0.85)' : color}" rx="4" class="liquid-pour-stream-bar" />
+        <rect x="80" y="0" width="4" height="${bottomY}" fill="rgba(0,0,0,0.22)" rx="2" />
+      </g>
       <g clip-path="url(#${style}Clip_${id})">
-        <g class="pour-stream-group ${isPouring ? 'is-active' : ''}"><rect x="76" y="0" width="8" height="230" fill="${isWater ? 'rgba(224, 247, 250, 0.85)' : color}" rx="4" class="liquid-pour-stream-bar" /></g>
         <rect x="25" y="${liquidY}" width="110" height="${bottomY - liquidY + 5}" fill="${fill}" opacity="0.9" class="beer-liquid-rect" />
         <rect x="80" y="${liquidY}" width="55" height="${bottomY - liquidY + 5}" fill="rgba(0, 0, 0, 0.22)" class="beer-liquid-shadow" />
         ${renderCarbonationBubbles(48, 112, bottomY - 5, liquidY, 6)}
@@ -227,7 +231,7 @@ function renderCornyKeg(pct, color, isPouring, id) {
   const fillStyle = isWater ? `fill="rgba(224, 247, 250, 0.22)"` : `fill="url(#liquidGrad_${id})"`;
 
   return `
-    <svg viewBox="0 12 160 238" data-bottom-y="220" data-top-rim-y="65" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" role="img" aria-label="Beer serving vessel" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 25 160 205" preserveAspectRatio="xMidYMax meet" data-bottom-y="220" data-top-rim-y="65" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" role="img" aria-label="Beer serving vessel" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <linearGradient id="kegBodyGrad_${id}" x1="0%" y1="0%" x2="100%" y2="0%">
           <stop offset="0%" stop-color="#4A5568" />
@@ -248,21 +252,24 @@ function renderCornyKeg(pct, color, isPouring, id) {
             : ''
         }
         <clipPath id="kegLiquidClip_${id}">
-          <rect x="35" y="45" width="90" height="175" rx="6" />
+          <rect x="44" y="55" width="72" height="165" rx="6" />
         </clipPath>
       </defs>
 
-      <!-- Keg Handle & Top Body -->
-      <path d="M 38 20 C 38 12, 122 12, 122 20 L 125 50 C 125 55, 35 55, 35 50 Z" fill="#1A202C" />
-      <rect x="52" y="24" width="22" height="14" rx="4" fill="#000000" opacity="0.6" />
-      <rect x="86" y="24" width="22" height="14" rx="4" fill="#000000" opacity="0.6" />
-      <circle cx="80" cy="38" r="4" fill="#A0AEC0" />
+      <!-- Keg Handle & Top Collar -->
+      <path d="M 45 32 C 45 24, 115 24, 115 32 L 117 55 C 117 60, 43 60, 43 55 Z" fill="#1A202C" />
+      <rect x="54" y="36" width="18" height="12" rx="3" fill="#000000" opacity="0.6" />
+      <rect x="88" y="36" width="18" height="12" rx="3" fill="#000000" opacity="0.6" />
+      <circle cx="80" cy="48" r="3" fill="#A0AEC0" />
 
-      <!-- Keg Main Stainless Steel Body -->
-      <rect x="32" y="52" width="96" height="175" rx="14" fill="url(#kegBodyGrad_${id})" stroke="#2D3748" stroke-width="2" />
+      <!-- Keg Main Stainless Steel Body (Original full size) -->
+      <rect x="41" y="58" width="78" height="152" rx="12" fill="url(#kegBodyGrad_${id})" stroke="#2D3748" stroke-width="2" />
+      
+      <!-- Keg Bottom Black Rubber Base Boot -->
+      <path d="M 39 205 L 121 205 L 123 220 C 123 223, 37 223, 37 220 Z" fill="#1A202C" />
       
       <!-- Transparent Window for Liquid Level -->
-      <rect x="35" y="65" width="90" height="155" rx="6" fill="#1A202C" opacity="0.75" />
+      <rect x="44" y="70" width="72" height="132" rx="6" fill="#1A202C" opacity="0.75" />
 
       <!-- Liquid Fill with Two-Tone SRM Split & Clipped Foam Head -->
       <g clip-path="url(#kegLiquidClip_${id})">
@@ -271,21 +278,21 @@ function renderCornyKeg(pct, color, isPouring, id) {
           <rect x="76" y="0" width="8" height="230" fill="${isWater ? 'rgba(224, 247, 250, 0.85)' : color}" rx="4" class="liquid-pour-stream-bar" />
           <rect x="80" y="0" width="4" height="230" fill="rgba(0,0,0,0.22)" rx="2" />
         </g>
-        <rect x="30" y="${liquidY}" width="100" height="${220 - liquidY}" ${fillStyle} class="beer-liquid-rect" />
+        <rect x="40" y="${liquidY}" width="80" height="${220 - liquidY}" ${fillStyle} class="beer-liquid-rect" />
         <!-- Two-Tone Darker SRM Right-Half Overlay -->
-        <rect x="80" y="${liquidY}" width="50" height="${220 - liquidY}" fill="rgba(0, 0, 0, 0.22)" class="beer-liquid-shadow" />
-        ${renderCarbonationBubbles(38, 122, 218, liquidY, 6)}
+        <rect x="80" y="${liquidY}" width="40" height="${220 - liquidY}" fill="rgba(0, 0, 0, 0.22)" class="beer-liquid-shadow" />
+        ${renderCarbonationBubbles(46, 114, 215, liquidY, 6)}
         ${
           !isWater
             ? `
           <!-- Puffy Cloud Foam Head (Clipped to Keg Walls) -->
           <g class="beer-cloud-foam" data-base-y="${liquidY}">
-            <rect x="30" y="${liquidY - 8}" width="100" height="16" fill="${foamColor}" opacity="0.9" />
-            <circle cx="48" cy="${liquidY - 5}" r="12" fill="${foamColor}" />
-            <circle cx="68" cy="${liquidY - 8}" r="15" fill="${foamColor}" />
-            <circle cx="88" cy="${liquidY - 7}" r="14" fill="${foamColor}" />
-            <circle cx="108" cy="${liquidY - 5}" r="11" fill="${foamColor}" />
-            <circle cx="74" cy="${liquidY - 9}" r="10" fill="#FFFFFF" opacity="0.5" />
+            <rect x="40" y="${liquidY - 8}" width="80" height="16" fill="${foamColor}" opacity="0.9" />
+            <circle cx="52" cy="${liquidY - 5}" r="10" fill="${foamColor}" />
+            <circle cx="68" cy="${liquidY - 8}" r="13" fill="${foamColor}" />
+            <circle cx="86" cy="${liquidY - 7}" r="13" fill="${foamColor}" />
+            <circle cx="102" cy="${liquidY - 5}" r="10" fill="${foamColor}" />
+            <circle cx="74" cy="${liquidY - 9}" r="8" fill="#FFFFFF" opacity="0.5" />
           </g>
         `
             : ''
@@ -311,7 +318,7 @@ function renderPintGlass(pct, color, isPouring, id) {
   const fillStyle = isWater ? `fill="rgba(224, 247, 250, 0.25)"` : `fill="${color}" opacity="0.9"`;
 
   return `
-    <svg viewBox="0 35 160 215" data-bottom-y="225" data-top-rim-y="45" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" role="img" aria-label="Beer serving vessel" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 25 160 205" preserveAspectRatio="xMidYMax meet" data-bottom-y="225" data-top-rim-y="45" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" role="img" aria-label="Beer serving vessel" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <clipPath id="pintGlassClip_${id}">
           <polygon points="30,0 130,0 114,45 104,225 56,225 46,45" />
@@ -372,7 +379,7 @@ function renderWheatGlass(pct, color, isPouring, id) {
   const fillStyle = isWater ? `fill="rgba(224, 247, 250, 0.25)"` : `fill="url(#wheatLiquid_${id})"`;
 
   return `
-    <svg viewBox="0 25 160 200" data-bottom-y="220" data-top-rim-y="30" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" role="img" aria-label="Beer serving vessel" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 25 160 205" preserveAspectRatio="xMidYMax meet" data-bottom-y="220" data-top-rim-y="30" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" role="img" aria-label="Beer serving vessel" xmlns="http://www.w3.org/2000/svg">
       <defs>
         ${
           !isWater
@@ -441,7 +448,7 @@ function renderTulipGlass(pct, color, isPouring, id) {
   const fillStyle = isWater ? `fill="rgba(224, 247, 250, 0.25)"` : `fill="${color}" opacity="0.9"`;
 
   return `
-    <svg viewBox="0 35 160 210" data-bottom-y="170" data-top-rim-y="40" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" role="img" aria-label="Beer serving vessel" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 25 160 205" preserveAspectRatio="xMidYMax meet" data-bottom-y="170" data-top-rim-y="40" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" role="img" aria-label="Beer serving vessel" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <clipPath id="tulipGlassClip_${id}">
           <path d="M 30 0 L 130 0 L 108 40 C 120 90, 130 150, 80 170 C 30 150, 40 90, 52 40 Z" />
@@ -502,7 +509,7 @@ function renderMug(pct, color, isPouring, id) {
   const fillStyle = isWater ? `fill="rgba(224, 247, 250, 0.25)"` : `fill="${color}" opacity="0.9"`;
 
   return `
-    <svg viewBox="0 40 160 185" data-bottom-y="215" data-top-rim-y="55" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" role="img" aria-label="Beer serving vessel" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 25 160 205" preserveAspectRatio="xMidYMax meet" data-bottom-y="215" data-top-rim-y="55" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" role="img" aria-label="Beer serving vessel" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <clipPath id="mugGlassClip_${id}">
           <path d="M 30 0 L 130 0 L 118 55 L 118 215 C 118 220, 42 220, 42 215 L 42 55 Z" />
@@ -560,7 +567,7 @@ function renderStoutGlass(pct, color, isPouring, id) {
   const fillStyle = isWater ? `fill="rgba(224, 247, 250, 0.25)"` : `fill="${color}" opacity="0.9"`;
 
   return `
-    <svg viewBox="0 35 160 210" data-bottom-y="220" data-top-rim-y="45" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" role="img" aria-label="Beer serving vessel" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 25 160 205" preserveAspectRatio="xMidYMax meet" data-bottom-y="220" data-top-rim-y="45" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" role="img" aria-label="Beer serving vessel" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <clipPath id="stoutGlassClip_${id}">
           <path d="M 30 0 L 130 0 L 108 45 C 116 80, 120 120, 102 175 L 104 220 Q 80 225, 56 220 L 58 175 C 40 120, 44 80, 52 45 Z" />
@@ -618,7 +625,7 @@ function renderSnifter(pct, color, isPouring, id) {
   const fillStyle = isWater ? `fill="rgba(224, 247, 250, 0.25)"` : `fill="${color}" opacity="0.9"`;
 
   return `
-    <svg viewBox="0 45 160 200" data-bottom-y="175" data-top-rim-y="55" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" role="img" aria-label="Beer serving vessel" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 25 160 205" preserveAspectRatio="xMidYMax meet" data-bottom-y="175" data-top-rim-y="55" class="tap-graphic-svg ${isPouring ? 'is-pouring' : ''}" role="img" aria-label="Beer serving vessel" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <clipPath id="snifterGlassClip_${id}">
           <path d="M 30 0 L 130 0 L 102 55 C 128 105, 128 155, 80 175 C 32 155, 32 105, 58 55 Z" />
