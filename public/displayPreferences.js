@@ -207,7 +207,7 @@
     const body = documentRef.body;
     const root = documentRef.documentElement;
     body.setAttribute('data-theme', theme);
-    body.setAttribute('data-layout-mode', settings.layout_mode === 'compact' ? 'compact' : 'cozy');
+    body.setAttribute('data-layout-mode', settings.layout_mode === 'cozy' ? 'cozy' : 'compact');
     root.style.setProperty('color-scheme', theme === 'light_minimal' ? 'light' : 'dark');
 
     if (TITLE_FONTS.has(settings.font_title)) {
