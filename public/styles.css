@@ -404,22 +404,31 @@ body {
 
   body[data-layout-mode='cozy'] .graphic-container {
     height: 100%;
+    min-height: 0;
+    justify-content: flex-start;
+    align-items: center;
   }
 
   body[data-layout-mode='cozy'] .tap-graphic-wrapper {
     flex: 1 1 0;
     width: 100%;
-    max-width: 180px;
     height: auto;
     min-height: 0;
-    max-height: 260px;
-    aspect-ratio: 160 / 260;
+    max-height: 225px;
+    max-width: 200px;
+    aspect-ratio: 160 / 200;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
   }
 
   body[data-layout-mode='cozy'] .tap-graphic-wrapper > svg {
     display: block;
     width: 100%;
-    height: 100%;
+    height: auto;
+    max-height: 100%;
+    object-fit: contain;
+    overflow: visible;
   }
 
   body[data-layout-mode='compact'] .tap-grid {
@@ -522,6 +531,8 @@ body {
   box-shadow: var(--card-shadow);
   position: relative;
   overflow: hidden;
+  container-type: inline-size;
+  container-name: tapcard;
   transition:
     box-shadow 0.4s ease,
     border-color 0.4s ease,
@@ -769,11 +780,11 @@ body.is-authenticated .tap-cog-btn {
 }
 
 .badge {
-  font-size: 0.75rem;
-  font-weight: 800;
-  padding: 0.3rem 0.7rem;
+  font-size: clamp(0.72rem, 3.2cqw, 1.15rem);
+  padding: clamp(0.22rem, 1cqw, 0.45rem) clamp(0.5rem, 2.2cqw, 0.95rem);
   border-radius: 0.5rem;
   letter-spacing: 0.03em;
+  font-weight: 800;
 }
 
 .badge-low {
@@ -1348,12 +1359,15 @@ body.is-authenticated .ondeck-cog-btn {
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: flex-start;
     min-width: 0;
     width: 100%;
+    height: 100%;
+    min-height: 0;
   }
 
   body[data-layout-mode='compact'] .beer-title {
-    font-size: 1rem;
+    font-size: clamp(0.9rem, 4cqw, 1.25rem);
     min-width: 0;
     margin: 0;
   }
@@ -1363,66 +1377,88 @@ body.is-authenticated .ondeck-cog-btn {
     grid-row: 2;
     min-width: 0;
     align-self: start;
+    display: flex;
+    flex-direction: column;
   }
 
   body[data-layout-mode='compact'] .beer-style {
-    font-size: 0.72rem;
-    margin-bottom: 0.45rem;
+    font-size: clamp(0.68rem, 2.8cqw, 0.9rem);
+    margin-bottom: 0.35rem;
+  }
+
+  body[data-layout-mode='compact'] .tapped-date-line {
+    font-size: clamp(0.62rem, 2.5cqw, 0.85rem);
+    margin-bottom: 0.35rem;
   }
 
   body[data-layout-mode='compact'] .beer-description {
     display: -webkit-box;
     margin: 0.35rem 0 0;
     overflow: hidden;
-    font-size: 0.6rem;
-    line-height: 1.25;
+    font-size: clamp(0.58rem, 2.4cqw, 0.82rem);
+    line-height: 1.3;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
   }
 
   body[data-layout-mode='compact'] .metrics-row {
-    padding: 0.4rem 0;
-    margin-bottom: 0;
+    padding: 0.3rem 0;
+    margin-bottom: 0.35rem;
   }
   body[data-layout-mode='compact'] .metric-label {
-    font-size: 0.52rem;
+    font-size: clamp(0.5rem, 2cqw, 0.72rem);
   }
   body[data-layout-mode='compact'] .metric-value {
-    font-size: 0.72rem;
+    font-size: clamp(0.68rem, 2.8cqw, 0.95rem);
   }
   body[data-layout-mode='compact'] .graphic-container {
     padding: 0;
     width: 100%;
+    height: 100%;
+    min-height: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: flex-start;
   }
 
   body[data-layout-mode='compact'] .tap-card-badges {
     min-height: 1rem;
-    gap: 0.25rem;
-    margin-bottom: 0.2rem;
+    gap: 0.3rem;
+    margin-bottom: 0.35rem;
     position: static;
   }
 
+  body[data-layout-mode='compact'] .badge {
+    font-size: clamp(0.65rem, 2.5cqw, 0.85rem);
+    padding: 0.2rem 0.5rem;
+  }
+
   body[data-layout-mode='compact'] .tap-graphic-wrapper {
+    flex: 0 1 auto;
     width: 100%;
-    max-width: 100%;
+    max-width: 200px;
     height: auto;
-    max-height: 145px;
-    aspect-ratio: 160 / 260;
+    max-height: 225px;
+    min-height: 0;
+    aspect-ratio: 160 / 200;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
   }
   body[data-layout-mode='compact'] .tap-graphic-wrapper > svg {
     width: 100%;
-    height: 100%;
+    height: auto;
     display: block;
+    overflow: visible;
   }
   body[data-layout-mode='compact'] .volume-readout {
-    margin-top: 0;
-    font-size: 0.68rem;
+    margin-top: 0.3rem;
+    font-size: clamp(0.8rem, 4.2cqw, 1.35rem);
+  }
+  body[data-layout-mode='compact'] .days-left-line {
+    margin-top: 0.1rem;
+    font-size: clamp(0.55rem, 2.5cqw, 0.8rem);
   }
   body[data-layout-mode='compact'] .volume-status {
     font-size: 0.58rem;
