@@ -405,7 +405,7 @@ body {
   body[data-layout-mode='cozy'] .graphic-container {
     height: 100%;
     min-height: 0;
-    justify-content: space-between;
+    justify-content: center;
   }
 
   body[data-layout-mode='cozy'] .tap-graphic-wrapper {
@@ -778,11 +778,11 @@ body.is-authenticated .tap-cog-btn {
 }
 
 .badge {
-  font-size: 0.75rem;
-  font-weight: 800;
-  padding: 0.3rem 0.7rem;
+  font-size: clamp(0.72rem, 3.2cqw, 1.15rem);
+  padding: clamp(0.22rem, 1cqw, 0.45rem) clamp(0.5rem, 2.2cqw, 0.95rem);
   border-radius: 0.5rem;
   letter-spacing: 0.03em;
+  font-weight: 800;
 }
 
 .badge-low {
@@ -1357,7 +1357,7 @@ body.is-authenticated .ondeck-cog-btn {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
     min-width: 0;
     width: 100%;
     height: 100%;
@@ -1416,7 +1416,7 @@ body.is-authenticated .ondeck-cog-btn {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
   }
 
   body[data-layout-mode='compact'] .tap-card-badges {
@@ -1424,6 +1424,11 @@ body.is-authenticated .ondeck-cog-btn {
     gap: 0.25rem;
     margin-bottom: 0.2rem;
     position: static;
+  }
+
+  body[data-layout-mode='compact'] .badge {
+    font-size: clamp(0.68rem, 3.2cqw, 1.1rem);
+    padding: clamp(0.2rem, 0.9cqw, 0.4rem) clamp(0.45rem, 2cqw, 0.85rem);
   }
 
   body[data-layout-mode='compact'] .tap-graphic-wrapper {
