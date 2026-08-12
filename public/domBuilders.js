@@ -57,8 +57,19 @@ export function buildTapCardContent({
   fragment.appendChild(header);
 
   const forecastLines = (forecastText || '').split('\n').filter(Boolean);
-  const tappedDateText = forecastLines[0] || '';
-  const daysLeftText = forecastLines.length > 1 ? forecastLines[1] : '';
+  let tappedDateText = '';
+  let daysLeftText = '';
+  if (forecastLines.length >= 2) {
+    tappedDateText = forecastLines[0];
+    daysLeftText = forecastLines[1];
+  } else if (forecastLines.length === 1) {
+    const line = forecastLines[0];
+    if (line.includes('left') || line.includes('remaining') || line.includes('Depleted') || line.includes('days')) {
+      daysLeftText = line;
+    } else {
+      tappedDateText = line;
+    }
+  }
 
   const details = element('div', 'tap-card-content');
   const styleName = element('div', 'beer-style', style);
@@ -98,12 +109,7 @@ export function buildTapCardContent({
   const daysLeftEl = element('div', 'days-left-line text-muted', daysLeftText);
   daysLeftEl.hidden = !daysLeftText;
 
-  graphic.append(
-    graphicWrapper,
-    element('div', 'floating-pour-badge', '🍺 NOW POURING'),
-    volumeReadout,
-    daysLeftEl
-  );
+  graphic.append(graphicWrapper, element('div', 'floating-pour-badge', '🍺 NOW POURING'), volumeReadout, daysLeftEl);
   const statusText =
     volumeStatus === 'stale' ? 'Stale measurement' : volumeStatus === 'unavailable' ? 'Unavailable' : '';
   const status = element('div', `volume-status volume-status-${volumeStatus}`, statusText);

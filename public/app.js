@@ -1096,8 +1096,19 @@ function updateTapCard(card, tap) {
   }
 
   const forecastLines = (forecastText || '').split('\n').filter(Boolean);
-  const tappedDateText = forecastLines[0] || '';
-  const daysLeftText = forecastLines.length > 1 ? forecastLines[1] : '';
+  let tappedDateText = '';
+  let daysLeftText = '';
+  if (forecastLines.length >= 2) {
+    tappedDateText = forecastLines[0];
+    daysLeftText = forecastLines[1];
+  } else if (forecastLines.length === 1) {
+    const line = forecastLines[0];
+    if (line.includes('left') || line.includes('remaining') || line.includes('Depleted') || line.includes('days')) {
+      daysLeftText = line;
+    } else {
+      tappedDateText = line;
+    }
+  }
 
   const tappedDateEl = card.querySelector('.tapped-date-line');
   if (tappedDateEl) {
