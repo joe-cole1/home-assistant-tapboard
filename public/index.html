@@ -31,7 +31,7 @@
           aria-live="polite"
           aria-label="Connection status: Live"
         >
-          <span style="font-size: 1.1rem" aria-hidden="true">⚡</span>
+          <span id="liveStatusIcon" style="font-size: 1.1rem" aria-hidden="true">⚡</span>
           <span id="headerClock">Live</span>
         </div>
         <button class="btn-icon" id="settingsBtn" title="Global Settings">⚙️</button>
@@ -166,6 +166,7 @@
             >
               <span>🩺</span> Kegerator Health
             </button>
+            <button id="adminLogoutBtn" class="btn-secondary" type="button">Logout</button>
             <button
               class="btn-icon"
               id="closeGlobalSettingsBtn"

@@ -538,14 +538,17 @@ function initSSE() {
 function updateClockStatus(text) {
   const clockEl = document.getElementById('headerClock');
   const statusBadge = document.getElementById('liveStatusBadge');
+  const iconEl = document.getElementById('liveStatusIcon');
   if (clockEl) {
     if (text.includes('Disconnected') || text.includes('Reconnecting') || text.includes('Offline')) {
       clockEl.textContent = 'Disconnected';
       clockEl.style.color = '#ffa726';
+      if (iconEl) iconEl.textContent = '⚠️';
       statusBadge?.setAttribute('aria-label', 'Connection status: Disconnected');
     } else {
       clockEl.textContent = 'Live';
       clockEl.style.color = '';
+      if (iconEl) iconEl.textContent = '⚡';
       statusBadge?.setAttribute('aria-label', 'Connection status: Live');
     }
   }
@@ -2370,6 +2373,13 @@ function initModalListeners() {
 
   document.getElementById('adminHealthBtn')?.addEventListener('click', () => {
     openKegeratorHealthModal();
+  });
+  document.getElementById('adminLogoutBtn')?.addEventListener('click', () => {
+    authToken = null;
+    sessionStorage.removeItem('tapboard_token');
+    updateAuthUI();
+    hideModal('globalSettingsModal');
+    showToast('Logged out of admin settings.');
   });
   document.getElementById('closeKegeratorHealthBtn')?.addEventListener('click', () => {
     hideModal('kegeratorHealthModal');

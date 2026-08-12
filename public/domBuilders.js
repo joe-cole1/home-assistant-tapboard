@@ -60,11 +60,7 @@ export function buildTapCardContent({
   const styleName = element('div', 'beer-style', style);
   styleName.title = String(style || '');
   details.appendChild(styleName);
-  if (description) details.appendChild(element('p', 'beer-description', description));
-  const metrics = element('div', 'metrics-row');
-  metrics.append(metric('ABV', abv), metric('IBU', ibu), metric('OG', og), metric('FG', fg));
-  details.appendChild(metrics);
-  const graphicColumn = element('div', 'tap-card-graphic-column');
+
   const badges = element('div', 'tap-card-badges');
   if (lowThreshold !== null && lowThreshold !== undefined && fillPercent <= lowThreshold) {
     badges.appendChild(element('span', 'badge badge-low', 'LOW KEG!'));
@@ -77,7 +73,13 @@ export function buildTapCardContent({
     sensorBadge.setAttribute('aria-label', 'Sensor problem');
     badges.appendChild(sensorBadge);
   }
-  graphicColumn.appendChild(badges);
+  details.appendChild(badges);
+
+  if (description) details.appendChild(element('p', 'beer-description', description));
+  const metrics = element('div', 'metrics-row');
+  metrics.append(metric('ABV', abv), metric('IBU', ibu), metric('OG', og), metric('FG', fg));
+  details.appendChild(metrics);
+  const graphicColumn = element('div', 'tap-card-graphic-column');
   const graphic = element('div', 'graphic-container');
   const graphicWrapper = element('div', 'tap-graphic-wrapper');
   graphicWrapper.id = `graphic-tap-${tapId}`;

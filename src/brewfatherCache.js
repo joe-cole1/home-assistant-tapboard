@@ -561,7 +561,7 @@ export function onDeckBatches(db, { limit = MAX_PUBLIC_BATCHES } = {}) {
         b.brew_date, b.image_url, p.visible, p.target_tap_id AS target_tap_id
       FROM batches b
       JOIN brewfather_ondeck_preferences p ON p.batch_id=b.batch_id
-      WHERE b.present=1
+      WHERE b.present=1 AND b.status IN ('Fermenting', 'Conditioning')
       ORDER BY b.brew_date DESC, b.batch_id LIMIT ?
     `
     )

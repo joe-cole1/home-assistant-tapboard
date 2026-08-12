@@ -310,7 +310,7 @@ body {
   min-width: 0;
   gap: 0.5rem;
   background: rgba(255, 255, 255, 0.08);
-  padding: 0.4rem 0.9rem;
+  padding: 0.25rem 0.65rem;
   border-radius: 9999px;
   font-size: 0.9rem;
   color: var(--text-muted);
@@ -730,14 +730,16 @@ body {
 
 .tap-card-badges {
   display: flex;
-  justify-content: center;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem;
-  position: absolute;
-  top: 1.75rem;
-  right: 4.5rem;
-  max-width: calc(100% - 8rem);
-  z-index: 2;
+  gap: 0.35rem;
+  margin-top: 0.2rem;
+  margin-bottom: 0.45rem;
+  position: static;
+}
+
+.tap-card-badges:empty {
+  display: none;
 }
 
 .tap-number-badge {
@@ -1470,7 +1472,7 @@ body.is-authenticated .ondeck-cog-btn {
   box-sizing: border-box;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: pre-line;
 }
 
 .forecast-button:hover,
