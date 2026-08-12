@@ -1330,40 +1330,51 @@ body.is-authenticated .ondeck-cog-btn {
   body[data-layout-mode='compact'] .tap-card {
     min-height: 0;
     padding: 0.55rem 0.7rem;
-    display: grid;
-    grid-template-columns: 35% minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
-    column-gap: 0.65rem;
-    row-gap: 0.35rem;
-    align-items: start;
+    display: grid !important;
+    grid-template-columns: 35% minmax(0, 1fr) !important;
+    grid-template-rows: auto minmax(0, 1fr) !important;
+    column-gap: 0.65rem !important;
+    row-gap: 0.35rem !important;
+    align-items: start !important;
   }
 
   body[data-layout-mode='compact'] .tap-card-header {
-    grid-column: 1 / -1;
-    display: grid;
-    grid-template-columns: min-content minmax(0, 1fr) min-content;
-    gap: 0.45rem;
-    align-items: center;
-    margin-bottom: 0.2rem;
+    grid-column: 1 / -1 !important;
+    grid-row: 1 !important;
+    display: grid !important;
+    grid-template-columns: min-content minmax(0, 1fr) min-content !important;
+    gap: 0.45rem !important;
+    align-items: center !important;
+    margin-bottom: 0.2rem !important;
   }
 
   body[data-layout-mode='compact'] .tap-card-header .beer-title {
-    order: initial;
-    flex: initial;
-    margin: 0;
+    order: initial !important;
+    flex: initial !important;
+    margin: 0 !important;
   }
 
   body[data-layout-mode='compact'] .tap-card-graphic-column {
-    grid-column: 1;
-    grid-row: 2;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
-    min-width: 0;
-    width: 100%;
-    height: 100%;
-    min-height: 0;
+    grid-column: 1 !important;
+    grid-row: 2 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    align-self: start !important;
+    min-width: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+  }
+
+  body[data-layout-mode='compact'] .tap-card-content {
+    grid-column: 2 !important;
+    grid-row: 2 !important;
+    align-self: start !important;
+    margin-top: 0 !important;
   }
 
   body[data-layout-mode='compact'] .beer-title {
@@ -1419,7 +1430,8 @@ body.is-authenticated .ondeck-cog-btn {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: flex-start;
+    justify-content: flex-start !important;
+    margin-top: 0 !important;
   }
 
   body[data-layout-mode='compact'] .tap-card-badges {
@@ -1435,22 +1447,25 @@ body.is-authenticated .ondeck-cog-btn {
   }
 
   body[data-layout-mode='compact'] .tap-graphic-wrapper {
-    flex: 0 1 auto;
-    width: 100%;
-    max-width: 200px;
-    height: auto;
-    max-height: 225px;
-    min-height: 0;
-    aspect-ratio: 160 / 200;
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
+    flex: 1 1 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 100% !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    display: flex !important;
+    align-items: flex-start !important;
+    justify-content: center !important;
+    margin: 0 !important;
   }
+
   body[data-layout-mode='compact'] .tap-graphic-wrapper > svg {
-    width: 100%;
-    height: auto;
-    display: block;
-    overflow: visible;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
+    display: block !important;
+    overflow: hidden !important;
   }
   body[data-layout-mode='compact'] .volume-readout {
     margin-top: 0.3rem;
