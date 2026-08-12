@@ -336,7 +336,9 @@ test('a v11 database missing target_tap_id is repaired on startup', () => {
       ALTER TABLE brewfather_ondeck_preferences_old RENAME TO brewfather_ondeck_preferences;
     `);
     assert.doesNotThrow(() => migrateDatabase(db));
-    assert.ok(db.prepare("SELECT 1 FROM pragma_table_info('brewfather_ondeck_preferences') WHERE name='target_tap_id'").get());
+    assert.ok(
+      db.prepare("SELECT 1 FROM pragma_table_info('brewfather_ondeck_preferences') WHERE name='target_tap_id'").get()
+    );
   } finally {
     db.close();
   }
