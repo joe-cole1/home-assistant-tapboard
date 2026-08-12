@@ -59,7 +59,8 @@ test('Brew Story renders telemetry and partial radar without interpreting remote
           batch: { ...story.batch, recipe_name: hostile },
           sections: { ...story.sections, recipe: { ...story.sections.recipe, notes: hostile } }
         },
-        {}
+        {},
+        { isAdmin: true }
       )
     );
     assert.ok(wrapper.textContent.includes(hostile));
@@ -104,7 +105,7 @@ test('Tap Details starts with the Tapboard chapter and Flavor guidance', () =>
     const headings = Array.from(wrapper.querySelectorAll('.brew-story-section-heading h3'), (heading) =>
       heading.textContent.trim()
     );
-    assert.deepEqual(headings.slice(0, 3), ['Tapboard chapter', 'Flavor guidance', 'Identity']);
+    assert.deepEqual(headings.slice(0, 2), ['Tap Details', 'Flavor guidance']);
   }));
 
 test('public sensory rankings use the five simple bands without exposing numeric detail', () =>
@@ -165,6 +166,7 @@ test('controller loads on demand, switches windows, and suppresses stale respons
       title,
       body,
       status,
+      canEdit: () => true,
       fetchStory(id, windowName, signal) {
         calls.push({ id, windowName, signal });
         return new Promise((resolve) => pending.push(resolve));

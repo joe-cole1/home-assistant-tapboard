@@ -410,7 +410,7 @@ function milestoneList(entry) {
 
 function lifecycleSection(lifecycles) {
   if (!Array.isArray(lifecycles) || !lifecycles.length) return null;
-  const node = section('Tapboard chapter', 'Tapboard lifecycle');
+  const node = section('Tap Details', 'Tapboard lifecycle');
   lifecycles.forEach((entry, index) => {
     const chapter = el('article', 'brew-story-lifecycle');
     chapter.appendChild(
@@ -556,18 +556,18 @@ function sensoryEditor(story, onSave, onError) {
   return node;
 }
 
-export function buildBrewStoryContent(story, fallback = {}, { showSensoryDetails = false } = {}) {
+export function buildBrewStoryContent(story, fallback = {}, { showSensoryDetails = false, isAdmin = false } = {}) {
   const fragment = document.createDocumentFragment();
   const detail = story?.sections || {};
   for (const node of [
     lifecycleSection(story?.tapboard?.lifecycles),
     sensorySection(story?.sensory, showSensoryDetails),
-    identitySection(story, fallback),
-    styleSection(detail.recipe),
+    isAdmin ? identitySection(story, fallback) : null,
+    isAdmin ? styleSection(detail.recipe) : null,
     recipeSection(detail.recipe),
-    measurementsSection(detail.batch, fallback),
+    isAdmin ? measurementsSection(detail.batch, fallback) : null,
     timelineSection(detail.batch?.events),
-    telemetrySection(story),
+    isAdmin ? telemetrySection(story) : null,
     tastingSection(detail.batch?.taste_logs)
   ]) {
     if (node) fragment.appendChild(node);
@@ -580,7 +580,13 @@ export function createBrewStoryController({ dialog, title, body, status, fetchSt
   let requestId = 0;
   let current;
   let activeWindow = '7d';
+  const windowsNav = dialog.querySelector('.brew-story-windows');
   const setStatus = (text, stale = false) => {
+    const isAdmin = canEdit?.() === true;
+    if (!isAdmin) {
+      status.hidden = true;
+      return;
+    }
     status.textContent = text;
     status.hidden = !text;
     status.classList.toggle('is-stale', stale);
@@ -591,6 +597,8 @@ export function createBrewStoryController({ dialog, title, body, status, fetchSt
     controller?.abort();
     controller = new AbortController();
     const id = ++requestId;
+    const isAdmin = canEdit?.() === true;
+    if (windowsNav) windowsNav.hidden = !isAdmin;
     setStatus('Loading Brewfather story…');
     body.replaceChildren(el('p', 'brew-story-loading', 'Loading…'));
     try {
@@ -600,10 +608,9 @@ export function createBrewStoryController({ dialog, title, body, status, fetchSt
       const story = await response.json();
       if (id !== requestId) return;
       title.textContent = story?.batch?.recipe_name || story?.batch?.batch_name || current.title || 'Brew Story';
-      const showSensoryDetails = canEdit?.() === true;
-      const content = buildBrewStoryContent(story, current.fallback, { showSensoryDetails });
+      const content = buildBrewStoryContent(story, current.fallback, { showSensoryDetails: isAdmin, isAdmin });
       body.replaceChildren(content);
-      if (showSensoryDetails && typeof saveSensory === 'function') {
+      if (isAdmin && typeof saveSensory === 'function') {
         const editor = sensoryEditor(
           story,
           async (payload) => {
@@ -629,7 +636,7 @@ export function createBrewStoryController({ dialog, title, body, status, fetchSt
       );
     } catch (error) {
       if (error.name === 'AbortError' || id !== requestId) return;
-      body.replaceChildren(buildBrewStoryContent(null, current.fallback));
+      body.replaceChildren(buildBrewStoryContent(null, current.fallback, { isAdmin }));
       const retry = el('button', 'btn-primary', 'Retry');
       retry.type = 'button';
       retry.addEventListener('click', () => load(windowName));
@@ -642,13 +649,15 @@ export function createBrewStoryController({ dialog, title, body, status, fetchSt
     open(context) {
       current = context;
       title.textContent = context.title || 'Brew Story';
+      const isAdmin = canEdit?.() === true;
+      if (windowsNav) windowsNav.hidden = !isAdmin;
       dialog
         .querySelectorAll('[data-story-window]')
         .forEach((item) => item.setAttribute('aria-pressed', String(item.dataset.storyWindow === '7d')));
       if (!dialog.open) dialog.showModal();
       if (context.batchId) load('7d');
       else {
-        body.replaceChildren(buildBrewStoryContent(null, context.fallback));
+        body.replaceChildren(buildBrewStoryContent(null, context.fallback, { isAdmin }));
         setStatus('Local tap detail — no Brewfather batch is assigned.', true);
       }
     },

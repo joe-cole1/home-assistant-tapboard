@@ -46,9 +46,11 @@ export function createTickerAutoScroller({
       if (next >= limit) {
         next = limit;
         direction = -1;
+        pausedUntil = frameAt + 1_000;
       } else if (next <= 0) {
         next = 0;
         direction = 1;
+        pausedUntil = frameAt + 1_000;
       }
       element.scrollLeft = next;
     }

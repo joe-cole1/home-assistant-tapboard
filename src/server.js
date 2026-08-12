@@ -540,7 +540,7 @@ function planningCandidates(policy = readinessPolicy()) {
        LEFT JOIN brewfather_batch_details d ON d.batch_id=b.batch_id
        LEFT JOIN batch_readiness_overrides o ON o.batch_id=b.batch_id
        JOIN settings s ON s.id=1
-       WHERE b.present=1 AND p.visible=1 AND s.show_ondeck=1
+       WHERE b.present=1 AND p.visible=1 AND s.show_ondeck=1 AND b.status IN ('Fermenting', 'Conditioning')
        ORDER BY b.brew_date DESC, b.batch_id LIMIT 50`
     )
     .all();

@@ -137,7 +137,7 @@ test('compact-card semantics keep the header, graphic badges, and right-side det
     const graphicColumn = card.querySelector('.tap-card-graphic-column');
     const graphic = directChild(graphicColumn, '.graphic-container');
     const details = card.querySelector('.tap-card-content');
-    const badges = directChild(graphicColumn, '.tap-card-badges');
+    const badges = directChild(details, '.tap-card-badges');
 
     assert.ok(header);
     assert.equal(directChild(header, '.tap-number-badge')?.textContent, '4');
