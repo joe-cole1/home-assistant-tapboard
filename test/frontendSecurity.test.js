@@ -105,7 +105,7 @@ test('opted-in fresh badge is rendered with its new label', () =>
         forecastText: 'Calculating'
       })
     );
-    assert.equal(card.querySelector('.badge-fresh')?.textContent, 'NEW');
+    assert.equal(card.querySelector('.badge-fresh')?.textContent, 'New');
     assert.equal(card.textContent.includes('FRESH!'), false);
   }));
 
@@ -150,8 +150,8 @@ test('compact-card semantics keep the header, graphic badges, and right-side det
     assert.equal(directChild(card, '.tap-card-graphic-column'), graphicColumn);
     assert.ok(graphic);
     assert.ok(badges);
-    assert.equal(badges.querySelector('.badge-low')?.textContent, 'LOW KEG!');
-    assert.equal(badges.querySelector('.badge-fresh')?.textContent, 'NEW');
+    assert.equal(badges.querySelector('.badge-low')?.textContent, 'Low');
+    assert.equal(badges.querySelector('.badge-fresh')?.textContent, 'New');
     assert.equal(header.querySelector('.badge'), null);
     assert.ok(directChild(graphic, '.tap-graphic-wrapper'));
 
@@ -161,18 +161,18 @@ test('compact-card semantics keep the header, graphic badges, and right-side det
     assert.equal(directChild(details, '.beer-description')?.textContent, 'Right-side details remain inert.');
     assert.ok(directChild(details, '.metrics-row'));
     const volumeReadout = directChild(graphic, '.volume-readout');
-    const forecastReadout = directChild(graphic, '.forecast-readout');
+    const daysLeftReadout = directChild(graphic, '.days-left-line');
     assert.equal(volumeReadout?.textContent, '10% Remaining');
-    assert.equal(forecastReadout?.textContent, '2 days remaining');
-    assert.equal(volumeReadout?.nextElementSibling, forecastReadout);
-    assert.equal(directChild(details, '.forecast-readout'), null);
+    assert.equal(daysLeftReadout?.textContent, '2 days remaining');
+    assert.equal(volumeReadout?.nextElementSibling, daysLeftReadout);
+    assert.equal(directChild(details, '.days-left-line'), null);
     assert.equal(details.querySelector('.graphic-container'), null);
     assert.equal(details.querySelector('.serving-glass-readout'), null);
 
     // Existing app live-update selectors remain meaningful after the restructuring.
     assert.ok(card.querySelector('.tap-card-actions .tap-cog-btn'));
     assert.ok(card.querySelector('.metrics-row .metric-value'));
-    assert.equal(card.querySelector('.forecast-readout')?.hidden, false);
+    assert.equal(card.querySelector('.days-left-line')?.hidden, false);
   }));
 
 test('forecast block is hidden when no usage forecast is available', () =>
@@ -195,7 +195,8 @@ test('forecast block is hidden when no usage forecast is available', () =>
         forecastText: ''
       })
     );
-    assert.equal(card.querySelector('.forecast-readout')?.hidden, true);
+    assert.equal(card.querySelector('.tapped-date-line')?.hidden, true);
+    assert.equal(card.querySelector('.days-left-line')?.hidden, true);
   }));
 
 test('unavailable and assumed-full states are explicit, and low-keg is fresh-measured only', () =>

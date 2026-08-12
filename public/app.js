@@ -1024,7 +1024,7 @@ function updateTapCard(card, tap) {
   if (description && !descriptionEl) {
     descriptionEl = document.createElement('p');
     descriptionEl.className = 'beer-description';
-    card.querySelector('.metrics-row')?.before(descriptionEl);
+    card.querySelector('.metrics-row')?.after(descriptionEl);
   }
   if (descriptionEl) {
     descriptionEl.textContent = description;
@@ -1038,8 +1038,10 @@ function updateTapCard(card, tap) {
     if (isLow && !lowBadge) {
       lowBadge = document.createElement('span');
       lowBadge.className = 'badge badge-low';
-      lowBadge.textContent = 'LOW KEG!';
+      lowBadge.textContent = 'Low';
       badges.prepend(lowBadge);
+    } else if (isLow && lowBadge) {
+      lowBadge.textContent = 'Low';
     } else if (!isLow && lowBadge) {
       lowBadge.remove();
     }
@@ -1049,8 +1051,10 @@ function updateTapCard(card, tap) {
     if (isNew && !newBadge) {
       newBadge = document.createElement('span');
       newBadge.className = 'badge badge-fresh';
-      newBadge.textContent = 'NEW';
+      newBadge.textContent = 'New';
       badges.appendChild(newBadge);
+    } else if (isNew && newBadge) {
+      newBadge.textContent = 'New';
     } else if (!isNew && newBadge) {
       newBadge.remove();
     }
@@ -1091,11 +1095,31 @@ function updateTapCard(card, tap) {
     volumeStatusEl.className = `volume-status volume-status-${measurement.volumeStatus}`;
   }
 
-  const forecastEl = card.querySelector('.forecast-readout');
-  if (forecastEl) {
-    if (forecastEl.textContent !== forecastText) forecastEl.textContent = forecastText;
-    forecastEl.hidden = !forecastText;
-    forecastEl.setAttribute('aria-label', `${forecastText}. Open forecast details.`);
+  const forecastLines = (forecastText || '').split('\n').filter(Boolean);
+  let tappedDateText = '';
+  let daysLeftText = '';
+  if (forecastLines.length >= 2) {
+    tappedDateText = forecastLines[0];
+    daysLeftText = forecastLines[1];
+  } else if (forecastLines.length === 1) {
+    const line = forecastLines[0];
+    if (line.includes('left') || line.includes('remaining') || line.includes('Depleted') || line.includes('days')) {
+      daysLeftText = line;
+    } else {
+      tappedDateText = line;
+    }
+  }
+
+  const tappedDateEl = card.querySelector('.tapped-date-line');
+  if (tappedDateEl) {
+    if (tappedDateEl.textContent !== tappedDateText) tappedDateEl.textContent = tappedDateText;
+    tappedDateEl.hidden = !tappedDateText;
+  }
+
+  const daysLeftEl = card.querySelector('.days-left-line');
+  if (daysLeftEl) {
+    if (daysLeftEl.textContent !== daysLeftText) daysLeftEl.textContent = daysLeftText;
+    daysLeftEl.hidden = !daysLeftText;
   }
 
   scheduleTitleFits();
