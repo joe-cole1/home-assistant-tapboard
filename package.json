@@ -1,0 +1,33 @@
+{
+  "name": "tapboard",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Tapboard v2 modular monolith",
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "start": "node src/main.ts",
+    "format": "prettier --write --ignore-unknown .",
+    "format:check": "prettier --check --ignore-unknown .",
+    "lint": "eslint . --max-warnings=0",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test",
+    "check:architecture": "bash scripts/check-architecture.sh && python3 scripts/check-reuse-manifest.py",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm run check:architecture && npm run test"
+  },
+  "dependencies": {
+    "better-sqlite3": "13.0.3",
+    "eta": "4.6.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/better-sqlite3": "7.6.13",
+    "@types/node": "24.13.3",
+    "eslint": "10.8.0",
+    "prettier": "3.9.6",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.65.0"
+  }
+}

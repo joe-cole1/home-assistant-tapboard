@@ -1,0 +1,12 @@
+node_modules/
+data/
+backups/
+AGENTS.md
+
+# Frozen architecture records are reviewed as exact repository evidence.
+docs/adr/
+docs/rebuild/ARCHITECTURE-DECISIONS.md
+docs/rebuild/ARCHITECTURE-FREEZE.md
+docs/rebuild/TARGET.md
+docs/rebuild/V1-REUSE-CRITERIA.md
+docs/rebuild/v1-reuse-manifest.json

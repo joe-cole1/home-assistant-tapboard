@@ -1,0 +1,4 @@
+<% layout("/layouts/foundation", { title: it.title }) %>
+<main data-foundation="render-proof">
+  <%~ include("/partials/foundation", { message: it.message }) %>
+</main>
