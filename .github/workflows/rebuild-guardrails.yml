@@ -1,0 +1,42 @@
+name: Rebuild architecture guardrails
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rebuild-guardrails-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  guardrails:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate initialization records and boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/check-architecture.sh
+          python3 scripts/check-reuse-manifest.py
+
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            diff_base="${{ github.event.pull_request.base.sha }}"
+          elif [[ "${{ github.event_name }}" == "push" && "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]]; then
+            diff_base="${{ github.event.before }}"
+          elif git rev-parse HEAD^ >/dev/null 2>&1; then
+            diff_base="$(git rev-parse HEAD^)"
+          else
+            diff_base="$(git hash-object -t tree /dev/null)"
+          fi
+
+          git diff --check "$diff_base" HEAD

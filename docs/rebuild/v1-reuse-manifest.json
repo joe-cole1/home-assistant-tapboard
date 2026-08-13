@@ -1,0 +1,736 @@
+{
+  "schema_version": 1,
+  "generated_from_commit": "429cf07e451b64ca1713655a34ffa5ebd376efae",
+  "preservation_strategy": "This manifest is an architectural-memory index, not a runtime compatibility layer. Every listed v1 source file and test remains recoverable from the main branch and Git history at generated_from_commit; v2 must not import these files through a shadow runtime, dual schema, or legacy route. Ported behavior is reimplemented or moved behind v2-owned interfaces, and tests are carried forward only after their contract is reviewed.",
+  "classifications": [
+    "PORT_LARGELY_AS_IS",
+    "PORT_ALGORITHM_ONLY",
+    "REFERENCE_ONLY",
+    "DO_NOT_REPRODUCE"
+  ],
+  "v2_requirement_values": {
+    "KEEP": "Carry the cohesive behavior/asset into v2 with only interface or boundary adaptation.",
+    "MODIFY": "Carry selected behavior or intent, but reimplement around v2 ownership and contracts.",
+    "REMOVE": "Do not reproduce in the initial v2 rebuild; retain only historical evidence where stated."
+  },
+  "entries": [
+    {
+      "id": "sse-backpressure",
+      "subsystem": "SSE framing, heartbeats, backpressure, and stalled-client bounds",
+      "approximate_size": "1 module, ~135 LOC",
+      "responsibilities": ["Format SSE frames", "Register/remove clients", "Write heartbeats and events", "Bound blocked/stalled consumers"],
+      "coupling": ["Node HTTP request/response streams", "Legacy v1 event names and snapshot payloads"],
+      "source_selectors": [
+        { "path": "src/sseHub.js", "selector": "SSEHub.addClient, publish, publishImmediate, write, heartbeat, removeClient", "concern": "transport framing/backpressure core" }
+      ],
+      "v2_requirement": "KEEP",
+      "source_paths": [
+        { "path": "src/sseHub.js", "git_blob_oid": "d2ba8237dd288c64c433ae766a5dd2c3369e29c4" }
+      ],
+      "classification": "PORT_LARGELY_AS_IS",
+      "evidence_tests": [
+        { "path": "test/sseHub.test.js", "git_blob_oid": "0ad840582ebb18e93e0838a287a1eeeed7589505" }
+      ],
+      "proposed_v2_destination_or_purpose": "A v2 delivery adapter for server-rendered initial state, named feature events, reconnect resync, heartbeats, and bounded per-client output.",
+      "rationale": "The hub is cohesive and its write/heartbeat logic has strong tests for retry guidance, disconnect cleanup, byte ceilings, drain recovery, and stalled consumers. The old module still assumes the v1 event stream and therefore the mechanics are safer to re-express behind the v2 event contract than to import wholesale.",
+      "preservation": "Port the cohesive framing, cleanup, heartbeat, and bounded-buffer core; adapt event names, snapshot authority, and reconnect semantics at the v2 delivery boundary.",
+      "confidence": "high",
+      "risks": ["The core is suitable for direct reuse only after its legacy event/payload adapter is removed.", "Slow-client policy must remain bounded without dropping authoritative resync events."]
+    },
+    {
+      "id": "http-security-mechanics",
+      "subsystem": "HTTP request validation and security mechanics",
+      "approximate_size": "1 module, ~153 LOC",
+      "responsibilities": ["Validate JSON media type and byte limits", "Enforce exact Origin policy", "Apply security headers", "Contain static paths and redact errors"],
+      "coupling": ["Node HTTP headers and URL/path APIs", "Configured public origin"],
+      "v2_requirement": "KEEP",
+      "source_paths": [
+        { "path": "src/httpSecurity.js", "git_blob_oid": "7f9835b87bdc7318555f0d1b7c97af35e9c353f8" }
+      ],
+      "classification": "PORT_LARGELY_AS_IS",
+      "evidence_tests": [
+        { "path": "test/httpSecurity.test.js", "git_blob_oid": "9a79ffb52885bc80fe835094f20542084d3b87f7" },
+        { "path": "test/serverSecurity.test.js", "git_blob_oid": "9c02004311dd95cfab54db32762eda1e69174967" }
+      ],
+      "proposed_v2_destination_or_purpose": "Shared v2 HTTP boundary for strict JSON media type/size checks, exact Origin policy, safe public errors, security headers, and contained static paths.",
+      "rationale": "The module has one clear responsibility, no database or integration ownership, and tests cover malformed bodies, byte limits, origin matching, headers, error redaction, and traversal. These mechanics remain required in v2; only the surrounding handler and session contract change.",
+      "preservation": "Retain the tested limits, allowlists, containment checks, and redacted errors while adapting cookie/CSRF handling and v2 routes.",
+      "confidence": "high",
+      "risks": ["Security headers must be reconciled with the v2 template and cookie policy.", "Do not infer that the old bearer-session implementation is part of this reusable boundary."]
+    },
+    {
+      "id": "fill-glass-geometry-mapping",
+      "subsystem": "Fill Glass graphic catalog, SVG geometry, SRM color, and style mapping",
+      "approximate_size": "2 modules, ~713 LOC",
+      "responsibilities": ["Catalog Fill Glass IDs", "Map styles to graphics", "Render SVG geometry, liquid, foam, and bubbles", "Convert SRM/fallback colors"],
+      "coupling": ["Browser SVG markup and CSS classes", "Brewfather style strings"],
+      "v2_requirement": "KEEP",
+      "source_paths": [
+        { "path": "src/fillGraphic.js", "git_blob_oid": "25e15dd2486dc0e94ce0fc2299182c94084f7315" },
+        { "path": "public/graphics.js", "git_blob_oid": "ac4c2502b4b4eeafcf042283e54bd7298d526a2a" }
+      ],
+      "classification": "PORT_LARGELY_AS_IS",
+      "evidence_tests": [
+        { "path": "test/fillGraphic.test.js", "git_blob_oid": "f7eca7c2c9dadbdfe914b81ca5f9935292cbc354" },
+        { "path": "test/graphicsFoam.test.js", "git_blob_oid": "3d5f1d0567ee4a7cfe495168bf0169de47ab9920" },
+        { "path": "test/frontendSecurity.test.js", "git_blob_oid": "dcc0dca7e4368fbf4d7f26d3b617e59b0ea66fcf" }
+      ],
+      "proposed_v2_destination_or_purpose": "V2 presentation asset package with reviewed glass/keg SVGs, deterministic style-to-graphic mapping, bounded colors, and accessible markup.",
+      "rationale": "The geometry and mapping are valuable visual assets; the mapping module is pure and the renderer has tests for style catalog, foam behavior, hostile values, and SVG identity. Preserve the assets rather than redraw them, but keep them out of domain and HTTP code.",
+      "preservation": "Port the reviewed geometry and mapping data with explicit sanitization, stable IDs, responsive scaling, and accessibility checks; remove unrelated legacy card wiring.",
+      "confidence": "high",
+      "risks": ["The renderer currently generates animation randomness and HTML strings; v2 must retain safe generated markup boundaries.", "Graphic IDs must remain stable when presentation moves to new templates."]
+    },
+    {
+      "id": "theme-tokens",
+      "subsystem": "Theme palettes, typography, accents, and CSS design tokens",
+      "approximate_size": "3 presentation files, ~6,386 LOC",
+      "responsibilities": ["Define palettes, fonts, spacing, and responsive rules", "Apply theme/accent settings", "Provide dashboard/settings markup"],
+      "coupling": ["Large v1 dashboard DOM", "Monolithic app state and modal selectors", "Google Fonts and legacy CSS cascade"],
+      "source_selectors": [
+        { "path": "public/app.js", "selector": "THEME_COLORS, applySettingsPreview, currentThemeColors", "concern": "theme palette/accent intent" },
+        { "path": "public/index.html", "selector": "body[data-theme], stylesheet/font links", "concern": "theme bootstrap and token consumers" }
+      ],
+      "v2_requirement": "MODIFY",
+      "source_paths": [
+        { "path": "public/styles.css", "git_blob_oid": "93590530e3941c4f626ba55fff8917fe2d76f327" },
+        { "path": "public/app.js", "git_blob_oid": "5e50c47f959b094ba148904f92051f2b99d36370" },
+        { "path": "public/index.html", "git_blob_oid": "87f3493489ca29dd865da8739d7a354721eb70dc" }
+      ],
+      "classification": "REFERENCE_ONLY",
+      "evidence_tests": [
+        { "path": "test/settingsUi.test.js", "git_blob_oid": "cbeae3fc879d6481a6fbe88b1b5ec3cabc4f36ef" },
+        { "path": "test/displayPreferences.test.js", "git_blob_oid": "b7916d7808d6c7c31f99520b65ffe359f3d45025" }
+      ],
+      "proposed_v2_destination_or_purpose": "V2 shared CSS design-token system preserving the liked dark/light palettes, fonts, color roles, and accent behavior.",
+      "rationale": "The existing visual language is explicitly valuable, but the stylesheet contains page-era selectors, duplicates, and modal-specific structure. Preserve visual intent and reusable token values as design reference, not the old cascade or page organization.",
+      "preservation": "Inventory palette/font/accent values and responsive lessons; re-author tokens and components in the v2 template system.",
+      "confidence": "medium",
+      "risks": ["Copying the full stylesheet would import dead selectors and conflicting media queries.", "Token names must not become a second settings ownership layer."]
+    },
+    {
+      "id": "pour-detector",
+      "subsystem": "Deterministic pour detection and telemetry arbitration",
+      "approximate_size": "1 module plus fixtures, ~483 LOC",
+      "responsibilities": ["Normalize canonical measurements", "Reject stale/duplicate/implausible samples", "Track baselines and candidates", "Arbitrate one active pour and emit completion/cancel"],
+      "coupling": ["Timer/clock callbacks", "v1 Home Assistant telemetry adapter", "Tap-indexed state"],
+      "v2_requirement": "MODIFY",
+      "source_paths": [
+        { "path": "src/pourDetector.js", "git_blob_oid": "c2f18dcc6438bf4eace6ee1d09db313c5d1f6cbe" },
+        { "path": "test/fixtures/pourTraces.js", "git_blob_oid": "3376504fe29b626f441a5add5892698bf056e9e1" }
+      ],
+      "classification": "PORT_ALGORITHM_ONLY",
+      "evidence_tests": [
+        { "path": "test/pourDetector.test.js", "git_blob_oid": "885676a53139b15f6074759fb0fe915aabd9d9c4" },
+        { "path": "test/haClientEventFlow.test.js", "git_blob_oid": "97da9d41559a2a0036ae2da82b643e3c9da75968" }
+      ],
+      "proposed_v2_destination_or_purpose": "Pure v2 measurement-to-pour domain service consuming canonical Tapboard telemetry measurements.",
+      "rationale": "Timestamp rejection, unit conversion, settled baselines, candidate arbitration, quiet completion, cooldown, and safety timeout are carefully exercised. The current adapter is coupled to Home Assistant state ownership and must be rebuilt around the v2 telemetry API.",
+      "preservation": "Carry the deterministic state machine and trace cases; define v2 measurement, clock, lifecycle, and persistence interfaces before porting tests.",
+      "confidence": "high",
+      "risks": ["Changing timestamp or net-loss semantics can synthesize or miss physical pours.", "HA hydration/replay behavior must not leak into the new detector boundary."]
+    },
+    {
+      "id": "lifecycle-attribution",
+      "subsystem": "Immutable keg lifecycle assignment and pour attribution",
+      "approximate_size": "2 modules, ~267 LOC",
+      "responsibilities": ["Open/close immutable assignments", "Capture lifecycle at pour start", "Handle unassigned pours", "Claim idempotent first-pour/kick milestones"],
+      "coupling": ["v1 SQLite tables and transaction callbacks", "Tap/batch identifiers and display receipts"],
+      "v2_requirement": "MODIFY",
+      "source_paths": [
+        { "path": "src/kegLifecycle.js", "git_blob_oid": "608a2b989ea5b48efa85f5e48276de96a9783514" },
+        { "path": "src/lifecycleExperience.js", "git_blob_oid": "c096d27db7025c916a78df9626f4cbbf176ebf77" }
+      ],
+      "classification": "PORT_ALGORITHM_ONLY",
+      "evidence_tests": [
+        { "path": "test/kegLifecycle.test.js", "git_blob_oid": "75ae6cf4435136c6ecbe6737bb51b7cbcfe620c2" },
+        { "path": "test/lifecycleExperience.test.js", "git_blob_oid": "7caff0bd9788db81df102bfb94b5e910fe65662c" }
+      ],
+      "proposed_v2_destination_or_purpose": "V2 use-case/domain services for Beverage → Fill → Physical Keg → Tap lifecycle assignment, close, and start-time pour attribution.",
+      "rationale": "The immutable lifecycle and captured-at-start attribution semantics are valuable and directly match the frozen target. Current code still carries v1 table and action assumptions, so preserve semantics while adapting ownership to Fill and Physical Keg identifiers.",
+      "preservation": "Carry immutable history, unassigned-pour handling, idempotent ceremony claims, and transaction rollback behavior into v2 repositories/use cases.",
+      "confidence": "high",
+      "risks": ["Attributing by completion-time Tap would corrupt history after a move.", "Lifecycle side effects and external notifications must remain after durable writes."]
+    },
+    {
+      "id": "forecast-math",
+      "subsystem": "Keg depletion forecast mathematics and uncertainty handling",
+      "approximate_size": "1 module, ~244 LOC",
+      "responsibilities": ["Select current lifecycle usage", "Aggregate UTC observation days", "Estimate depletion interval", "Report fallback and confidence states"],
+      "coupling": ["v1 lifecycle/pour SQL schema", "Capacity and volume fields", "Date/clock representation"],
+      "v2_requirement": "MODIFY",
+      "source_paths": [
+        { "path": "src/kegForecast.js", "git_blob_oid": "58a8bdb019c3a77e4a8c07d8543937bf6bb13f93" }
+      ],
+      "classification": "PORT_ALGORITHM_ONLY",
+      "evidence_tests": [
+        { "path": "test/kegForecast.test.js", "git_blob_oid": "dae0713f88e02ad48dc3917387a2c55924a149ed" },
+        { "path": "test/kegLifecycle.test.js", "git_blob_oid": "75ae6cf4435136c6ecbe6737bb51b7cbcfe620c2" }
+      ],
+      "proposed_v2_destination_or_purpose": "V2 Fill-level forecast service following the active Fill across Tap moves and reporting bounded confidence/availability.",
+      "rationale": "UTC day handling, fallback intervals, lifecycle filtering, invalid/future timestamp rejection, capacity consistency, and empty-volume behavior are tested mathematics worth preserving. The query model is v1-specific and must be rewritten for Fill history.",
+      "preservation": "Port the formulas and edge-case contract; bind input to Fill/lifecycle history and explicit measurement provenance in v2.",
+      "confidence": "high",
+      "risks": ["Reusing Tap-centric queries would split a Fill forecast when a Fill moves.", "Fallback estimates must remain clearly labeled and never appear as measured values."]
+    },
+    {
+      "id": "draft-health-rules",
+      "subsystem": "Five draft-health checks and bounded incident evidence",
+      "approximate_size": "1 module, ~393 LOC",
+      "responsibilities": ["Evaluate low-keg, scale, leak, temperature, and cleaning checks", "Track transitions/acknowledgement/recovery", "Bound incident evidence"],
+      "coupling": ["v1 Tap state and health tables", "Maintenance records", "Temperature entity readers"],
+      "v2_requirement": "MODIFY",
+      "source_paths": [
+        { "path": "src/draftHealth.js", "git_blob_oid": "69adb28d840e8f86a83c26dd2821710532df95bc" }
+      ],
+      "classification": "PORT_ALGORITHM_ONLY",
+      "evidence_tests": [
+        { "path": "test/draftHealth.test.js", "git_blob_oid": "62fa1dc395d55f3f8eb06407f33a76aa37149905" }
+      ],
+      "proposed_v2_destination_or_purpose": "V2 health evaluator and durable incident projection for the five frozen concepts: low Keg, telemetry/scale freshness, suspected leak, serving temperature, and line-cleaning due; stable machine IDs are finalized consistently during implementation.",
+      "rationale": "The rule concepts, opt-in behavior, freshness/continuity requirements, leak suppression, acknowledgement, recovery, and bounded evidence are high-value and specifically retained by the target. Current configuration and storage are tied to v1 Tap state.",
+      "preservation": "Carry the five check concepts and conservative transitions; select stable v2 machine IDs and adapt to v2 telemetry, maintenance, global defaults, and per-Tap overrides.",
+      "confidence": "high",
+      "risks": ["The source test names mention seven registered checks; v2 must expose only the five frozen rules.", "Private temperature/entity evidence must stay out of public snapshots."]
+    },
+    {
+      "id": "brewfather-transport",
+      "subsystem": "Brewfather transport, budgeting, pagination, retries, cache sanitization, and sync coalescing",
+      "approximate_size": "3 modules, ~1,493 LOC",
+      "responsibilities": ["Authenticate and call allowlisted endpoints", "Budget and back off requests", "Paginate status pages", "Sanitize/cache bounded data", "Coalesce sync callers and classify failures"],
+      "coupling": ["Brewfather v2 response shapes", "v1 SQLite cache schema", "Tap/On Deck projection and scheduler"],
+      "source_selectors": [
+        { "path": "src/brewfatherCache.js", "selector": "sanitizeSummary, sanitizeDetail, upsertSummaries, upsertDetail, detailCandidates", "concern": "transport/cache sanitization and candidate summaries" }
+      ],
+      "v2_requirement": "MODIFY",
+      "source_paths": [
+        { "path": "src/brewfatherClient.js", "git_blob_oid": "2f70ecacd4c5b0d3306516b455e9fdb0b0980961" },
+        { "path": "src/brewfatherCache.js", "git_blob_oid": "05f0a14293d05e067f89ae132c4ff583141a396b" },
+        { "path": "src/brewfatherSync.js", "git_blob_oid": "ac9149b85bd49d2262eac33cd950692edf33afd8" }
+      ],
+      "classification": "PORT_ALGORITHM_ONLY",
+      "evidence_tests": [
+        { "path": "test/brewfatherClient.test.js", "git_blob_oid": "70dee8e6a24de0268b27b1f8dc28b55fbc178ceb" },
+        { "path": "test/brewfatherCache.test.js", "git_blob_oid": "aac2fc8099d33b794e78b997cb70f0130cc59b86" },
+        { "path": "test/brewfatherSync.test.js", "git_blob_oid": "f0fd2625c6ed1f53ef38403dd5a851510edaadf5" }
+      ],
+      "proposed_v2_destination_or_purpose": "V2 Brewfather integration adapter and bounded cache/synchronization use cases translating external batches into Tapboard-owned Beverage candidates and source profiles.",
+      "rationale": "Basic authentication handling, endpoint allowlists, request budget, pagination, Retry-After/backoff, timeout classification, response-size checks, sanitized errors, idempotent cache writes, partial-failure preservation, and overlapping-sync coalescing are substantial tested engineering. Storage and old Tap/On Deck domain coupling must be rewritten.",
+      "preservation": "Reuse transport invariants and sanitizer/test vectors; implement v2 candidate/link ownership, startup plus 60-minute scheduled refreshes and manual refresh, bounded detail/recipe/candidate-cache policy, and explicit one-way completion behavior.",
+      "confidence": "high",
+      "risks": ["A direct cache port could reintroduce Brewfather-owned readings and v1 public projections.", "Budget and backoff errors can create external request storms or hide stale data."]
+    },
+    {
+      "id": "sensory-formulas",
+      "subsystem": "Deterministic sensory axes, formula precedence, and style mappings",
+      "approximate_size": "2 modules, ~613 LOC",
+      "responsibilities": ["Compute bounded sensory axes", "Apply amount/gravity/IBU/pH formulas", "Compose style families", "Attach evidence and confidence"],
+      "coupling": ["Brewfather recipe/detail fields", "v1 tasting source layer", "Presentation profile schema"],
+      "source_selectors": [
+        { "path": "src/sensoryEngine.js", "selector": "recipeModel, buildSensoryModel, buildSensoryProfile", "concern": "formula/model layers; tasting layer is separate" }
+      ],
+      "v2_requirement": "MODIFY",
+      "source_paths": [
+        { "path": "src/sensoryEngine.js", "git_blob_oid": "6bfb84dc6041707d0e74c4739e8a7ca01bb06d9a" },
+        { "path": "src/sensoryMappings.js", "git_blob_oid": "a97182a92421aada175a8da04db5f64f67235178" }
+      ],
+      "classification": "PORT_ALGORITHM_ONLY",
+      "evidence_tests": [
+        { "path": "test/sensoryEngine.test.js", "git_blob_oid": "736380f82a50b3f34a8c4200559c2d3bd3c2ee43" }
+      ],
+      "proposed_v2_destination_or_purpose": "V2 pure sensory profile service using measured values, recipe prediction, and style baselines with bounded half-step axes and evidence metadata.",
+      "rationale": "Amount-aware formulas for bitterness, gravity/attenuation, roast/body/tartness, style composition, null safety, and evidence/confidence are valuable deterministic behavior. The v1 implementation includes a removed brewer-tasting layer and external detail shapes, so only formulas and reviewed mappings should move.",
+      "preservation": "Port formula behavior and mappings behind v2-owned typed inputs; enforce the frozen precedence and omit unsupported axes rather than inventing values.",
+      "confidence": "medium",
+      "risks": ["Preserving tasting precedence would violate the v2 source policy.", "Recipe field normalization must remain separate from the Brewfather transport adapter."]
+    },
+    {
+      "id": "display-local-preferences",
+      "subsystem": "Validated per-browser display preference records and pre-paint bootstrap",
+      "approximate_size": "1 module, ~284 LOC",
+      "responsibilities": ["Validate versioned sparse records", "Overlay local fields on shared settings", "Handle storage fallback/failure", "Synchronize same-origin tabs and pre-paint state"],
+      "coupling": ["Browser localStorage/storage events", "Shared snapshot settings", "Legacy global bootstrap name"],
+      "v2_requirement": "KEEP",
+      "source_paths": [
+        { "path": "public/displayPreferences.js", "git_blob_oid": "021a0c3fe738a92a0eb247e420ce84119f627844" }
+      ],
+      "classification": "PORT_LARGELY_AS_IS",
+      "evidence_tests": [
+        { "path": "test/displayPreferences.test.js", "git_blob_oid": "b7916d7808d6c7c31f99520b65ffe359f3d45025" }
+      ],
+      "proposed_v2_destination_or_purpose": "V2 browser display-profile module for sparse validated local overrides, shared-setting overlay, storage-event synchronization, and no-flash bootstrap.",
+      "rationale": "The module has a narrow browser-only responsibility and tests cover versioning, migration, allowlists, precedence, unavailable storage, failed writes, reset, and cross-tab events. This behavior matches the frozen per-browser preference contract.",
+      "preservation": "Port the record schema and validation with a v2 key/version if needed; keep local values non-sensitive and subordinate to authenticated shared defaults.",
+      "confidence": "high",
+      "risks": ["Storage data is untrusted and must not become a server setting or HTML injection path.", "Changing the key without a migration plan would unexpectedly reset existing displays."]
+    },
+    {
+      "id": "targeted-dirty-updates",
+      "subsystem": "Targeted browser updates, dirty-tap scheduling, and display coalescing",
+      "approximate_size": "3 modules, ~2,742 LOC",
+      "responsibilities": ["Coalesce display changes", "Merge coherent measurement tuples", "Schedule dirty cards", "Mutate existing graphics and browser state"],
+      "coupling": ["v1 appState/tapStates shape", "SSE event names", "DOM selectors and animation nodes"],
+      "source_selectors": [
+        { "path": "public/app.js", "selector": "scheduleTapUpdates, applyFullSnapshot, liveUpdates controller wiring", "concern": "dirty-card scheduling and targeted rendering" },
+        { "path": "public/liveUpdates.js", "selector": "createLiveUpdateController, updateGraphicFill", "concern": "state merge/coherent tuple and node identity" }
+      ],
+      "v2_requirement": "MODIFY",
+      "source_paths": [
+        { "path": "src/displayUpdateCoalescer.js", "git_blob_oid": "5c053426abd77a433ea9fcf3ed5a2ba27bbf0d8c" },
+        { "path": "public/liveUpdates.js", "git_blob_oid": "476baf855bcc8dba6c420175df4b901c0dea153c" },
+        { "path": "public/app.js", "git_blob_oid": "5e50c47f959b094ba148904f92051f2b99d36370" }
+      ],
+      "classification": "PORT_ALGORITHM_ONLY",
+      "evidence_tests": [
+        { "path": "test/displayUpdateCoalescer.test.js", "git_blob_oid": "27105029f06b2781390fc9c3469395c52d15cc5e" },
+        { "path": "test/appLiveUpdates.test.js", "git_blob_oid": "4950d78f32766b120a5b68374b034b2d6ee98c72" }
+      ],
+      "proposed_v2_destination_or_purpose": "V2 client state/event reducer and targeted DOM update scheduler that keeps SVG nodes attached and bounds normal telemetry frequency.",
+      "rationale": "The coalescer's 250 ms window, four-batch-per-second ceiling, coherent tuple merging, deterministic ordering, and dirty-card identity preservation directly support the target browser delivery contract. The current app-state shape and monolithic controller do not.",
+      "preservation": "Carry coalescing and node-identity invariants; define v2 event reducer/state slices and page-level resync behavior.",
+      "confidence": "high",
+      "risks": ["Over-coalescing detector or operational events would lose causal ordering.", "Re-rendering whole cards would break animation and accessibility state."]
+    },
+    {
+      "id": "safe-dom-building",
+      "subsystem": "Safe DOM construction and untrusted-value rendering",
+      "approximate_size": "1 module, ~176 LOC",
+      "responsibilities": ["Build cards/options/toasts with DOM APIs", "Keep untrusted values as text", "Allowlist graphic/style inputs"],
+      "coupling": ["v1 card DOM structure", "Browser document APIs", "Trusted graphics renderer"],
+      "v2_requirement": "MODIFY",
+      "source_paths": [
+        { "path": "public/domBuilders.js", "git_blob_oid": "1430625b821efe20f7a502e51a06ab8a1a2eaafa" }
+      ],
+      "classification": "PORT_ALGORITHM_ONLY",
+      "evidence_tests": [
+        { "path": "test/frontendSecurity.test.js", "git_blob_oid": "dcc0dca7e4368fbf4d7f26d3b617e59b0ea66fcf" }
+      ],
+      "proposed_v2_destination_or_purpose": "V2 view helpers that use text nodes/attributes, allowlisted option values, and a narrowly trusted graphic renderer.",
+      "rationale": "The builders establish a useful XSS boundary and their tests exercise hostile card, recipe, catalog, option, toast, style, color, and instance inputs. The specific card hierarchy belongs to the rebuilt UI, so preserve the construction discipline rather than the whole module.",
+      "preservation": "Reimplement builders around v2 templates/components; never interpolate user or integration strings into HTML.",
+      "confidence": "high",
+      "risks": ["Treating generated SVG strings as generally trusted would reopen the tested injection boundary.", "A template layer must retain text escaping and attribute allowlists."]
+    },
+    {
+      "id": "autosave-coalescing",
+      "subsystem": "Serialized autosave queue and newest-value coalescing",
+      "approximate_size": "1 module, ~49 LOC",
+      "responsibilities": ["Serialize field writes", "Replace pending values by key", "Report status/failure and continue"],
+      "coupling": ["Browser fetch callback supplied by caller", "v1 field status selectors"],
+      "v2_requirement": "KEEP",
+      "source_paths": [
+        { "path": "public/autosave.js", "git_blob_oid": "64803d36f30e2d40763eac5424af938e30c16f84" }
+      ],
+      "classification": "PORT_LARGELY_AS_IS",
+      "evidence_tests": [
+        { "path": "test/autosave.test.js", "git_blob_oid": "27e7d6cec32cc02e510093d24cd2e32691cbe0c1" }
+      ],
+      "proposed_v2_destination_or_purpose": "V2 admin form helper that serializes mutation writes, coalesces each dirty field to its latest value, and continues after failures.",
+      "rationale": "The module is small, dependency-free, and tests prove ordering, replacement of pending values, failure reporting, and continued processing. Those mechanics remain useful with v2 mutation endpoints.",
+      "preservation": "Port queue semantics and status states; connect to v2 form boundaries and CSRF-aware requests.",
+      "confidence": "high",
+      "risks": ["Coalescing across unrelated fields or resources could discard user intent.", "Failure states must remain visible and not silently mark data clean."]
+    },
+    {
+      "id": "event-envelope",
+      "subsystem": "Versioned outbound Tapboard event envelope and strict per-type payloads",
+      "approximate_size": "1 module, ~316 LOC",
+      "responsibilities": ["Build schema-versioned event envelopes", "Validate per-type data", "Bound display metadata", "Exclude secrets/fermentation/arbitrary targets"],
+      "coupling": ["v1 HA WebSocket fire_event delivery", "Tap/lifecycle/batch identifiers", "Legacy event catalog"],
+      "source_selectors": [
+        { "path": "src/tapboardEvents.js", "selector": "TAPBOARD_EVENT_TYPES, normalizeContext, normalizeData, buildTapboardEvent", "concern": "strict outbound envelope contract" }
+      ],
+      "v2_requirement": "MODIFY",
+      "source_paths": [
+        { "path": "src/tapboardEvents.js", "git_blob_oid": "c7fc8342cc4e7aeddfd8c2f9ea66034de79aaf7b" }
+      ],
+      "classification": "PORT_ALGORITHM_ONLY",
+      "evidence_tests": [
+        { "path": "test/tapboardEvents.test.js", "git_blob_oid": "9237c787a8fa70d80c9e417e00a70a92c720eb75" }
+      ],
+      "proposed_v2_destination_or_purpose": "V2 domain-event/outbox serializer for one versioned `tapboard_event` contract with bounded display metadata and strict type data.",
+      "rationale": "Envelope versioning, stable IDs/times, nullable identities, payload bounds, unknown-field rejection, secret/fermentation exclusion, lifecycle facts, and safe Brewfather failure projection are well-tested contract ideas. Delivery and event ownership change to the v2 outbox.",
+      "preservation": "Preserve strict schemas and redaction; adapt event catalog to v2 domains and durable post-commit publication.",
+      "confidence": "high",
+      "risks": ["Allowing arbitrary service targets or integration payloads would turn the event into a webhook tunnel.", "Publishing before the transaction commits can emit facts that never became durable."]
+    },
+    {
+      "id": "docker-hardening",
+      "subsystem": "Container and Compose hardening posture",
+      "approximate_size": "2 deployment files, ~87 LOC",
+      "responsibilities": ["Build runtime image", "Set user/filesystem/capability restrictions", "Configure loopback service, volumes, health check, and shutdown"],
+      "coupling": ["v1 Node version and paths", "v1 database/backup volumes", "Docker runtime semantics"],
+      "v2_requirement": "MODIFY",
+      "source_paths": [
+        { "path": "Dockerfile", "git_blob_oid": "861cd83ea5a09520f16d9a46c4f93b771ed8b761" },
+        { "path": "docker-compose.yml", "git_blob_oid": "2e9fbce3eaaaf4bf5a5f87668d20ba6c8e8c7e90" }
+      ],
+      "classification": "REFERENCE_ONLY",
+      "evidence_tests": [
+        { "path": "test/repositoryPolicy.test.js", "git_blob_oid": "5be3f3f4f7cc573b5ad67b2b499de33bf34d838d" }
+      ],
+      "proposed_v2_destination_or_purpose": "Clean v2 image/deployment configuration preserving non-root execution, read-only root, dropped capabilities, no-new-privileges, health checks, loopback binding, and graceful shutdown.",
+      "rationale": "The security posture is deliberate and documented, but image paths, Node version, database initialization, and backup-volume assumptions belong to v2 operations. Preserve principles, not incidental layout.",
+      "preservation": "Rebuild the image/Compose files from v2 runtime and storage requirements while retaining the hardening controls and bounded health check.",
+      "confidence": "high",
+      "risks": ["Dropping a hardening flag during the rebuild changes deployment risk.", "A read-only root must still leave only intentional writable data paths."]
+    },
+    {
+      "id": "behavioral-tests",
+      "subsystem": "v1 behavioral and security test suite as reuse evidence",
+      "approximate_size": "10 representative suites, ~3,500 LOC",
+      "responsibilities": ["Exercise algorithms and edge cases", "Protect HTTP/frontend/security boundaries", "Record obsolete contracts that must be removed"],
+      "coupling": ["Node test runner and v1 module paths", "v1 schema, HA, bearer, and UI contracts"],
+      "v2_requirement": "MODIFY",
+      "source_paths": [
+        { "path": "test/sseHub.test.js", "git_blob_oid": "0ad840582ebb18e93e0838a287a1eeeed7589505" },
+        { "path": "test/httpSecurity.test.js", "git_blob_oid": "9a79ffb52885bc80fe835094f20542084d3b87f7" },
+        { "path": "test/pourDetector.test.js", "git_blob_oid": "885676a53139b15f6074759fb0fe915aabd9d9c4" },
+        { "path": "test/kegLifecycle.test.js", "git_blob_oid": "75ae6cf4435136c6ecbe6737bb51b7cbcfe620c2" },
+        { "path": "test/kegForecast.test.js", "git_blob_oid": "dae0713f88e02ad48dc3917387a2c55924a149ed" },
+        { "path": "test/draftHealth.test.js", "git_blob_oid": "62fa1dc395d55f3f8eb06407f33a76aa37149905" },
+        { "path": "test/brewfatherClient.test.js", "git_blob_oid": "70dee8e6a24de0268b27b1f8dc28b55fbc178ceb" },
+        { "path": "test/sensoryEngine.test.js", "git_blob_oid": "736380f82a50b3f34a8c4200559c2d3bd3c2ee43" },
+        { "path": "test/frontendSecurity.test.js", "git_blob_oid": "dcc0dca7e4368fbf4d7f26d3b617e59b0ea66fcf" },
+        { "path": "test/serverSecurity.test.js", "git_blob_oid": "9c02004311dd95cfab54db32762eda1e69174967" }
+      ],
+      "classification": "REFERENCE_ONLY",
+      "evidence_tests": [
+        { "path": "test/repositoryPolicy.test.js", "git_blob_oid": "5be3f3f4f7cc573b5ad67b2b499de33bf34d838d" },
+        { "path": "test/serverSmoke.test.js", "git_blob_oid": "1d087f7dc373c4918565d3eefbb71bbeac957ea7" }
+      ],
+      "proposed_v2_destination_or_purpose": "A test inventory for selecting carry-forward, adapted, reference-only, and deleted cases during v2 implementation.",
+      "rationale": "Tests establish concrete edge cases and security invariants but are not the v2 specification. The suite mixes required behavior with obsolete schema, HA, On Deck, tasting, bearer, and UI-organization assumptions.",
+      "preservation": "Keep this inventory pinned to the frozen commit; port tests only after defining v2 contracts and add new boundary tests. Do not keep a v1 test runner as a shadow runtime.",
+      "confidence": "high",
+      "risks": ["Blind test copying can force obsolete architecture into v2.", "Deleting tests without retaining their proven edge-case intent can regress safety."]
+    },
+    {
+      "id": "obsolete-schema-migrations",
+      "subsystem": "Legacy SQLite schema and migration chain",
+      "approximate_size": "2 modules, ~983 LOC",
+      "responsibilities": ["Create/upgrade v1 tables", "Run ordered migrations", "Validate legacy integrity and foreign keys"],
+      "coupling": ["v1 table names and columns", "Legacy Tap/custom-batch model", "Startup database initialization"],
+      "v2_requirement": "REMOVE",
+      "source_paths": [
+        { "path": "src/dbMigrations.js", "git_blob_oid": "f67ebbebcc47366f11dc531d39d9dd18cc900eef" },
+        { "path": "src/db.js", "git_blob_oid": "28c09145ee97a6d5914f36ff818e39e6cedca041" }
+      ],
+      "classification": "DO_NOT_REPRODUCE",
+      "evidence_tests": [
+        { "path": "test/dbMigrations.test.js", "git_blob_oid": "b6f56f54a2ea420b3d85ac42daa22d406c78d907" },
+        { "path": "test/dbSecurity.test.js", "git_blob_oid": "8f9e54392725bfac629e24b0300b2ae4edfc98a5" }
+      ],
+      "proposed_v2_destination_or_purpose": "Historical evidence for v2 schema design only; v2 starts with a clean domain schema and explicit migration policy approved for that schema.",
+      "rationale": "The v1 chain preserves obsolete tables, serving-glass columns, Tap-centric ownership, and compatibility migrations. Its tests prove useful data-safety lessons but reproducing the chain would make v1 architecture the v2 foundation.",
+      "preservation": "Retain migration invariants and data-loss lessons in design notes; do not run or import v1 migrations in v2.",
+      "confidence": "high",
+      "risks": ["A compatibility adapter or dual schema would create ambiguous ownership and an unbounded removal obligation.", "Fresh-schema initialization still needs explicit integrity and failure checks."]
+    },
+    {
+      "id": "backup-tooling",
+      "subsystem": "Tapboard-owned backup, restore, rotation, and pruning tooling",
+      "approximate_size": "2 modules, ~366 LOC",
+      "responsibilities": ["Create/verify/restore SQLite backups", "Rotate/prune files", "Gate migration and retention on integrity"],
+      "coupling": ["v1 filesystem volumes", "SQLite online backup API", "Startup migration lock"],
+      "v2_requirement": "REMOVE",
+      "source_paths": [
+        { "path": "scripts/db-maintenance.js", "git_blob_oid": "9a1cbaf9fcb6857c9259297393ea691025444141" },
+        { "path": "src/databaseMaintenance.js", "git_blob_oid": "106f94b9f342591342695317f8d12a4d10d4460e" }
+      ],
+      "classification": "DO_NOT_REPRODUCE",
+      "evidence_tests": [
+        { "path": "test/databaseMaintenance.test.js", "git_blob_oid": "2b3435f4e8b64353e639d9cbae5f93e947e116bb" }
+      ],
+      "proposed_v2_destination_or_purpose": "Documented operator-owned backup boundary outside the v2 application; preserve only operational requirements and verification lessons.",
+      "rationale": "The reuse criteria explicitly remove Tapboard-owned backup/restore/rotation tooling. The implementation and tests are valuable evidence about atomicity and verification, not a v2 application subsystem.",
+      "preservation": "Keep backup responsibilities in deployment/operator documentation; do not port scripts, routes, schema hooks, or retention code.",
+      "confidence": "high",
+      "risks": ["Removing the app tool without an operator backup process would create data-safety risk.", "Do not silently reintroduce backup writes through startup migrations."]
+    },
+    {
+      "id": "ha-inbound-capacity-arbitrary-services",
+      "subsystem": "Home Assistant inbound state ownership, capacity helpers, and arbitrary service bridge",
+      "approximate_size": "4 modules/config files, ~1,978 LOC",
+      "responsibilities": ["Authenticate/subscribe to HA state", "Hydrate and reconnect", "Project Tapboard state into HA entities", "Call helpers/services"],
+      "coupling": ["HA WebSocket protocol and entity IDs", "HA package templates", "v1 Tap/scale ownership", "Generic service payloads"],
+      "source_selectors": [
+        { "path": "home-assistant/packages/tapboard.yaml", "selector": "Tapboard-facing sensor/helper templates and selector blocks", "concern": "inbound/capacity/arbitrary service ownership to remove" }
+      ],
+      "v2_requirement": "REMOVE",
+      "source_paths": [
+        { "path": "src/haClient.js", "git_blob_oid": "c5bbcc71620c0e8cc4f60def0f9d92a254b385d9" },
+        { "path": "src/tapboardProjection.js", "git_blob_oid": "ff978aef70a81f82ea18a39cc0be7fff219ec7f2" },
+        { "path": "home-assistant/packages/tapboard.yaml", "git_blob_oid": "579d5c170c8023d5544dad617a95f07360c78f14" },
+        { "path": "home-assistant/packages/tapboard_helpers.yaml", "git_blob_oid": "5dc279843511ea734e872cfc406aee22ab661356" }
+      ],
+      "classification": "DO_NOT_REPRODUCE",
+      "evidence_tests": [
+        { "path": "test/haClientWebSocket.test.js", "git_blob_oid": "6b7155832857c44905d6c7ee229460fe80d380b3" },
+        { "path": "test/haClientEventFlow.test.js", "git_blob_oid": "97da9d41559a2a0036ae2da82b643e3c9da75968" }
+      ],
+      "proposed_v2_destination_or_purpose": "Optional outbound Home Assistant integration only; no inbound Tap/scale ownership, capacity-helper authority, arbitrary service calls, or HA-shaped public state.",
+      "rationale": "The frozen target makes Tapboard the domain and telemetry owner. HA hydration, state subscription, helper capacity writes, and generic service/request channels are explicitly removed even though their cleanup tests document useful failure handling.",
+      "preservation": "Retain only bounded outbound event integration ideas; leave existing HA packages recoverable for operator compatibility during cutover, without importing their runtime ownership.",
+      "confidence": "high",
+      "risks": ["Retaining an inbound subscription would create two sources of truth.", "Arbitrary service payloads can become an unsafe webhook/credential tunnel."]
+    },
+    {
+      "id": "tap-planning",
+      "subsystem": "Tap Planning readiness, compatibility, and gap projection",
+      "approximate_size": "1 module, ~240 LOC",
+      "responsibilities": ["Estimate candidate readiness", "Compare capabilities", "Project ranges, confidence, and forecast gaps"],
+      "coupling": ["Brewfather status/date fields", "v1 Tap planning config", "Public planning projection"],
+      "v2_requirement": "REMOVE",
+      "source_paths": [
+        { "path": "src/tapPlanning.js", "git_blob_oid": "16d6e0b2e98ac8d64ebf6fe57cfe0baff0328719" }
+      ],
+      "classification": "DO_NOT_REPRODUCE",
+      "evidence_tests": [
+        { "path": "test/tapPlanning.test.js", "git_blob_oid": "6c9ed2f03209cb6cc50be6b76a196a1734fad97d" }
+      ],
+      "proposed_v2_destination_or_purpose": "No initial v2 destination; retain the source and tests solely as historical evidence for a future Upcoming/Planning feature.",
+      "rationale": "The reuse criteria explicitly defer Tap Planning. Its readiness projections and capability model are not part of the initial rebuild even where they share forecasting concepts.",
+      "preservation": "Keep the algorithm and tests in Git for a future separately designed feature; do not expose planning tables, endpoints, events, or public projections in v2 initial scope.",
+      "confidence": "high",
+      "risks": ["Porting planning now would expand domain scope and entangle Brewfather candidate semantics with physical inventory."]
+    },
+    {
+      "id": "brewfather-readings-old-on-deck",
+      "subsystem": "Brewfather readings history, old On Deck semantics, and reading-backed story UI",
+      "approximate_size": "3 modules, ~1,632 LOC",
+      "responsibilities": ["Persist/query readings and details", "Build bounded story projection", "Render telemetry windows and old On Deck visibility"],
+      "coupling": ["Brewfather readings/history endpoints", "v1 cache tables", "Tap assignment and On Deck flags", "Browser dialog DOM"],
+      "source_selectors": [
+        { "path": "src/brewfatherCache.js", "selector": "sanitizeReading, upsertReadings, latestReadingCandidates, historyCandidates", "concern": "readings/history and old On Deck cache behavior" },
+        { "path": "public/brewStory.js", "selector": "telemetryChart, telemetrySection, tastingSection, createBrewStoryController", "concern": "reading-backed story UI and tasting display" }
+      ],
+      "v2_requirement": "REMOVE",
+      "source_paths": [
+        { "path": "src/brewfatherCache.js", "git_blob_oid": "05f0a14293d05e067f89ae132c4ff583141a396b" },
+        { "path": "src/brewStory.js", "git_blob_oid": "f14707e98af308bd09e9a550b6c3a2747f3a9364" },
+        { "path": "public/brewStory.js", "git_blob_oid": "f5f896d6e693d72bbbc4865c610c4a88e0994797" }
+      ],
+      "classification": "DO_NOT_REPRODUCE",
+      "evidence_tests": [
+        { "path": "test/brewfatherCache.test.js", "git_blob_oid": "aac2fc8099d33b794e78b997cb70f0130cc59b86" },
+        { "path": "test/brewStory.test.js", "git_blob_oid": "20bdb739d1eee86480daaa9acfa80624119e8654" },
+        { "path": "test/brewStoryUi.test.js", "git_blob_oid": "d67da8ad605e03ac8a4bdf611d7af7367279752e" }
+      ],
+      "proposed_v2_destination_or_purpose": "No v2 readings cache or Brewfather-owned On Deck projection; a smaller Brew Story may read bounded source summaries and Tapboard Fill/pour chapters through new interfaces.",
+      "rationale": "Brewfather owns readings and fermentation history, while v2 On Deck is an explicitly marked physical Fill, not an available Brewfather batch. Existing cache/story code therefore contains both useful presentation lessons and prohibited ownership assumptions.",
+      "preservation": "Retain bounded-story and safe-rendering lessons only; discard readings tables, old visibility rules, and batch-as-inventory semantics.",
+      "confidence": "high",
+      "risks": ["A readings cache can grow without bound and become a second source of truth.", "Treating a Completed or On Deck batch as physical inventory violates the v2 model."]
+    },
+    {
+      "id": "legacy-brewer-tasting",
+      "subsystem": "Brewer tasting records as a sensory source",
+      "approximate_size": "Concern within ~567 LOC sensory module",
+      "responsibilities": ["Accept/normalize brewer tasting axes", "Place tasting above recipe/style layers", "Expose tasting evidence"],
+      "coupling": ["Brewfather brewer tasting payloads", "v1 sensory precedence", "Public/authenticated story projection"],
+      "source_selectors": [
+        { "path": "src/sensoryEngine.js", "selector": "tastingValues and its call site in buildSensoryModel", "concern": "removed brewer-tasting source layer" }
+      ],
+      "v2_requirement": "REMOVE",
+      "source_paths": [
+        { "path": "src/sensoryEngine.js", "git_blob_oid": "6bfb84dc6041707d0e74c4739e8a7ca01bb06d9a" }
+      ],
+      "classification": "DO_NOT_REPRODUCE",
+      "evidence_tests": [
+        { "path": "test/sensoryEngine.test.js", "git_blob_oid": "736380f82a50b3f34a8c4200559c2d3bd3c2ee43" }
+      ],
+      "proposed_v2_destination_or_purpose": "None; v2 sensory precedence is manual override, recipe prediction, then style baseline.",
+      "rationale": "The v1 engine and tests explicitly exercise a newest-valid tasting layer, but the reuse criteria and target remove brewer tasting as a source. The test remains evidence of the behavior that must not be carried forward.",
+      "preservation": "Keep source history and negative test intent; remove tasting fields, precedence, persistence, and public exposure from v2.",
+      "confidence": "high",
+      "risks": ["A hidden tasting fallback would violate deterministic source ownership and user expectations."]
+    },
+    {
+      "id": "artwork-proxy-upload",
+      "subsystem": "Remote artwork proxy and custom artwork upload surface",
+      "approximate_size": "2 modules, ~819 LOC",
+      "responsibilities": ["Validate remote artwork URLs", "Fetch bounded HTTPS images", "Render story artwork and reserve upload surface"],
+      "coupling": ["DNS/HTTPS/redirect behavior", "Brewfather image_url fields", "Browser story dialog and storage"],
+      "source_selectors": [
+        { "path": "public/brewStory.js", "selector": "identitySection and artwork/image rendering concern", "concern": "story artwork consumer; no v2 proxy/upload" }
+      ],
+      "v2_requirement": "REMOVE",
+      "source_paths": [
+        { "path": "src/imageProxy.js", "git_blob_oid": "0ef6d5292bcca8345a06fad1059e0b4ba7575f96" },
+        { "path": "public/brewStory.js", "git_blob_oid": "f5f896d6e693d72bbbc4865c610c4a88e0994797" }
+      ],
+      "classification": "DO_NOT_REPRODUCE",
+      "evidence_tests": [
+        { "path": "test/imageProxy.test.js", "git_blob_oid": "35c6e9167618b573863ded49499ac51a10346a9b" },
+        { "path": "test/brewStoryUi.test.js", "git_blob_oid": "d67da8ad605e03ac8a4bdf611d7af7367279752e" }
+      ],
+      "proposed_v2_destination_or_purpose": "None in the initial v2 product; use approved first-party/static assets where needed.",
+      "rationale": "The target explicitly removes remote artwork proxy and custom upload. The proxy tests document strong SSRF defenses, but preserving this network surface adds complexity and a new trust boundary that is not required.",
+      "preservation": "Retain SSRF defense patterns as security reference only; do not port proxy routes, fetchers, upload storage, or artwork fields.",
+      "confidence": "high",
+      "risks": ["Reintroducing remote fetches creates DNS, redirect, credential, type, and byte-limit attack surface.", "Upload storage would add lifecycle and content-validation responsibilities outside v2 scope."]
+    },
+    {
+      "id": "singleton-custom-beverage",
+      "subsystem": "Single hard-coded custom beverage and HA selector compatibility",
+      "approximate_size": "4 files/configs, ~4,320 LOC",
+      "responsibilities": ["Persist one custom beverage", "Expose fixed custom selector", "Render/edit singleton fields", "Translate selector through HA"],
+      "coupling": ["`custom:topo_chico` sentinel", "HA template selectors", "v1 Tap assignment and server projection"],
+      "source_selectors": [
+        { "path": "home-assistant/packages/tapboard.yaml", "selector": "custom:topo_chico assignment-option template branches", "concern": "singleton custom beverage compatibility" },
+        { "path": "public/index.html", "selector": "Custom Beverage settings disclosure", "concern": "singleton editor surface" },
+        { "path": "src/server.js", "selector": "customBeverage and optionForBatch/resolveBatchOption helpers", "concern": "singleton persistence/projection" }
+      ],
+      "v2_requirement": "REMOVE",
+      "source_paths": [
+        { "path": "src/server.js", "git_blob_oid": "ba596124d37296c46cb9e6de3911b0d4c6e59589" },
+        { "path": "src/tapActions.js", "git_blob_oid": "149cb1c2f68e0b133dbb580435256377bf38f0c3" },
+        { "path": "public/index.html", "git_blob_oid": "87f3493489ca29dd865da8739d7a354721eb70dc" },
+        { "path": "home-assistant/packages/tapboard.yaml", "git_blob_oid": "579d5c170c8023d5544dad617a95f07360c78f14" }
+      ],
+      "classification": "DO_NOT_REPRODUCE",
+      "evidence_tests": [
+        { "path": "test/dbSecurity.test.js", "git_blob_oid": "8f9e54392725bfac629e24b0300b2ae4edfc98a5" },
+        { "path": "test/tapActions.test.js", "git_blob_oid": "88cef427272eff7f971299740ea49db9e9e3f3b1" },
+        { "path": "test/settingsUi.test.js", "git_blob_oid": "cbeae3fc879d6481a6fbe88b1b5ec3cabc4f36ef" }
+      ],
+      "proposed_v2_destination_or_purpose": "None for the singleton constraint; v2 supports unlimited Tapboard-owned Custom Beverages with one profile per Beverage.",
+      "rationale": "The v1 UI, server, and HA selectors encode one `custom:topo_chico` record. The target removes that artificial limit and makes Beverage identity/domain ownership explicit.",
+      "preservation": "Retain validation/display metadata ideas only; replace the selector and persistence model with normal Beverage CRUD and no compatibility alias.",
+      "confidence": "high",
+      "risks": ["A compatibility alias would preserve hidden singleton state and prevent duplicate names/independent profiles.", "HA selector strings must not become the v2 Beverage identity."]
+    },
+    {
+      "id": "modal-spa-settings",
+      "subsystem": "Scattered modal SPA and monolithic settings workspace",
+      "approximate_size": "3 presentation files, ~3,940 LOC",
+      "responsibilities": ["Render dashboard and dialogs", "Manage pin/settings/recipe/forecast modal state", "Wire broad admin controls and celebrations"],
+      "coupling": ["Global DOM IDs", "Monolithic browser app state", "v1 endpoints and session token", "Large CSS cascade"],
+      "source_selectors": [
+        { "path": "public/app.js", "selector": "openGlobalSettingsModal, showModal/hideModal, initModalListeners", "concern": "modal SPA/settings structure" },
+        { "path": "public/index.html", "selector": "#globalSettingsModal, #pinModal, #recipeModal, #forecastDialog", "concern": "scattered modal/settings DOM" }
+      ],
+      "v2_requirement": "REMOVE",
+      "source_paths": [
+        { "path": "public/index.html", "git_blob_oid": "87f3493489ca29dd865da8739d7a354721eb70dc" },
+        { "path": "public/app.js", "git_blob_oid": "5e50c47f959b094ba148904f92051f2b99d36370" },
+        { "path": "public/phase3Ui.js", "git_blob_oid": "82a31572775968baf170f6e07c19742b0667c40a" }
+      ],
+      "classification": "DO_NOT_REPRODUCE",
+      "evidence_tests": [
+        { "path": "test/settingsUi.test.js", "git_blob_oid": "cbeae3fc879d6481a6fbe88b1b5ec3cabc4f36ef" },
+        { "path": "test/phase3Ui.test.js", "git_blob_oid": "4e25454f716fdd63d0c3b6c9c640f0df16a9c0ea" }
+      ],
+      "proposed_v2_destination_or_purpose": "No structural destination; rebuild admin and public workflows as v2-owned routes/templates/components while selectively preserving labels and interaction lessons.",
+      "rationale": "The current page combines public dashboard, pin modal, recipe/forecast dialogs, and a large settings disclosure tree. The reuse criteria explicitly reject this organization even where accessibility and validation details are useful.",
+      "preservation": "Use tests and UI as behavioral reference; reimplement focused pages/forms with server-rendered boundaries and narrow client controllers.",
+      "confidence": "high",
+      "risks": ["Porting the modal tree would recreate a giant client-side rendering architecture.", "Removing useful validation/accessibility lessons would regress admin safety; carry those deliberately."]
+    },
+    {
+      "id": "bearer-sessionstorage-auth",
+      "subsystem": "Bearer-token authentication and sessionStorage browser auth",
+      "approximate_size": "Server/client concern across ~4,000 LOC plus security docs",
+      "responsibilities": ["Issue/parse bearer tokens", "Store browser token in sessionStorage", "Authorize v1 mutations", "Document token/session lifecycle"],
+      "coupling": ["Authorization headers", "Browser-readable sessionStorage", "v1 PIN/session tables", "Monolithic HTTP handlers"],
+      "source_selectors": [
+        { "path": "public/app.js", "selector": "authToken initialization, authHeaders, sessionStorage access", "concern": "browser bearer/sessionStorage contract" },
+        { "path": "src/server.js", "selector": "sessionDigest, isAuthorized, requireAdmin, Authorization header parsing", "concern": "server bearer-session contract" }
+      ],
+      "v2_requirement": "REMOVE",
+      "source_paths": [
+        { "path": "src/server.js", "git_blob_oid": "ba596124d37296c46cb9e6de3911b0d4c6e59589" },
+        { "path": "public/app.js", "git_blob_oid": "5e50c47f959b094ba148904f92051f2b99d36370" },
+        { "path": "docs/SECURITY.md", "git_blob_oid": "6ef148ff48c043d1dfb942e505e55e181a0452f8" }
+      ],
+      "classification": "DO_NOT_REPRODUCE",
+      "evidence_tests": [
+        { "path": "test/serverSecurity.test.js", "git_blob_oid": "9c02004311dd95cfab54db32762eda1e69174967" }
+      ],
+      "proposed_v2_destination_or_purpose": "None for the old browser contract; v2 uses HttpOnly cookie sessions, CSRF, strict Origin validation, and SQLite-backed session records.",
+      "rationale": "The v1 bearer/sessionStorage flow is explicitly superseded. Its tests still provide useful expiry, revocation, redaction, and authorization evidence but must not force Authorization headers or browser-readable tokens into v2.",
+      "preservation": "Retain security invariants and threat-model lessons; redesign authentication at the v2 HTTP boundary with no legacy route or token alias.",
+      "confidence": "high",
+      "risks": ["SessionStorage tokens are exposed to same-origin script compromise and are incompatible with the approved cookie contract.", "A compatibility bearer route would make CSRF and revocation policy ambiguous."]
+    },
+    {
+      "id": "discord",
+      "subsystem": "Dedicated Discord delivery and notifier target handling",
+      "approximate_size": "Documentation/event concern, ~516 LOC",
+      "responsibilities": ["Describe Discord HA automation", "Constrain event payloads from carrying notifier targets/credentials"],
+      "coupling": ["Home Assistant notify.discord", "HA secret/channel configuration", "v1 event envelope"],
+      "source_selectors": [
+        { "path": "src/tapboardEvents.js", "selector": "normalizeContext/normalizeData key allowlists", "concern": "exclude notifier targets and credentials" }
+      ],
+      "v2_requirement": "REMOVE",
+      "source_paths": [
+        { "path": "docs/HOME-ASSISTANT-EVENTS.md", "git_blob_oid": "04bcfcc8849bc39c3dffdbc5f235f4ea0561e3a5" },
+        { "path": "src/tapboardEvents.js", "git_blob_oid": "c7fc8342cc4e7aeddfd8c2f9ea66034de79aaf7b" }
+      ],
+      "classification": "DO_NOT_REPRODUCE",
+      "evidence_tests": [
+        { "path": "test/tapboardEvents.test.js", "git_blob_oid": "9237c787a8fa70d80c9e417e00a70a92c720eb75" }
+      ],
+      "proposed_v2_destination_or_purpose": "None; Home Assistant or another operator-owned automation system may consume bounded v2 events and own Discord credentials/targets.",
+      "rationale": "The documentation's Discord example is an HA automation concern, not a Tapboard domain feature. The event serializer's target exclusion tests support keeping notifier destinations and credentials outside Tapboard.",
+      "preservation": "Keep the principle that Tapboard emits stable facts only; do not add Discord clients, webhook URLs, channel IDs, or credential storage.",
+      "confidence": "high",
+      "risks": ["A dedicated notifier would expand secret handling and delivery retry scope.", "Arbitrary target fields in the event envelope would recreate the forbidden service bridge."]
+    },
+    {
+      "id": "legacy-snapshot-sse",
+      "subsystem": "Legacy monolithic snapshot SSE protocol and v1 public state shape",
+      "approximate_size": "3 modules, ~2,848 LOC",
+      "responsibilities": ["Send v1 snapshot on SSE connect", "Reduce/merge v1 state events", "Serialize HA/Tap/Brewfather public projection"],
+      "coupling": ["v1 schemaVersion snapshot", "HA state and On Deck fields", "Global browser appState", "Legacy event names"],
+      "source_selectors": [
+        { "path": "src/sseHub.js", "selector": "addClient snapshot write and formatSSEFrame", "concern": "legacy snapshot transport use" },
+        { "path": "public/liveUpdates.js", "selector": "createLiveUpdateController replaceSnapshot/apply event reducer", "concern": "legacy snapshot state shape" },
+        { "path": "src/server.js", "selector": "getFullStateSnapshot and /events wiring", "concern": "v1 monolithic public snapshot projection" }
+      ],
+      "v2_requirement": "REMOVE",
+      "source_paths": [
+        { "path": "src/sseHub.js", "git_blob_oid": "d2ba8237dd288c64c433ae766a5dd2c3369e29c4" },
+        { "path": "public/liveUpdates.js", "git_blob_oid": "476baf855bcc8dba6c420175df4b901c0dea153c" },
+        { "path": "src/server.js", "git_blob_oid": "ba596124d37296c46cb9e6de3911b0d4c6e59589" }
+      ],
+      "classification": "DO_NOT_REPRODUCE",
+      "evidence_tests": [
+        { "path": "test/sseHub.test.js", "git_blob_oid": "0ad840582ebb18e93e0838a287a1eeeed7589505" },
+        { "path": "test/serverSmoke.test.js", "git_blob_oid": "1d087f7dc373c4918565d3eefbb71bbeac957ea7" }
+      ],
+      "proposed_v2_destination_or_purpose": "None for the v1 snapshot schema; v2 defines server-rendered initial state, named feature events, and authoritative page-level reconnect resync.",
+      "rationale": "Although framing/backpressure is reusable, the old stream couples all state into one snapshot schema and v1 public projection. Carrying that protocol would preserve obsolete HA, batch, On Deck, and singleton fields.",
+      "preservation": "Use the separate SSE mechanics entry for transport invariants; discard v1 snapshot fields, schema version, and reducer contract.",
+      "confidence": "high",
+      "risks": ["Keeping a legacy snapshot endpoint would create dual public contracts and stale field ownership.", "Reconnect logic must still recover authoritative state without replaying obsolete snapshots."]
+    },
+    {
+      "id": "monolithic-controllers",
+      "subsystem": "God-file server and browser controllers",
+      "approximate_size": "2 controllers, ~4,765 LOC",
+      "responsibilities": ["Mix routing, auth, persistence, integrations, projections, SSE, rendering, settings, and ceremonies"],
+      "coupling": ["Every v1 subsystem and shared mutable state", "Raw SQL in HTTP/controller paths", "Global DOM and browser storage"],
+      "source_selectors": [
+        { "path": "src/server.js", "selector": "http.createServer callback plus route/projection/helper sections", "concern": "monolithic server controller" },
+        { "path": "public/app.js", "selector": "module-level appState, renderApp, initSSE, initModalListeners", "concern": "monolithic browser controller" }
+      ],
+      "v2_requirement": "REMOVE",
+      "source_paths": [
+        { "path": "src/server.js", "git_blob_oid": "ba596124d37296c46cb9e6de3911b0d4c6e59589" },
+        { "path": "public/app.js", "git_blob_oid": "5e50c47f959b094ba148904f92051f2b99d36370" }
+      ],
+      "classification": "DO_NOT_REPRODUCE",
+      "evidence_tests": [
+        { "path": "test/serverSmoke.test.js", "git_blob_oid": "1d087f7dc373c4918565d3eefbb71bbeac957ea7" },
+        { "path": "test/appLiveUpdates.test.js", "git_blob_oid": "4950d78f32766b120a5b68374b034b2d6ee98c72" }
+      ],
+      "proposed_v2_destination_or_purpose": "No direct destination; split v2 HTTP handlers, repositories, integrations, use cases, domain services, templates, and focused browser controllers by responsibility.",
+      "rationale": "The files combine routing, auth, raw persistence, HA/Brewfather orchestration, projections, SSE, rendering, settings, and ceremony behavior. Their tests prove outcomes but do not make the mixed ownership maintainable or compatible with the frozen architecture.",
+      "preservation": "Extract behavior into v2-owned modules deliberately; do not copy the files, import them, or add compatibility shims around them.",
+      "confidence": "high",
+      "risks": ["Mechanical extraction can preserve hidden cross-layer coupling.", "Splitting without transaction and event-order contracts can change durable behavior."]
+    }
+  ]
+}
