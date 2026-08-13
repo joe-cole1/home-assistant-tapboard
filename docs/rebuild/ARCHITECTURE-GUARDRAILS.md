@@ -1,34 +1,40 @@
 # Rebuild architecture guardrails
 
-## Active during initialization
+## Active Foundation gate
 
-`scripts/check-architecture.sh` is dependency-free and currently enforces:
+`scripts/check-architecture.sh` now permits the legitimate package manifest and `src/` runtime introduced by issue #66 while enforcing topology- and content-aware Foundation boundaries:
 
 - required authoritative rebuild records remain present;
 - known v1 runtime, database, Home Assistant telemetry, backup, SPA, and deployment paths do not return;
 - no top-level or active-source `v1`, `v2`, or `legacy` shadow runtime tree is introduced;
-- source files do not import named legacy v1 runtime modules;
-- core domain directories do not import integration-specific modules;
-- browser directories do not import server or infrastructure source;
-- raw SQL in application source is limited to repository, migration, or database-infrastructure ownership.
+- application source does not import named legacy v1 runtime modules;
+- core/domain locations do not import integration-specific modules;
+- browser locations do not import server or infrastructure source;
+- raw SQL is allowed only in `src/infrastructure/database/connection.ts`, `src/infrastructure/database/migrations.ts`, or a future feature-owned `repository.ts`/`repositories/*.ts`;
+- `better-sqlite3` imports and database construction are allowed only in `src/infrastructure/database/connection.ts`.
 
-`scripts/check-reuse-manifest.py` uses only the Python standard library and enforces the exact immutable frozen v1 commit, manifest schema/classifications, required entry fields, unique entry IDs, and every source/test path's recorded Git blob.
+The gate reports the violated rule and path. `test/architecture.test.ts` uses isolated negative fixtures to prove rejection of shadow runtime trees, legacy imports, domain-to-integration imports, browser-to-server imports, SQL outside approved ownership, and SQLite access outside the controlled connection boundary. It also proves that the legitimate Foundation topology passes.
 
-The guardrail intentionally excludes `docs/` from legacy-name scans because the rebuild records and manifest must discuss v1 paths.
+`scripts/check-reuse-manifest.py` remains dependency-free and enforces the exact immutable frozen v1 commit, manifest schema and classifications, required entry fields, unique entry IDs, and every source/test path's recorded Git blob. The architecture checker intentionally excludes `docs/` from legacy-name scans because the rebuild records and manifest must discuss v1 paths.
 
-The exact path bans are construction-site checks, not permanent bans on v2 files. During Foundation, the package/runtime bans must be replaced with v2 topology- and content-aware checks before the new package manifest or runtime is added. The clean Docker/Compose files remain absent until their frozen deployment phase; that phase must replace the initialization Docker path bans with v2 deployment-content checks in the same change that introduces those files.
+These checks preserve the clean rebuild boundary; they do not make v1 code an active dependency. A manifest classification of `reference` never authorizes an import.
 
-## Pending Foundation topology
+## Canonical enforcement
 
-Foundation must review and tighten the import and SQL allowlists after it establishes the approved TypeScript feature tree. It must also:
+`npm run check` is the canonical Foundation gate. It runs:
 
-- replace initialization-only package/runtime path bans before adding legitimate v2 manifests or runtime paths;
-- make the architecture gate part of the canonical `npm run check`;
-- prohibit integration-specific imports from every finalized core-domain location;
-- prohibit browser imports from finalized server-only paths;
-- permit raw SQL only in the finalized feature repository and migration ownership paths;
-- add tests proving violations fail with concise path/rule output.
+1. Prettier checking;
+2. TypeScript-aware ESLint;
+3. `tsc --noEmit`;
+4. the architecture checker and reuse-manifest checker;
+5. the `node:test` suite, including architecture negative fixtures.
 
-The deployment/final-acceptance phase must replace the initialization-only Docker/Compose path bans before adding the approved clean v2 deployment files, while continuing to reject legacy Node, backup-volume, HA-telemetry, and secret-handling configuration.
+The Foundation CI workflow uses Node 24, installs from the lockfile with `npm ci`, runs the same canonical gate, and checks changed-line whitespace. A pre-commit hook dependency is not part of Foundation; the local and CI gate is authoritative.
 
-These are explicit pending checks, not claims that an absent runtime has already proven the final topology.
+## Boundaries reserved for later phases
+
+The exact known v1 Docker and Compose paths remain banned during Foundation. Issue #81 must replace those path bans with content-aware v2 deployment checks in the same change that introduces the approved clean deployment files, while continuing to reject legacy Node, backup-volume, Home Assistant telemetry, and unsafe secret-handling configuration.
+
+Future issues may add domain, integration, browser, and feature-repository locations only within the frozen architecture. When a legitimate new topology or migration adds a boundary not represented here, that issue must deliberately update the focused allowlists and negative tests without weakening the legacy, layering, SQL-ownership, SQLite-connection, or reuse-manifest protections.
+
+Playwright/browser E2E is intentionally absent in #66 because there is no feature UI or browser workflow. No E2E tests ran or passed; the browser E2E tier is deferred to issue #76.

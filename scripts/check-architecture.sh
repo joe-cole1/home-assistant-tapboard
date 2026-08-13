@@ -1,12 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# This gate describes the rebuild-initialization construction site. Foundation
-# must replace the package/runtime path bans with v2 topology-aware checks, and
-# the deployment phase must replace the Docker path bans with content-aware
-# v2 deployment checks. See docs/rebuild/ARCHITECTURE-GUARDRAILS.md.
+# Foundation topology gate. The deployment phase must replace the remaining
+# Docker path bans with content-aware v2 deployment checks when those files are
+# legitimately introduced. See docs/rebuild/ARCHITECTURE-GUARDRAILS.md.
 
-repository_root="$(git rev-parse --show-toplevel)"
+if [[ -n "${TAPBOARD_ARCHITECTURE_ROOT:-}" ]]; then
+  repository_root="$TAPBOARD_ARCHITECTURE_ROOT"
+else
+  repository_root="$(git rev-parse --show-toplevel)"
+fi
+
+if [[ ! -d "$repository_root" ]]; then
+  printf 'architecture check root is not a directory: %s\n' "$repository_root" >&2
+  exit 2
+fi
+
 cd "$repository_root"
 
 violations=0
@@ -21,6 +30,8 @@ required_rebuild_files=(
   docs/rebuild/ARCHITECTURE-DECISIONS.md
   docs/rebuild/V1-REUSE-CRITERIA.md
   docs/rebuild/ARCHITECTURE-FREEZE.md
+  docs/rebuild/ARCHITECTURE-GUARDRAILS.md
+  docs/rebuild/STATUS.md
   docs/rebuild/v1-reuse-manifest.json
 )
 
@@ -35,8 +46,7 @@ forbidden_v1_paths=(
   .env.example
   .github/dependabot.yml
   .github/workflows/ci.yml
-  .prettierignore
-  .prettierrc.json
+  eslint.config.js
   src/brewStory.js
   src/brewfatherCache.js
   src/brewfatherClient.js
@@ -63,6 +73,14 @@ forbidden_v1_paths=(
   src/tapActions.js
   src/tapboardEvents.js
   src/validation.js
+  src/server.ts
+  src/dbMigrations.ts
+  src/databaseMaintenance.ts
+  src/haClient.ts
+  src/tapboardProjection.ts
+  src/tapPlanning.ts
+  src/imageProxy.ts
+  src/tapActions.ts
   public/app.js
   public/autosave.js
   public/brewStory.js
@@ -82,9 +100,6 @@ forbidden_v1_paths=(
   home-assistant/packages/brewfather_tapboard.yaml
   home-assistant/packages/tapboard.yaml
   home-assistant/packages/tapboard_helpers.yaml
-  package.json
-  package-lock.json
-  eslint.config.js
   Dockerfile
   docker-compose.yml
 )
@@ -95,47 +110,130 @@ for path in "${forbidden_v1_paths[@]}"; do
   fi
 done
 
+legacy_v1_module_basenames=()
+for path in "${forbidden_v1_paths[@]}"; do
+  if [[ "$path" =~ ^src/([^/]+)\.js$ ]]; then
+    legacy_v1_module_basenames+=("${BASH_REMATCH[1]}")
+  fi
+done
+
 active_repository_files() {
-  while IFS= read -r path; do
-    [[ -f "$path" ]] && printf '%s\n' "$path"
-  done < <(git ls-files --cached --others --exclude-standard)
+  if [[ -z "${TAPBOARD_ARCHITECTURE_ROOT:-}" ]]; then
+    while IFS= read -r path; do
+      [[ -f "$path" ]] && printf '%s\n' "$path"
+    done < <(git ls-files --cached --others --exclude-standard)
+    return
+  fi
+
+  find . -type f \
+    -not -path './.git/*' \
+    -not -path './node_modules/*' \
+    -not -path './data/*' \
+    -not -path './backups/*' \
+    -print | sed 's#^\./##' | LC_ALL=C sort
+}
+
+import_specifiers() {
+  grep -Eo "(from|import)[[:space:]]*(\()?[[:space:]]*['\"][^'\"]+['\"]" "$1" |
+    sed -E "s/^(from|import)[[:space:]]*(\()?[[:space:]]*['\"]//; s/['\"]$//"
 }
 
 if active_repository_files | grep -Eq '^(v1|v2|legacy)/|^(src|app|server|client|public)/(v1|v2|legacy)/'; then
   while IFS= read -r path; do
-    report "parallel or legacy runtime tree is prohibited: $path"
+    report "[shadow-runtime] parallel or legacy runtime tree is prohibited: $path"
   done < <(active_repository_files | grep -E '^(v1|v2|legacy)/|^(src|app|server|client|public)/(v1|v2|legacy)/')
 fi
 
-legacy_import_pattern='(server|dbMigrations|databaseMaintenance|haClient|tapboardProjection|tapPlanning|imageProxy|tapActions)\.(js|ts)'
 while IFS= read -r source_file; do
-  if grep -En "$legacy_import_pattern" "$source_file" >/dev/null; then
-    report "legacy v1 module import/reference in source: $source_file"
-  fi
+  while IFS= read -r specifier; do
+    if [[ "$specifier" =~ (^|/)(v1|legacy)/ ]]; then
+      report "[legacy-import] legacy v1 module import in source: $source_file"
+      break
+    fi
+
+    module_path="${specifier%%[?#]*}"
+    case "$module_path" in
+      ./*|../*)
+        normalized_module_path="$(realpath -m --relative-to=. -- "$(dirname "$source_file")/$module_path")"
+        ;;
+      src/*|/src/*)
+        normalized_module_path="${module_path#/}"
+        ;;
+      *)
+        normalized_module_path=""
+        ;;
+    esac
+
+    if [[ "$normalized_module_path" == "src/infrastructure/http/server.ts" ||
+      "$normalized_module_path" == "src/shared/validation.ts" ]]; then
+      continue
+    fi
+
+    module_basename="$module_path"
+    module_basename="${module_basename##*/}"
+    if [[ "$module_basename" =~ ^(.+)\.(mjs|cjs|js|mts|cts|ts)$ ]]; then
+      module_basename="${BASH_REMATCH[1]}"
+    fi
+
+    for legacy_basename in "${legacy_v1_module_basenames[@]}"; do
+      if [[ "$module_basename" == "$legacy_basename" ]]; then
+        report "[legacy-import] legacy v1 module import in source: $source_file"
+        break 2
+      fi
+    done
+  done < <(import_specifiers "$source_file" || true)
 done < <(active_repository_files | grep -E '^(src|app|server|client|public)/.*\.(js|mjs|cjs|ts|mts|cts)$' || true)
 
 while IFS= read -r domain_file; do
-  if grep -Ein '(integrations?/|brewfather|home[-_]?assistant|webhook)' "$domain_file" >/dev/null; then
-    report "integration-specific dependency in core domain: $domain_file"
+  if grep -Ein "(from|import)[[:space:]]*(\()?[[:space:]]*['\"][^'\"]*(integrations?/|brewfather|home[-_]?assistant|webhook)" "$domain_file" >/dev/null; then
+    report "[domain-integration] integration-specific import in domain source: $domain_file"
   fi
-done < <(active_repository_files | grep -E '^src/(domain/|.*/domain/).*\.(js|mjs|cjs|ts|mts|cts)$' || true)
+done < <(active_repository_files | grep -E '^src/(core/|domain/|features/[^/]+/domain/).*\.(js|mjs|cjs|ts|mts|cts)$' || true)
 
 while IFS= read -r browser_file; do
-  if grep -En "(from|import\()[[:space:]]*['\"][^'\"]*(src/|server/|infrastructure/)" "$browser_file" >/dev/null; then
-    report "browser source imports server/infrastructure source: $browser_file"
-  fi
-done < <(active_repository_files | grep -E '^(public|client|browser)/.*\.(js|mjs|cjs|ts|mts|cts)$' || true)
+  while IFS= read -r import_expression; do
+    specifier="$(sed -E "s/^(from|import)[[:space:]]*(\\()?[[:space:]]*['\"]//; s/['\"]$//" <<<"$import_expression")"
+
+    case "$specifier" in
+      ./*|../*)
+        normalized_specifier="$(realpath -m --relative-to=. -- "$(dirname "$browser_file")/$specifier")"
+        ;;
+      src/*|server/*|/src/*|/server/*)
+        normalized_specifier="${specifier#/}"
+        ;;
+      *)
+        continue
+        ;;
+    esac
+
+    if [[ "$normalized_specifier" =~ ^src/(application|main|config)\.([cm]?[jt]s)$ ||
+      "$normalized_specifier" =~ ^src/infrastructure/ ||
+      "$normalized_specifier" =~ ^(src/)?server/ ]]; then
+      report "[browser-server] browser source imports server/infrastructure source: $browser_file"
+      break
+    fi
+  done < <(import_specifiers "$browser_file" || true)
+done < <(active_repository_files | grep -E '^((public|client|browser)/|src/(public|client|browser|presentation/browser|features/[^/]+/(public|client|browser))/).*\.(js|mjs|cjs|ts|mts|cts)$' || true)
 
 while IFS= read -r sql_file; do
-  case "$sql_file" in
-    */repository.*|*/repositories/*|*/migration.*|*/migrations/*|*/database/*|*/db/*) ;;
-    *)
-      if grep -Ein '\b(SELECT|INSERT|UPDATE|DELETE[[:space:]]+FROM|CREATE[[:space:]]+TABLE|ALTER[[:space:]]+TABLE|DROP[[:space:]]+TABLE|PRAGMA)\b' "$sql_file" >/dev/null; then
-        report "raw SQL outside repository/migration/database ownership: $sql_file"
-      fi
-      ;;
-  esac
+  if grep -Eq '^src/infrastructure/database/(connection|migrations)\.ts$|^src/features/[^/]+/repository\.ts$|^src/features/[^/]+/repositories/[^/]+\.ts$' <<<"$sql_file"; then
+    continue
+  fi
+
+  if grep -Ein '\b(SELECT|INSERT|UPDATE|DELETE[[:space:]]+FROM|CREATE[[:space:]]+TABLE|ALTER[[:space:]]+TABLE|DROP[[:space:]]+TABLE|PRAGMA)\b' "$sql_file" >/dev/null; then
+    report "[sql-ownership] raw SQL outside approved database ownership: $sql_file"
+  fi
 done < <(active_repository_files | grep -E '^(src|app|server)/.*\.(js|mjs|cjs|ts|mts|cts)$' || true)
+
+while IFS= read -r database_file; do
+  if [[ "$database_file" == "src/infrastructure/database/connection.ts" ]]; then
+    continue
+  fi
+
+  if grep -En "better-sqlite3|new[[:space:]]+Database[[:space:]]*\(" "$database_file" >/dev/null; then
+    report "[sqlite-boundary] better-sqlite3 access or construction outside connection boundary: $database_file"
+  fi
+done < <(active_repository_files | grep -E '^src/.*\.(js|mjs|cjs|ts|mts|cts)$' || true)
 
 if ((violations > 0)); then
   printf '%d architecture violation(s) found.\n' "$violations" >&2

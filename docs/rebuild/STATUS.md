@@ -1,10 +1,10 @@
 # Tapboard v2 rebuild status
 
 - Architecture: **FROZEN**
-- Current phase: **Rebuild initialization complete; Foundation not started**
-- Rebuild branch: `codex/rebuild-initialization`
-- Frozen v1 source branch: `main`
-- Exact frozen v1 base: `429cf07e451b64ca1713655a34ffa5ebd376efae`
+- Current phase: **Foundation implemented; awaiting review and shipping**
+- Foundation branch: `codex/issue-66-foundation`
+- Foundation base: `9ec2f14051b5ac0a6bfd11f44b8273eecdfca35e`
+- Frozen v1 source commit: `429cf07e451b64ca1713655a34ffa5ebd376efae`
 - ADR index: [`docs/adr/README.md`](../adr/README.md)
 - V1 reuse manifest: [`docs/rebuild/v1-reuse-manifest.json`](v1-reuse-manifest.json)
 - Guardrail policy: [`docs/rebuild/ARCHITECTURE-GUARDRAILS.md`](ARCHITECTURE-GUARDRAILS.md)
@@ -29,8 +29,21 @@
 - 15. [#80 — System and local operator functions](https://github.com/joe-cole1/home-assistant-tapboard/issues/80)
 - 16. [#81 — Deployment, documentation, and final acceptance](https://github.com/joe-cole1/home-assistant-tapboard/issues/81)
 
-The list preserves the frozen implementation sequence after initialization. Each child records its immediate dependency; #66 depends on explicit approval of this initialization phase rather than on another implementation issue.
+The list preserves the frozen implementation sequence. Issue #66 remains open and this implementation has not been committed, pushed, or opened as a PR under the repository shipping policy.
 
-## Implementation state
+## Implemented in Foundation
 
-No Foundation or feature implementation has begun. The initialization working tree removes the active v1 runtime and has no parallel v1/v2 runtime trees. Reusable v1 material is preserved by exact commit/path/blob references in the manifest and remains recoverable from Git rather than copied into an executable shadow tree.
+- Node 24 ESM runtime with native erasable TypeScript and `tsc --noEmit` checking;
+- explicit application composition, Node HTTP lifecycle, and exactly `GET /healthz` for local application/database readiness;
+- file-based Eta rendering with default escaping plus layout/partial proof templates;
+- one controlled `better-sqlite3` connection, foreign keys, transactional versioned migrations, exact version-1 schema validation, and resource closure;
+- shared typed errors, centralized HTTP error mapping, explicit validation, and structured redacting logging;
+- Foundation-aware architecture guardrails and negative fixtures;
+- canonical `npm run check` covering format, lint, types, architecture/reuse integrity, and `node:test`;
+- Node 24 CI running `npm ci`, the canonical gate, and changed-line whitespace validation.
+
+The schema contains only the `schema_migrations` infrastructure ledger. No v1 schema or data is adopted, and no #67+ security, domain, integration, telemetry, UI, or deployment behavior is present.
+
+## Deferred validation tiers
+
+Playwright/browser E2E is intentionally not introduced in #66 because no feature UI or workflow exists. No E2E tests ran or passed; that tier is deferred to issue #76. A staged-file pre-commit formatter and hook dependency are also not introduced; the canonical local and CI gate is authoritative for Foundation.

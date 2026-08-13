@@ -1,4 +1,4 @@
-name: Rebuild architecture guardrails
+name: Foundation quality
 
 on:
   pull_request:
@@ -14,21 +14,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  guardrails:
+  check:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Validate initialization records and boundaries
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - name: Check changed-line whitespace
         shell: bash
         run: |
           set -euo pipefail
-          bash scripts/check-architecture.sh
-          python3 scripts/check-reuse-manifest.py
-
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             diff_base="${{ github.event.pull_request.base.sha }}"
           elif [[ "${{ github.event_name }}" == "push" && "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]]; then
