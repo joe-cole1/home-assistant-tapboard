@@ -28,12 +28,6 @@ export interface TapAssignmentLifecycle {
   readonly createdAt: string;
 }
 
-export interface TapFillState {
-  readonly id: string;
-  readonly endedAt: string | null;
-  readonly onDeckOrder: number | null;
-}
-
 export interface ActiveAssignmentDetails {
   readonly id: string;
   readonly fillId: string;

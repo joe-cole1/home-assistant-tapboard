@@ -751,3 +751,134 @@ void test("HTTP API: full Tap and assignment lifecycle smoke test with auth, CSR
   assert.equal(deleteData.deleted, true);
   assert.equal(deleteData.tapId, tap3.tap.id);
 });
+
+void test("linked beverage tap projections honor 3-state presentation overrides (beverageType override, explicit clear for style and abv)", async () => {
+  const { database, beverageService, tapService, fillService, kegService, authService } =
+    setupTestEnvironment();
+
+  // 0. Set up Brewfather account
+  beverageService.configureBrewfatherAccount({
+    userId: "bf-user-123",
+    apiKey: "secret-api-key-xyz",
+    enabled: true,
+  });
+
+  // 1. Insert a candidate into brewfather_candidate_cache
+  database
+    .prepare(
+      `INSERT INTO brewfather_candidate_cache (
+        id, account_id, source_batch_id, batch_name, batch_number, status, brewer,
+        recipe_name, style, brew_date, estimated_og, estimated_fg, estimated_abv,
+        estimated_ibu, estimated_srm, raw_summary_json, summary_fingerprint, synced_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      "c1111111-1111-4111-8111-111111111111",
+      "default",
+      "batch-source-1",
+      "Source IPA",
+      42,
+      "Fermenting",
+      "Brewer Joe",
+      "West Coast IPA Recipe",
+      "IPA",
+      "2026-08-01",
+      1.065,
+      1.012,
+      6.5,
+      60,
+      6,
+      "{}",
+      "a".repeat(64),
+      "2026-08-14T00:00:00.000Z",
+    );
+
+  // 2. Link candidate into a new Beverage
+  const linked = beverageService.linkBrewfatherCandidate({
+    sourceBatchId: "batch-source-1",
+  });
+  assert.equal(linked.beverage.ownershipType, "brewfather");
+
+  // 3. Apply local overrides:
+  // - beverageType: explicit value different from source ("cider" vs source "beer")
+  // - style: explicit CLEAR (clear: true -> style = null)
+  // - abv: explicit CLEAR (clear: true -> abv = null)
+  // - name: explicit value ("Local Dry Hopped Cider")
+  const updatedBeverage = beverageService.updatePresentationOverrides(linked.beverage.id, {
+    name: { value: "Local Dry Hopped Cider" },
+    beverageType: { value: "cider" },
+    style: { clear: true },
+    abv: { clear: true },
+  });
+
+  const canonicalEffective = updatedBeverage.effectivePresentation;
+  assert.equal(canonicalEffective.name, "Local Dry Hopped Cider");
+  assert.equal(canonicalEffective.beverageType, "cider");
+  assert.equal(canonicalEffective.style, null);
+  assert.equal(canonicalEffective.abv, null);
+
+  // 4. Create Keg + Fill and assign to Tap
+  const keg = kegService.createKeg({ kegNumber: 50, capacityMl: 19000 });
+  const fill = fillService.createFill({ beverageId: linked.beverage.id, kegId: keg.id });
+  const tap = tapService.createTap({ tapNumber: 7, name: "Cider Tap" });
+  tapService.assignFill(tap.id, { fillId: fill.id });
+
+  // 5. Assert AdminTapView activeAssignment matches canonical effective presentation
+  const adminTap = tapService.getTap(tap.id);
+  assert.ok(adminTap.activeAssignment !== null);
+  assert.equal(adminTap.activeAssignment.beverageName, canonicalEffective.name);
+  assert.equal(adminTap.activeAssignment.beverageType, canonicalEffective.beverageType);
+  assert.equal(adminTap.activeAssignment.beverageStyle, canonicalEffective.style);
+  assert.equal(adminTap.activeAssignment.beverageAbv, canonicalEffective.abv);
+  assert.equal(adminTap.activeAssignment.beverageStyle, null); // explicitly proved null
+  assert.equal(adminTap.activeAssignment.beverageAbv, null); // explicitly proved null
+  assert.equal(adminTap.activeAssignment.beverageType, "cider"); // override honored
+
+  // 6. Assert PublicTapView activeFill matches canonical effective presentation
+  const publicTaps = tapService.listPublicTaps();
+  const publicTap = publicTaps.find((t) => t.tapNumber === 7);
+  assert.ok(publicTap !== undefined);
+  assert.ok(publicTap.activeFill !== null);
+  assert.equal(publicTap.activeFill.beverageName, canonicalEffective.name);
+  assert.equal(publicTap.activeFill.beverageType, canonicalEffective.beverageType);
+  assert.equal(publicTap.activeFill.beverageStyle, canonicalEffective.style);
+  assert.equal(publicTap.activeFill.beverageAbv, canonicalEffective.abv);
+  assert.equal(publicTap.activeFill.beverageStyle, null); // explicitly proved null
+  assert.equal(publicTap.activeFill.beverageAbv, null); // explicitly proved null
+  assert.equal(publicTap.activeFill.beverageType, "cider"); // override honored
+
+  // 7. Assert HTTP API endpoints match canonical effective presentation
+  const router = new Router(quietLogger);
+  registerTapRoutes({ router, tapService, authService });
+  const server = new HttpServer({
+    router,
+    logger: quietLogger,
+    shutdownGraceMs: 500,
+  });
+  const address = await server.start("127.0.0.1", 0);
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+
+  try {
+    const publicRes = await fetch(`${baseUrl}/api/public/taps`);
+    assert.equal(publicRes.status, 200);
+    const publicData = (await publicRes.json()) as {
+      taps: Array<{
+        tapNumber: number;
+        activeFill: {
+          beverageName: string;
+          beverageType: string;
+          beverageStyle: string | null;
+          beverageAbv: number | null;
+        } | null;
+      }>;
+    };
+    const httpPublicTap = publicData.taps.find((t) => t.tapNumber === 7);
+    assert.ok(httpPublicTap?.activeFill);
+    assert.equal(httpPublicTap.activeFill.beverageName, "Local Dry Hopped Cider");
+    assert.equal(httpPublicTap.activeFill.beverageType, "cider");
+    assert.equal(httpPublicTap.activeFill.beverageStyle, null);
+    assert.equal(httpPublicTap.activeFill.beverageAbv, null);
+  } finally {
+    await server.stop();
+  }
+});

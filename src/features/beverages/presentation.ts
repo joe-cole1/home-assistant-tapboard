@@ -1,3 +1,10 @@
+import type { DatabaseExecutor } from "../../infrastructure/database/connection.ts";
+import {
+  readBeverage,
+  readCustomProfile,
+  readPresentationOverrides,
+  readSourceProfile,
+} from "./repository.ts";
 import type {
   BrewfatherPresentationOverrides,
   BrewfatherSourceProfile,
@@ -77,4 +84,33 @@ export function resolveLinkedPresentation(
       ? overrides.manualDensityOverride
       : null,
   };
+}
+
+/**
+ * Resolves the canonical effective presentation for a beverage by ID directly from the database.
+ * Reuses the canonical #69 Custom and Brewfather-linked presentation rules.
+ */
+export function resolveEffectivePresentationFromDb(
+  database: DatabaseExecutor,
+  beverageId: string,
+): EffectiveBeveragePresentation | undefined {
+  const beverage = readBeverage(database, beverageId);
+  if (beverage === undefined) {
+    return undefined;
+  }
+
+  if (beverage.ownershipType === "custom") {
+    const profile = readCustomProfile(database, beverageId);
+    if (profile === undefined) {
+      return undefined;
+    }
+    return resolveCustomPresentation(profile);
+  }
+
+  const source = readSourceProfile(database, beverageId);
+  if (source === undefined) {
+    return undefined;
+  }
+  const overrides = readPresentationOverrides(database, beverageId);
+  return resolveLinkedPresentation(source, overrides);
 }

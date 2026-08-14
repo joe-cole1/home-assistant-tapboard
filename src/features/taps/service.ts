@@ -4,7 +4,12 @@ import { ApplicationError } from "../../shared/errors.ts";
 import { appendActivity } from "../activity/operations.ts";
 import { appendDeletionAudit } from "../activity/deletion-audit.ts";
 import {
-  clearFillOnDeckOrder,
+  findFillById,
+  listOnDeckFills,
+  reorderOnDeck,
+  updateOnDeckOrder,
+} from "../fills/repository.ts";
+import {
   closeAssignmentLifecycle,
   countActiveAssignmentsByTapId,
   countHistoricalAssignmentsByTapId,
@@ -12,7 +17,6 @@ import {
   findActiveAssignmentByFillId,
   findActiveAssignmentByTapId,
   findAdminTapViewById,
-  findFillState,
   findTapById,
   findTapByNumber,
   insertAssignmentLifecycle,
@@ -20,7 +24,6 @@ import {
   listAdminTapViews,
   listPublicTapViews,
   registerTapFirstUse,
-  reorderOnDeckFillsContiguous,
   updateTap,
 } from "./repository.ts";
 import {
@@ -322,8 +325,8 @@ export class TapService {
         });
       }
 
-      const fillState = findFillState(this.#database, validated.fillId);
-      if (!fillState) {
+      const fill = findFillById(this.#database, validated.fillId);
+      if (!fill) {
         throw new ApplicationError({
           category: "not_found",
           code: "fill.not_found",
@@ -332,8 +335,8 @@ export class TapService {
         });
       }
 
-      if (fillState.endedAt !== null) {
-        const endedAt = fillState.endedAt;
+      if (fill.endedAt !== null) {
+        const endedAt = fill.endedAt;
         throw new ApplicationError({
           category: "conflict",
           code: "fill.already_ended",
@@ -356,9 +359,14 @@ export class TapService {
         });
       }
 
-      if (fillState.onDeckOrder !== null) {
-        clearFillOnDeckOrder(this.#database, validated.fillId, nowIso);
-        reorderOnDeckFillsContiguous(this.#database, nowIso);
+      if (fill.onDeckOrder !== null) {
+        updateOnDeckOrder(this.#database, fill.id, null, nowIso);
+        const remainingOnDeck = listOnDeckFills(this.#database);
+        reorderOnDeck(
+          this.#database,
+          remainingOnDeck.map((f) => f.id),
+          nowIso,
+        );
       }
 
       const assignmentId = this.#idFactory();

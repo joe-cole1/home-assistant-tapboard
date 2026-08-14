@@ -1,11 +1,11 @@
 import type { DatabaseExecutor } from "../../infrastructure/database/connection.ts";
+import { resolveEffectivePresentationFromDb } from "../beverages/presentation.ts";
 import type {
   ActiveAssignmentDetails,
   AdminTapView,
   PublicTapView,
   Tap,
   TapAssignmentLifecycle,
-  TapFillState,
 } from "./types.ts";
 
 interface TapRow {
@@ -39,18 +39,6 @@ interface AdminTapJoinedRow extends TapRow {
   readonly assignment_fill_id: string | null;
   readonly assignment_assigned_at: string | null;
   readonly beverage_id: string | null;
-  readonly beverage_ownership_type: string | null;
-  readonly custom_name: string | null;
-  readonly custom_type: string | null;
-  readonly custom_style: string | null;
-  readonly custom_abv: number | null;
-  readonly source_name: string | null;
-  readonly source_type: string | null;
-  readonly source_style: string | null;
-  readonly source_abv: number | null;
-  readonly override_name: string | null;
-  readonly override_style: string | null;
-  readonly override_abv: number | null;
   readonly keg_id: string | null;
   readonly keg_number: number | null;
   readonly keg_label: string | null;
@@ -60,27 +48,11 @@ interface PublicTapJoinedRow {
   readonly tap_number: number;
   readonly name: string | null;
   readonly fill_id: string | null;
-  readonly custom_name: string | null;
-  readonly custom_type: string | null;
-  readonly custom_style: string | null;
-  readonly custom_abv: number | null;
-  readonly source_name: string | null;
-  readonly source_type: string | null;
-  readonly source_style: string | null;
-  readonly source_abv: number | null;
-  readonly override_name: string | null;
-  readonly override_style: string | null;
-  readonly override_abv: number | null;
+  readonly beverage_id: string | null;
 }
 
 interface CountRow {
   readonly count: number;
-}
-
-interface FillStateRow {
-  readonly id: string;
-  readonly ended_at: string | null;
-  readonly on_deck_order: number | null;
 }
 
 function mapTapRow(row: TapRow): Tap {
@@ -113,43 +85,7 @@ function mapLifecycleRow(row: LifecycleRow): TapAssignmentLifecycle {
   };
 }
 
-function resolveBeverageDetails(row: {
-  readonly beverage_id: string | null;
-  readonly beverage_ownership_type: string | null;
-  readonly custom_name: string | null;
-  readonly custom_type: string | null;
-  readonly custom_style: string | null;
-  readonly custom_abv: number | null;
-  readonly source_name: string | null;
-  readonly source_type: string | null;
-  readonly source_style: string | null;
-  readonly source_abv: number | null;
-  readonly override_name: string | null;
-  readonly override_style: string | null;
-  readonly override_abv: number | null;
-}): {
-  readonly name: string;
-  readonly type: string;
-  readonly style: string | null;
-  readonly abv: number | null;
-} {
-  if (row.beverage_ownership_type === "custom") {
-    return {
-      name: row.custom_name ?? "Unknown Beverage",
-      type: row.custom_type ?? "other",
-      style: row.custom_style,
-      abv: row.custom_abv,
-    };
-  }
-
-  const name = row.override_name ?? row.source_name ?? "Unknown Beverage";
-  const type = row.source_type ?? "other";
-  const style = row.override_style ?? row.source_style;
-  const abv = row.override_abv ?? row.source_abv;
-  return { name, type, style, abv };
-}
-
-function mapAdminTapJoinedRow(row: AdminTapJoinedRow): AdminTapView {
+function mapAdminTapJoinedRow(database: DatabaseExecutor, row: AdminTapJoinedRow): AdminTapView {
   const isRetired = row.retired_at !== null;
   const isOccupied = row.assignment_id !== null;
 
@@ -162,20 +98,22 @@ function mapAdminTapJoinedRow(row: AdminTapJoinedRow): AdminTapView {
     row.keg_id !== null &&
     row.keg_number !== null
   ) {
-    const bev = resolveBeverageDetails(row);
-    activeAssignment = {
-      id: row.assignment_id,
-      fillId: row.assignment_fill_id,
-      beverageId: row.beverage_id,
-      beverageName: bev.name,
-      beverageType: bev.type,
-      beverageStyle: bev.style,
-      beverageAbv: bev.abv,
-      kegId: row.keg_id,
-      kegNumber: row.keg_number,
-      kegLabel: row.keg_label,
-      assignedAt: row.assignment_assigned_at,
-    };
+    const pres = resolveEffectivePresentationFromDb(database, row.beverage_id);
+    if (pres !== undefined) {
+      activeAssignment = {
+        id: row.assignment_id,
+        fillId: row.assignment_fill_id,
+        beverageId: row.beverage_id,
+        beverageName: pres.name,
+        beverageType: pres.beverageType,
+        beverageStyle: pres.style,
+        beverageAbv: pres.abv,
+        kegId: row.keg_id,
+        kegNumber: row.keg_number,
+        kegLabel: row.keg_label,
+        assignedAt: row.assignment_assigned_at,
+      };
+    }
   }
 
   return {
@@ -217,9 +155,21 @@ export function insertTap(database: DatabaseExecutor, tap: Tap): void {
         string,
       ]
     >(
-      `INSERT INTO taps
-        (id, tap_number, name, enabled, first_used_at, retired_at, gas_type, serving_pressure_kpa, line_length_mm, line_diameter_mm, notes, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO taps (
+        id,
+        tap_number,
+        name,
+        enabled,
+        first_used_at,
+        retired_at,
+        gas_type,
+        serving_pressure_kpa,
+        line_length_mm,
+        line_diameter_mm,
+        notes,
+        created_at,
+        updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       tap.id,
@@ -291,7 +241,20 @@ export function updateTap(database: DatabaseExecutor, tap: Tap): boolean {
 export function findTapById(database: DatabaseExecutor, id: string): Tap | undefined {
   const row = database
     .prepare<[string], TapRow>(
-      `SELECT id, tap_number, name, enabled, first_used_at, retired_at, gas_type, serving_pressure_kpa, line_length_mm, line_diameter_mm, notes, created_at, updated_at
+      `SELECT
+        id,
+        tap_number,
+        name,
+        enabled,
+        first_used_at,
+        retired_at,
+        gas_type,
+        serving_pressure_kpa,
+        line_length_mm,
+        line_diameter_mm,
+        notes,
+        created_at,
+        updated_at
        FROM taps
        WHERE id = ?`,
     )
@@ -303,7 +266,20 @@ export function findTapById(database: DatabaseExecutor, id: string): Tap | undef
 export function findTapByNumber(database: DatabaseExecutor, tapNumber: number): Tap | undefined {
   const row = database
     .prepare<[number], TapRow>(
-      `SELECT id, tap_number, name, enabled, first_used_at, retired_at, gas_type, serving_pressure_kpa, line_length_mm, line_diameter_mm, notes, created_at, updated_at
+      `SELECT
+        id,
+        tap_number,
+        name,
+        enabled,
+        first_used_at,
+        retired_at,
+        gas_type,
+        serving_pressure_kpa,
+        line_length_mm,
+        line_diameter_mm,
+        notes,
+        created_at,
+        updated_at
        FROM taps
        WHERE tap_number = ?`,
     )
@@ -315,7 +291,20 @@ export function findTapByNumber(database: DatabaseExecutor, tapNumber: number): 
 export function listTaps(database: DatabaseExecutor): Tap[] {
   const rows = database
     .prepare<[], TapRow>(
-      `SELECT id, tap_number, name, enabled, first_used_at, retired_at, gas_type, serving_pressure_kpa, line_length_mm, line_diameter_mm, notes, created_at, updated_at
+      `SELECT
+        id,
+        tap_number,
+        name,
+        enabled,
+        first_used_at,
+        retired_at,
+        gas_type,
+        serving_pressure_kpa,
+        line_length_mm,
+        line_diameter_mm,
+        notes,
+        created_at,
+        updated_at
        FROM taps
        ORDER BY tap_number ASC`,
     )
@@ -333,8 +322,8 @@ export function registerTapFirstUse(
   database: DatabaseExecutor,
   tapId: string,
   occurredAt: string,
-): boolean {
-  const result = database
+): void {
+  database
     .prepare<[string, string, string]>(
       `UPDATE taps
        SET first_used_at = ?,
@@ -342,8 +331,6 @@ export function registerTapFirstUse(
        WHERE id = ? AND first_used_at IS NULL`,
     )
     .run(occurredAt, occurredAt, tapId);
-
-  return result.changes > 0;
 }
 
 export function insertAssignmentLifecycle(
@@ -352,8 +339,15 @@ export function insertAssignmentLifecycle(
 ): void {
   database
     .prepare<[string, string, string, string, string | null, string | null, string]>(
-      `INSERT INTO tap_assignment_lifecycles (id, tap_id, fill_id, assigned_at, ended_at, end_reason, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO tap_assignment_lifecycles (
+        id,
+        tap_id,
+        fill_id,
+        assigned_at,
+        ended_at,
+        end_reason,
+        created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       lifecycle.id,
@@ -380,6 +374,24 @@ export function closeAssignmentLifecycle(
        WHERE id = ? AND ended_at IS NULL`,
     )
     .run(endedAt, endReason, assignmentId);
+
+  return result.changes > 0;
+}
+
+export function closeActiveAssignmentByFillId(
+  database: DatabaseExecutor,
+  fillId: string,
+  endedAt: string,
+  endReason: string,
+): boolean {
+  const result = database
+    .prepare<[string, string, string]>(
+      `UPDATE tap_assignment_lifecycles
+       SET ended_at = ?,
+           end_reason = ?
+       WHERE fill_id = ? AND ended_at IS NULL`,
+    )
+    .run(endedAt, endReason, fillId);
 
   return result.changes > 0;
 }
@@ -475,28 +487,12 @@ const ADMIN_TAP_SELECT = `
     a.fill_id AS assignment_fill_id,
     a.assigned_at AS assignment_assigned_at,
     f.beverage_id,
-    b.ownership_type AS beverage_ownership_type,
-    cbp.name AS custom_name,
-    cbp.beverage_type AS custom_type,
-    cbp.style AS custom_style,
-    cbp.abv AS custom_abv,
-    bsp.name AS source_name,
-    bsp.beverage_type AS source_type,
-    bsp.style AS source_style,
-    bsp.abv AS source_abv,
-    bpo.name AS override_name,
-    bpo.style AS override_style,
-    bpo.abv AS override_abv,
     k.id AS keg_id,
     k.keg_number AS keg_number,
     k.label AS keg_label
   FROM taps t
   LEFT JOIN tap_assignment_lifecycles a ON a.tap_id = t.id AND a.ended_at IS NULL
   LEFT JOIN fills f ON f.id = a.fill_id
-  LEFT JOIN beverages b ON b.id = f.beverage_id
-  LEFT JOIN custom_beverage_profiles cbp ON cbp.beverage_id = b.id
-  LEFT JOIN brewfather_source_profiles bsp ON bsp.beverage_id = b.id
-  LEFT JOIN brewfather_presentation_overrides bpo ON bpo.beverage_id = b.id
   LEFT JOIN kegs k ON k.id = f.keg_id
 `;
 
@@ -508,7 +504,7 @@ export function findAdminTapViewById(
     .prepare<[string], AdminTapJoinedRow>(`${ADMIN_TAP_SELECT} WHERE t.id = ?`)
     .get(tapId);
 
-  return row === undefined ? undefined : mapAdminTapJoinedRow(row);
+  return row === undefined ? undefined : mapAdminTapJoinedRow(database, row);
 }
 
 export function listAdminTapViews(database: DatabaseExecutor): AdminTapView[] {
@@ -516,7 +512,7 @@ export function listAdminTapViews(database: DatabaseExecutor): AdminTapView[] {
     .prepare<[], AdminTapJoinedRow>(`${ADMIN_TAP_SELECT} ORDER BY t.tap_number ASC`)
     .all();
 
-  return rows.map(mapAdminTapJoinedRow);
+  return rows.map((row) => mapAdminTapJoinedRow(database, row));
 }
 
 export function listPublicTapViews(database: DatabaseExecutor): PublicTapView[] {
@@ -526,24 +522,10 @@ export function listPublicTapViews(database: DatabaseExecutor): PublicTapView[] 
         t.tap_number,
         t.name,
         a.fill_id,
-        cbp.name AS custom_name,
-        cbp.beverage_type AS custom_type,
-        cbp.style AS custom_style,
-        cbp.abv AS custom_abv,
-        bsp.name AS source_name,
-        bsp.beverage_type AS source_type,
-        bsp.style AS source_style,
-        bsp.abv AS source_abv,
-        bpo.name AS override_name,
-        bpo.style AS override_style,
-        bpo.abv AS override_abv
+        f.beverage_id
        FROM taps t
        LEFT JOIN tap_assignment_lifecycles a ON a.tap_id = t.id AND a.ended_at IS NULL
        LEFT JOIN fills f ON f.id = a.fill_id
-       LEFT JOIN beverages b ON b.id = f.beverage_id
-       LEFT JOIN custom_beverage_profiles cbp ON cbp.beverage_id = b.id
-       LEFT JOIN brewfather_source_profiles bsp ON bsp.beverage_id = b.id
-       LEFT JOIN brewfather_presentation_overrides bpo ON bpo.beverage_id = b.id
        WHERE t.enabled = 1 AND t.retired_at IS NULL
        ORDER BY t.tap_number ASC`,
     )
@@ -551,29 +533,17 @@ export function listPublicTapViews(database: DatabaseExecutor): PublicTapView[] 
 
   return rows.map((row) => {
     let activeFill: PublicTapView["activeFill"] = null;
-    if (row.fill_id !== null) {
-      const bev = resolveBeverageDetails({
-        beverage_id: "public",
-        beverage_ownership_type: row.custom_name !== null ? "custom" : "brewfather",
-        custom_name: row.custom_name,
-        custom_type: row.custom_type,
-        custom_style: row.custom_style,
-        custom_abv: row.custom_abv,
-        source_name: row.source_name,
-        source_type: row.source_type,
-        source_style: row.source_style,
-        source_abv: row.source_abv,
-        override_name: row.override_name,
-        override_style: row.override_style,
-        override_abv: row.override_abv,
-      });
-      activeFill = {
-        fillId: row.fill_id,
-        beverageName: bev.name,
-        beverageType: bev.type,
-        beverageStyle: bev.style,
-        beverageAbv: bev.abv,
-      };
+    if (row.fill_id !== null && row.beverage_id !== null) {
+      const pres = resolveEffectivePresentationFromDb(database, row.beverage_id);
+      if (pres !== undefined) {
+        activeFill = {
+          fillId: row.fill_id,
+          beverageName: pres.name,
+          beverageType: pres.beverageType,
+          beverageStyle: pres.style,
+          beverageAbv: pres.abv,
+        };
+      }
     }
     return {
       tapNumber: row.tap_number,
@@ -581,63 +551,4 @@ export function listPublicTapViews(database: DatabaseExecutor): PublicTapView[] 
       activeFill,
     };
   });
-}
-
-export function findFillState(
-  database: DatabaseExecutor,
-  fillId: string,
-): TapFillState | undefined {
-  const row = database
-    .prepare<[string], FillStateRow>(
-      `SELECT id, ended_at, on_deck_order
-       FROM fills
-       WHERE id = ?`,
-    )
-    .get(fillId);
-
-  if (row === undefined) {
-    return undefined;
-  }
-  return {
-    id: row.id,
-    endedAt: row.ended_at,
-    onDeckOrder: row.on_deck_order,
-  };
-}
-
-export function clearFillOnDeckOrder(
-  database: DatabaseExecutor,
-  fillId: string,
-  updatedAt: string,
-): boolean {
-  const result = database
-    .prepare<[string, string]>(
-      `UPDATE fills
-       SET on_deck_order = NULL,
-           updated_at = ?
-       WHERE id = ? AND on_deck_order IS NOT NULL`,
-    )
-    .run(updatedAt, fillId);
-
-  return result.changes > 0;
-}
-
-export function reorderOnDeckFillsContiguous(database: DatabaseExecutor, updatedAt: string): void {
-  const remaining = database
-    .prepare<[], { readonly id: string }>(
-      `SELECT id
-       FROM fills
-       WHERE ended_at IS NULL AND on_deck_order IS NOT NULL
-       ORDER BY on_deck_order ASC, created_at ASC`,
-    )
-    .all();
-
-  const updateStmt = database.prepare<[number, string, string]>(
-    `UPDATE fills SET on_deck_order = ?, updated_at = ? WHERE id = ?`,
-  );
-
-  for (let index = 0; index < remaining.length; index += 1) {
-    const item = remaining[index]!;
-    updateStmt.run(index + 1, updatedAt, item.id);
-  }
 }
