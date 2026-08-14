@@ -72,11 +72,23 @@ export interface BrewfatherAdapterOptions {
   readonly retryDelayMs?: number | ((attempt: number) => number);
 }
 
-function parseRetryAfter(value: string | null | undefined, now: number): number | null {
+export const MIN_RETRY_AFTER_MS = 1_000; // 1 second
+export const MAX_RETRY_AFTER_MS = 3_600_000; // 1 hour
+
+export function parseRetryAfter(value: string | null | undefined, now: number): number | null {
   if (!value) return null;
-  if (/^\d+$/.test(value)) return Number(value) * 1000;
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? Math.max(0, parsed - now) : null;
+  const trimmed = value.trim();
+  if (/^-?\d+$/.test(trimmed)) {
+    const seconds = Number(trimmed);
+    const ms = seconds * 1000;
+    return Math.max(MIN_RETRY_AFTER_MS, Math.min(MAX_RETRY_AFTER_MS, ms));
+  }
+  const parsed = Date.parse(trimmed);
+  if (Number.isFinite(parsed)) {
+    const diffMs = parsed - now;
+    return Math.max(MIN_RETRY_AFTER_MS, Math.min(MAX_RETRY_AFTER_MS, diffMs));
+  }
+  return null;
 }
 
 export class BrewfatherAdapter {
@@ -232,10 +244,9 @@ export class BrewfatherAdapter {
 
         if (response.status === 429) {
           const retryAfterHeader = response.headers.get("retry-after");
-          const retryMs = parseRetryAfter(retryAfterHeader, this.#now());
-          if (retryMs !== null) {
-            this.#blockedUntil = Math.max(this.#blockedUntil, this.#now() + retryMs);
-          }
+          const parsedRetryMs = parseRetryAfter(retryAfterHeader, this.#now());
+          const retryMs = parsedRetryMs ?? 60_000;
+          this.#blockedUntil = Math.max(this.#blockedUntil, this.#now() + retryMs);
           throw new BrewfatherError("rate_limited", "Brewfather rate limit exceeded (429).", {
             status: 429,
             retryAfterMs: retryMs,
@@ -308,36 +319,50 @@ export class BrewfatherAdapter {
   async listBatchesByStatuses(statuses: readonly string[]): Promise<{
     readonly batches: readonly Record<string, unknown>[];
     readonly failures: readonly { readonly status: string; readonly error: BrewfatherError }[];
+    readonly complete: boolean;
   }> {
     const batches: Record<string, unknown>[] = [];
     const failures: { readonly status: string; readonly error: BrewfatherError }[] = [];
-    let totalPages = 0;
+    let complete = true;
 
     for (const status of statuses) {
       let startAfter: string | undefined;
+      let statusPages = 0;
       try {
         while (true) {
-          if (++totalPages > this.#maxPages) {
+          if (statusPages >= this.#maxPages) {
+            complete = false;
             break;
           }
+          statusPages += 1;
           const page = await this.listBatches({
             status,
             ...(startAfter !== undefined ? { startAfter } : {}),
           });
           for (const item of page) {
             batches.push({ ...item, status: item.status ?? status });
+            if (batches.length >= this.#maxItems) {
+              complete = false;
+              break;
+            }
           }
-          if (batches.length >= this.#maxItems || page.length < 50) {
+          if (batches.length >= this.#maxItems) {
+            complete = false;
+            break;
+          }
+          if (page.length < 50) {
             break;
           }
           const lastItem = page[page.length - 1];
           const nextId = lastItem?._id ?? lastItem?.id;
           if (typeof nextId !== "string" || nextId.length === 0) {
+            complete = false;
             break;
           }
           startAfter = nextId;
         }
       } catch (error: unknown) {
+        complete = false;
         const brewError =
           error instanceof BrewfatherError
             ? error
@@ -349,7 +374,11 @@ export class BrewfatherAdapter {
       }
     }
 
-    return { batches, failures };
+    if (failures.length > 0) {
+      complete = false;
+    }
+
+    return { batches, failures, complete };
   }
 
   async getBatch(batchId: string): Promise<Record<string, unknown> | null> {

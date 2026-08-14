@@ -1114,12 +1114,15 @@ export function updateBeverageLinkState(
   now: string,
 ): void {
   database
-    .prepare<[string, string, string | null, string, string]>(
+    .prepare<[string, string, string, string | null, string, string]>(
       `UPDATE brewfather_beverage_links
-       SET sync_state = ?, last_synced_at = ?, last_error_message = ?, updated_at = ?
+       SET sync_state = ?,
+           last_synced_at = CASE WHEN ? = 'synced' THEN ? ELSE last_synced_at END,
+           last_error_message = ?,
+           updated_at = ?
        WHERE beverage_id = ?`,
     )
-    .run(syncState, now, lastErrorMessage, now, beverageId);
+    .run(syncState, syncState, now, lastErrorMessage, now, beverageId);
 }
 
 export function upsertSourceProfile(

@@ -10,6 +10,7 @@ import { resolveLinkedPresentation } from "../src/features/beverages/presentatio
 import {
   BrewfatherAdapter,
   BrewfatherError,
+  parseRetryAfter,
 } from "../src/features/beverages/brewfather/adapter.ts";
 import {
   sanitizeBatchSummary,
@@ -200,6 +201,35 @@ void test("custom beverage lifecycle: create, recipe, sensory, update, delete", 
 
   // Verify not found after delete
   assert.throws(() => beverageService.getBeverage(created.beverage.id), /not found/i);
+});
+
+void test("updateCustomBeverage persists updated_at to beverages table and is visible in getBeverage", () => {
+  const { beverageService } = createTestContext();
+  const t1 = new Date("2026-08-14T10:00:00.000Z");
+  const created = beverageService.createCustomBeverage(
+    {
+      name: "Timestamp Test Ale",
+      beverageType: "beer",
+      style: "Pale Ale",
+    },
+    { now: () => t1 },
+  );
+  assert.equal(created.beverage.createdAt, t1.toISOString());
+  assert.equal(created.beverage.updatedAt, t1.toISOString());
+
+  const t2 = new Date("2026-08-14T11:00:00.000Z");
+  const updated = beverageService.updateCustomBeverage(
+    created.beverage.id,
+    {
+      name: "Timestamp Test Ale (Updated)",
+    },
+    { now: () => t2 },
+  );
+  assert.equal(updated.beverage.updatedAt, t2.toISOString());
+
+  // Fresh read from database must show updated timestamp
+  const freshRead = beverageService.getBeverage(created.beverage.id);
+  assert.equal(freshRead.beverage.updatedAt, t2.toISOString());
 });
 
 void test("Brewfather candidate linking, snapshot versioning, and atomic unlink", () => {
@@ -473,6 +503,81 @@ void test("Brewfather adapter handles pagination with start_after, budget limits
     (err: unknown) => err instanceof BrewfatherError && err.category === "rate_limited",
   );
   assert.equal(requestedUrls.length, callsBefore); // No new network call
+});
+
+void test("parseRetryAfter safely parses and clamps values to min 1s and max 1h", () => {
+  const now = 1_000_000;
+  // 1. Zero / below-minimum clamped to MIN_RETRY_AFTER_MS (1000ms)
+  assert.equal(parseRetryAfter("0", now), 1000);
+  assert.equal(parseRetryAfter("-10", now), 1000);
+
+  // 2. Normal integer seconds
+  assert.equal(parseRetryAfter("30", now), 30_000);
+  assert.equal(parseRetryAfter("120", now), 120_000);
+
+  // 3. Over-maximum clamped to MAX_RETRY_AFTER_MS (3600000ms = 1 hour)
+  assert.equal(parseRetryAfter("10000", now), 3_600_000);
+
+  // 4. HTTP-date format
+  const normalDate = new Date(now + 45_000).toUTCString();
+  assert.equal(parseRetryAfter(normalDate, now), 45_000);
+
+  const pastDate = new Date(now - 10_000).toUTCString();
+  assert.equal(parseRetryAfter(pastDate, now), 1000); // clamped to min 1s
+
+  const farFutureDate = new Date(now + 10_000_000).toUTCString();
+  assert.equal(parseRetryAfter(farFutureDate, now), 3_600_000); // clamped to max 1h
+
+  // 5. Malformed / empty returns null
+  assert.equal(parseRetryAfter("", now), null);
+  assert.equal(parseRetryAfter("invalid-date-string", now), null);
+  assert.equal(parseRetryAfter(undefined, now), null);
+});
+
+void test("Brewfather adapter request budget exhaustion rejects locally and resumes after window advances", async () => {
+  let mockClock = 1_000_000;
+  let networkCalls = 0;
+  const mockFetch: typeof fetch = () => {
+    networkCalls += 1;
+    return Promise.resolve(
+      new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+  };
+
+  const adapter = new BrewfatherAdapter({
+    userId: "user-budget",
+    apiKey: "key-budget",
+    fetchFn: mockFetch,
+    requestBudget: 3,
+    budgetWindowMs: 60_000,
+    now: () => mockClock,
+  });
+
+  // Consume 3 budget slots
+  await adapter.request("GET", "/test1");
+  await adapter.request("GET", "/test2");
+  await adapter.request("GET", "/test3");
+  assert.equal(networkCalls, 3);
+
+  // 4th request must fail locally as rate_limited without making a network call
+  await assert.rejects(
+    () => adapter.request("GET", "/test4"),
+    (err: unknown) =>
+      err instanceof BrewfatherError &&
+      err.category === "rate_limited" &&
+      typeof err.retryAfterMs === "number",
+  );
+  assert.equal(networkCalls, 3); // No extra network call!
+
+  // Advance time past budget window
+  mockClock += 60_001;
+
+  // 5th request succeeds
+  await adapter.request("GET", "/test5");
+  assert.equal(networkCalls, 4);
 });
 
 void test("Brewfather sync coordinator retains persistent rate-limit budget and backoff per account", async () => {
@@ -817,44 +922,224 @@ void test("candidate link materializes initial source presentation directly from
   assert.equal(linked.brewfatherLink?.lastSyncedAt, null); // Pending link has null lastSyncedAt
 });
 
-void test("candidate cache reconciliation prunes unlinked batches on complete discovery and preserves on partial failure", async () => {
+void test("candidate discovery distinguishes complete discovery from truncated discovery and prunes only on completion", async () => {
   const { database, secretsService, beverageService } = createTestContext();
+  const allStatuses = [
+    "Planning",
+    "Brewing",
+    "Fermenting",
+    "Conditioning",
+    "Completed",
+    "Archived",
+  ];
   beverageService.configureBrewfatherAccount({
-    accountId: "acc-recon",
-    userId: "user-recon",
-    apiKey: "key-recon",
+    accountId: "acc-discovery",
+    userId: "user-disc",
+    apiKey: "key-disc",
     enabled: true,
-    discoveryStatuses: ["Fermenting"],
+    discoveryStatuses: allStatuses,
   });
 
-  const dummyFingerprint = "1".repeat(64);
-  // Insert cand-1 (Fermenting, unlinked), cand-2 (Archived, unlinked), cand-3 (Archived, linked)
-  for (const bId of ["cand-1", "cand-2", "cand-3"]) {
-    database
-      .prepare(
-        `INSERT INTO brewfather_candidate_cache
-         (id, account_id, source_batch_id, batch_name, status, raw_summary_json, summary_fingerprint, synced_at)
-         VALUES (?, 'acc-recon', ?, 'Batch Name', 'Fermenting', '{}', ?, '2026-08-14T00:00:00Z')`,
-      )
-      .run(randomUUID(), bId, dummyFingerprint);
-  }
+  const dummyFingerprint = "9".repeat(64);
+  // Pre-populate candidate cache with cand-stale (Planning, unlinked) and cand-linked (Archived, linked)
+  database
+    .prepare(
+      `INSERT INTO brewfather_candidate_cache
+       (id, account_id, source_batch_id, batch_name, status, raw_summary_json, summary_fingerprint, synced_at)
+       VALUES (?, 'acc-discovery', 'cand-stale', 'Stale Batch', 'Planning', '{"beverageType":"beer"}', ?, '2026-08-14T00:00:00Z')`,
+    )
+    .run(randomUUID(), dummyFingerprint);
 
-  // Link cand-3
+  database
+    .prepare(
+      `INSERT INTO brewfather_candidate_cache
+       (id, account_id, source_batch_id, batch_name, status, raw_summary_json, summary_fingerprint, synced_at)
+       VALUES (?, 'acc-discovery', 'cand-linked', 'Linked Batch', 'Archived', '{"beverageType":"beer"}', ?, '2026-08-14T00:00:00Z')`,
+    )
+    .run(randomUUID(), dummyFingerprint);
+
   beverageService.linkBrewfatherCandidate({
-    accountId: "acc-recon",
-    sourceBatchId: "cand-3",
+    accountId: "acc-discovery",
+    sourceBatchId: "cand-linked",
   });
 
-  // Step 1: Successful discovery returns only cand-1
-  const mockSuccessFetch: typeof fetch = (url) => {
+  // Test 1: All 6 statuses queried in naturally bounded cycle
+  const queriedStatuses: string[] = [];
+  const mockAllFetch: typeof fetch = (url) => {
     const urlStr = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
-    if (urlStr.includes("/v2/batches/cand-3")) {
+    for (const st of allStatuses) {
+      if (urlStr.includes(`status=${st}`)) {
+        queriedStatuses.push(st);
+      }
+    }
+    return Promise.resolve(
+      new Response(JSON.stringify([{ _id: "b-live", name: "Live Batch" }]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+  };
+
+  const adapter = new BrewfatherAdapter({
+    userId: "user-disc",
+    apiKey: "key-disc",
+    fetchFn: mockAllFetch,
+    maxPages: 5,
+  });
+  const resAll = await adapter.listBatchesByStatuses(allStatuses);
+  assert.equal(resAll.complete, true);
+  assert.equal(queriedStatuses.length, 6);
+  assert.deepEqual(queriedStatuses, allStatuses);
+
+  // Test 2: Incomplete discovery (hitting page cap) does NOT prune candidate cache
+  const full50Batches = Array.from({ length: 50 }, (_, i) => ({ _id: `page-batch-${i + 1}` }));
+  const mockTruncatedFetch: typeof fetch = (url) => {
+    const urlStr = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+    if (urlStr.includes("/v2/batches/cand-linked")) {
       return Promise.resolve(
-        new Response(JSON.stringify({ _id: "cand-3", name: "Linked Batch" }), { status: 200 }),
+        new Response(JSON.stringify({ _id: "cand-linked", name: "Linked Batch" }), {
+          status: 200,
+        }),
       );
     }
     return Promise.resolve(
-      new Response(JSON.stringify([{ _id: "cand-1", name: "Batch 1", status: "Fermenting" }]), {
+      new Response(JSON.stringify(full50Batches), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+  };
+
+  const truncCoordinator = new BrewfatherSyncCoordinator({
+    fetchFn: mockTruncatedFetch,
+  });
+  await truncCoordinator.sync(database, secretsService, { accountId: "acc-discovery" });
+
+  // Verify: cand-stale was NOT pruned because discovery hit page cap (incomplete)
+  const candidatesAfterTrunc = beverageService.listCandidates("acc-discovery");
+  assert.ok(candidatesAfterTrunc.some((c) => c.sourceBatchId === "cand-stale"));
+  assert.ok(candidatesAfterTrunc.some((c) => c.sourceBatchId === "cand-linked"));
+
+  // Test 3: Complete discovery (short page < 50 items) DOES prune stale unlinked candidates
+  const mockCompleteFetch: typeof fetch = (url) => {
+    const urlStr = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+    if (urlStr.includes("/v2/batches/cand-linked")) {
+      return Promise.resolve(
+        new Response(JSON.stringify({ _id: "cand-linked", name: "Linked Batch" }), {
+          status: 200,
+        }),
+      );
+    }
+    return Promise.resolve(
+      new Response(JSON.stringify([{ _id: "b-fresh", name: "Fresh Batch" }]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+  };
+
+  const completeCoordinator = new BrewfatherSyncCoordinator({
+    fetchFn: mockCompleteFetch,
+  });
+  await completeCoordinator.sync(database, secretsService, { accountId: "acc-discovery" });
+
+  // Verify: cand-stale is now pruned, cand-linked is preserved, b-fresh is discovered
+  const candidatesAfterComplete = beverageService.listCandidates("acc-discovery");
+  assert.equal(
+    candidatesAfterComplete.some((c) => c.sourceBatchId === "cand-stale"),
+    false,
+  );
+  assert.ok(candidatesAfterComplete.some((c) => c.sourceBatchId === "cand-linked"));
+  assert.ok(candidatesAfterComplete.some((c) => c.sourceBatchId === "b-fresh"));
+});
+
+void test("multi-status 5xx failures resolve gracefully with bounded error metadata and append Activity without throwing", async () => {
+  const { database, secretsService, beverageService } = createTestContext();
+  beverageService.configureBrewfatherAccount({
+    accountId: "acc-5xx",
+    userId: "user-5xx",
+    apiKey: "secret-key-that-must-be-redacted",
+    enabled: true,
+    discoveryStatuses: [
+      "Planning",
+      "Brewing",
+      "Fermenting",
+      "Conditioning",
+      "Completed",
+      "Archived",
+    ],
+  });
+
+  const hugeErrorMessage = `Server Error at endpoint: Basic ${Buffer.from("user-5xx:secret-key-that-must-be-redacted").toString("base64")} - ${"X".repeat(500)}`;
+  const mock5xxFetch: typeof fetch = () => {
+    return Promise.resolve(
+      new Response(hugeErrorMessage, {
+        status: 500,
+        headers: { "Content-Type": "text/plain" },
+      }),
+    );
+  };
+
+  const coordinator = new BrewfatherSyncCoordinator({ fetchFn: mock5xxFetch });
+  const results = await coordinator.sync(database, secretsService, { accountId: "acc-5xx" });
+
+  // 1. Sync resolves with an error result rather than throwing
+  assert.equal(results.length, 1);
+  const res = results[0]!;
+  assert.ok(res.error !== undefined);
+  assert.ok(Buffer.byteLength(res.error, "utf8") <= 255);
+  assert.equal(res.error.includes("secret-key-that-must-be-redacted"), false);
+
+  // 2. Activity was appended successfully without throwing
+  const activities = readActivities(database);
+  const syncActivity = activities.find((a) => a.entityId === "acc-5xx");
+  assert.ok(syncActivity);
+  const errorDetail = String(syncActivity?.details?.error ?? "");
+  assert.ok(Buffer.byteLength(errorDetail, "utf8") <= 255);
+  assert.equal(errorDetail.includes("secret-key-that-must-be-redacted"), false);
+});
+
+void test("brewfather link last_synced_at preserves last successful sync timestamp across error and stale transitions", async () => {
+  const { database, secretsService, beverageService } = createTestContext();
+  beverageService.configureBrewfatherAccount({
+    userId: "user-sync-ts",
+    apiKey: "key-sync-ts",
+    enabled: true,
+  });
+
+  const dummyFingerprint = "7".repeat(64);
+  database
+    .prepare(
+      `INSERT INTO brewfather_candidate_cache
+       (id, account_id, source_batch_id, batch_name, status, raw_summary_json, summary_fingerprint, synced_at)
+       VALUES (?, 'default', 'batch-ts-test', 'Timestamp IPA', 'Fermenting', '{"beverageType":"beer"}', ?, '2026-08-14T00:00:00Z')`,
+    )
+    .run(randomUUID(), dummyFingerprint);
+
+  // 1. Initial link -> pending (lastSyncedAt is null)
+  const linked = beverageService.linkBrewfatherCandidate({
+    sourceBatchId: "batch-ts-test",
+  });
+  assert.equal(linked.brewfatherLink?.syncState, "pending");
+  assert.equal(linked.brewfatherLink?.lastSyncedAt, null);
+
+  // 2. Successful sync -> lastSyncedAt becomes T1
+  const t1 = "2026-08-14T12:00:00.000Z";
+  const mockSuccessFetch: typeof fetch = (url) => {
+    const urlStr = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+    if (urlStr.includes("/v2/batches/batch-ts-test")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({ _id: "batch-ts-test", name: "Timestamp IPA", status: "Fermenting" }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      );
+    }
+    return Promise.resolve(
+      new Response(JSON.stringify([]), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       }),
@@ -862,25 +1147,44 @@ void test("candidate cache reconciliation prunes unlinked batches on complete di
   };
 
   const coordinator = new BrewfatherSyncCoordinator({ fetchFn: mockSuccessFetch });
-  await coordinator.sync(database, secretsService, { accountId: "acc-recon" });
+  await coordinator.sync(database, secretsService, { now: () => new Date(t1) });
 
-  const candidatesAfterSuccess = beverageService.listCandidates("acc-recon");
-  assert.ok(candidatesAfterSuccess.some((c) => c.sourceBatchId === "cand-1"));
-  assert.ok(candidatesAfterSuccess.some((c) => c.sourceBatchId === "cand-3")); // Linked candidate preserved
-  assert.equal(
-    candidatesAfterSuccess.some((c) => c.sourceBatchId === "cand-2"),
-    false,
-  ); // cand-2 pruned!
+  const bevT1 = beverageService.getBeverage(linked.beverage.id);
+  assert.equal(bevT1.brewfatherLink?.syncState, "synced");
+  assert.equal(bevT1.brewfatherLink?.lastSyncedAt, t1);
 
-  // Step 2: Failed discovery does NOT prune candidate cache
-  const mockFailFetch: typeof fetch = () => {
-    return Promise.resolve(new Response("Server Error", { status: 500 }));
+  // 3. Sync failure (e.g. 500 server error) at T2 -> syncState="error", lastSyncedAt remains T1!
+  const t2 = "2026-08-14T13:00:00.000Z";
+  const mock500Fetch: typeof fetch = () => {
+    return Promise.resolve(new Response("Internal Error", { status: 500 }));
   };
-  const failCoordinator = new BrewfatherSyncCoordinator({ fetchFn: mockFailFetch });
-  await failCoordinator.sync(database, secretsService, { accountId: "acc-recon" });
+  const failCoordinator = new BrewfatherSyncCoordinator({ fetchFn: mock500Fetch });
+  await failCoordinator.sync(database, secretsService, { now: () => new Date(t2) });
 
-  const candidatesAfterFail = beverageService.listCandidates("acc-recon");
-  assert.ok(candidatesAfterFail.some((c) => c.sourceBatchId === "cand-1"));
+  const bevT2 = beverageService.getBeverage(linked.beverage.id);
+  assert.equal(bevT2.brewfatherLink?.syncState, "error");
+  assert.equal(bevT2.brewfatherLink?.lastSyncedAt, t1); // Preserved T1!
+
+  // 4. Stale transition (404 Not Found) at T3 -> syncState="stale", lastSyncedAt remains T1!
+  const t3 = "2026-08-14T14:00:00.000Z";
+  const mock404Fetch: typeof fetch = (url) => {
+    const urlStr = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+    if (urlStr.includes("/v2/batches/batch-ts-test")) {
+      return Promise.resolve(new Response("Not Found", { status: 404 }));
+    }
+    return Promise.resolve(
+      new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+  };
+  const staleCoordinator = new BrewfatherSyncCoordinator({ fetchFn: mock404Fetch });
+  await staleCoordinator.sync(database, secretsService, { now: () => new Date(t3) });
+
+  const bevT3 = beverageService.getBeverage(linked.beverage.id);
+  assert.equal(bevT3.brewfatherLink?.syncState, "stale");
+  assert.equal(bevT3.brewfatherLink?.lastSyncedAt, t1); // Preserved T1!
 });
 
 void test("configureBrewfatherAccount is atomic across account metadata and secret storage", () => {

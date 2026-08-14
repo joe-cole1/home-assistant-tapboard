@@ -16,6 +16,7 @@ import { BrewfatherAdapter } from "./adapter.ts";
 import {
   sanitizeBatchSummary,
   sanitizeBatchToSourceProfile,
+  sanitizeErrorMessage,
   sanitizeRecipeSnapshot,
 } from "./sanitizer.ts";
 import type { BrewfatherAccount } from "../types.ts";
@@ -230,7 +231,7 @@ export class BrewfatherSyncCoordinator {
         linkedSynced += 1;
       } catch (error: unknown) {
         const rawMessage = error instanceof Error ? error.message : "Sync error";
-        const errorMessage = rawMessage.slice(0, 255);
+        const errorMessage = sanitizeErrorMessage(rawMessage, 255);
         updateBeverageLinkState(database, link.beverageId, "error", errorMessage, nowIso);
         linkedErrors += 1;
       }
@@ -240,7 +241,9 @@ export class BrewfatherSyncCoordinator {
     let candidatesFound = 0;
     let candidateError: string | undefined;
     try {
-      const { batches, failures } = await adapter.listBatchesByStatuses(account.discoveryStatuses);
+      const { batches, failures, complete } = await adapter.listBatchesByStatuses(
+        account.discoveryStatuses,
+      );
       if (failures.length > 0) {
         candidateError = failures.map((f) => `${f.status}: ${f.error.message}`).join("; ");
       }
@@ -270,8 +273,8 @@ export class BrewfatherSyncCoordinator {
         }
       }
 
-      // If discovery completed without failures, prune unlinked candidates that left discovery filter
-      if (failures.length === 0) {
+      // Candidate pruning may occur ONLY after known-complete discovery (no failures and complete === true)
+      if (complete && failures.length === 0) {
         const discoveredBatchIds = new Set(
           batches
             .map((b) => (b as { _id?: string; id?: string })?._id ?? (b as { id?: string })?.id)
@@ -292,6 +295,10 @@ export class BrewfatherSyncCoordinator {
       candidateError = error instanceof Error ? error.message : "Candidate discovery error";
     }
 
+    const safeCandidateError = candidateError
+      ? sanitizeErrorMessage(candidateError, 255)
+      : undefined;
+
     appendActivity(database, {
       category: "admin",
       action: "configuration_changed",
@@ -303,7 +310,7 @@ export class BrewfatherSyncCoordinator {
         linked_synced: linkedSynced,
         linked_errors: linkedErrors,
         candidates_found: candidatesFound,
-        ...(candidateError ? { error: candidateError } : {}),
+        ...(safeCandidateError ? { error: safeCandidateError } : {}),
       },
       occurredAt: nowIso,
     });
@@ -314,7 +321,7 @@ export class BrewfatherSyncCoordinator {
       linkedErrors,
       candidatesFound,
       durationMs: Date.now() - start,
-      ...(candidateError !== undefined ? { error: candidateError } : {}),
+      ...(safeCandidateError !== undefined ? { error: safeCandidateError } : {}),
     };
   }
 }

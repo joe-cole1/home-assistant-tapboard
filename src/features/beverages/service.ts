@@ -355,6 +355,8 @@ export class BeverageService {
       const effectivePresentation = resolveCustomPresentation(customProfile);
       const density = resolveBeverageDensity(effectivePresentation, settings.fallbackFg);
 
+      touchBeverage(this.#database, id, now);
+
       return {
         beverage: { ...beverage, updatedAt: now },
         effectivePresentation,

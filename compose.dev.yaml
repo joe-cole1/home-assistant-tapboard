@@ -9,6 +9,7 @@ services:
       NODE_ENV: development
       TAPBOARD_HOST: 0.0.0.0
       TAPBOARD_PORT: "3000"
+      TAPBOARD_EXTERNAL_ORIGIN: http://127.0.0.1:3000
       TAPBOARD_DATABASE_PATH: /app/data/tapboard-v2.sqlite3
       TAPBOARD_SECRET_KEY: ${TAPBOARD_SECRET_KEY:?Set TAPBOARD_SECRET_KEY in the ignored .env file}
     ports:

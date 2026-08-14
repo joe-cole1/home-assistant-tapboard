@@ -326,3 +326,21 @@ export function sanitizeRecipeSnapshot(recipeData: unknown): SanitizedRecipeSnap
     recipeFingerprint,
   };
 }
+
+export function truncateUtf8Bytes(text: string, maxBytes: number = 255): string {
+  if (Buffer.byteLength(text, "utf8") <= maxBytes) {
+    return text;
+  }
+  let truncated = text;
+  while (Buffer.byteLength(truncated, "utf8") > maxBytes && truncated.length > 0) {
+    truncated = truncated.slice(0, -1);
+  }
+  return truncated;
+}
+
+export function sanitizeErrorMessage(rawMessage: string, maxBytes: number = 255): string {
+  const sanitized = rawMessage
+    .replace(/(?:basic|bearer)\s+[a-zA-Z0-9+/=._-]+/gi, "[REDACTED]")
+    .replace(/api[_-]?key[:=]\s*[^\s,;]+/gi, "api_key=[REDACTED]");
+  return truncateUtf8Bytes(sanitized, maxBytes);
+}
