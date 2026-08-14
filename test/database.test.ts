@@ -111,7 +111,7 @@ function readTransactionValues(database: DatabaseConnection): string[] {
     .map((row) => row.value);
 }
 
-void test("a clean file database bootstraps the canonical v2 migration ledger", (context) => {
+void test("a clean file database bootstraps the canonical v3 migration ledger", (context) => {
   const path = makeDatabasePath(context);
   const database = openDatabase(path);
 
@@ -129,6 +129,8 @@ void test("a clean file database bootstraps the canonical v2 migration ledger", 
       [
         { type: "index", name: "idx_activity_log_occurred_at" },
         { type: "index", name: "idx_deletion_audit_deleted_at" },
+        { type: "index", name: "idx_keg_maintenance_keg_recorded" },
+        { type: "index", name: "idx_keg_tare_history_keg_recorded" },
         { type: "index", name: "idx_outbound_deliveries_destination_state" },
         { type: "index", name: "idx_outbound_deliveries_due" },
         { type: "index", name: "idx_outbound_events_created_at" },
@@ -139,6 +141,9 @@ void test("a clean file database bootstraps the canonical v2 migration ledger", 
         { type: "table", name: "admin_sessions" },
         { type: "table", name: "deletion_audit" },
         { type: "table", name: "encrypted_secrets" },
+        { type: "table", name: "keg_maintenance_records" },
+        { type: "table", name: "keg_tare_history" },
+        { type: "table", name: "kegs" },
         { type: "table", name: "login_throttle" },
         { type: "table", name: "machine_api_keys" },
         { type: "table", name: "outbound_deliveries" },
@@ -152,6 +157,8 @@ void test("a clean file database bootstraps the canonical v2 migration ledger", 
         { type: "trigger", name: "trg_activity_log_no_update" },
         { type: "trigger", name: "trg_deletion_audit_no_delete" },
         { type: "trigger", name: "trg_deletion_audit_no_update" },
+        { type: "trigger", name: "trg_keg_maintenance_records_no_update" },
+        { type: "trigger", name: "trg_keg_tare_history_no_update" },
         { type: "trigger", name: "trg_outbound_destination_versions_no_update" },
         { type: "trigger", name: "trg_outbox_overflow_incidents_no_delete" },
         { type: "trigger", name: "trg_outbox_overflow_incidents_no_insert" },
@@ -162,11 +169,13 @@ void test("a clean file database bootstraps the canonical v2 migration ledger", 
         "SELECT version, name, applied_at FROM schema_migrations ORDER BY version",
       )
       .all();
-    assert.equal(ledger.length, 2);
+    assert.equal(ledger.length, 3);
     assert.equal(ledger[0]?.version, FOUNDATION_SCHEMA_VERSION);
     assert.equal(ledger[0]?.name, FOUNDATION_INITIAL_MIGRATION_NAME);
-    assert.equal(ledger[1]?.version, CURRENT_SCHEMA_VERSION);
+    assert.equal(ledger[1]?.version, 2);
     assert.equal(ledger[1]?.name, "security-activity-outbox-primitives");
+    assert.equal(ledger[2]?.version, 3);
+    assert.equal(ledger[2]?.name, "physical-kegs");
     assert.match(ledger[0]?.applied_at ?? "", /^\d{4}-\d{2}-\d{2}T/);
   } finally {
     database.close();
@@ -184,13 +193,13 @@ void test("an in-memory database bootstraps the same canonical schema", () => {
           "SELECT type, name FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%'",
         )
         .all().length,
-      28,
+      35,
     );
     assert.equal(
       database
         .prepare<[], { readonly count: number }>("SELECT count(*) AS count FROM schema_migrations")
         .get()?.count,
-      2,
+      3,
     );
   } finally {
     database.close();
@@ -292,7 +301,7 @@ void test("v2 outbound delivery lease fields reject one-sided stale values", () 
   }
 });
 
-void test("an exact v1 database upgrades to v2 with both ledger entries", (context) => {
+void test("an exact v1 database upgrades to v3 with all ledger entries", (context) => {
   const path = makeDatabasePath(context);
   openDatabase(path, { migrations: FOUNDATION_MIGRATIONS }).close();
   const database = openDatabase(path, { migrations: MIGRATIONS });
@@ -307,6 +316,7 @@ void test("an exact v1 database upgrades to v2 with both ledger entries", (conte
       [
         { version: 1, name: FOUNDATION_INITIAL_MIGRATION_NAME },
         { version: 2, name: "security-activity-outbox-primitives" },
+        { version: 3, name: "physical-kegs" },
       ],
     );
   } finally {
@@ -314,17 +324,17 @@ void test("an exact v1 database upgrades to v2 with both ledger entries", (conte
   }
 });
 
-void test("canonical v2 reopen rejects an extra user object", (context) => {
+void test("canonical v3 reopen rejects an extra user object", (context) => {
   const path = makeDatabasePath(context);
   openDatabase(path, { migrations: MIGRATIONS }).close();
-  withFixture(path, (database) => database.exec("CREATE TABLE unexpected_v2_table (id INTEGER)"));
+  withFixture(path, (database) => database.exec("CREATE TABLE unexpected_v3_table (id INTEGER)"));
   assert.throws(
     () => openDatabase(path, { migrations: MIGRATIONS }),
     /schema objects do not match|unexpected schema objects/,
   );
 });
 
-void test("v2 validation rejects a tampered DDL definition on reopen", (context) => {
+void test("v3 validation rejects a tampered DDL definition on reopen", (context) => {
   const path = makeDatabasePath(context);
   openDatabase(path, { migrations: MIGRATIONS }).close();
   withFixture(path, (database) => {
@@ -351,14 +361,14 @@ void test("a current database reopens idempotently", (context) => {
       reopened
         .prepare<[], { readonly count: number }>("SELECT count(*) AS count FROM schema_migrations")
         .get()?.count,
-      2,
+      3,
     );
   } finally {
     reopened.close();
   }
 });
 
-void test("a clean version 0 database upgrades through the canonical v2 schema", (context) => {
+void test("a clean version 0 database upgrades through the canonical v3 schema", (context) => {
   const path = makeDatabasePath(context);
   withFixture(path, (database) => assert.equal(readUserVersion(database), 0));
 
@@ -366,7 +376,7 @@ void test("a clean version 0 database upgrades through the canonical v2 schema",
 
   withFixture(path, (database) => {
     assert.equal(readUserVersion(database), CURRENT_SCHEMA_VERSION);
-    assert.equal(readSchemaObjects(database).length, 28);
+    assert.equal(readSchemaObjects(database).length, 35);
   });
 });
 
@@ -394,12 +404,12 @@ void test("migration definitions must be contiguous with nonempty unique names",
 
 void test("an unsupported future schema is rejected without mutation", (context) => {
   const path = makeDatabasePath(context);
-  withFixture(path, (database) => database.exec("PRAGMA user_version = 3"));
+  withFixture(path, (database) => database.exec("PRAGMA user_version = 4"));
 
   assert.throws(() => openDatabase(path), /schema version is newer/);
 
   withFixture(path, (database) => {
-    assert.equal(readUserVersion(database), 3);
+    assert.equal(readUserVersion(database), 4);
     assert.deepEqual(readSchemaObjects(database), []);
   });
 });
@@ -776,4 +786,107 @@ void test("close is idempotent and later database use is rejected", () => {
   assert.equal(database.isOpen, false);
   assert.throws(() => database.pragma("user_version"), /connection is closed/);
   assert.throws(() => database.execute("SELECT 1"), /connection is closed/);
+});
+
+void test("kegs schema enforces uniqueness, capacity, tare, and lifecycle constraints", () => {
+  const database = openDatabase(":memory:");
+  try {
+    database.execute(`
+      INSERT INTO kegs (id, keg_number, label, capacity_ml, current_tare_g, is_active, created_at, updated_at)
+      VALUES ('11111111-1111-4111-8111-111111111111', 1, 'Keg 1', 19000, 4200, 1, '2026-08-14T00:00:00.000Z', '2026-08-14T00:00:00.000Z');
+    `);
+
+    // Duplicate keg_number rejected
+    assert.throws(
+      () =>
+        database.execute(`
+          INSERT INTO kegs (id, keg_number, label, capacity_ml, current_tare_g, is_active, created_at, updated_at)
+          VALUES ('22222222-2222-4222-8222-222222222222', 1, 'Duplicate Keg', 19000, 4200, 1, '2026-08-14T00:00:00.000Z', '2026-08-14T00:00:00.000Z');
+        `),
+      /UNIQUE constraint failed: kegs\.keg_number/,
+    );
+
+    // Negative capacity rejected
+    assert.throws(
+      () =>
+        database.execute(`
+          INSERT INTO kegs (id, keg_number, label, capacity_ml, current_tare_g, is_active, created_at, updated_at)
+          VALUES ('33333333-3333-4333-8333-333333333333', 2, 'Keg 2', 0, 4200, 1, '2026-08-14T00:00:00.000Z', '2026-08-14T00:00:00.000Z');
+        `),
+      /CHECK constraint failed/,
+    );
+
+    // Negative tare rejected
+    assert.throws(
+      () =>
+        database.execute(`
+          INSERT INTO kegs (id, keg_number, label, capacity_ml, current_tare_g, is_active, created_at, updated_at)
+          VALUES ('44444444-4444-4444-8444-444444444444', 3, 'Keg 3', 19000, -1, 1, '2026-08-14T00:00:00.000Z', '2026-08-14T00:00:00.000Z');
+        `),
+      /CHECK constraint failed/,
+    );
+
+    // Invalid is_active rejected
+    assert.throws(
+      () =>
+        database.execute(`
+          INSERT INTO kegs (id, keg_number, label, capacity_ml, current_tare_g, is_active, created_at, updated_at)
+          VALUES ('55555555-5555-4555-8555-555555555555', 4, 'Keg 4', 19000, 4200, 2, '2026-08-14T00:00:00.000Z', '2026-08-14T00:00:00.000Z');
+        `),
+      /CHECK constraint failed/,
+    );
+  } finally {
+    database.close();
+  }
+});
+
+void test("keg tare history and maintenance records are append-only and cascade on keg deletion", () => {
+  const database = openDatabase(":memory:");
+  try {
+    database.execute(`
+      INSERT INTO kegs (id, keg_number, label, capacity_ml, current_tare_g, is_active, created_at, updated_at)
+      VALUES ('11111111-1111-4111-8111-111111111111', 1, 'Keg 1', 19000, 4200, 1, '2026-08-14T00:00:00.000Z', '2026-08-14T00:00:00.000Z');
+      INSERT INTO keg_tare_history (id, keg_id, previous_tare_g, new_tare_g, recorded_at, reason, actor_type, actor_id)
+      VALUES ('aaaaaaaa-1111-4111-8111-111111111111', '11111111-1111-4111-8111-111111111111', NULL, 4200, '2026-08-14T00:00:00.000Z', 'initial', 'admin', 'admin-1');
+      INSERT INTO keg_maintenance_records (id, keg_id, maintenance_type, notes, recorded_at, actor_type, actor_id)
+      VALUES ('bbbbbbbb-1111-4111-8111-111111111111', '11111111-1111-4111-8111-111111111111', 'deep_clean', 'clean notes', '2026-08-14T00:00:00.000Z', 'admin', 'admin-1');
+    `);
+
+    // Updates to tare history are blocked by trigger
+    assert.throws(
+      () =>
+        database.execute(
+          "UPDATE keg_tare_history SET new_tare_g = 5000 WHERE id = 'aaaaaaaa-1111-4111-8111-111111111111'",
+        ),
+      /keg_tare_history is append-only/,
+    );
+
+    // Updates to maintenance records are blocked by trigger
+    assert.throws(
+      () =>
+        database.execute(
+          "UPDATE keg_maintenance_records SET notes = 'tampered' WHERE id = 'bbbbbbbb-1111-4111-8111-111111111111'",
+        ),
+      /keg_maintenance_records is append-only/,
+    );
+
+    // Deleting keg cascades to tare history and maintenance records
+    database.execute("DELETE FROM kegs WHERE id = '11111111-1111-4111-8111-111111111111'");
+    assert.equal(
+      database
+        .prepare<[], { readonly count: number }>("SELECT count(*) AS count FROM keg_tare_history")
+        .get()?.count,
+      0,
+    );
+    assert.equal(
+      database
+        .prepare<[], { readonly count: number }>(
+          "SELECT count(*) AS count FROM keg_maintenance_records",
+        )
+        .get()?.count,
+      0,
+    );
+  } finally {
+    database.close();
+  }
 });

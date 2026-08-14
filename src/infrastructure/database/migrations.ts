@@ -2,8 +2,11 @@ import type { DatabaseExecutor } from "./connection.ts";
 
 export const FOUNDATION_SCHEMA_VERSION = 1;
 export const FOUNDATION_INITIAL_MIGRATION_NAME = "foundation-schema";
-export const CURRENT_SCHEMA_VERSION = 2;
+export const SECURITY_ACTIVITY_OUTBOX_SCHEMA_VERSION = 2;
 export const SECURITY_ACTIVITY_OUTBOX_MIGRATION_NAME = "security-activity-outbox-primitives";
+export const PHYSICAL_KEGS_SCHEMA_VERSION = 3;
+export const PHYSICAL_KEGS_MIGRATION_NAME = "physical-kegs";
+export const CURRENT_SCHEMA_VERSION = PHYSICAL_KEGS_SCHEMA_VERSION;
 
 export interface MigrationDefinition {
   readonly version: number;
@@ -444,6 +447,52 @@ const OUTBOX_OVERFLOW_GUARD_TRIGGERS_SQL = `
     END;
 `;
 
+export const PHYSICAL_KEGS_SCHEMA_SQL = `
+  CREATE TABLE kegs (
+    id TEXT PRIMARY KEY CHECK (length(CAST(id AS BLOB)) = 36),
+    keg_number INTEGER NOT NULL UNIQUE CHECK (keg_number >= 1),
+    label TEXT CHECK (label IS NULL OR length(CAST(label AS BLOB)) BETWEEN 1 AND 120),
+    capacity_ml INTEGER NOT NULL CHECK (capacity_ml > 0),
+    current_tare_g INTEGER NOT NULL CHECK (current_tare_g >= 0),
+    is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE keg_tare_history (
+    id TEXT PRIMARY KEY CHECK (length(CAST(id AS BLOB)) = 36),
+    keg_id TEXT NOT NULL REFERENCES kegs(id) ON DELETE CASCADE,
+    previous_tare_g INTEGER CHECK (previous_tare_g IS NULL OR previous_tare_g >= 0),
+    new_tare_g INTEGER NOT NULL CHECK (new_tare_g >= 0),
+    recorded_at TEXT NOT NULL,
+    reason TEXT CHECK (reason IS NULL OR length(CAST(reason AS BLOB)) BETWEEN 1 AND 255),
+    actor_type TEXT NOT NULL CHECK (actor_type IN ('admin', 'operator', 'system', 'machine')),
+    actor_id TEXT CHECK (actor_id IS NULL OR length(CAST(actor_id AS BLOB)) BETWEEN 1 AND 255)
+  );
+  CREATE INDEX idx_keg_tare_history_keg_recorded ON keg_tare_history (keg_id, recorded_at);
+  CREATE TRIGGER trg_keg_tare_history_no_update
+    BEFORE UPDATE ON keg_tare_history
+    BEGIN
+      SELECT RAISE(ABORT, 'keg_tare_history is append-only');
+    END;
+
+  CREATE TABLE keg_maintenance_records (
+    id TEXT PRIMARY KEY CHECK (length(CAST(id AS BLOB)) = 36),
+    keg_id TEXT NOT NULL REFERENCES kegs(id) ON DELETE CASCADE,
+    maintenance_type TEXT NOT NULL CHECK (length(CAST(maintenance_type AS BLOB)) BETWEEN 1 AND 80),
+    notes TEXT CHECK (notes IS NULL OR length(CAST(notes AS BLOB)) BETWEEN 1 AND 2048),
+    recorded_at TEXT NOT NULL,
+    actor_type TEXT NOT NULL CHECK (actor_type IN ('admin', 'operator', 'system', 'machine')),
+    actor_id TEXT CHECK (actor_id IS NULL OR length(CAST(actor_id AS BLOB)) BETWEEN 1 AND 255)
+  );
+  CREATE INDEX idx_keg_maintenance_keg_recorded ON keg_maintenance_records (keg_id, recorded_at);
+  CREATE TRIGGER trg_keg_maintenance_records_no_update
+    BEFORE UPDATE ON keg_maintenance_records
+    BEGIN
+      SELECT RAISE(ABORT, 'keg_maintenance_records is append-only');
+    END;
+`;
+
 const SECURITY_ACTIVITY_OUTBOX_SCHEMA_OBJECTS = [
   ["table", "admin_credentials"],
   ["table", "activity_log"],
@@ -473,6 +522,17 @@ const SECURITY_ACTIVITY_OUTBOX_SCHEMA_OBJECTS = [
   ["trigger", "trg_outbound_destination_versions_no_update"],
   ["trigger", "trg_outbox_overflow_incidents_no_delete"],
   ["trigger", "trg_outbox_overflow_incidents_no_insert"],
+] as const;
+
+const PHYSICAL_KEGS_SCHEMA_OBJECTS = [
+  ...SECURITY_ACTIVITY_OUTBOX_SCHEMA_OBJECTS,
+  ["table", "kegs"],
+  ["table", "keg_tare_history"],
+  ["table", "keg_maintenance_records"],
+  ["index", "idx_keg_tare_history_keg_recorded"],
+  ["index", "idx_keg_maintenance_keg_recorded"],
+  ["trigger", "trg_keg_tare_history_no_update"],
+  ["trigger", "trg_keg_maintenance_records_no_update"],
 ] as const;
 
 function splitSqlStatements(sql: string): string[] {
@@ -744,6 +804,83 @@ function validateSecurityActivityOutboxColumns(database: DatabaseExecutor): void
   }
 }
 
+function validatePhysicalKegsColumns(database: DatabaseExecutor): void {
+  validateSecurityActivityOutboxColumns(database);
+  const required: Readonly<Record<string, readonly Omit<TableColumnRow, "cid">[]>> = {
+    kegs: [
+      { name: "id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+      { name: "keg_number", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "label", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "capacity_ml", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "current_tare_g", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "is_active", type: "INTEGER", notnull: 1, dflt_value: "1", pk: 0 },
+      { name: "created_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    ],
+    keg_tare_history: [
+      { name: "id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+      { name: "keg_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "previous_tare_g", type: "INTEGER", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "new_tare_g", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "recorded_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "reason", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "actor_type", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "actor_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+    ],
+    keg_maintenance_records: [
+      { name: "id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+      { name: "keg_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "maintenance_type", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "notes", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "recorded_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "actor_type", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "actor_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+    ],
+  };
+
+  for (const [table, columns] of Object.entries(required)) {
+    expectColumns(database, table, columns);
+  }
+}
+
+function validatePhysicalKegsSchema(database: DatabaseExecutor): void {
+  const expected = new Map(
+    PHYSICAL_KEGS_SCHEMA_OBJECTS.map(([type, name]) => [`${type}:${name}`, type]),
+  );
+  const actual = readSchemaObjects(database).filter(
+    ({ type, name }) => !(type === "index" && name.startsWith("sqlite_autoindex")),
+  );
+  if (
+    actual.length !== expected.size ||
+    actual.some(({ type, name }) => !expected.has(`${type}:${name}`))
+  ) {
+    throw incompatibleSchema("schema objects do not match the supported v3 schema");
+  }
+  const expectedSql = new Map<string, string>();
+  for (const statement of splitSqlStatements(
+    `${SECURITY_ACTIVITY_OUTBOX_SCHEMA_SQL}\n${OUTBOX_OVERFLOW_GUARD_TRIGGERS_SQL}\n${PHYSICAL_KEGS_SCHEMA_SQL}`,
+  )) {
+    const key = schemaDefinitionKey(statement);
+    if (key !== undefined) {
+      expectedSql.set(key, normalizeSql(statement));
+    }
+  }
+  expectedSql.set("table:schema_migrations", normalizeSql(CREATE_SCHEMA_MIGRATIONS_SQL));
+  for (const row of actual) {
+    const expectedType = expected.get(`${row.type}:${row.name}`);
+    const expectedDefinition = expectedSql.get(`${row.type}:${row.name}`);
+    if (
+      expectedType === undefined ||
+      expectedDefinition === undefined ||
+      row.sql === null ||
+      normalizeSql(row.sql) !== expectedDefinition
+    ) {
+      throw incompatibleSchema(`schema object ${row.name} has invalid DDL`);
+    }
+  }
+  validatePhysicalKegsColumns(database);
+}
+
 function seedSecurityActivityOutbox(database: DatabaseExecutor): void {
   database.execute(`
     INSERT INTO activity_retention (id, retention_days, updated_at)
@@ -780,7 +917,7 @@ export const FOUNDATION_MIGRATIONS: readonly MigrationDefinition[] = [
 ];
 
 export const SECURITY_ACTIVITY_OUTBOX_MIGRATION: MigrationDefinition = {
-  version: CURRENT_SCHEMA_VERSION,
+  version: SECURITY_ACTIVITY_OUTBOX_SCHEMA_VERSION,
   name: SECURITY_ACTIVITY_OUTBOX_MIGRATION_NAME,
   apply(database) {
     database.execute(SECURITY_ACTIVITY_OUTBOX_SCHEMA_SQL);
@@ -790,10 +927,20 @@ export const SECURITY_ACTIVITY_OUTBOX_MIGRATION: MigrationDefinition = {
   },
 };
 
+export const PHYSICAL_KEGS_MIGRATION: MigrationDefinition = {
+  version: PHYSICAL_KEGS_SCHEMA_VERSION,
+  name: PHYSICAL_KEGS_MIGRATION_NAME,
+  apply(database) {
+    database.execute(PHYSICAL_KEGS_SCHEMA_SQL);
+    return undefined;
+  },
+};
+
 /** Canonical production migration list. Keep this array identity stable. */
 export const MIGRATIONS: readonly MigrationDefinition[] = [
   FOUNDATION_MIGRATIONS[0]!,
   SECURITY_ACTIVITY_OUTBOX_MIGRATION,
+  PHYSICAL_KEGS_MIGRATION,
 ];
 
 // Compatibility aliases for callers that prefer an explicit application name.
@@ -855,7 +1002,10 @@ export function initializeSchema(
   }
   validateMigrationLedger(database, currentVersion, migrations);
 
-  if (migrations === MIGRATIONS && currentVersion === CURRENT_SCHEMA_VERSION) {
+  if (migrations === MIGRATIONS && currentVersion === PHYSICAL_KEGS_SCHEMA_VERSION) {
+    validateFoundationLedgerStructure(database);
+    validatePhysicalKegsSchema(database);
+  } else if (currentVersion === SECURITY_ACTIVITY_OUTBOX_SCHEMA_VERSION) {
     validateFoundationLedgerStructure(database);
     validateSecurityActivityOutboxSchema(database);
   } else if (currentVersion === FOUNDATION_SCHEMA_VERSION) {
