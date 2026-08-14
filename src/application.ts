@@ -16,6 +16,9 @@ import {
   type CreateRendererOptions,
   type Renderer,
 } from "./infrastructure/rendering/renderer.ts";
+import { createAuthService } from "./features/auth/service.ts";
+import { createKegService } from "./features/kegs/service.ts";
+import { registerKegRoutes } from "./features/kegs/routes.ts";
 import { createLogger, type Logger } from "./shared/logging.ts";
 
 type ApplicationState = "new" | "starting" | "ready" | "stopping" | "stopped" | "failed";
@@ -90,6 +93,26 @@ class FoundationApplication implements Application {
       this.#database = this.#openDatabase(this.#config.databasePath);
       this.#renderer = this.#createRenderer();
 
+      const authService = createAuthService(this.#database, {
+        ...(this.#config.canonicalExternalOrigin !== undefined
+          ? { canonicalOrigin: this.#config.canonicalExternalOrigin }
+          : {}),
+        ...(this.#config.sessionInactivityMs !== undefined ||
+        this.#config.sessionAbsoluteMs !== undefined
+          ? {
+              session: {
+                ...(this.#config.sessionInactivityMs !== undefined
+                  ? { inactivityMs: this.#config.sessionInactivityMs }
+                  : {}),
+                ...(this.#config.sessionAbsoluteMs !== undefined
+                  ? { absoluteMs: this.#config.sessionAbsoluteMs }
+                  : {}),
+              },
+            }
+          : {}),
+      });
+      const kegService = createKegService(this.#database);
+
       const router = new Router(this.#logger);
       router.get("/healthz", (_request, response) => {
         if (!this.isReady()) {
@@ -101,6 +124,8 @@ class FoundationApplication implements Application {
           schemaVersion: APPLICATION_SCHEMA_VERSION,
         });
       });
+
+      registerKegRoutes({ router, kegService, authService });
 
       this.#httpServer = this.#createHttpServer({
         router,

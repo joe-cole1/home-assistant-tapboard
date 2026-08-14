@@ -7,18 +7,60 @@ import { sendHttpError, sendJson } from "./error-mapper.ts";
 export type RouteHandler = (
   request: IncomingMessage,
   response: ServerResponse,
+  params: Readonly<Record<string, string>>,
 ) => void | Promise<void>;
 
 interface Route {
   readonly method: string;
   readonly path: string;
+  readonly segments: readonly string[];
+  readonly paramNames: readonly string[];
   readonly handler: RouteHandler;
 }
 
 const MAX_REQUEST_TARGET_LENGTH = 8192;
 
+function parseSegments(path: string): {
+  readonly segments: readonly string[];
+  readonly paramNames: readonly string[];
+} {
+  const parts = path.split("/").filter((segment) => segment.length > 0);
+  const paramNames: string[] = [];
+  for (const part of parts) {
+    if (part.startsWith(":")) {
+      const name = part.slice(1);
+      if (name.length === 0) {
+        throw new TypeError(`Invalid parameter in route path: ${path}`);
+      }
+      paramNames.push(name);
+    }
+  }
+  return { segments: parts, paramNames };
+}
+
+function matchRoute(
+  route: Route,
+  pathSegments: readonly string[],
+): Record<string, string> | undefined {
+  if (route.segments.length !== pathSegments.length) {
+    return undefined;
+  }
+  const params: Record<string, string> = {};
+  for (let index = 0; index < route.segments.length; index += 1) {
+    const patternSegment = route.segments[index]!;
+    const requestSegment = pathSegments[index]!;
+    if (patternSegment.startsWith(":")) {
+      const paramName = patternSegment.slice(1);
+      params[paramName] = decodeURIComponent(requestSegment);
+    } else if (patternSegment !== requestSegment) {
+      return undefined;
+    }
+  }
+  return params;
+}
+
 export class Router {
-  readonly #routes = new Map<string, Route>();
+  readonly #routes: Route[] = [];
   readonly #logger: Logger;
 
   constructor(logger: Logger) {
@@ -31,34 +73,68 @@ export class Router {
       throw new TypeError("Routes require an HTTP method and an absolute pathname");
     }
 
-    const key = this.#key(normalizedMethod, path);
-    if (this.#routes.has(key)) {
+    const { segments, paramNames } = parseSegments(path);
+    const existing = this.#routes.find(
+      (candidate) => candidate.method === normalizedMethod && candidate.path === path,
+    );
+    if (existing !== undefined) {
       throw new Error(`Duplicate route registration: ${normalizedMethod} ${path}`);
     }
 
-    this.#routes.set(key, { method: normalizedMethod, path, handler });
+    this.#routes.push({
+      method: normalizedMethod,
+      path,
+      segments,
+      paramNames,
+      handler,
+    });
   }
 
   get(path: string, handler: RouteHandler): void {
     this.register("GET", path, handler);
   }
 
+  post(path: string, handler: RouteHandler): void {
+    this.register("POST", path, handler);
+  }
+
+  patch(path: string, handler: RouteHandler): void {
+    this.register("PATCH", path, handler);
+  }
+
+  delete(path: string, handler: RouteHandler): void {
+    this.register("DELETE", path, handler);
+  }
+
   async handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
     try {
       const method = request.method?.toUpperCase() ?? "";
       const path = this.#pathname(request.url);
-      const route = this.#routes.get(this.#key(method, path));
+      const requestSegments = path.split("/").filter((segment) => segment.length > 0);
 
-      if (route !== undefined) {
-        await route.handler(request, response);
+      let matchedHandler: RouteHandler | undefined;
+      let matchedParams: Record<string, string> = {};
+
+      const allowedMethods = new Set<string>();
+
+      for (const route of this.#routes) {
+        const params = matchRoute(route, requestSegments);
+        if (params !== undefined) {
+          allowedMethods.add(route.method);
+          if (route.method === method && matchedHandler === undefined) {
+            matchedHandler = route.handler;
+            matchedParams = params;
+          }
+        }
+      }
+
+      if (matchedHandler !== undefined) {
+        await matchedHandler(request, response, matchedParams);
         return;
       }
 
-      const allowed = [...this.#routes.values()]
-        .filter((candidate) => candidate.path === path)
-        .map((candidate) => candidate.method)
-        .sort();
-      if (allowed.length > 0) {
+      if (allowedMethods.size > 0) {
+        const allowed = [...allowedMethods].sort();
         sendJson(
           response,
           405,
@@ -101,9 +177,5 @@ export class Router {
         cause,
       });
     }
-  }
-
-  #key(method: string, path: string): string {
-    return `${method}\u0000${path}`;
   }
 }

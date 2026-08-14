@@ -9,6 +9,8 @@ import type { Logger } from "../../shared/logging.ts";
 
 const STATUS_BY_CATEGORY: Readonly<Record<ApplicationErrorCategory, number>> = {
   validation: 400,
+  unauthorized: 401,
+  forbidden: 403,
   not_found: 404,
   conflict: 409,
   unavailable: 503,

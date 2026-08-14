@@ -1,5 +1,11 @@
 export type ApplicationErrorCategory =
-  "validation" | "not_found" | "conflict" | "unavailable" | "internal";
+  | "validation"
+  | "unauthorized"
+  | "forbidden"
+  | "not_found"
+  | "conflict"
+  | "unavailable"
+  | "internal";
 
 export type SafeDetailValue = string | number | boolean | null;
 export type SafeErrorDetails = Readonly<Record<string, SafeDetailValue>>;
