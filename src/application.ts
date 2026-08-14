@@ -17,8 +17,11 @@ import {
   type Renderer,
 } from "./infrastructure/rendering/renderer.ts";
 import { createAuthService } from "./features/auth/service.ts";
+import { createSecretsService } from "./features/secrets/service.ts";
 import { createKegService } from "./features/kegs/service.ts";
 import { registerKegRoutes } from "./features/kegs/routes.ts";
+import { createBeverageService, type BeverageService } from "./features/beverages/service.ts";
+import { registerBeverageRoutes } from "./features/beverages/routes.ts";
 import { createLogger, type Logger } from "./shared/logging.ts";
 
 type ApplicationState = "new" | "starting" | "ready" | "stopping" | "stopped" | "failed";
@@ -59,6 +62,7 @@ class FoundationApplication implements Application {
   #database: DatabaseConnection | undefined;
   #renderer: Renderer | undefined;
   #httpServer: HttpServerLifecycle | undefined;
+  #beverageService: BeverageService | undefined;
   #address: HttpServerAddress | undefined;
   #starting: Promise<HttpServerAddress> | undefined;
   #stopping: Promise<void> | undefined;
@@ -111,7 +115,14 @@ class FoundationApplication implements Application {
             }
           : {}),
       });
+      const secretsService = createSecretsService(this.#database, {
+        ...(this.#config.secretKey ? { rootKey: this.#config.secretKey } : {}),
+      });
       const kegService = createKegService(this.#database);
+      const beverageService = createBeverageService(this.#database, {
+        secretsService,
+      });
+      this.#beverageService = beverageService;
 
       const router = new Router(this.#logger);
       router.get("/healthz", (_request, response) => {
@@ -126,6 +137,7 @@ class FoundationApplication implements Application {
       });
 
       registerKegRoutes({ router, kegService, authService });
+      registerBeverageRoutes({ router, beverageService, authService });
 
       this.#httpServer = this.#createHttpServer({
         router,
@@ -138,6 +150,7 @@ class FoundationApplication implements Application {
       }
       this.#address = address;
       this.#state = "ready";
+      beverageService.startPeriodicSync();
       return address;
     } catch (error) {
       this.#state = "failed";
@@ -162,6 +175,13 @@ class FoundationApplication implements Application {
 
   async #stop(): Promise<void> {
     let failure: unknown;
+    try {
+      this.#beverageService?.stopPeriodicSync();
+      this.#beverageService = undefined;
+    } catch {
+      // Ignored
+    }
+
     try {
       if (this.#starting !== undefined) {
         await this.#starting.catch(() => undefined);
@@ -199,6 +219,13 @@ class FoundationApplication implements Application {
   }
 
   async #closeResourcesAfterFailure(): Promise<void> {
+    try {
+      this.#beverageService?.stopPeriodicSync();
+      this.#beverageService = undefined;
+    } catch {
+      // Ignored
+    }
+
     try {
       await this.#httpServer?.stop();
     } catch (closeError) {

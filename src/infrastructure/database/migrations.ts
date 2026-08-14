@@ -6,7 +6,9 @@ export const SECURITY_ACTIVITY_OUTBOX_SCHEMA_VERSION = 2;
 export const SECURITY_ACTIVITY_OUTBOX_MIGRATION_NAME = "security-activity-outbox-primitives";
 export const PHYSICAL_KEGS_SCHEMA_VERSION = 3;
 export const PHYSICAL_KEGS_MIGRATION_NAME = "physical-kegs";
-export const CURRENT_SCHEMA_VERSION = PHYSICAL_KEGS_SCHEMA_VERSION;
+export const BEVERAGES_SCHEMA_VERSION = 4;
+export const BEVERAGES_MIGRATION_NAME = "custom-and-brewfather-beverages";
+export const CURRENT_SCHEMA_VERSION = BEVERAGES_SCHEMA_VERSION;
 
 export interface MigrationDefinition {
   readonly version: number;
@@ -493,6 +495,186 @@ export const PHYSICAL_KEGS_SCHEMA_SQL = `
     END;
 `;
 
+export const BEVERAGES_SCHEMA_SQL = `
+  CREATE TABLE beverage_settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    fallback_fg REAL NOT NULL DEFAULT 1.008 CHECK (fallback_fg BETWEEN 0.5 AND 2.0),
+    brewfather_completion_policy TEXT NOT NULL DEFAULT 'never' CHECK (brewfather_completion_policy IN ('never', 'ask', 'completed')),
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE beverages (
+    id TEXT PRIMARY KEY CHECK (length(CAST(id AS BLOB)) = 36),
+    ownership_type TEXT NOT NULL CHECK (ownership_type IN ('custom', 'brewfather')),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE custom_beverage_profiles (
+    beverage_id TEXT PRIMARY KEY REFERENCES beverages(id) ON DELETE CASCADE,
+    name TEXT NOT NULL CHECK (length(CAST(name AS BLOB)) BETWEEN 1 AND 160),
+    beverage_type TEXT NOT NULL CHECK (beverage_type IN ('beer', 'cider', 'mead', 'seltzer', 'soda', 'water', 'cocktail', 'kombucha', 'coffee', 'other')),
+    style TEXT CHECK (style IS NULL OR length(CAST(style AS BLOB)) BETWEEN 1 AND 120),
+    abv REAL CHECK (abv IS NULL OR (abv >= 0 AND abv <= 100)),
+    ibu REAL CHECK (ibu IS NULL OR (ibu >= 0 AND ibu <= 2000)),
+    og REAL CHECK (og IS NULL OR (og >= 0.5 AND og <= 2.0)),
+    fg REAL CHECK (fg IS NULL OR (fg >= 0.5 AND fg <= 2.0)),
+    srm REAL CHECK (srm IS NULL OR (srm >= 0 AND srm <= 100)),
+    display_color TEXT CHECK (display_color IS NULL OR length(CAST(display_color AS BLOB)) BETWEEN 1 AND 32),
+    description TEXT CHECK (description IS NULL OR length(CAST(description AS BLOB)) <= 4000),
+    fill_glass TEXT CHECK (fill_glass IS NULL OR length(CAST(fill_glass AS BLOB)) BETWEEN 1 AND 64),
+    manual_density_override REAL CHECK (manual_density_override IS NULL OR (manual_density_override >= 0.5 AND manual_density_override <= 2.0)),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE custom_recipes (
+    id TEXT PRIMARY KEY CHECK (length(CAST(id AS BLOB)) = 36),
+    beverage_id TEXT NOT NULL UNIQUE REFERENCES beverages(id) ON DELETE CASCADE,
+    notes TEXT CHECK (notes IS NULL OR length(CAST(notes AS BLOB)) <= 4000),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE custom_recipe_ingredients (
+    id TEXT PRIMARY KEY CHECK (length(CAST(id AS BLOB)) = 36),
+    recipe_id TEXT NOT NULL REFERENCES custom_recipes(id) ON DELETE CASCADE,
+    sort_order INTEGER NOT NULL CHECK (sort_order >= 0),
+    name TEXT NOT NULL CHECK (length(CAST(name AS BLOB)) BETWEEN 1 AND 160),
+    amount REAL CHECK (amount IS NULL OR amount >= 0),
+    unit TEXT CHECK (unit IS NULL OR length(CAST(unit AS BLOB)) BETWEEN 1 AND 32),
+    note TEXT CHECK (note IS NULL OR length(CAST(note AS BLOB)) <= 255)
+  );
+  CREATE INDEX idx_custom_recipe_ingredients_recipe ON custom_recipe_ingredients (recipe_id, sort_order);
+
+  CREATE TABLE custom_recipe_steps (
+    id TEXT PRIMARY KEY CHECK (length(CAST(id AS BLOB)) = 36),
+    recipe_id TEXT NOT NULL REFERENCES custom_recipes(id) ON DELETE CASCADE,
+    sort_order INTEGER NOT NULL CHECK (sort_order >= 0),
+    name TEXT NOT NULL CHECK (length(CAST(name AS BLOB)) BETWEEN 1 AND 160),
+    temperature_c REAL CHECK (temperature_c IS NULL OR (temperature_c >= -50 AND temperature_c <= 150)),
+    time_minutes REAL CHECK (time_minutes IS NULL OR time_minutes >= 0),
+    note TEXT CHECK (note IS NULL OR length(CAST(note AS BLOB)) <= 1000)
+  );
+  CREATE INDEX idx_custom_recipe_steps_recipe ON custom_recipe_steps (recipe_id, sort_order);
+
+  CREATE TABLE beverage_sensory_overrides (
+    beverage_id TEXT PRIMARY KEY REFERENCES beverages(id) ON DELETE CASCADE,
+    bitterness REAL CHECK (bitterness IS NULL OR (bitterness >= 0 AND bitterness <= 10)),
+    sweetness REAL CHECK (sweetness IS NULL OR (sweetness >= 0 AND sweetness <= 10)),
+    body REAL CHECK (body IS NULL OR (body >= 0 AND body <= 10)),
+    roast REAL CHECK (roast IS NULL OR (roast >= 0 AND roast <= 10)),
+    tartness REAL CHECK (tartness IS NULL OR (tartness >= 0 AND tartness <= 10)),
+    alcohol REAL CHECK (alcohol IS NULL OR (alcohol >= 0 AND alcohol <= 10)),
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE brewfather_accounts (
+    id TEXT PRIMARY KEY CHECK (length(CAST(id AS BLOB)) BETWEEN 1 AND 64),
+    user_id TEXT NOT NULL CHECK (length(CAST(user_id AS BLOB)) BETWEEN 1 AND 120),
+    enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+    discovery_statuses_json TEXT NOT NULL DEFAULT '["Planning","Brewing","Fermenting","Conditioning","Completed"]' CHECK (length(CAST(discovery_statuses_json AS BLOB)) <= 512),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE brewfather_candidate_cache (
+    id TEXT PRIMARY KEY CHECK (length(CAST(id AS BLOB)) = 36),
+    account_id TEXT NOT NULL REFERENCES brewfather_accounts(id) ON DELETE CASCADE,
+    source_batch_id TEXT NOT NULL CHECK (length(CAST(source_batch_id AS BLOB)) BETWEEN 1 AND 256),
+    batch_name TEXT CHECK (batch_name IS NULL OR length(CAST(batch_name AS BLOB)) <= 160),
+    batch_number TEXT CHECK (batch_number IS NULL OR length(CAST(batch_number AS BLOB)) <= 64),
+    status TEXT NOT NULL CHECK (length(CAST(status AS BLOB)) <= 32),
+    brewer TEXT CHECK (brewer IS NULL OR length(CAST(brewer AS BLOB)) <= 120),
+    recipe_name TEXT CHECK (recipe_name IS NULL OR length(CAST(recipe_name AS BLOB)) <= 160),
+    style TEXT CHECK (style IS NULL OR length(CAST(style AS BLOB)) <= 120),
+    brew_date TEXT,
+    estimated_og REAL,
+    estimated_fg REAL,
+    estimated_abv REAL,
+    estimated_ibu REAL,
+    estimated_srm REAL,
+    raw_summary_json TEXT CHECK (raw_summary_json IS NULL OR length(CAST(raw_summary_json AS BLOB)) <= 32768),
+    summary_fingerprint TEXT NOT NULL CHECK (length(CAST(summary_fingerprint AS BLOB)) = 64),
+    synced_at TEXT NOT NULL,
+    UNIQUE (account_id, source_batch_id)
+  );
+  CREATE INDEX idx_brewfather_candidate_cache_account_status ON brewfather_candidate_cache (account_id, status);
+
+  CREATE TABLE brewfather_beverage_links (
+    beverage_id TEXT PRIMARY KEY REFERENCES beverages(id) ON DELETE CASCADE,
+    account_id TEXT NOT NULL REFERENCES brewfather_accounts(id) ON DELETE RESTRICT,
+    source_batch_id TEXT NOT NULL CHECK (length(CAST(source_batch_id AS BLOB)) BETWEEN 1 AND 256),
+    sync_state TEXT NOT NULL CHECK (sync_state IN ('synced', 'stale', 'error', 'pending')),
+    last_synced_at TEXT,
+    last_error_message TEXT CHECK (last_error_message IS NULL OR length(CAST(last_error_message AS BLOB)) <= 255),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE (account_id, source_batch_id)
+  );
+
+  CREATE TABLE brewfather_source_profiles (
+    beverage_id TEXT PRIMARY KEY REFERENCES beverages(id) ON DELETE CASCADE,
+    name TEXT NOT NULL CHECK (length(CAST(name AS BLOB)) BETWEEN 1 AND 160),
+    beverage_type TEXT NOT NULL CHECK (beverage_type IN ('beer', 'cider', 'mead', 'seltzer', 'soda', 'water', 'cocktail', 'kombucha', 'coffee', 'other')),
+    style TEXT CHECK (style IS NULL OR length(CAST(style AS BLOB)) BETWEEN 1 AND 120),
+    abv REAL CHECK (abv IS NULL OR (abv >= 0 AND abv <= 100)),
+    ibu REAL CHECK (ibu IS NULL OR (ibu >= 0 AND ibu <= 2000)),
+    og REAL CHECK (og IS NULL OR (og >= 0.5 AND og <= 2.0)),
+    fg REAL CHECK (fg IS NULL OR (fg >= 0.5 AND fg <= 2.0)),
+    srm REAL CHECK (srm IS NULL OR (srm >= 0 AND srm <= 100)),
+    display_color TEXT CHECK (display_color IS NULL OR length(CAST(display_color AS BLOB)) BETWEEN 1 AND 32),
+    description TEXT CHECK (description IS NULL OR length(CAST(description AS BLOB)) <= 4000),
+    raw_source_json TEXT CHECK (raw_source_json IS NULL OR length(CAST(raw_source_json AS BLOB)) <= 65536),
+    source_fingerprint TEXT NOT NULL CHECK (length(CAST(source_fingerprint AS BLOB)) = 64),
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE brewfather_presentation_overrides (
+    beverage_id TEXT PRIMARY KEY REFERENCES beverages(id) ON DELETE CASCADE,
+    override_name_present INTEGER NOT NULL DEFAULT 0 CHECK (override_name_present IN (0, 1)),
+    name TEXT CHECK (override_name_present = 0 OR (name IS NOT NULL AND length(CAST(name AS BLOB)) BETWEEN 1 AND 160)),
+    override_beverage_type_present INTEGER NOT NULL DEFAULT 0 CHECK (override_beverage_type_present IN (0, 1)),
+    beverage_type TEXT CHECK (beverage_type IS NULL OR beverage_type IN ('beer', 'cider', 'mead', 'seltzer', 'soda', 'water', 'cocktail', 'kombucha', 'coffee', 'other')),
+    override_style_present INTEGER NOT NULL DEFAULT 0 CHECK (override_style_present IN (0, 1)),
+    style TEXT CHECK (style IS NULL OR length(CAST(style AS BLOB)) BETWEEN 1 AND 120),
+    override_abv_present INTEGER NOT NULL DEFAULT 0 CHECK (override_abv_present IN (0, 1)),
+    abv REAL CHECK (abv IS NULL OR (abv >= 0 AND abv <= 100)),
+    override_ibu_present INTEGER NOT NULL DEFAULT 0 CHECK (override_ibu_present IN (0, 1)),
+    ibu REAL CHECK (ibu IS NULL OR (ibu >= 0 AND ibu <= 2000)),
+    override_og_present INTEGER NOT NULL DEFAULT 0 CHECK (override_og_present IN (0, 1)),
+    og REAL CHECK (og IS NULL OR (og >= 0.5 AND og <= 2.0)),
+    override_fg_present INTEGER NOT NULL DEFAULT 0 CHECK (override_fg_present IN (0, 1)),
+    fg REAL CHECK (fg IS NULL OR (fg >= 0.5 AND fg <= 2.0)),
+    override_srm_present INTEGER NOT NULL DEFAULT 0 CHECK (override_srm_present IN (0, 1)),
+    srm REAL CHECK (srm IS NULL OR (srm >= 0 AND srm <= 100)),
+    override_display_color_present INTEGER NOT NULL DEFAULT 0 CHECK (override_display_color_present IN (0, 1)),
+    display_color TEXT CHECK (display_color IS NULL OR length(CAST(display_color AS BLOB)) BETWEEN 1 AND 32),
+    override_description_present INTEGER NOT NULL DEFAULT 0 CHECK (override_description_present IN (0, 1)),
+    description TEXT CHECK (description IS NULL OR length(CAST(description AS BLOB)) <= 4000),
+    override_fill_glass_present INTEGER NOT NULL DEFAULT 0 CHECK (override_fill_glass_present IN (0, 1)),
+    fill_glass TEXT CHECK (fill_glass IS NULL OR length(CAST(fill_glass AS BLOB)) BETWEEN 1 AND 64),
+    override_manual_density_override_present INTEGER NOT NULL DEFAULT 0 CHECK (override_manual_density_override_present IN (0, 1)),
+    manual_density_override REAL CHECK (manual_density_override IS NULL OR (manual_density_override >= 0.5 AND manual_density_override <= 2.0)),
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE beverage_source_recipe_snapshots (
+    id TEXT PRIMARY KEY CHECK (length(CAST(id AS BLOB)) = 36),
+    beverage_id TEXT NOT NULL REFERENCES beverages(id) ON DELETE CASCADE,
+    account_id TEXT NOT NULL CHECK (length(CAST(account_id AS BLOB)) BETWEEN 1 AND 64),
+    source_batch_id TEXT NOT NULL CHECK (length(CAST(source_batch_id AS BLOB)) BETWEEN 1 AND 256),
+    source_recipe_id TEXT CHECK (source_recipe_id IS NULL OR length(CAST(source_recipe_id AS BLOB)) <= 256),
+    state TEXT NOT NULL CHECK (state IN ('linked_current', 'detached', 'superseded')),
+    version INTEGER NOT NULL CHECK (version >= 1),
+    recipe_json TEXT NOT NULL CHECK (length(CAST(recipe_json AS BLOB)) BETWEEN 1 AND 262144),
+    recipe_fingerprint TEXT NOT NULL CHECK (length(CAST(recipe_fingerprint AS BLOB)) = 64),
+    created_at TEXT NOT NULL
+  );
+  CREATE UNIQUE INDEX idx_beverage_source_recipe_snapshots_linked ON beverage_source_recipe_snapshots (beverage_id) WHERE state = 'linked_current';
+  CREATE INDEX idx_beverage_source_recipe_snapshots_beverage ON beverage_source_recipe_snapshots (beverage_id, version DESC);
+`;
+
 const SECURITY_ACTIVITY_OUTBOX_SCHEMA_OBJECTS = [
   ["table", "admin_credentials"],
   ["table", "activity_log"],
@@ -533,6 +715,28 @@ const PHYSICAL_KEGS_SCHEMA_OBJECTS = [
   ["index", "idx_keg_maintenance_keg_recorded"],
   ["trigger", "trg_keg_tare_history_no_update"],
   ["trigger", "trg_keg_maintenance_records_no_update"],
+] as const;
+
+const BEVERAGES_SCHEMA_OBJECTS = [
+  ...PHYSICAL_KEGS_SCHEMA_OBJECTS,
+  ["table", "beverage_settings"],
+  ["table", "beverages"],
+  ["table", "custom_beverage_profiles"],
+  ["table", "custom_recipes"],
+  ["table", "custom_recipe_ingredients"],
+  ["table", "custom_recipe_steps"],
+  ["table", "beverage_sensory_overrides"],
+  ["table", "brewfather_accounts"],
+  ["table", "brewfather_candidate_cache"],
+  ["table", "brewfather_beverage_links"],
+  ["table", "brewfather_source_profiles"],
+  ["table", "brewfather_presentation_overrides"],
+  ["table", "beverage_source_recipe_snapshots"],
+  ["index", "idx_custom_recipe_ingredients_recipe"],
+  ["index", "idx_custom_recipe_steps_recipe"],
+  ["index", "idx_brewfather_candidate_cache_account_status"],
+  ["index", "idx_beverage_source_recipe_snapshots_linked"],
+  ["index", "idx_beverage_source_recipe_snapshots_beverage"],
 ] as const;
 
 function splitSqlStatements(sql: string): string[] {
@@ -581,7 +785,9 @@ function splitSqlStatements(sql: string): string[] {
 }
 
 function schemaDefinitionKey(sql: string): string | undefined {
-  const match = /^CREATE\s+(TABLE|INDEX|TRIGGER)\s+([A-Za-z_][A-Za-z0-9_]*)/i.exec(sql.trim());
+  const match = /^CREATE\s+(?:UNIQUE\s+)?(TABLE|INDEX|TRIGGER)\s+([A-Za-z_][A-Za-z0-9_]*)/i.exec(
+    sql.trim(),
+  );
   return match === null ? undefined : `${match[1]!.toLowerCase()}:${match[2]!.toLowerCase()}`;
 }
 
@@ -843,6 +1049,242 @@ function validatePhysicalKegsColumns(database: DatabaseExecutor): void {
   }
 }
 
+function validateBeveragesColumns(database: DatabaseExecutor): void {
+  validatePhysicalKegsColumns(database);
+  const required: Readonly<Record<string, readonly Omit<TableColumnRow, "cid">[]>> = {
+    beverage_settings: [
+      { name: "id", type: "INTEGER", notnull: 0, dflt_value: null, pk: 1 },
+      { name: "fallback_fg", type: "REAL", notnull: 1, dflt_value: "1.008", pk: 0 },
+      {
+        name: "brewfather_completion_policy",
+        type: "TEXT",
+        notnull: 1,
+        dflt_value: "'never'",
+        pk: 0,
+      },
+      { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    ],
+    beverages: [
+      { name: "id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+      { name: "ownership_type", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "created_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    ],
+    custom_beverage_profiles: [
+      { name: "beverage_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+      { name: "name", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "beverage_type", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "style", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "abv", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "ibu", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "og", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "fg", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "srm", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "display_color", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "description", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "fill_glass", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "manual_density_override", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "created_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    ],
+    custom_recipes: [
+      { name: "id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+      { name: "beverage_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "notes", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "created_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    ],
+    custom_recipe_ingredients: [
+      { name: "id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+      { name: "recipe_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "sort_order", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "name", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "amount", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "unit", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "note", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+    ],
+    custom_recipe_steps: [
+      { name: "id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+      { name: "recipe_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "sort_order", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "name", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "temperature_c", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "time_minutes", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "note", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+    ],
+    beverage_sensory_overrides: [
+      { name: "beverage_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+      { name: "bitterness", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "sweetness", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "body", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "roast", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "tartness", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "alcohol", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    ],
+    brewfather_accounts: [
+      { name: "id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+      { name: "user_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "enabled", type: "INTEGER", notnull: 1, dflt_value: "1", pk: 0 },
+      {
+        name: "discovery_statuses_json",
+        type: "TEXT",
+        notnull: 1,
+        dflt_value: '\'["Planning","Brewing","Fermenting","Conditioning","Completed"]\'',
+        pk: 0,
+      },
+      { name: "created_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    ],
+    brewfather_candidate_cache: [
+      { name: "id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+      { name: "account_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "source_batch_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "batch_name", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "batch_number", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "status", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "brewer", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "recipe_name", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "style", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "brew_date", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "estimated_og", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "estimated_fg", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "estimated_abv", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "estimated_ibu", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "estimated_srm", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "raw_summary_json", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "summary_fingerprint", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "synced_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    ],
+    brewfather_beverage_links: [
+      { name: "beverage_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+      { name: "account_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "source_batch_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "sync_state", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "last_synced_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "last_error_message", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "created_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    ],
+    brewfather_source_profiles: [
+      { name: "beverage_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+      { name: "name", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "beverage_type", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "style", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "abv", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "ibu", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "og", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "fg", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "srm", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "display_color", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "description", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "raw_source_json", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "source_fingerprint", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    ],
+    brewfather_presentation_overrides: [
+      { name: "beverage_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+      { name: "override_name_present", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
+      { name: "name", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      {
+        name: "override_beverage_type_present",
+        type: "INTEGER",
+        notnull: 1,
+        dflt_value: "0",
+        pk: 0,
+      },
+      { name: "beverage_type", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "override_style_present", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
+      { name: "style", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "override_abv_present", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
+      { name: "abv", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "override_ibu_present", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
+      { name: "ibu", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "override_og_present", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
+      { name: "og", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "override_fg_present", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
+      { name: "fg", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "override_srm_present", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
+      { name: "srm", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      {
+        name: "override_display_color_present",
+        type: "INTEGER",
+        notnull: 1,
+        dflt_value: "0",
+        pk: 0,
+      },
+      { name: "display_color", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "override_description_present", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
+      { name: "description", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "override_fill_glass_present", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
+      { name: "fill_glass", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      {
+        name: "override_manual_density_override_present",
+        type: "INTEGER",
+        notnull: 1,
+        dflt_value: "0",
+        pk: 0,
+      },
+      { name: "manual_density_override", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    ],
+    beverage_source_recipe_snapshots: [
+      { name: "id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+      { name: "beverage_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "account_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "source_batch_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "source_recipe_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "state", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "version", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "recipe_json", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "recipe_fingerprint", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "created_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    ],
+  };
+
+  for (const [table, columns] of Object.entries(required)) {
+    expectColumns(database, table, columns);
+  }
+}
+
+function validateBeveragesSchema(database: DatabaseExecutor): void {
+  const expected = new Map(
+    BEVERAGES_SCHEMA_OBJECTS.map(([type, name]) => [`${type}:${name}`, type]),
+  );
+  const actual = readSchemaObjects(database).filter(
+    ({ type, name }) => !(type === "index" && name.startsWith("sqlite_autoindex")),
+  );
+  if (
+    actual.length !== expected.size ||
+    actual.some(({ type, name }) => !expected.has(`${type}:${name}`))
+  ) {
+    throw incompatibleSchema("schema objects do not match the supported v4 schema");
+  }
+  const expectedSql = new Map<string, string>();
+  for (const statement of splitSqlStatements(
+    `${SECURITY_ACTIVITY_OUTBOX_SCHEMA_SQL}\n${OUTBOX_OVERFLOW_GUARD_TRIGGERS_SQL}\n${PHYSICAL_KEGS_SCHEMA_SQL}\n${BEVERAGES_SCHEMA_SQL}`,
+  )) {
+    const key = schemaDefinitionKey(statement);
+    if (key !== undefined) {
+      expectedSql.set(key, normalizeSql(statement));
+    }
+  }
+  expectedSql.set("table:schema_migrations", normalizeSql(CREATE_SCHEMA_MIGRATIONS_SQL));
+  for (const row of actual) {
+    const expectedType = expected.get(`${row.type}:${row.name}`);
+    const expectedDefinition = expectedSql.get(`${row.type}:${row.name}`);
+    if (
+      expectedType === undefined ||
+      expectedDefinition === undefined ||
+      row.sql === null ||
+      normalizeSql(row.sql) !== expectedDefinition
+    ) {
+      throw incompatibleSchema(`schema object ${row.name} has invalid DDL`);
+    }
+  }
+  validateBeveragesColumns(database);
+}
+
 function validatePhysicalKegsSchema(database: DatabaseExecutor): void {
   const expected = new Map(
     PHYSICAL_KEGS_SCHEMA_OBJECTS.map(([type, name]) => [`${type}:${name}`, type]),
@@ -905,6 +1347,13 @@ function seedSecurityActivityOutbox(database: DatabaseExecutor): void {
   }
 }
 
+function seedBeverages(database: DatabaseExecutor): void {
+  database.execute(`
+    INSERT INTO beverage_settings (id, fallback_fg, brewfather_completion_policy, updated_at)
+    VALUES (1, 1.008, 'never', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+  `);
+}
+
 export const FOUNDATION_MIGRATIONS: readonly MigrationDefinition[] = [
   {
     version: FOUNDATION_SCHEMA_VERSION,
@@ -936,11 +1385,22 @@ export const PHYSICAL_KEGS_MIGRATION: MigrationDefinition = {
   },
 };
 
+export const BEVERAGES_MIGRATION: MigrationDefinition = {
+  version: BEVERAGES_SCHEMA_VERSION,
+  name: BEVERAGES_MIGRATION_NAME,
+  apply(database) {
+    database.execute(BEVERAGES_SCHEMA_SQL);
+    seedBeverages(database);
+    return undefined;
+  },
+};
+
 /** Canonical production migration list. Keep this array identity stable. */
 export const MIGRATIONS: readonly MigrationDefinition[] = [
   FOUNDATION_MIGRATIONS[0]!,
   SECURITY_ACTIVITY_OUTBOX_MIGRATION,
   PHYSICAL_KEGS_MIGRATION,
+  BEVERAGES_MIGRATION,
 ];
 
 // Compatibility aliases for callers that prefer an explicit application name.
@@ -1002,7 +1462,10 @@ export function initializeSchema(
   }
   validateMigrationLedger(database, currentVersion, migrations);
 
-  if (migrations === MIGRATIONS && currentVersion === PHYSICAL_KEGS_SCHEMA_VERSION) {
+  if (migrations === MIGRATIONS && currentVersion === BEVERAGES_SCHEMA_VERSION) {
+    validateFoundationLedgerStructure(database);
+    validateBeveragesSchema(database);
+  } else if (currentVersion === PHYSICAL_KEGS_SCHEMA_VERSION) {
     validateFoundationLedgerStructure(database);
     validatePhysicalKegsSchema(database);
   } else if (currentVersion === SECURITY_ACTIVITY_OUTBOX_SCHEMA_VERSION) {
