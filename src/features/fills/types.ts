@@ -1,0 +1,106 @@
+import type { DatabaseExecutor } from "../../infrastructure/database/connection.ts";
+
+export type FillState = "available" | "on_deck" | "on_tap" | "ended";
+
+export interface Fill {
+  readonly id: string;
+  readonly beverageId: string;
+  readonly kegId: string;
+  readonly fillDate: string;
+  readonly onDeckOrder: number | null;
+  readonly endedAt: string | null;
+  readonly endReason: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface FillSettings {
+  readonly autoDeleteBeverageOnLastFill: boolean;
+  readonly updatedAt: string;
+}
+
+export interface FillAssignmentLifecyclePort {
+  hasActiveAssignment(fillId: string): boolean;
+  closeForFillEnd(database: DatabaseExecutor, fillId: string, endedAt: string): void;
+}
+
+export interface AdminFillView {
+  readonly id: string;
+  readonly beverageId: string;
+  readonly beverageName: string;
+  readonly beverageType: string;
+  readonly beverageStyle: string | null;
+  readonly beverageAbv: number | null;
+  readonly kegId: string;
+  readonly kegNumber: number;
+  readonly kegLabel: string | null;
+  readonly fillDate: string;
+  readonly state: FillState;
+  readonly onDeckOrder: number | null;
+  readonly endedAt: string | null;
+  readonly endReason: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface PublicOnDeckItem {
+  readonly fillId: string;
+  readonly order: number;
+  readonly name: string;
+  readonly style: string | null;
+}
+
+export type BrewfatherCompletionOutcome =
+  | "not_applicable"
+  | "not_requested"
+  | "confirmation_required"
+  | "already_terminal"
+  | "completed"
+  | "failed";
+
+export interface KickFillResult {
+  readonly fill: AdminFillView;
+  readonly brewfatherOutcome: BrewfatherCompletionOutcome;
+  readonly brewfatherMessage?: string;
+}
+
+export interface FillDeletionImpact {
+  readonly fillId: string;
+  readonly fills: number;
+  readonly isLastFillForBeverage: boolean;
+  readonly beverageAutoDeleted: boolean;
+  readonly beverageId: string;
+  readonly kegId: string;
+  readonly impacts: readonly { readonly code: string; readonly count: number }[];
+}
+
+export interface CreateFillInput {
+  readonly id?: string;
+  readonly beverageId: string;
+  readonly kegId: string;
+  readonly fillDate?: string;
+}
+
+export interface KickFillInput {
+  readonly reason?: string | null;
+}
+
+export interface ReorderOnDeckInput {
+  readonly fillIds: readonly string[];
+}
+
+export interface UpdateFillSettingsInput {
+  readonly autoDeleteBeverageOnLastFill: boolean;
+}
+
+export interface DeleteFillInput {
+  readonly reason?: string | null;
+}
+
+export interface FillActorOptions {
+  readonly actorType?: "admin" | "operator" | "system" | "machine";
+  readonly actorId?: string;
+  readonly sessionId?: string;
+  readonly now?: () => Date;
+  readonly idFactory?: () => string;
+}

@@ -8,7 +8,9 @@ export const PHYSICAL_KEGS_SCHEMA_VERSION = 3;
 export const PHYSICAL_KEGS_MIGRATION_NAME = "physical-kegs";
 export const BEVERAGES_SCHEMA_VERSION = 4;
 export const BEVERAGES_MIGRATION_NAME = "custom-and-brewfather-beverages";
-export const CURRENT_SCHEMA_VERSION = BEVERAGES_SCHEMA_VERSION;
+export const FILLS_SCHEMA_VERSION = 5;
+export const FILLS_MIGRATION_NAME = "fills-and-on-deck";
+export const CURRENT_SCHEMA_VERSION = FILLS_SCHEMA_VERSION;
 
 export interface MigrationDefinition {
   readonly version: number;
@@ -675,6 +677,30 @@ export const BEVERAGES_SCHEMA_SQL = `
   CREATE INDEX idx_beverage_source_recipe_snapshots_beverage ON beverage_source_recipe_snapshots (beverage_id, version DESC);
 `;
 
+export const FILLS_SCHEMA_SQL = `
+  CREATE TABLE fill_settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    auto_delete_beverage_on_last_fill INTEGER NOT NULL DEFAULT 0 CHECK (auto_delete_beverage_on_last_fill IN (0, 1)),
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE fills (
+    id TEXT PRIMARY KEY CHECK (length(CAST(id AS BLOB)) = 36),
+    beverage_id TEXT NOT NULL REFERENCES beverages(id) ON DELETE CASCADE,
+    keg_id TEXT NOT NULL REFERENCES kegs(id) ON DELETE CASCADE,
+    fill_date TEXT NOT NULL CHECK (length(CAST(fill_date AS BLOB)) = 10),
+    on_deck_order INTEGER CHECK (on_deck_order IS NULL OR on_deck_order >= 1),
+    ended_at TEXT,
+    end_reason TEXT CHECK (end_reason IS NULL OR length(CAST(end_reason AS BLOB)) <= 255),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX idx_fills_beverage_id ON fills (beverage_id);
+  CREATE INDEX idx_fills_keg_id ON fills (keg_id);
+  CREATE UNIQUE INDEX idx_fills_active_keg ON fills (keg_id) WHERE ended_at IS NULL;
+  CREATE INDEX idx_fills_on_deck_order ON fills (on_deck_order) WHERE on_deck_order IS NOT NULL;
+`;
+
 const SECURITY_ACTIVITY_OUTBOX_SCHEMA_OBJECTS = [
   ["table", "admin_credentials"],
   ["table", "activity_log"],
@@ -737,6 +763,16 @@ const BEVERAGES_SCHEMA_OBJECTS = [
   ["index", "idx_brewfather_candidate_cache_account_status"],
   ["index", "idx_beverage_source_recipe_snapshots_linked"],
   ["index", "idx_beverage_source_recipe_snapshots_beverage"],
+] as const;
+
+const FILLS_SCHEMA_OBJECTS = [
+  ...BEVERAGES_SCHEMA_OBJECTS,
+  ["table", "fill_settings"],
+  ["table", "fills"],
+  ["index", "idx_fills_beverage_id"],
+  ["index", "idx_fills_keg_id"],
+  ["index", "idx_fills_active_keg"],
+  ["index", "idx_fills_on_deck_order"],
 ] as const;
 
 function splitSqlStatements(sql: string): string[] {
@@ -1285,6 +1321,74 @@ function validateBeveragesSchema(database: DatabaseExecutor): void {
   validateBeveragesColumns(database);
 }
 
+function validateFillsColumns(database: DatabaseExecutor): void {
+  validateBeveragesColumns(database);
+  const required: Readonly<Record<string, readonly Omit<TableColumnRow, "cid">[]>> = {
+    fill_settings: [
+      { name: "id", type: "INTEGER", notnull: 0, dflt_value: null, pk: 1 },
+      {
+        name: "auto_delete_beverage_on_last_fill",
+        type: "INTEGER",
+        notnull: 1,
+        dflt_value: "0",
+        pk: 0,
+      },
+      { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    ],
+    fills: [
+      { name: "id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+      { name: "beverage_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "keg_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "fill_date", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "on_deck_order", type: "INTEGER", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "ended_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "end_reason", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "created_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    ],
+  };
+
+  for (const [table, columns] of Object.entries(required)) {
+    expectColumns(database, table, columns);
+  }
+}
+
+function validateFillsSchema(database: DatabaseExecutor): void {
+  const expected = new Map(FILLS_SCHEMA_OBJECTS.map(([type, name]) => [`${type}:${name}`, type]));
+  const actual = readSchemaObjects(database).filter(
+    ({ type, name }) => !(type === "index" && name.startsWith("sqlite_autoindex")),
+  );
+  if (
+    actual.length !== expected.size ||
+    actual.some(({ type, name }) => !expected.has(`${type}:${name}`))
+  ) {
+    throw incompatibleSchema("schema objects do not match the supported v5 schema");
+  }
+  const expectedSql = new Map<string, string>();
+  for (const statement of splitSqlStatements(
+    `${SECURITY_ACTIVITY_OUTBOX_SCHEMA_SQL}\n${OUTBOX_OVERFLOW_GUARD_TRIGGERS_SQL}\n${PHYSICAL_KEGS_SCHEMA_SQL}\n${BEVERAGES_SCHEMA_SQL}\n${FILLS_SCHEMA_SQL}`,
+  )) {
+    const key = schemaDefinitionKey(statement);
+    if (key !== undefined) {
+      expectedSql.set(key, normalizeSql(statement));
+    }
+  }
+  expectedSql.set("table:schema_migrations", normalizeSql(CREATE_SCHEMA_MIGRATIONS_SQL));
+  for (const row of actual) {
+    const expectedType = expected.get(`${row.type}:${row.name}`);
+    const expectedDefinition = expectedSql.get(`${row.type}:${row.name}`);
+    if (
+      expectedType === undefined ||
+      expectedDefinition === undefined ||
+      row.sql === null ||
+      normalizeSql(row.sql) !== expectedDefinition
+    ) {
+      throw incompatibleSchema(`schema object ${row.name} has invalid DDL`);
+    }
+  }
+  validateFillsColumns(database);
+}
+
 function validatePhysicalKegsSchema(database: DatabaseExecutor): void {
   const expected = new Map(
     PHYSICAL_KEGS_SCHEMA_OBJECTS.map(([type, name]) => [`${type}:${name}`, type]),
@@ -1395,12 +1499,30 @@ export const BEVERAGES_MIGRATION: MigrationDefinition = {
   },
 };
 
+function seedFills(database: DatabaseExecutor): void {
+  database.execute(`
+    INSERT INTO fill_settings (id, auto_delete_beverage_on_last_fill, updated_at)
+    VALUES (1, 0, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+  `);
+}
+
+export const FILLS_MIGRATION: MigrationDefinition = {
+  version: FILLS_SCHEMA_VERSION,
+  name: FILLS_MIGRATION_NAME,
+  apply(database) {
+    database.execute(FILLS_SCHEMA_SQL);
+    seedFills(database);
+    return undefined;
+  },
+};
+
 /** Canonical production migration list. Keep this array identity stable. */
 export const MIGRATIONS: readonly MigrationDefinition[] = [
   FOUNDATION_MIGRATIONS[0]!,
   SECURITY_ACTIVITY_OUTBOX_MIGRATION,
   PHYSICAL_KEGS_MIGRATION,
   BEVERAGES_MIGRATION,
+  FILLS_MIGRATION,
 ];
 
 // Compatibility aliases for callers that prefer an explicit application name.
@@ -1462,7 +1584,10 @@ export function initializeSchema(
   }
   validateMigrationLedger(database, currentVersion, migrations);
 
-  if (migrations === MIGRATIONS && currentVersion === BEVERAGES_SCHEMA_VERSION) {
+  if (migrations === MIGRATIONS && currentVersion === FILLS_SCHEMA_VERSION) {
+    validateFoundationLedgerStructure(database);
+    validateFillsSchema(database);
+  } else if (currentVersion === BEVERAGES_SCHEMA_VERSION) {
     validateFoundationLedgerStructure(database);
     validateBeveragesSchema(database);
   } else if (currentVersion === PHYSICAL_KEGS_SCHEMA_VERSION) {

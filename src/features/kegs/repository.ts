@@ -279,6 +279,22 @@ export function countMaintenanceRecordsByKegId(database: DatabaseExecutor, kegId
   return row?.count ?? 0;
 }
 
+export function countFillsByKegId(database: DatabaseExecutor, kegId: string): number {
+  try {
+    const row = database
+      .prepare<[string], CountRow>(
+        `SELECT COUNT(*) AS count
+         FROM fills
+         WHERE keg_id = ?`,
+      )
+      .get(kegId);
+
+    return row?.count ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
 export function getKegDeletionImpact(
   database: DatabaseExecutor,
   id: string,
@@ -290,6 +306,16 @@ export function getKegDeletionImpact(
 
   const tareCount = countTareHistoryByKegId(database, id);
   const maintenanceCount = countMaintenanceRecordsByKegId(database, id);
+  const fillCount = countFillsByKegId(database, id);
+
+  const impacts: { readonly code: string; readonly count: number }[] = [
+    { code: "kegs", count: 1 },
+    { code: "keg_tare_history", count: tareCount },
+    { code: "keg_maintenance_records", count: maintenanceCount },
+  ];
+  if (fillCount > 0) {
+    impacts.push({ code: "fills", count: fillCount });
+  }
 
   return {
     kegId: keg.id,
@@ -297,10 +323,7 @@ export function getKegDeletionImpact(
     kegs: 1,
     tareHistoryRecords: tareCount,
     maintenanceRecords: maintenanceCount,
-    impacts: [
-      { code: "kegs", count: 1 },
-      { code: "keg_tare_history", count: tareCount },
-      { code: "keg_maintenance_records", count: maintenanceCount },
-    ],
+    fills: fillCount,
+    impacts,
   };
 }

@@ -960,6 +960,26 @@ export class BeverageService {
       ...options,
     });
   }
+
+  async completeBrewfatherBatch(
+    beverageId: string,
+    options: SyncOptions = {},
+  ): Promise<{
+    readonly outcome: "not_applicable" | "already_terminal" | "completed" | "failed";
+    readonly message?: string;
+  }> {
+    if (!this.#secretsService) {
+      return {
+        outcome: "failed",
+        message: "Secrets service is unavailable for Brewfather integration.",
+      };
+    }
+
+    return this.#syncCoordinator.completeBatch(this.#database, this.#secretsService, beverageId, {
+      now: this.#now,
+      ...options,
+    });
+  }
 }
 
 export function createBeverageService(

@@ -286,10 +286,15 @@ export class BrewfatherAdapter {
           );
         }
 
+        if (text.trim().length === 0) {
+          return null;
+        }
+
         try {
           return JSON.parse(text) as T;
         } catch {
-          throw new BrewfatherError("invalid_response", "Brewfather returned malformed JSON.");
+          // If response is non-JSON plain text (e.g. "Updated"), treat as success
+          return text as unknown as T;
         }
       } finally {
         clearTimeout(timer);
@@ -397,6 +402,19 @@ export class BrewfatherAdapter {
       `/v2/recipes/${encodeURIComponent(recipeId)}`,
       {
         notFoundAsNull: true,
+      },
+    );
+  }
+
+  async updateBatchStatus(
+    batchId: string,
+    status: string,
+  ): Promise<Record<string, unknown> | string | null> {
+    return this.request<Record<string, unknown> | string>(
+      "PATCH",
+      `/v2/batches/${encodeURIComponent(batchId)}`,
+      {
+        body: { status },
       },
     );
   }

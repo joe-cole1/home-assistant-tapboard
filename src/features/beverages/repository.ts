@@ -1597,10 +1597,23 @@ export function calculateBeverageDeletionImpact(
       )
       .get(beverageId)?.count ?? 0;
 
+  let fillCount = 0;
+  try {
+    fillCount =
+      database
+        .prepare<[string], { readonly count: number }>(
+          `SELECT COUNT(*) as count FROM fills WHERE beverage_id = ?`,
+        )
+        .get(beverageId)?.count ?? 0;
+  } catch {
+    fillCount = 0;
+  }
+
   const impacts: { readonly code: string; readonly count: number }[] = [
     { code: "beverages", count: 1 },
   ];
 
+  if (fillCount > 0) impacts.push({ code: "fills", count: fillCount });
   if (recipeCount > 0) impacts.push({ code: "custom_recipes", count: recipeCount });
   if (sensoryCount > 0) impacts.push({ code: "beverage_sensory_overrides", count: sensoryCount });
   if (snapshotCount > 0)
