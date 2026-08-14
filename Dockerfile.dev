@@ -1,0 +1,24 @@
+# DEVELOPMENT-ONLY image for local Tapboard work; not a production artifact.
+FROM node:24-bookworm-slim
+
+WORKDIR /app
+
+# better-sqlite3 is native code and needs the Linux build toolchain during npm ci.
+RUN apt-get update \
+    && apt-get install --no-install-recommends --yes python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY src/ ./src/
+COPY views/ ./views/
+
+RUN mkdir -p /app/data \
+    && chown node:node /app/data
+
+EXPOSE 3000
+
+USER node
+
+CMD ["node", "src/main.ts"]

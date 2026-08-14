@@ -1,8 +1,8 @@
 # Tapboard architecture
 
-## Implemented Foundation and #67 primitives
+## Implemented Foundation, #67 primitives, and #85 development container
 
-Issue #66 establishes a Node 24 ESM modular monolith with explicit startup composition. Issue #67 adds security/session, Activity/deletion-audit, encrypted-secret, machine-key, stable-event, and bounded-outbox primitives. Node executes erasable `.ts` files directly, while TypeScript performs static checking with `tsc --noEmit`. There is no transpiler, backend or application bundler, SPA/client framework, HTTP framework, ORM, query builder, dependency-injection framework, or global service locator.
+Issue #66 establishes a Node 24 ESM modular monolith with explicit startup composition. Issue #67 adds security/session, Activity/deletion-audit, encrypted-secret, machine-key, stable-event, and bounded-outbox primitives. Issue #85 adds a development-only Docker image and Compose surface for local operation. Node executes erasable `.ts` files directly, while TypeScript performs static checking with `tsc --noEmit`. There is no transpiler, backend or application bundler, SPA/client framework, HTTP framework, ORM, query builder, dependency-injection framework, or global service locator.
 
 The implemented source topology is intentionally concise:
 
@@ -28,6 +28,10 @@ Exactly one route is registered: `GET /healthz`. When the local application stat
 The configured external origin is an exact canonical HTTP(S) origin; trusted proxies are explicit comma-separated addresses and never provide an origin fallback. Session lifetimes default to 30 days inactivity and 365 days absolute, with bounded validation. PIN reset and root-key rotation are local non-TTY stdin commands only; no browser reset flow or default PIN exists.
 
 The PIN is exactly four ASCII decimal digits. Its deliberately small 10,000-value contract has limited offline resistance if a database verifier is stolen; scrypt, durable throttling, opaque digest-only sessions, expiry/revocation, strict Origin, and session-bound CSRF protect online/local use. Integration encryption is independent and uses externally supplied `TAPBOARD_SECRET_KEY` with AES-256-GCM, fresh nonces, identity-bound AAD, safe degraded status, and atomic all-row key rotation.
+
+## Development container boundary (#85)
+
+`Dockerfile.dev`, `Dockerfile.dev.dockerignore`, and `compose.dev.yaml` are one coherent, development-only set. The image installs the locked dependencies, copies only the v2 `src/` and `views/` runtime inputs, runs as the unprivileged `node` user, and exposes port 3000. Compose binds host loopback `127.0.0.1:3000` to the container's `0.0.0.0:3000`, requires an external canonical 32-byte base64url `TAPBOARD_SECRET_KEY` from ignored local configuration, and checks the actual `/healthz` route. SQLite is `/app/data/tapboard-v2.sqlite3` on the named `tapboard-data` volume, materialized by Compose as `tapboard-dev_tapboard-data`; ordinary lifecycle operations preserve that volume. Stdin-only operator reset and root-key rotation run through the service and never accept secret arguments or defaults. The guardrail rejects partial dev sets and every other top-level Dockerfile or Compose variant. Production image hardening, deployment topology, and production secret handling are not implemented here and remain owned by issue #81.
 
 ## Rendering boundary
 
@@ -64,11 +68,11 @@ Development dependencies are TypeScript, `@types/node`, and `@types/better-sqlit
 
 ## Architecture enforcement
 
-The canonical `npm run check` gate combines format, lint, type, architecture, reuse-manifest, and `node:test` validation. The architecture checker permits the legitimate Foundation package and source paths while rejecting legacy/v1 imports and paths, shadow v1/v2 runtime trees, integration-specific imports from domain locations, browser-to-server/infrastructure imports, raw SQL outside approved ownership, and any `better-sqlite3` construction outside the controlled connection module. Negative fixture tests prove these rules reject representative violations. Docker/Compose path bans remain active until issue #81 introduces the deployment topology.
+The canonical `npm run check` gate combines format, lint, type, architecture, reuse-manifest, and `node:test` validation. The architecture checker permits the legitimate Foundation package and source paths plus the exact coherent #85 development container set while rejecting legacy/v1 imports and paths, shadow v1/v2 runtime trees, integration-specific imports from domain locations, browser-to-server/infrastructure imports, raw SQL outside approved ownership, and any `better-sqlite3` construction outside the controlled connection module. Negative fixture tests prove these rules reject representative violations. Canonical production Docker/Compose paths and all other top-level container variants remain banned until issue #81 introduces and hardens the production deployment topology.
 
 ## Not implemented
 
-The #67 slice intentionally does not implement provider delivery workers, Home Assistant/webhook adapters, domain entities/workflows, telemetry or pour detection, forecasting or draft health, Admin/public feature pages, SSE, Brew Story, Mystery Tap, Tap Wars, or final Docker deployment. Authentication/session, CSRF, throttling, Activity, encrypted secrets, machine API keys, canonical events, and bounded outbox storage are primitives only.
+The #67/#85 slices intentionally do not implement provider delivery workers, Home Assistant/webhook adapters, domain entities/workflows, telemetry or pour detection, forecasting or draft health, Admin/public feature pages, SSE, Brew Story, Mystery Tap, Tap Wars, or production Docker hardening/deployment. Authentication/session, CSRF, throttling, Activity, encrypted secrets, machine API keys, canonical events, bounded outbox storage, and the local development container workflow are implemented boundaries; production deployment remains deferred to issue #81.
 
 Playwright/browser E2E is also not present because Foundation has no feature UI or browser workflow. No E2E tests ran or passed; the tier is deferred to issue #76.
 

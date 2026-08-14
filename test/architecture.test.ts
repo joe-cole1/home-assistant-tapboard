@@ -98,6 +98,36 @@ void test("allows a v2 module nested beneath a similarly named feature directory
   assert.match(result.output, /Architecture guardrails passed\./);
 });
 
+void test("allows the exact coherent development container set", () => {
+  const result = runFixture({
+    "Dockerfile.dev": "FROM node:24-bookworm-slim\n",
+    "Dockerfile.dev.dockerignore": "node_modules\n",
+    "compose.dev.yaml": "services:\n  tapboard:\n    build: .\n",
+  });
+
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.output, /Architecture guardrails passed\./);
+});
+
+void test("rejects an incomplete development container set", () => {
+  const result = runFixture({
+    "Dockerfile.dev": "FROM node:24-bookworm-slim\n",
+    "compose.dev.yaml": "services:\n  tapboard:\n    build: .\n",
+  });
+
+  assert.notEqual(result.status, 0, result.output);
+  assert.match(result.output, /\[development-container\]/);
+});
+
+for (const path of [".dockerignore", "Dockerfile", "docker-compose.yml"] as const) {
+  void test(`continues rejecting canonical v1 container path ${path}`, () => {
+    const result = runFixture({ [path]: "legacy\n" });
+
+    assert.notEqual(result.status, 0, result.output);
+    assert.match(result.output, /legacy v1 path is active/);
+  });
+}
+
 const previouslyOmittedLegacyBasenames = [
   "brewStory",
   "brewfatherCache",
@@ -203,6 +233,18 @@ const violations = [
     rule: "secret-crypto",
     path: "src/features/integrations/credentials.ts",
     contents: 'import { createCipheriv } from "node:crypto";\nvoid createCipheriv;\n',
+  },
+  {
+    name: "unapproved top-level Dockerfile variant",
+    rule: "deployment-scope",
+    path: "Dockerfile.prod",
+    contents: "FROM node:24-bookworm-slim\n",
+  },
+  {
+    name: "unapproved top-level Compose variant",
+    rule: "deployment-scope",
+    path: "compose.prod.yaml",
+    contents: "services:\n  tapboard:\n    build: .\n",
   },
 ] as const;
 

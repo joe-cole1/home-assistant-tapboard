@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Foundation topology gate. The deployment phase must replace the remaining
-# Docker path bans with content-aware v2 deployment checks when those files are
-# legitimately introduced. See docs/rebuild/ARCHITECTURE-GUARDRAILS.md.
+# Foundation topology gate. Issue #85 permits one coherent development-only
+# container set; production Docker and Compose paths remain reserved for #81.
+# See docs/rebuild/ARCHITECTURE-GUARDRAILS.md.
 
 if [[ -n "${TAPBOARD_ARCHITECTURE_ROOT:-}" ]]; then
   repository_root="$TAPBOARD_ARCHITECTURE_ROOT"
@@ -108,6 +108,43 @@ for path in "${forbidden_v1_paths[@]}"; do
   if [[ -e "$path" ]]; then
     report "legacy v1 path is active: $path"
   fi
+done
+
+allowed_development_container_paths=(
+  Dockerfile.dev
+  Dockerfile.dev.dockerignore
+  compose.dev.yaml
+)
+
+development_container_count=0
+for path in "${allowed_development_container_paths[@]}"; do
+  if [[ -e "$path" ]]; then
+    development_container_count=$((development_container_count + 1))
+  fi
+done
+
+if ((development_container_count > 0 && development_container_count < ${#allowed_development_container_paths[@]})); then
+  report "[development-container] development container files must be present as one coherent set: Dockerfile.dev, Dockerfile.dev.dockerignore, compose.dev.yaml"
+fi
+
+# Only top-level container/deployment filenames are considered here. Content
+# beneath docs/ or fixtures is reference material and is intentionally ignored.
+for path in ./*; do
+  [[ -f "$path" ]] || continue
+  path="${path#./}"
+
+  case "$path" in
+    Dockerfile.dev|Dockerfile.dev.dockerignore|compose.dev.yaml)
+      ;;
+    # These canonical v1 paths retain their existing legacy-path diagnostics.
+    Dockerfile|.dockerignore|docker-compose.yml)
+      ;;
+    # Keep the exact Dockerfile.dev.dockerignore exception above ahead of this
+    # broad top-level variant check.
+    Dockerfile*|compose*.yaml|compose*.yml|docker-compose*.yaml|docker-compose*.yml)
+      report "[deployment-scope] unapproved top-level container/deployment path: $path"
+      ;;
+  esac
 done
 
 legacy_v1_module_basenames=()

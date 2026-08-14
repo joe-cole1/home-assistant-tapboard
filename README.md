@@ -1,8 +1,8 @@
 # Tapboard v2
 
-Tapboard v2 is being rebuilt as an ESM modular monolith. Issue #66 establishes the first runnable Foundation on Node 24: native erasable TypeScript executed directly by Node, static checking with `tsc --noEmit`, Node HTTP, file-based Eta rendering, and a controlled `better-sqlite3` database boundary.
+Tapboard v2 is being rebuilt as an ESM modular monolith. Issues #66 and #67 are on `main`: #66 establishes the first runnable Foundation on Node 24 (native erasable TypeScript executed directly by Node, static checking with `tsc --noEmit`, Node HTTP, file-based Eta rendering, and a controlled `better-sqlite3` database boundary), while #67 adds the security, Activity, event, secret, machine-key, and bounded-outbox primitives. Issue #85 adds a development-only container workflow for local use; production deployment remains deferred to #81.
 
-This branch is a local/development implementation of the #66 Foundation plus the #67 security, Activity, event, secret, machine-key, and bounded-outbox primitives. It remains awaiting review and shipping; no production deployment, Admin page, provider adapter, delivery worker, or domain workflow is included.
+The current implementation includes the local Foundation, #67 primitives, and the #85 development container. No production deployment, Admin page, provider adapter, delivery worker, or domain workflow is included.
 
 The frozen v1 application remains available at commit `429cf07e451b64ca1713655a34ffa5ebd376efae` and through Git history. Reusable v1 evidence is indexed in [`docs/rebuild/v1-reuse-manifest.json`](docs/rebuild/v1-reuse-manifest.json); it is reference material, not an active dependency or import source for v2.
 
@@ -44,7 +44,70 @@ The Admin PIN contract is exactly four ASCII decimal digits (`[0-9]{4}`), includ
 
 Local operator maintenance is stdin-only and never accepts secret positional arguments: `npm run operator:reset-pin` reads one exact PIN line, and `npm run operator:rotate-secret-key` reads exact old/new key lines. There is no browser PIN-reset workflow or default PIN. These commands print only safe revision/count metadata.
 
-The runtime has no backend transpiler, application bundler, SPA framework, or HTTP framework. Docker and Compose deployment remain deferred to issue #81.
+The runtime has no backend transpiler, application bundler, SPA framework, or HTTP framework. The Docker/Compose surface below is development-only; production image hardening and deployment remain owned by issue #81.
+
+## Development container workflow
+
+Install Docker Desktop with the Compose v2 plugin, then create an ignored local `.env` containing an external canonical 32-byte base64url `TAPBOARD_SECRET_KEY`. No real key or default value belongs in Git. A new key can be written without printing it:
+
+```sh
+(umask 077; printf 'TAPBOARD_SECRET_KEY=' > .env; openssl rand -base64 32 | tr '+/' '-_' | tr -d '\n=' >> .env; printf '\n' >> .env)
+```
+
+Build and start the development service:
+
+```sh
+docker compose -f compose.dev.yaml up --build -d
+```
+
+Check status and readiness, view logs, and control the service with:
+
+```sh
+docker compose -f compose.dev.yaml ps
+curl --fail http://127.0.0.1:3000/healthz
+docker compose -f compose.dev.yaml logs -f tapboard
+docker compose -f compose.dev.yaml stop
+docker compose -f compose.dev.yaml restart tapboard
+docker compose -f compose.dev.yaml down
+docker compose -f compose.dev.yaml up --build --force-recreate -d
+```
+
+The app is published at `http://127.0.0.1:3000` (the container listens on `0.0.0.0:3000`), and the actual readiness route is `/healthz`. SQLite lives at `/app/data/tapboard-v2.sqlite3`. The named volume key `tapboard-data` is materialized by Compose as `tapboard-dev_tapboard-data`; stop, ordinary down, restart, recreate, and rebuild preserve it.
+
+### DEV-ONLY destructive reset
+
+This removes the development database volume and must never be used for another Compose project:
+
+```sh
+docker compose -f compose.dev.yaml down --volumes
+docker compose -f compose.dev.yaml up --build -d
+```
+
+This Compose project declares only the Tapboard development data volume, so the command does not target unrelated projects or volumes. A fresh database has no default PIN.
+
+Operator commands require the service to be running; use the documented start command first. Reset the PIN with a hidden shell variable piped over stdin (there is no PIN argument or default):
+
+```bash
+IFS= read -r -s TAPBOARD_NEW_PIN; printf '\n'
+printf '%s\n' "$TAPBOARD_NEW_PIN" | docker compose -f compose.dev.yaml exec -T tapboard npm run operator:reset-pin
+unset TAPBOARD_NEW_PIN
+```
+
+Rotate the root key by piping exactly two stdin lines (old key, then new key), without printing either value:
+
+```bash
+IFS= read -r -s TAPBOARD_OLD_KEY; printf '\n'
+IFS= read -r -s TAPBOARD_NEW_KEY; printf '\n'
+printf '%s\n%s\n' "$TAPBOARD_OLD_KEY" "$TAPBOARD_NEW_KEY" | docker compose -f compose.dev.yaml exec -T tapboard npm run operator:rotate-secret-key
+```
+
+After a successful rotation, write the new external key to the ignored `.env`, force-recreate the service, and then clear the shell variables:
+
+```sh
+(umask 077; printf 'TAPBOARD_SECRET_KEY=%s\n' "$TAPBOARD_NEW_KEY" > .env)
+docker compose -f compose.dev.yaml up --force-recreate -d
+unset TAPBOARD_OLD_KEY TAPBOARD_NEW_KEY
+```
 
 ## Canonical validation
 
