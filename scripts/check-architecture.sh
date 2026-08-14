@@ -2,7 +2,8 @@
 set -euo pipefail
 
 # Foundation topology gate. Issue #85 permits one coherent development-only
-# container set; production Docker and Compose paths remain reserved for #81.
+# container set; the exact production compose example is illustrative only,
+# while actual production Docker and Compose paths remain reserved for #81.
 # See docs/rebuild/ARCHITECTURE-GUARDRAILS.md.
 
 if [[ -n "${TAPBOARD_ARCHITECTURE_ROOT:-}" ]]; then
@@ -43,7 +44,6 @@ done
 
 forbidden_v1_paths=(
   .dockerignore
-  .env.example
   .github/dependabot.yml
   .github/workflows/ci.yml
   eslint.config.js
@@ -134,7 +134,7 @@ for path in ./*; do
   path="${path#./}"
 
   case "$path" in
-    Dockerfile.dev|Dockerfile.dev.dockerignore|compose.dev.yaml)
+    Dockerfile.dev|Dockerfile.dev.dockerignore|compose.dev.yaml|compose.production.example.yaml)
       ;;
     # These canonical v1 paths retain their existing legacy-path diagnostics.
     Dockerfile|.dockerignore|docker-compose.yml)
@@ -146,6 +146,15 @@ for path in ./*; do
       ;;
   esac
 done
+
+if [[ -f compose.production.example.yaml ]]; then
+  if ! grep -Eq '^[[:space:]]*image:[[:space:]]*[^[:space:]#]+' compose.production.example.yaml; then
+    report "[production-example] compose.production.example.yaml must declare an image:"
+  fi
+  if grep -Eq 'build:|Dockerfile\.dev' compose.production.example.yaml; then
+    report "[production-example] compose.production.example.yaml must not reference build: or Dockerfile.dev"
+  fi
+fi
 
 legacy_v1_module_basenames=()
 for path in "${forbidden_v1_paths[@]}"; do
