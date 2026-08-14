@@ -1,8 +1,8 @@
 # Rebuild architecture guardrails
 
-## Active Foundation and #67 gate
+## Active Foundation, #67, and #85 gate
 
-`scripts/check-architecture.sh` now permits the legitimate package manifest and `src/` runtime introduced by issue #66 while enforcing topology- and content-aware Foundation boundaries:
+`scripts/check-architecture.sh` now permits the legitimate package manifest and `src/` runtime introduced by issue #66 plus the exact coherent development-only container set introduced by #85 while enforcing topology- and content-aware boundaries:
 
 - required authoritative rebuild records remain present;
 - known v1 runtime, database, Home Assistant telemetry, backup, SPA, and deployment paths do not return;
@@ -13,8 +13,10 @@
 - raw SQL is allowed only in `src/infrastructure/database/connection.ts`, `src/infrastructure/database/migrations.ts`, or a future feature-owned `repository.ts`/`repositories/*.ts`;
 - `better-sqlite3` imports and database construction are allowed only in `src/infrastructure/database/connection.ts`;
 - security and crypto ownership remains in `src/features/auth/`, `src/features/secrets/`, and `src/features/machine-keys/`; Activity and event primitives remain provider-neutral in their feature directories; raw SQL remains repository-owned (`src/features/*/repository.ts` or `repositories/*.ts`).
+- the only allowed top-level development container paths are `Dockerfile.dev`, `Dockerfile.dev.dockerignore`, and `compose.dev.yaml`, and they must exist as one coherent set; an incomplete set reports `[development-container]`;
+- every other top-level Dockerfile or `compose`/`docker-compose` YAML/YML variant reports `[deployment-scope]`; the check is top-level anchored and does not recurse into docs or fixtures.
 
-The gate reports the violated rule and path. `test/architecture.test.ts` uses isolated negative fixtures to prove rejection of shadow runtime trees, legacy imports, domain-to-integration imports, browser-to-server imports, SQL outside approved ownership, and SQLite access outside the controlled connection boundary. It also proves that the legitimate Foundation topology passes.
+The gate reports the violated rule and path. `test/architecture.test.ts` uses isolated fixtures to prove that the exact coherent development set passes, incomplete sets report `[development-container]`, canonical v1 container paths remain rejected, and representative unapproved variants report `[deployment-scope]`; its existing negative fixtures continue to prove rejection of shadow runtime trees, legacy imports, domain-to-integration imports, browser-to-server imports, SQL outside approved ownership, and SQLite access outside the controlled connection boundary. It also proves that the legitimate Foundation topology passes.
 
 `scripts/check-reuse-manifest.py` remains dependency-free and enforces the exact immutable frozen v1 commit, manifest schema and classifications, required entry fields, unique entry IDs, and every source/test path's recorded Git blob. The architecture checker intentionally excludes `docs/` from legacy-name scans because the rebuild records and manifest must discuss v1 paths.
 
@@ -40,7 +42,7 @@ The event registry is explicit and rejects provider-specific fields. Outbox capa
 
 ## Boundaries reserved for later phases
 
-The exact known v1 Docker and Compose paths remain banned during Foundation. Issue #81 must replace those path bans with content-aware v2 deployment checks in the same change that introduces the approved clean deployment files, while continuing to reject legacy Node, backup-volume, Home Assistant telemetry, and unsafe secret-handling configuration.
+The exact known v1 Docker and Compose paths (`.dockerignore`, `Dockerfile`, and `docker-compose.yml`) remain banned, as do all unapproved top-level container variants. Issue #85's three development paths are the sole exception and remain development-only. Issue #81 must add content-aware v2 production deployment checks in the same change that introduces approved production files, while continuing to reject legacy Node, backup-volume, Home Assistant telemetry, and unsafe secret-handling configuration.
 
 Future issues may add domain, integration, browser, and feature-repository locations only within the frozen architecture. When a legitimate new topology or migration adds a boundary not represented here, that issue must deliberately update the focused allowlists and negative tests without weakening the legacy, layering, SQL-ownership, SQLite-connection, or reuse-manifest protections.
 
