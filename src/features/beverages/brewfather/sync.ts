@@ -14,6 +14,7 @@ import {
 } from "../repository.ts";
 import { BrewfatherAdapter } from "./adapter.ts";
 import {
+  STATUS_SET,
   sanitizeBatchSummary,
   sanitizeBatchToSourceProfile,
   sanitizeErrorMessage,
@@ -371,6 +372,13 @@ export class BrewfatherSyncCoordinator {
       }
 
       const status = typeof batch.status === "string" ? batch.status : "";
+      if (!STATUS_SET.has(status)) {
+        return {
+          outcome: "failed",
+          message: "Batch status was not recognized",
+        };
+      }
+
       if (status === "Completed" || status === "Archived") {
         return {
           outcome: "already_terminal",

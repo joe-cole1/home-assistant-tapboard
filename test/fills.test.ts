@@ -391,9 +391,10 @@ void test("Brewfather completion coordination: never, ask, completed, and error 
         const bodyStr = typeof init.body === "string" ? init.body : "";
         const body = JSON.parse(bodyStr) as { status: string };
         patchLog.call = { batchId: "batch-123", status: body.status };
-        return new Response(JSON.stringify({ status: "Updated" }), {
+        // Brewfather API legitimately returns plain text "Updated"
+        return new Response("Updated", {
           status: 200,
-          headers: { "content-type": "application/json" },
+          headers: { "content-type": "text/plain" },
         });
       }
       return new Response("Not found", { status: 404 });
@@ -474,6 +475,90 @@ void test("Brewfather completion coordination: never, ask, completed, and error 
     const kickTerminal = await fillService.kickFill(fill4.id);
     assert.equal(kickTerminal.brewfatherOutcome, "already_terminal");
     assert.equal(patchLog.call, null); // Did not issue unnecessary PATCH
+
+    // Test 4a: GET batch returns HTTP 200 plain text -> completion fails safely, ZERO PATCH
+    let plainTextPatchEmitted = false;
+    const plainTextGetFetch: typeof fetch = async (input, init) => {
+      await Promise.resolve();
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes("/v2/batches/batch-123") && init?.method === "GET") {
+        return new Response("OK", { status: 200, headers: { "content-type": "text/plain" } });
+      }
+      if (url.includes("/v2/batches/batch-123") && init?.method === "PATCH") {
+        plainTextPatchEmitted = true;
+        return new Response("Updated", { status: 200 });
+      }
+      return new Response("Not found", { status: 404 });
+    };
+    const fillPlainText = fillService.createFill({
+      beverageId: linkedBev.beverage.id,
+      kegId: keg1.id,
+    });
+    const kickPlainText = await fillService.kickFill(
+      fillPlainText.id,
+      {},
+      { fetchFn: plainTextGetFetch },
+    );
+    assert.equal(kickPlainText.brewfatherOutcome, "failed");
+    assert.equal(plainTextPatchEmitted, false);
+
+    // Test 4b: GET batch returns HTTP 200 malformed JSON -> completion fails safely, ZERO PATCH
+    let malformedPatchEmitted = false;
+    const malformedGetFetch: typeof fetch = async (input, init) => {
+      await Promise.resolve();
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes("/v2/batches/batch-123") && init?.method === "GET") {
+        return new Response("{not-valid-json", {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/v2/batches/batch-123") && init?.method === "PATCH") {
+        malformedPatchEmitted = true;
+        return new Response("Updated", { status: 200 });
+      }
+      return new Response("Not found", { status: 404 });
+    };
+    const fillMalformed = fillService.createFill({
+      beverageId: linkedBev.beverage.id,
+      kegId: keg1.id,
+    });
+    const kickMalformed = await fillService.kickFill(
+      fillMalformed.id,
+      {},
+      { fetchFn: malformedGetFetch },
+    );
+    assert.equal(kickMalformed.brewfatherOutcome, "failed");
+    assert.equal(malformedPatchEmitted, false);
+
+    // Test 4c: GET batch returns JSON with unknown / missing status -> completion fails safely, ZERO PATCH
+    let unknownStatusPatchEmitted = false;
+    const unknownStatusGetFetch: typeof fetch = async (input, init) => {
+      await Promise.resolve();
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes("/v2/batches/batch-123") && init?.method === "GET") {
+        return new Response(JSON.stringify({ _id: "batch-123", status: "InvalidStatusXYZ" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/v2/batches/batch-123") && init?.method === "PATCH") {
+        unknownStatusPatchEmitted = true;
+        return new Response("Updated", { status: 200 });
+      }
+      return new Response("Not found", { status: 404 });
+    };
+    const fillUnknownStatus = fillService.createFill({
+      beverageId: linkedBev.beverage.id,
+      kegId: keg1.id,
+    });
+    const kickUnknownStatus = await fillService.kickFill(
+      fillUnknownStatus.id,
+      {},
+      { fetchFn: unknownStatusGetFetch },
+    );
+    assert.equal(kickUnknownStatus.brewfatherOutcome, "failed");
+    assert.equal(unknownStatusPatchEmitted, false);
 
     // Test 5: 429 Backoff sharing: normal Brewfather operation encounters 429 -> completion fails locally without network call
     let networkCalls = 0;

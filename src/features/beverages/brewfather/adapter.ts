@@ -158,6 +158,7 @@ export class BrewfatherAdapter {
       readonly query?: Record<string, string | number | undefined>;
       readonly body?: unknown;
       readonly notFoundAsNull?: boolean;
+      readonly allowTextResponse?: boolean;
     } = {},
   ): Promise<T | null> {
     let attempt = 0;
@@ -293,8 +294,13 @@ export class BrewfatherAdapter {
         try {
           return JSON.parse(text) as T;
         } catch {
-          // If response is non-JSON plain text (e.g. "Updated"), treat as success
-          return text as unknown as T;
+          if (options.allowTextResponse) {
+            return text as unknown as T;
+          }
+          throw new BrewfatherError(
+            "invalid_response",
+            `Brewfather response for ${method} ${path} was not valid JSON.`,
+          );
         }
       } finally {
         clearTimeout(timer);
@@ -415,6 +421,7 @@ export class BrewfatherAdapter {
       `/v2/batches/${encodeURIComponent(batchId)}`,
       {
         body: { status },
+        allowTextResponse: true,
       },
     );
   }
