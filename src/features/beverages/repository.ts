@@ -443,6 +443,16 @@ export function listBeverages(database: DatabaseExecutor): readonly Beverage[] {
   return rows.map(mapBeverage);
 }
 
+export function touchBeverage(
+  database: DatabaseExecutor,
+  beverageId: string,
+  updatedAt: string,
+): void {
+  database
+    .prepare<[string, string]>(`UPDATE beverages SET updated_at = ? WHERE id = ?`)
+    .run(updatedAt, beverageId);
+}
+
 export function insertCustomProfile(
   database: DatabaseExecutor,
   profile: CustomBeverageProfile,
@@ -1020,6 +1030,18 @@ export function listCandidates(
     )
     .all(accountId);
   return rows.map(mapCandidate);
+}
+
+export function deleteCandidate(
+  database: DatabaseExecutor,
+  accountId: string,
+  sourceBatchId: string,
+): void {
+  database
+    .prepare<[string, string]>(
+      `DELETE FROM brewfather_candidate_cache WHERE account_id = ? AND source_batch_id = ?`,
+    )
+    .run(accountId, sourceBatchId);
 }
 
 export function insertBeverageLink(database: DatabaseExecutor, link: BrewfatherBeverageLink): void {

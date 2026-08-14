@@ -1,6 +1,6 @@
-import type { ActorType } from "../kegs/types.ts";
+import type { ActivityActorType } from "../activity/types.ts";
 
-export type { ActorType };
+export type ActorType = ActivityActorType;
 
 export type BeverageOwnershipType = "custom" | "brewfather";
 

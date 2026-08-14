@@ -7,14 +7,26 @@ export const BREWFATHER_BATCH_STATUSES = [
   "Fermenting",
   "Conditioning",
   "Completed",
+  "Archived",
 ] as const;
 
 export const STATUS_SET = new Set<string>(BREWFATHER_BATCH_STATUSES);
+
+export function inferBeverageType(rawType: string | null | undefined): BeverageType {
+  const normalized = rawType?.toLowerCase();
+  if (normalized && BEVERAGE_TYPES.includes(normalized as BeverageType)) {
+    return normalized as BeverageType;
+  }
+  if (normalized === "cider") return "cider";
+  if (normalized === "mead") return "mead";
+  return "beer";
+}
 
 export interface SanitizedBatchSummary {
   readonly batchId: string;
   readonly batchName: string | null;
   readonly batchNumber: string | null;
+  readonly beverageType: BeverageType;
   readonly status: string;
   readonly brewer: string | null;
   readonly recipeId: string | null;
@@ -56,7 +68,7 @@ export interface SanitizedRecipeSnapshot {
   readonly recipeFingerprint: string;
 }
 
-function cleanText(value: unknown, maxLength: number, allowNumber: boolean = false): string | null {
+function cleanText(value: unknown, maxBytes: number, allowNumber: boolean = false): string | null {
   if (allowNumber && (typeof value === "number" || typeof value === "bigint")) {
     value = String(value);
   }
@@ -67,7 +79,12 @@ function cleanText(value: unknown, maxLength: number, allowNumber: boolean = fal
   })
     .join("")
     .trim();
-  return normalized ? normalized.slice(0, maxLength) : null;
+  if (!normalized) return null;
+  let truncated = normalized;
+  while (Buffer.byteLength(truncated, "utf8") > maxBytes) {
+    truncated = truncated.slice(0, -1);
+  }
+  return truncated.trim() || null;
 }
 
 function finiteNumber(
@@ -138,10 +155,13 @@ export function sanitizeBatchSummary(
   const estimatedIbu = finiteNumber(s.estimatedIbu ?? recipe.ibu, 0, 2000);
   const estimatedSrm = finiteNumber(s.estimatedColor ?? recipe.color ?? recipe.srm, 0, 100);
 
+  const beverageType = inferBeverageType(cleanText(recipe.type ?? s.type, 32));
+
   const summaryRecord = {
     batchId,
     batchName,
     batchNumber,
+    beverageType,
     status,
     brewer,
     recipeId,
@@ -187,16 +207,7 @@ export function sanitizeBatchToSourceProfile(batchData: unknown): SanitizedSourc
   const fg = finiteNumber(s.measuredFg ?? s.estimatedFg ?? recipe.fg, 0.5, 2.0);
   const srm = finiteNumber(s.estimatedColor ?? recipe.color ?? recipe.srm, 0, 100);
 
-  // Determine beverage type from recipe type or style if possible
-  const rawType = cleanText(recipe.type ?? s.type, 32)?.toLowerCase();
-  let beverageType: BeverageType = "beer";
-  if (rawType && BEVERAGE_TYPES.includes(rawType as BeverageType)) {
-    beverageType = rawType as BeverageType;
-  } else if (rawType === "cider") {
-    beverageType = "cider";
-  } else if (rawType === "mead") {
-    beverageType = "mead";
-  }
+  const beverageType = inferBeverageType(cleanText(recipe.type ?? s.type, 32));
 
   const profileRecord = {
     name,

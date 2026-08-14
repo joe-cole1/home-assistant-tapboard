@@ -68,6 +68,8 @@ export interface BrewfatherAdapterOptions {
   readonly budgetWindowMs?: number;
   readonly maxPages?: number;
   readonly maxItems?: number;
+  readonly maxRetries?: number;
+  readonly retryDelayMs?: number | ((attempt: number) => number);
 }
 
 function parseRetryAfter(value: string | null | undefined, now: number): number | null {
@@ -89,6 +91,8 @@ export class BrewfatherAdapter {
   readonly #budgetWindowMs: number;
   readonly #maxPages: number;
   readonly #maxItems: number;
+  readonly #maxRetries: number;
+  readonly #retryDelayMs: number | ((attempt: number) => number);
 
   #requestTimes: number[] = [];
   #blockedUntil: number = 0;
@@ -108,6 +112,8 @@ export class BrewfatherAdapter {
     this.#budgetWindowMs = options.budgetWindowMs ?? 3_600_000; // 1 hour
     this.#maxPages = options.maxPages ?? 5;
     this.#maxItems = options.maxItems ?? 250;
+    this.#maxRetries = options.maxRetries ?? 1;
+    this.#retryDelayMs = options.retryDelayMs ?? 100;
   }
 
   #consumeBudget(): void {
@@ -142,100 +148,141 @@ export class BrewfatherAdapter {
       readonly notFoundAsNull?: boolean;
     } = {},
   ): Promise<T | null> {
-    this.#consumeBudget();
+    let attempt = 0;
+    while (true) {
+      this.#consumeBudget();
 
-    const url = new URL(path, this.#origin);
-    if (options.query !== undefined) {
-      for (const [k, v] of Object.entries(options.query)) {
-        if (v !== undefined) url.searchParams.set(k, String(v));
-      }
-    }
-
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.#timeoutMs);
-
-    const authHeader = `Basic ${Buffer.from(`${this.#userId}:${this.#apiKey}`).toString("base64")}`;
-
-    try {
-      let response: Response;
-      try {
-        response = await this.#fetchFn(url.toString(), {
-          method,
-          signal: controller.signal,
-          headers: {
-            Authorization: authHeader,
-            Accept: "application/json",
-            ...(options.body !== undefined ? { "Content-Type": "application/json" } : {}),
-          },
-          ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
-        });
-      } catch (error: unknown) {
-        if (controller.signal.aborted || (error instanceof Error && error.name === "AbortError")) {
-          throw new BrewfatherError("timeout", "Brewfather request timed out.");
+      const url = new URL(path, this.#origin);
+      if (options.query !== undefined) {
+        for (const [k, v] of Object.entries(options.query)) {
+          if (v !== undefined) url.searchParams.set(k, String(v));
         }
-        throw new BrewfatherError(
-          "network",
-          `Brewfather network request failed: ${error instanceof Error ? error.message : "unknown error"}`,
-        );
       }
 
-      if (response.status === 404 && options.notFoundAsNull) {
-        return null;
-      }
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), this.#timeoutMs);
 
-      if (response.status === 401) {
-        throw new BrewfatherError("auth", "Brewfather authentication failed (401).", {
-          status: 401,
-        });
-      }
-
-      if (response.status === 403) {
-        throw new BrewfatherError("forbidden", "Brewfather access forbidden (403).", {
-          status: 403,
-        });
-      }
-
-      if (response.status === 404) {
-        throw new BrewfatherError("not_found", "Brewfather resource not found (404).", {
-          status: 404,
-        });
-      }
-
-      if (response.status === 429) {
-        const retryAfterHeader = response.headers.get("retry-after");
-        const retryMs = parseRetryAfter(retryAfterHeader, this.#now());
-        if (retryMs !== null) {
-          this.#blockedUntil = Math.max(this.#blockedUntil, this.#now() + retryMs);
-        }
-        throw new BrewfatherError("rate_limited", "Brewfather rate limit exceeded (429).", {
-          status: 429,
-          retryAfterMs: retryMs,
-        });
-      }
-
-      if (!response.ok) {
-        throw new BrewfatherError(
-          "transient",
-          `Brewfather returned unsuccessful status ${response.status}.`,
-          { status: response.status },
-        );
-      }
-
-      const text = await response.text();
-      if (Buffer.byteLength(text, "utf8") > this.#maxResponseBytes) {
-        throw new BrewfatherError(
-          "response_too_large",
-          `Brewfather response exceeded maximum size of ${this.#maxResponseBytes} bytes.`,
-        );
-      }
+      const authHeader = `Basic ${Buffer.from(`${this.#userId}:${this.#apiKey}`).toString("base64")}`;
 
       try {
-        return JSON.parse(text) as T;
-      } catch {
-        throw new BrewfatherError("invalid_response", "Brewfather returned malformed JSON.");
+        let response: Response;
+        try {
+          response = await this.#fetchFn(url.toString(), {
+            method,
+            signal: controller.signal,
+            headers: {
+              Authorization: authHeader,
+              Accept: "application/json",
+              ...(options.body !== undefined ? { "Content-Type": "application/json" } : {}),
+            },
+            ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
+          });
+        } catch (error: unknown) {
+          if (
+            controller.signal.aborted ||
+            (error instanceof Error && error.name === "AbortError")
+          ) {
+            if (attempt < this.#maxRetries) {
+              attempt += 1;
+              const delay =
+                typeof this.#retryDelayMs === "function"
+                  ? this.#retryDelayMs(attempt)
+                  : this.#retryDelayMs;
+              if (delay > 0) await new Promise((r) => setTimeout(r, delay));
+              continue;
+            }
+            throw new BrewfatherError("timeout", "Brewfather request timed out.");
+          }
+          if (attempt < this.#maxRetries) {
+            attempt += 1;
+            const delay =
+              typeof this.#retryDelayMs === "function"
+                ? this.#retryDelayMs(attempt)
+                : this.#retryDelayMs;
+            if (delay > 0) await new Promise((r) => setTimeout(r, delay));
+            continue;
+          }
+          throw new BrewfatherError(
+            "network",
+            `Brewfather network request failed: ${error instanceof Error ? error.message : "unknown error"}`,
+          );
+        }
+
+        if (response.status === 404 && options.notFoundAsNull) {
+          return null;
+        }
+
+        if (response.status === 401) {
+          throw new BrewfatherError("auth", "Brewfather authentication failed (401).", {
+            status: 401,
+          });
+        }
+
+        if (response.status === 403) {
+          throw new BrewfatherError("forbidden", "Brewfather access forbidden (403).", {
+            status: 403,
+          });
+        }
+
+        if (response.status === 404) {
+          throw new BrewfatherError("not_found", "Brewfather resource not found (404).", {
+            status: 404,
+          });
+        }
+
+        if (response.status === 429) {
+          const retryAfterHeader = response.headers.get("retry-after");
+          const retryMs = parseRetryAfter(retryAfterHeader, this.#now());
+          if (retryMs !== null) {
+            this.#blockedUntil = Math.max(this.#blockedUntil, this.#now() + retryMs);
+          }
+          throw new BrewfatherError("rate_limited", "Brewfather rate limit exceeded (429).", {
+            status: 429,
+            retryAfterMs: retryMs,
+          });
+        }
+
+        if (response.status >= 500) {
+          if (attempt < this.#maxRetries) {
+            attempt += 1;
+            const delay =
+              typeof this.#retryDelayMs === "function"
+                ? this.#retryDelayMs(attempt)
+                : this.#retryDelayMs;
+            if (delay > 0) await new Promise((r) => setTimeout(r, delay));
+            continue;
+          }
+          throw new BrewfatherError(
+            "transient",
+            `Brewfather returned unsuccessful status ${response.status}.`,
+            { status: response.status },
+          );
+        }
+
+        if (!response.ok) {
+          throw new BrewfatherError(
+            "transient",
+            `Brewfather returned unsuccessful status ${response.status}.`,
+            { status: response.status },
+          );
+        }
+
+        const text = await response.text();
+        if (Buffer.byteLength(text, "utf8") > this.#maxResponseBytes) {
+          throw new BrewfatherError(
+            "response_too_large",
+            `Brewfather response exceeded maximum size of ${this.#maxResponseBytes} bytes.`,
+          );
+        }
+
+        try {
+          return JSON.parse(text) as T;
+        } catch {
+          throw new BrewfatherError("invalid_response", "Brewfather returned malformed JSON.");
+        }
+      } finally {
+        clearTimeout(timer);
       }
-    } finally {
-      clearTimeout(timer);
     }
   }
 

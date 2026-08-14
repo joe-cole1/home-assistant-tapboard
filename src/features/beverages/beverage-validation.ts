@@ -1,4 +1,5 @@
 import { ApplicationError, type SafeErrorDetails } from "../../shared/errors.ts";
+import { STATUS_SET } from "./brewfather/sanitizer.ts";
 import {
   BEVERAGE_TYPES,
   type BeverageType,
@@ -44,7 +45,7 @@ function assertKnownFields(
   }
 }
 
-function cleanString(value: unknown, maxLength: number, fieldName: string): string {
+function cleanString(value: unknown, maxBytes: number, fieldName: string): string {
   if (typeof value !== "string") {
     invalidRequest(`${fieldName} must be a string.`);
   }
@@ -52,21 +53,21 @@ function cleanString(value: unknown, maxLength: number, fieldName: string): stri
   if (trimmed.length === 0) {
     invalidRequest(`${fieldName} must not be empty.`);
   }
-  if (trimmed.length > maxLength) {
-    invalidRequest(`${fieldName} exceeds maximum length of ${maxLength} characters.`);
+  if (Buffer.byteLength(trimmed, "utf8") > maxBytes) {
+    invalidRequest(`${fieldName} exceeds maximum byte length of ${maxBytes}.`);
   }
   return trimmed;
 }
 
-function cleanOptionalString(value: unknown, maxLength: number, fieldName: string): string | null {
+function cleanOptionalString(value: unknown, maxBytes: number, fieldName: string): string | null {
   if (value === undefined || value === null) return null;
   if (typeof value !== "string") {
     invalidRequest(`${fieldName} must be a string or null.`);
   }
   const trimmed = value.trim();
   if (trimmed.length === 0) return null;
-  if (trimmed.length > maxLength) {
-    invalidRequest(`${fieldName} exceeds maximum length of ${maxLength} characters.`);
+  if (Buffer.byteLength(trimmed, "utf8") > maxBytes) {
+    invalidRequest(`${fieldName} exceeds maximum byte length of ${maxBytes}.`);
   }
   return trimmed;
 }
@@ -640,16 +641,25 @@ export function validateConfigureBrewfatherAccountInput(
     input.apiKey !== undefined
       ? (cleanOptionalString(input.apiKey, 256, "apiKey") ?? undefined)
       : undefined;
-  const enabled = input.enabled !== undefined ? Boolean(input.enabled) : true;
+  if (input.enabled !== undefined && typeof input.enabled !== "boolean") {
+    invalidRequest("enabled must be a boolean.");
+  }
+  const enabled = input.enabled ?? true;
 
   let discoveryStatuses: string[] | undefined;
   if (input.discoveryStatuses !== undefined) {
     if (!Array.isArray(input.discoveryStatuses)) {
       invalidRequest("discoveryStatuses must be an array of strings.");
     }
-    discoveryStatuses = input.discoveryStatuses.map((s, idx) =>
-      cleanString(s, 32, `discoveryStatuses[${idx}]`),
-    );
+    discoveryStatuses = input.discoveryStatuses.map((s, idx) => {
+      const val = cleanString(s, 32, `discoveryStatuses[${idx}]`);
+      if (!STATUS_SET.has(val)) {
+        invalidRequest(
+          `discoveryStatuses[${idx}] must be one of: ${Array.from(STATUS_SET).join(", ")}`,
+        );
+      }
+      return val;
+    });
   }
 
   return {
@@ -658,5 +668,22 @@ export function validateConfigureBrewfatherAccountInput(
     ...(apiKey !== undefined ? { apiKey } : {}),
     enabled,
     ...(discoveryStatuses !== undefined ? { discoveryStatuses } : {}),
+  };
+}
+
+export interface DeleteBeverageInput {
+  readonly reason?: string | null;
+}
+
+export function validateDeleteBeverageInput(input: unknown): DeleteBeverageInput {
+  if (input === undefined || input === null || input === "") {
+    return {};
+  }
+  assertPlainObject(input, "Delete beverage input must be an object.");
+  assertKnownFields(input, ["reason"], "delete beverage input");
+
+  const reason = cleanOptionalString(input.reason, 255, "reason");
+  return {
+    ...(reason !== null ? { reason } : {}),
   };
 }

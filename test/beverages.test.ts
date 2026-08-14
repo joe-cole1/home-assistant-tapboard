@@ -372,26 +372,63 @@ void test("Brewfather candidate linking, snapshot versioning, and atomic unlink"
   assert.ok(activities.some((a) => a.action === "transition" && a.entityId === linked.beverage.id));
 });
 
-void test("Brewfather adapter handles rate limits, errors, and backoff", async () => {
-  let callCount = 0;
-  const mockFetch: typeof fetch = (_url, _init) => {
-    callCount += 1;
-    if (callCount === 1) {
+void test("Brewfather adapter handles pagination with start_after, budget limits, retry-after backoff, transient retry, and auth rejection", async () => {
+  const requestedUrls: string[] = [];
+  let transientAttempts = 0;
+  const mockFetch: typeof fetch = (url) => {
+    const urlStr = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+    requestedUrls.push(urlStr);
+
+    if (urlStr.includes("/v2/batches") && !urlStr.includes("start_after")) {
+      // Page 1: 50 items (full page)
+      const batches = Array.from({ length: 50 }, (_, i) => ({
+        _id: `batch-${i + 1}`,
+        name: `Batch ${i + 1}`,
+      }));
       return Promise.resolve(
-        new Response(JSON.stringify([{ _id: "b1", name: "Batch 1" }]), {
+        new Response(JSON.stringify(batches), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         }),
       );
     }
-    if (callCount === 2) {
+
+    if (urlStr.includes("start_after=batch-50")) {
+      // Page 2: 1 item (terminal short page)
       return Promise.resolve(
-        new Response("Rate limited", {
-          status: 429,
-          headers: { "Retry-After": "2" },
+        new Response(JSON.stringify([{ _id: "batch-51", name: "Batch 51" }]), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
         }),
       );
     }
+
+    if (urlStr.includes("/transient-test")) {
+      transientAttempts += 1;
+      if (transientAttempts === 1) {
+        return Promise.resolve(new Response("Internal Server Error", { status: 500 }));
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    }
+
+    if (urlStr.includes("/auth-fail")) {
+      return Promise.resolve(new Response("Unauthorized", { status: 401 }));
+    }
+
+    if (urlStr.includes("/rate-limited-test")) {
+      return Promise.resolve(
+        new Response("Rate limited", {
+          status: 429,
+          headers: { "Retry-After": "30" },
+        }),
+      );
+    }
+
     return Promise.resolve(new Response("Not found", { status: 404 }));
   };
 
@@ -400,15 +437,84 @@ void test("Brewfather adapter handles rate limits, errors, and backoff", async (
     apiKey: "key-1",
     fetchFn: mockFetch,
     requestBudget: 10,
+    maxRetries: 1,
+    retryDelayMs: 1,
   });
 
-  const page1 = await adapter.listBatches({ status: "Planning" });
-  assert.equal(page1.length, 1);
+  // 1. Multi-page start_after pagination + terminal short page termination
+  const result = await adapter.listBatchesByStatuses(["Planning"]);
+  assert.equal(result.batches.length, 51);
+  assert.ok(requestedUrls.some((u) => u.includes("start_after=batch-50")));
 
+  // 2. Bounded transient retry: 500 error retries and succeeds on attempt 2
+  const transientResult = await adapter.request<{ ok: boolean }>("GET", "/transient-test");
+  assert.equal(transientResult?.ok, true);
+  assert.equal(transientAttempts, 2);
+
+  // 3. 401 Authentication failure is rejected immediately without retry
   await assert.rejects(
-    () => adapter.listBatches({ status: "Planning" }),
-    (error: unknown) => error instanceof BrewfatherError && error.category === "rate_limited",
+    () => adapter.request("GET", "/auth-fail"),
+    (err: unknown) => err instanceof BrewfatherError && err.category === "auth",
   );
+
+  // 4. 429 Retry-After parsing and subsequent blocking
+  await assert.rejects(
+    () => adapter.request("GET", "/rate-limited-test"),
+    (err: unknown) =>
+      err instanceof BrewfatherError &&
+      err.category === "rate_limited" &&
+      err.retryAfterMs === 30_000,
+  );
+
+  // Subsequent call is blocked by Retry-After before making fetch
+  const callsBefore = requestedUrls.length;
+  await assert.rejects(
+    () => adapter.request("GET", "/any-path"),
+    (err: unknown) => err instanceof BrewfatherError && err.category === "rate_limited",
+  );
+  assert.equal(requestedUrls.length, callsBefore); // No new network call
+});
+
+void test("Brewfather sync coordinator retains persistent rate-limit budget and backoff per account", async () => {
+  const { database, secretsService, beverageService } = createTestContext();
+  beverageService.configureBrewfatherAccount({
+    accountId: "acc-persisted",
+    userId: "user-p",
+    apiKey: "key-p",
+    enabled: true,
+    discoveryStatuses: ["Fermenting"],
+  });
+
+  let fetchCalls = 0;
+  const mockFetch: typeof fetch = () => {
+    fetchCalls += 1;
+    if (fetchCalls === 1) {
+      return Promise.resolve(
+        new Response("Rate limited", {
+          status: 429,
+          headers: { "Retry-After": "60" },
+        }),
+      );
+    }
+    return Promise.resolve(
+      new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+  };
+
+  const coordinator = new BrewfatherSyncCoordinator({ fetchFn: mockFetch });
+
+  // Sync 1: receives 429 and sets backoff on the account's persistent adapter
+  const result1 = await coordinator.sync(database, secretsService, { accountId: "acc-persisted" });
+  assert.ok(result1[0]?.error?.includes("429") || result1[0]?.error?.includes("rate limit"));
+  assert.equal(fetchCalls, 1);
+
+  // Sync 2: next sync on same coordinator uses persistent adapter, which blocks before fetch
+  const result2 = await coordinator.sync(database, secretsService, { accountId: "acc-persisted" });
+  assert.ok(result2[0]?.error?.includes("rate limited") || result2[0]?.error?.includes("Retry in"));
+  assert.equal(fetchCalls, 1); // No new fetch made!
 });
 
 void test("Brewfather sync coalescing merges concurrent sync invocations", async () => {
@@ -470,22 +576,35 @@ void test("BeverageService periodic and startup sync manages timers cleanly", as
     enabled: true,
   });
 
+  async function waitFor(
+    predicate: () => boolean,
+    timeoutMs = 2000,
+    intervalMs = 10,
+  ): Promise<void> {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      if (predicate()) return;
+      await new Promise((r) => setTimeout(r, intervalMs));
+    }
+    if (!predicate()) throw new Error("Timed out waiting for predicate");
+  }
+
   // Start periodic sync with fast test intervals
   beverageService.startPeriodicSync({ initialDelayMs: 10, intervalMs: 25 });
 
   // Wait for initial startup sync
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  await waitFor(() => syncTriggered >= 1);
   assert.ok(syncTriggered >= 1);
 
   // Wait for at least one periodic tick
   const beforeTick = syncTriggered;
-  await new Promise((resolve) => setTimeout(resolve, 35));
+  await waitFor(() => syncTriggered > beforeTick);
   assert.ok(syncTriggered > beforeTick);
 
   // Stop periodic sync and verify no further triggers
   beverageService.stopPeriodicSync();
   const afterStop = syncTriggered;
-  await new Promise((resolve) => setTimeout(resolve, 40));
+  await new Promise((resolve) => setTimeout(resolve, 50));
   assert.equal(syncTriggered, afterStop);
 });
 
@@ -543,7 +662,7 @@ void test("different account namespaces can link the same source batch id", () =
         `
       INSERT INTO brewfather_candidate_cache
       (id, account_id, source_batch_id, batch_name, status, raw_summary_json, summary_fingerprint, synced_at)
-      VALUES (?, ?, 'shared-batch-100', 'Shared Batch', 'Fermenting', '{}', ?, '2026-08-14T00:00:00Z')
+      VALUES (?, ?, 'shared-batch-100', 'Shared Batch', 'Fermenting', '{"beverageType":"beer"}', ?, '2026-08-14T00:00:00Z')
     `,
       )
       .run(randomUUID(), accId, dummyFingerprint);
@@ -565,7 +684,7 @@ void test("different account namespaces can link the same source batch id", () =
   assert.notEqual(link1.beverage.id, link2.beverage.id);
 });
 
-void test("unlink transaction rolls back completely on injected failure", () => {
+void test("unlink transaction rolls back completely on late-injected failure", () => {
   const { database, beverageService } = createTestContext();
   beverageService.configureBrewfatherAccount({
     userId: "user-1",
@@ -580,7 +699,7 @@ void test("unlink transaction rolls back completely on injected failure", () => 
       `
     INSERT INTO brewfather_candidate_cache
     (id, account_id, source_batch_id, batch_name, status, raw_summary_json, summary_fingerprint, synced_at)
-    VALUES (?, 'default', 'batch-fail-test', 'Rollback IPA', 'Fermenting', '{}', ?, '2026-08-14T00:00:00Z')
+    VALUES (?, 'default', 'batch-fail-test', 'Rollback IPA', 'Fermenting', '{"beverageType":"beer"}', ?, '2026-08-14T00:00:00Z')
   `,
     )
     .run(randomUUID(), dummyFingerprint);
@@ -590,14 +709,23 @@ void test("unlink transaction rolls back completely on injected failure", () => 
     overrides: { name: { value: "Overridden Name" } },
   });
 
-  // Inject trigger failure on custom_beverage_profiles insert
+  database
+    .prepare(
+      `INSERT INTO beverage_source_recipe_snapshots
+       (id, beverage_id, account_id, source_batch_id, source_recipe_id, state, version, recipe_json, recipe_fingerprint, created_at)
+       VALUES (?, ?, 'default', 'batch-fail-test', 'rec-unlink', 'linked_current', 1, '{"name":"Unlink Recipe"}', ?, '2026-08-14T00:00:00Z')`,
+    )
+    .run(randomUUID(), linked.beverage.id, "a".repeat(64));
+
+  // Inject trigger failure on the final step (DELETE FROM brewfather_beverage_links)
+  // proving that previous steps (insert custom_profile, update beverage, update snapshot, delete overrides/source) are all rolled back!
   database
     .prepare(
       `
     CREATE TRIGGER fail_unlink_test
-    BEFORE INSERT ON custom_beverage_profiles
+    BEFORE DELETE ON brewfather_beverage_links
     BEGIN
-      SELECT RAISE(ABORT, 'Injected unlink failure');
+      SELECT RAISE(ABORT, 'Injected late unlink failure');
     END;
   `,
     )
@@ -606,18 +734,271 @@ void test("unlink transaction rolls back completely on injected failure", () => 
   // Unlink must throw and rollback
   assert.throws(
     () => beverageService.unlinkBeverage(linked.beverage.id),
-    /Injected unlink failure/,
+    /Injected late unlink failure/,
   );
 
   // Clean up trigger
   database.prepare("DROP TRIGGER fail_unlink_test").run();
 
-  // Verify full rollback: ownership is still brewfather, link and override remain intact
+  // Verify full rollback: ownership is still brewfather, link and override remain intact, snapshot still linked_current
   const bev = beverageService.getBeverage(linked.beverage.id);
   assert.equal(bev.beverage.ownershipType, "brewfather");
   assert.equal(bev.brewfatherLink?.sourceBatchId, "batch-fail-test");
   assert.equal(bev.presentationOverrides?.name, "Overridden Name");
+  assert.equal(bev.recipeSnapshot?.state, "linked_current");
   assert.equal(bev.customProfile, undefined);
+});
+
+void test("candidate link materializes initial source presentation directly from candidate without overrides", () => {
+  const { database, beverageService } = createTestContext();
+  beverageService.configureBrewfatherAccount({
+    userId: "user-initial",
+    apiKey: "key-initial",
+    enabled: true,
+  });
+
+  const dummyFingerprint = "f".repeat(64);
+  const candidateSummary = {
+    batchId: "batch-cand-init",
+    batchName: "Citra Sun Hazy IPA",
+    batchNumber: "42",
+    beverageType: "beer",
+    status: "Fermenting",
+    brewer: "Alice",
+    recipeName: "Citra Sun",
+    style: "New England IPA",
+    estimatedAbv: 6.7,
+    estimatedIbu: 48,
+    estimatedOg: 1.064,
+    estimatedFg: 1.013,
+    estimatedSrm: 4.5,
+    description: "Juicy citrus aromas",
+  };
+
+  database
+    .prepare(
+      `INSERT INTO brewfather_candidate_cache
+       (id, account_id, source_batch_id, batch_name, batch_number, status,
+        brewer, recipe_name, style, estimated_og, estimated_fg, estimated_abv,
+        estimated_ibu, estimated_srm, raw_summary_json, summary_fingerprint, synced_at)
+       VALUES (?, 'default', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '2026-08-14T00:00:00Z')`,
+    )
+    .run(
+      randomUUID(),
+      candidateSummary.batchId,
+      candidateSummary.batchName,
+      candidateSummary.batchNumber,
+      candidateSummary.status,
+      candidateSummary.brewer,
+      candidateSummary.recipeName,
+      candidateSummary.style,
+      candidateSummary.estimatedOg,
+      candidateSummary.estimatedFg,
+      candidateSummary.estimatedAbv,
+      candidateSummary.estimatedIbu,
+      candidateSummary.estimatedSrm,
+      JSON.stringify(candidateSummary),
+      dummyFingerprint,
+    );
+
+  const linked = beverageService.linkBrewfatherCandidate({
+    sourceBatchId: "batch-cand-init",
+  });
+
+  // Assert immediate effective presentation matches candidate data before any remote sync
+  assert.equal(linked.effectivePresentation.name, "Citra Sun Hazy IPA");
+  assert.equal(linked.effectivePresentation.beverageType, "beer");
+  assert.equal(linked.effectivePresentation.style, "New England IPA");
+  assert.equal(linked.effectivePresentation.abv, 6.7);
+  assert.equal(linked.effectivePresentation.ibu, 48);
+  assert.equal(linked.effectivePresentation.og, 1.064);
+  assert.equal(linked.effectivePresentation.fg, 1.013);
+  assert.equal(linked.effectivePresentation.description, "Juicy citrus aromas");
+  assert.equal(linked.brewfatherLink?.lastSyncedAt, null); // Pending link has null lastSyncedAt
+});
+
+void test("candidate cache reconciliation prunes unlinked batches on complete discovery and preserves on partial failure", async () => {
+  const { database, secretsService, beverageService } = createTestContext();
+  beverageService.configureBrewfatherAccount({
+    accountId: "acc-recon",
+    userId: "user-recon",
+    apiKey: "key-recon",
+    enabled: true,
+    discoveryStatuses: ["Fermenting"],
+  });
+
+  const dummyFingerprint = "1".repeat(64);
+  // Insert cand-1 (Fermenting, unlinked), cand-2 (Archived, unlinked), cand-3 (Archived, linked)
+  for (const bId of ["cand-1", "cand-2", "cand-3"]) {
+    database
+      .prepare(
+        `INSERT INTO brewfather_candidate_cache
+         (id, account_id, source_batch_id, batch_name, status, raw_summary_json, summary_fingerprint, synced_at)
+         VALUES (?, 'acc-recon', ?, 'Batch Name', 'Fermenting', '{}', ?, '2026-08-14T00:00:00Z')`,
+      )
+      .run(randomUUID(), bId, dummyFingerprint);
+  }
+
+  // Link cand-3
+  beverageService.linkBrewfatherCandidate({
+    accountId: "acc-recon",
+    sourceBatchId: "cand-3",
+  });
+
+  // Step 1: Successful discovery returns only cand-1
+  const mockSuccessFetch: typeof fetch = (url) => {
+    const urlStr = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+    if (urlStr.includes("/v2/batches/cand-3")) {
+      return Promise.resolve(
+        new Response(JSON.stringify({ _id: "cand-3", name: "Linked Batch" }), { status: 200 }),
+      );
+    }
+    return Promise.resolve(
+      new Response(JSON.stringify([{ _id: "cand-1", name: "Batch 1", status: "Fermenting" }]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+  };
+
+  const coordinator = new BrewfatherSyncCoordinator({ fetchFn: mockSuccessFetch });
+  await coordinator.sync(database, secretsService, { accountId: "acc-recon" });
+
+  const candidatesAfterSuccess = beverageService.listCandidates("acc-recon");
+  assert.ok(candidatesAfterSuccess.some((c) => c.sourceBatchId === "cand-1"));
+  assert.ok(candidatesAfterSuccess.some((c) => c.sourceBatchId === "cand-3")); // Linked candidate preserved
+  assert.equal(
+    candidatesAfterSuccess.some((c) => c.sourceBatchId === "cand-2"),
+    false,
+  ); // cand-2 pruned!
+
+  // Step 2: Failed discovery does NOT prune candidate cache
+  const mockFailFetch: typeof fetch = () => {
+    return Promise.resolve(new Response("Server Error", { status: 500 }));
+  };
+  const failCoordinator = new BrewfatherSyncCoordinator({ fetchFn: mockFailFetch });
+  await failCoordinator.sync(database, secretsService, { accountId: "acc-recon" });
+
+  const candidatesAfterFail = beverageService.listCandidates("acc-recon");
+  assert.ok(candidatesAfterFail.some((c) => c.sourceBatchId === "cand-1"));
+});
+
+void test("configureBrewfatherAccount is atomic across account metadata and secret storage", () => {
+  const database = openDatabase(":memory:");
+  const failingSecretsService = {
+    list: () => [],
+    get: () => undefined,
+    revealPrivileged: () => {
+      throw new Error("Secret retrieval error");
+    },
+    upsert: () => {
+      throw new Error("Simulated secret storage failure");
+    },
+    delete: () => undefined,
+    rotateRootKey: () => ({ reencrypted: 0, removed: 0 }),
+  } as unknown as ReturnType<typeof createSecretsService>;
+
+  const beverageService = createBeverageService(database, {
+    secretsService: failingSecretsService,
+  });
+
+  assert.throws(
+    () =>
+      beverageService.configureBrewfatherAccount({
+        accountId: "acc-atomic",
+        userId: "user-atomic",
+        apiKey: "secret-key",
+        enabled: true,
+      }),
+    /Simulated secret storage failure/,
+  );
+
+  // Assert account row was rolled back and does not exist
+  const status = beverageService.getBrewfatherStatus("acc-atomic");
+  assert.equal(status.configured, false);
+});
+
+void test("linked-sync persistence rolls back atomically on injected failure and preserves coherent state", async () => {
+  const { database, secretsService, beverageService } = createTestContext();
+  beverageService.configureBrewfatherAccount({
+    userId: "user-sync-rollback",
+    apiKey: "key-sync-rollback",
+    enabled: true,
+  });
+
+  const dummyFingerprint = "e".repeat(64);
+  database
+    .prepare(
+      `INSERT INTO brewfather_candidate_cache
+       (id, account_id, source_batch_id, batch_name, status, raw_summary_json, summary_fingerprint, synced_at)
+       VALUES (?, 'default', 'batch-atomic-test', 'Initial Batch Name', 'Fermenting', '{"beverageType":"beer"}', ?, '2026-08-14T00:00:00Z')`,
+    )
+    .run(randomUUID(), dummyFingerprint);
+
+  const linked = beverageService.linkBrewfatherCandidate({
+    sourceBatchId: "batch-atomic-test",
+  });
+
+  // Save initial recipe snapshot version 1
+  database
+    .prepare(
+      `INSERT INTO beverage_source_recipe_snapshots
+       (id, beverage_id, account_id, source_batch_id, source_recipe_id, state, version, recipe_json, recipe_fingerprint, created_at)
+       VALUES (?, ?, 'default', 'batch-atomic-test', 'rec-1', 'linked_current', 1, '{"name":"V1"}', ?, '2026-08-14T00:00:00Z')`,
+    )
+    .run(randomUUID(), linked.beverage.id, "b".repeat(64));
+
+  // Mock remote sync returning updated batch (Name: "Updated Remote Name", ABV: 8.0) and new recipe V2
+  const mockFetch: typeof fetch = (url) => {
+    const urlStr = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+    if (urlStr.includes("/v2/batches/batch-atomic-test")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            _id: "batch-atomic-test",
+            name: "Updated Remote Name",
+            status: "Fermenting",
+            recipe: {
+              _id: "rec-2",
+              name: "V2 Recipe",
+              abv: 8.0,
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+    }
+    return Promise.resolve(
+      new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+  };
+
+  // Inject failure on link state update AFTER source profile and snapshot write would have executed in transaction
+  database
+    .prepare(
+      `CREATE TRIGGER fail_link_sync_update
+       BEFORE UPDATE OF sync_state ON brewfather_beverage_links
+       WHEN NEW.sync_state = 'synced'
+       BEGIN
+         SELECT RAISE(ABORT, 'Injected sync write failure');
+       END;`,
+    )
+    .run();
+
+  const syncCoordinator = new BrewfatherSyncCoordinator({ fetchFn: mockFetch });
+  await syncCoordinator.sync(database, secretsService);
+
+  database.prepare("DROP TRIGGER fail_link_sync_update").run();
+
+  // Verify full rollback: old source profile, old recipe snapshot, and old link state remain coherent
+  const bev = beverageService.getBeverage(linked.beverage.id);
+  assert.equal(bev.brewfatherSourceProfile?.name, "Initial Batch Name"); // Not updated to "Updated Remote Name"
+  assert.equal(bev.recipeSnapshot?.version, 1); // Not superseded
+  assert.equal(bev.recipeSnapshot?.state, "linked_current");
+  assert.equal(bev.brewfatherLink?.syncState, "error"); // Error state recorded upon failure
 });
 
 void test("source sync updates underlying source while override remains effective, and restoring inheritance reveals updated source", async () => {
@@ -635,7 +1016,7 @@ void test("source sync updates underlying source while override remains effectiv
       `
     INSERT INTO brewfather_candidate_cache
     (id, account_id, source_batch_id, batch_name, status, raw_summary_json, summary_fingerprint, synced_at)
-    VALUES (?, 'default', 'batch-override-sync', 'Original Source Name', 'Fermenting', '{}', ?, '2026-08-14T00:00:00Z')
+    VALUES (?, 'default', 'batch-override-sync', 'Original Source Name', 'Fermenting', '{"beverageType":"beer"}', ?, '2026-08-14T00:00:00Z')
   `,
     )
     .run(randomUUID(), dummyFingerprint);
@@ -747,7 +1128,7 @@ void test("linked batch syncs outside discovery status filter and preserves last
       `
     INSERT INTO brewfather_candidate_cache
     (id, account_id, source_batch_id, batch_name, status, raw_summary_json, summary_fingerprint, synced_at)
-    VALUES (?, 'default', 'batch-archived-99', 'Archived Batch', 'Archived', '{}', ?, '2026-08-14T00:00:00Z')
+    VALUES (?, 'default', 'batch-archived-99', 'Archived Batch', 'Archived', '{"beverageType":"beer"}', ?, '2026-08-14T00:00:00Z')
   `,
     )
     .run(randomUUID(), dummyFingerprint);
@@ -880,7 +1261,7 @@ void test("multi-account partial sync failure isolates errors and candidate disc
   assert.equal(customBev.effectivePresentation.name, "Independent Stout");
 });
 
-void test("HTTP Admin API: full lifecycle smoke test with cookie auth, CSRF, overrides, and delete", async (context) => {
+void test("HTTP Admin API: full lifecycle smoke test with cookie auth, CSRF, overrides, and delete validation", async (context) => {
   const database = openDatabase(":memory:");
   const canonicalOrigin = "http://127.0.0.1:3000";
   const authService = createAuthService(database, { canonicalOrigin });
@@ -1009,7 +1390,39 @@ void test("HTTP Admin API: full lifecycle smoke test with cookie auth, CSRF, ove
   });
   assert.equal(impactRes.status, 200);
 
-  // 9. DELETE beverage
+  // 9. DELETE validation: Malformed JSON body returns 400 and DOES NOT delete
+  const malformedDelete = await fetch(`${baseUrl}/api/admin/beverages/${beverageId}`, {
+    method: "DELETE",
+    headers: {
+      cookie: cookieHeader,
+      origin: canonicalOrigin,
+      "x-csrf-token": csrfToken,
+      "content-type": "application/json",
+    },
+    body: "{ malformed json",
+  });
+  assert.equal(malformedDelete.status, 400);
+
+  // 10. DELETE validation: Unknown fields return 400 and DO NOT delete
+  const unknownFieldDelete = await fetch(`${baseUrl}/api/admin/beverages/${beverageId}`, {
+    method: "DELETE",
+    headers: {
+      cookie: cookieHeader,
+      origin: canonicalOrigin,
+      "x-csrf-token": csrfToken,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ unknownField: "bad" }),
+  });
+  assert.equal(unknownFieldDelete.status, 400);
+
+  // Verify beverage is still alive
+  const stillAlive = await fetch(`${baseUrl}/api/admin/beverages/${beverageId}`, {
+    headers: { cookie: cookieHeader },
+  });
+  assert.equal(stillAlive.status, 200);
+
+  // 11. DELETE with valid reason body -> 200 deleted
   const deleteRes = await fetch(`${baseUrl}/api/admin/beverages/${beverageId}`, {
     method: "DELETE",
     headers: {
@@ -1022,9 +1435,37 @@ void test("HTTP Admin API: full lifecycle smoke test with cookie auth, CSRF, ove
   });
   assert.equal(deleteRes.status, 200);
 
-  // 10. GET after delete -> 404
+  // 12. GET after delete -> 404
   const getAfterDelete = await fetch(`${baseUrl}/api/admin/beverages/${beverageId}`, {
     headers: { cookie: cookieHeader },
   });
   assert.equal(getAfterDelete.status, 404);
+
+  // 13. Create second beverage and delete with EMPTY body -> 200 deleted
+  const createSecond = await fetch(`${baseUrl}/api/admin/beverages`, {
+    method: "POST",
+    headers: {
+      cookie: cookieHeader,
+      origin: canonicalOrigin,
+      "x-csrf-token": csrfToken,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      name: "Empty Body Delete Test",
+      beverageType: "beer",
+    }),
+  });
+  assert.equal(createSecond.status, 201);
+  const secondId = ((await createSecond.json()) as { beverage: { beverage: { id: string } } })
+    .beverage.beverage.id;
+
+  const emptyDelete = await fetch(`${baseUrl}/api/admin/beverages/${secondId}`, {
+    method: "DELETE",
+    headers: {
+      cookie: cookieHeader,
+      origin: canonicalOrigin,
+      "x-csrf-token": csrfToken,
+    },
+  });
+  assert.equal(emptyDelete.status, 200);
 });

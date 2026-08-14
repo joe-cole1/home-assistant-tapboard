@@ -2,8 +2,10 @@ import type { DatabaseExecutor } from "../../../infrastructure/database/connecti
 import type { SecretsService } from "../../secrets/service.ts";
 import { appendActivity } from "../../activity/operations.ts";
 import {
+  deleteCandidate,
   listBeverageLinks,
   listBrewfatherAccounts,
+  listCandidates,
   readBrewfatherAccount,
   saveRecipeSnapshot,
   updateBeverageLinkState,
@@ -38,10 +40,46 @@ export class BrewfatherSyncCoordinator {
   #inFlightSync: Promise<readonly SyncResult[]> | null = null;
   readonly #fetchFn?: typeof fetch | undefined;
   readonly #origin?: string | undefined;
+  readonly #adapters = new Map<
+    string,
+    { adapter: BrewfatherAdapter; userId: string; apiKey: string; origin?: string }
+  >();
 
   constructor(options: { readonly fetchFn?: typeof fetch; readonly origin?: string } = {}) {
     this.#fetchFn = options.fetchFn;
     this.#origin = options.origin;
+  }
+
+  #getOrCreateAdapter(
+    account: BrewfatherAccount,
+    apiKey: string,
+    options: SyncOptions,
+  ): BrewfatherAdapter {
+    const origin = options.origin ?? this.#origin;
+    const fetchFn = options.fetchFn ?? this.#fetchFn;
+    const cached = this.#adapters.get(account.id);
+    if (
+      cached &&
+      cached.userId === account.userId &&
+      cached.apiKey === apiKey &&
+      cached.origin === origin &&
+      !options.fetchFn
+    ) {
+      return cached.adapter;
+    }
+    const adapter = new BrewfatherAdapter({
+      userId: account.userId,
+      apiKey,
+      ...(origin !== undefined ? { origin } : {}),
+      ...(fetchFn !== undefined ? { fetchFn } : {}),
+    });
+    this.#adapters.set(account.id, {
+      adapter,
+      userId: account.userId,
+      apiKey,
+      ...(origin !== undefined ? { origin } : {}),
+    });
+    return adapter;
   }
 
   /**
@@ -121,14 +159,7 @@ export class BrewfatherSyncCoordinator {
       };
     }
 
-    const fetchFn = options.fetchFn ?? this.#fetchFn;
-    const origin = options.origin ?? this.#origin;
-    const adapter = new BrewfatherAdapter({
-      userId: account.userId,
-      apiKey,
-      ...(origin !== undefined ? { origin } : {}),
-      ...(fetchFn !== undefined ? { fetchFn } : {}),
-    });
+    const adapter = this.#getOrCreateAdapter(account, apiKey, options);
 
     let linkedSynced = 0;
     let linkedErrors = 0;
@@ -152,31 +183,34 @@ export class BrewfatherSyncCoordinator {
           continue;
         }
 
-        // Sanitize source profile
+        // Sanitize source profile outside transaction
         const sanitizedProfile = sanitizeBatchToSourceProfile(batchData);
-        if (sanitizedProfile !== null) {
-          upsertSourceProfile(database, {
-            beverageId: link.beverageId,
-            name: sanitizedProfile.name,
-            beverageType: sanitizedProfile.beverageType,
-            style: sanitizedProfile.style,
-            abv: sanitizedProfile.abv,
-            ibu: sanitizedProfile.ibu,
-            og: sanitizedProfile.og,
-            fg: sanitizedProfile.fg,
-            srm: sanitizedProfile.srm,
-            displayColor: sanitizedProfile.displayColor,
-            description: sanitizedProfile.description,
-            rawSourceJson: sanitizedProfile.rawSourceJson,
-            sourceFingerprint: sanitizedProfile.sourceFingerprint,
-            updatedAt: nowIso,
-          });
-        }
 
-        // Lazy load & sanitize recipe snapshot if present on batch
+        // Sanitize recipe snapshot outside transaction
         const recipeData = (batchData.recipe as Record<string, unknown> | undefined) ?? null;
-        if (recipeData !== null) {
-          const sanitizedRecipe = sanitizeRecipeSnapshot(recipeData);
+        const sanitizedRecipe = recipeData !== null ? sanitizeRecipeSnapshot(recipeData) : null;
+
+        // Synchronously persist coherent local state for this ONE linked beverage in a transaction
+        database.withTransaction(() => {
+          if (sanitizedProfile !== null) {
+            upsertSourceProfile(database, {
+              beverageId: link.beverageId,
+              name: sanitizedProfile.name,
+              beverageType: sanitizedProfile.beverageType,
+              style: sanitizedProfile.style,
+              abv: sanitizedProfile.abv,
+              ibu: sanitizedProfile.ibu,
+              og: sanitizedProfile.og,
+              fg: sanitizedProfile.fg,
+              srm: sanitizedProfile.srm,
+              displayColor: sanitizedProfile.displayColor,
+              description: sanitizedProfile.description,
+              rawSourceJson: sanitizedProfile.rawSourceJson,
+              sourceFingerprint: sanitizedProfile.sourceFingerprint,
+              updatedAt: nowIso,
+            });
+          }
+
           if (sanitizedRecipe !== null) {
             saveRecipeSnapshot(database, {
               beverageId: link.beverageId,
@@ -189,12 +223,14 @@ export class BrewfatherSyncCoordinator {
               createdAt: nowIso,
             });
           }
-        }
 
-        updateBeverageLinkState(database, link.beverageId, "synced", null, nowIso);
+          updateBeverageLinkState(database, link.beverageId, "synced", null, nowIso);
+        });
+
         linkedSynced += 1;
       } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : "Sync error";
+        const rawMessage = error instanceof Error ? error.message : "Sync error";
+        const errorMessage = rawMessage.slice(0, 255);
         updateBeverageLinkState(database, link.beverageId, "error", errorMessage, nowIso);
         linkedErrors += 1;
       }
@@ -231,6 +267,25 @@ export class BrewfatherSyncCoordinator {
             syncedAt: nowIso,
           });
           candidatesFound += 1;
+        }
+      }
+
+      // If discovery completed without failures, prune unlinked candidates that left discovery filter
+      if (failures.length === 0) {
+        const discoveredBatchIds = new Set(
+          batches
+            .map((b) => (b as { _id?: string; id?: string })?._id ?? (b as { id?: string })?.id)
+            .filter(Boolean),
+        );
+        const existingCandidates = listCandidates(database, account.id);
+        const linkedBatchIds = new Set(allLinks.map((l) => l.sourceBatchId));
+        for (const candidate of existingCandidates) {
+          if (
+            !discoveredBatchIds.has(candidate.sourceBatchId) &&
+            !linkedBatchIds.has(candidate.sourceBatchId)
+          ) {
+            deleteCandidate(database, account.id, candidate.sourceBatchId);
+          }
         }
       }
     } catch (error: unknown) {

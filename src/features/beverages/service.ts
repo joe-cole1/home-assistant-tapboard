@@ -28,6 +28,7 @@ import {
   readSensoryOverrides,
   readSourceProfile,
   saveCustomRecipe,
+  touchBeverage,
   unlinkBeverageTransaction,
   updateBeverageSettings,
   updateCustomProfile,
@@ -45,7 +46,7 @@ import {
   validateUpdatePresentationOverridesInput,
 } from "./beverage-validation.ts";
 import { BrewfatherSyncCoordinator, type SyncOptions, type SyncResult } from "./brewfather/sync.ts";
-import { sanitizeBatchToSourceProfile } from "./brewfather/sanitizer.ts";
+import { BEVERAGE_TYPES } from "./types.ts";
 import type {
   Beverage,
   BeverageActorOptions,
@@ -53,6 +54,7 @@ import type {
   BeverageSensoryOverrides,
   BeverageSettings,
   BeverageSourceRecipeSnapshot,
+  BeverageType,
   BrewfatherAccount,
   BrewfatherBeverageLink,
   BrewfatherCandidate,
@@ -354,7 +356,7 @@ export class BeverageService {
       const density = resolveBeverageDensity(effectivePresentation, settings.fallbackFg);
 
       return {
-        beverage,
+        beverage: { ...beverage, updatedAt: now },
         effectivePresentation,
         density,
         customProfile,
@@ -408,43 +410,52 @@ export class BeverageService {
       };
       insertBeverage(this.#database, beverage);
 
-      // 4. Create link
+      // 4. Create link with pending state and null lastSyncedAt
       const link: BrewfatherBeverageLink = {
         beverageId: id,
         accountId,
         sourceBatchId: validated.sourceBatchId,
         syncState: "pending",
-        lastSyncedAt: now,
+        lastSyncedAt: null,
         lastErrorMessage: null,
         createdAt: now,
         updatedAt: now,
       };
       insertBeverageLink(this.#database, link);
 
-      // 5. Populate initial source profile from candidate summary
-      let rawSource: unknown = {};
+      // 5. Populate initial source profile directly from candidate summary
+      let parsedSummary: Record<string, unknown> = {};
       if (candidate.rawSummaryJson) {
         try {
-          rawSource = JSON.parse(candidate.rawSummaryJson);
+          const parsed: unknown = JSON.parse(candidate.rawSummaryJson);
+          if (parsed !== null && typeof parsed === "object") {
+            parsedSummary = parsed as Record<string, unknown>;
+          }
         } catch {
-          rawSource = {};
+          parsedSummary = {};
         }
       }
-      const sanitized = sanitizeBatchToSourceProfile(rawSource);
+      const rawType =
+        typeof parsedSummary.beverageType === "string" ? parsedSummary.beverageType : "beer";
+      const beverageType: BeverageType = (BEVERAGE_TYPES as readonly string[]).includes(rawType)
+        ? (rawType as BeverageType)
+        : "beer";
+
       const sourceProfile: BrewfatherSourceProfile = {
         beverageId: id,
-        name: sanitized?.name ?? candidate.batchName ?? candidate.recipeName ?? "Brewfather Batch",
-        beverageType: sanitized?.beverageType ?? "beer",
-        style: sanitized?.style ?? candidate.style,
-        abv: sanitized?.abv ?? candidate.estimatedAbv,
-        ibu: sanitized?.ibu ?? candidate.estimatedIbu,
-        og: sanitized?.og ?? candidate.estimatedOg,
-        fg: sanitized?.fg ?? candidate.estimatedFg,
-        srm: sanitized?.srm ?? candidate.estimatedSrm,
+        name: candidate.batchName || candidate.recipeName || "Brewfather Batch",
+        beverageType,
+        style: candidate.style,
+        abv: candidate.estimatedAbv,
+        ibu: candidate.estimatedIbu,
+        og: candidate.estimatedOg,
+        fg: candidate.estimatedFg,
+        srm: candidate.estimatedSrm,
         displayColor: null,
-        description: sanitized?.description ?? null,
-        rawSourceJson: sanitized?.rawSourceJson ?? candidate.rawSummaryJson ?? "{}",
-        sourceFingerprint: sanitized?.sourceFingerprint ?? candidate.summaryFingerprint,
+        description:
+          typeof parsedSummary.description === "string" ? parsedSummary.description : null,
+        rawSourceJson: candidate.rawSummaryJson,
+        sourceFingerprint: candidate.summaryFingerprint,
         updatedAt: now,
       };
       upsertSourceProfile(this.#database, sourceProfile);
@@ -554,8 +565,10 @@ export class BeverageService {
       const recipeSnapshot = readCurrentRecipeSnapshot(this.#database, beverageId);
       const sensoryOverrides = readSensoryOverrides(this.#database, beverageId);
 
+      touchBeverage(this.#database, beverageId, now);
+
       return {
-        beverage,
+        beverage: { ...beverage, updatedAt: now },
         effectivePresentation,
         density,
         brewfatherLink: link,
@@ -611,7 +624,7 @@ export class BeverageService {
       current?.manualDensityOverride,
     );
 
-    const merged: BrewfatherPresentationOverrides = {
+    const overrides: BrewfatherPresentationOverrides = {
       beverageId,
       overrideNamePresent: nameField.present,
       name: nameField.value,
@@ -640,8 +653,8 @@ export class BeverageService {
       updatedAt: now,
     };
 
-    upsertPresentationOverrides(this.#database, merged);
-    return merged;
+    upsertPresentationOverrides(this.#database, overrides);
+    return overrides;
   }
 
   unlinkBeverage(
@@ -849,43 +862,45 @@ export class BeverageService {
     const accountId = validated.accountId ?? "default";
     const now = (actorOptions.now ?? this.#now)().toISOString();
 
-    const account = upsertBrewfatherAccount(
-      this.#database,
-      {
-        id: accountId,
-        userId: validated.userId,
-        ...(validated.enabled !== undefined ? { enabled: validated.enabled } : {}),
-        ...(validated.discoveryStatuses !== undefined
-          ? { discoveryStatuses: validated.discoveryStatuses }
-          : {}),
-      },
-      now,
-    );
+    return this.#database.withTransaction(() => {
+      const account = upsertBrewfatherAccount(
+        this.#database,
+        {
+          id: accountId,
+          userId: validated.userId,
+          ...(validated.enabled !== undefined ? { enabled: validated.enabled } : {}),
+          ...(validated.discoveryStatuses !== undefined
+            ? { discoveryStatuses: validated.discoveryStatuses }
+            : {}),
+        },
+        now,
+      );
 
-    if (validated.apiKey && this.#secretsService) {
-      this.#secretsService.upsert("brewfather", accountId, "api_key", validated.apiKey, {
-        ...(actorOptions.now ? { now: actorOptions.now } : {}),
+      if (validated.apiKey && this.#secretsService) {
+        this.#secretsService.upsert("brewfather", accountId, "api_key", validated.apiKey, {
+          ...(actorOptions.now ? { now: actorOptions.now } : {}),
+        });
+      }
+
+      appendActivity(this.#database, {
+        category: "admin",
+        action: "configuration_changed",
+        actorType: actorOptions.actorType ?? "admin",
+        ...(actorOptions.actorId !== undefined ? { actorId: actorOptions.actorId } : {}),
+        ...(actorOptions.sessionId !== undefined ? { sessionId: actorOptions.sessionId } : {}),
+        entityType: "brewfather_account",
+        entityId: accountId,
+        details: {
+          change: "configured",
+          account_id: accountId,
+          user_id: account.userId,
+          enabled: account.enabled,
+        },
+        occurredAt: now,
       });
-    }
 
-    appendActivity(this.#database, {
-      category: "admin",
-      action: "configuration_changed",
-      actorType: actorOptions.actorType ?? "admin",
-      ...(actorOptions.actorId !== undefined ? { actorId: actorOptions.actorId } : {}),
-      ...(actorOptions.sessionId !== undefined ? { sessionId: actorOptions.sessionId } : {}),
-      entityType: "brewfather_account",
-      entityId: accountId,
-      details: {
-        change: "configured",
-        account_id: accountId,
-        user_id: account.userId,
-        enabled: account.enabled,
-      },
-      occurredAt: now,
+      return account;
     });
-
-    return account;
   }
 
   getBrewfatherStatus(accountId: string = "default"): {

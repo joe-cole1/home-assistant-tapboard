@@ -401,9 +401,10 @@ void test("a clean version 0 database upgrades through the canonical v4 schema",
   });
 });
 
-void test("migration definitions must be contiguous with nonempty unique names", (context) => {
+void test("migration definitions must be contiguous with nonempty unique names", async (context) => {
   const invalidSets: readonly (readonly MigrationDefinition[])[] = [
     [{ version: 2, name: "starts-late", apply: () => undefined }],
+    [{ version: 1, name: "   ", apply: () => undefined }],
     [
       { version: 1, name: "ok-1", apply: () => undefined },
       { version: 3, name: "gap", apply: () => undefined },
@@ -416,12 +417,17 @@ void test("migration definitions must be contiguous with nonempty unique names",
       { version: 1, name: "duplicate-name", apply: () => undefined },
       { version: 2, name: "duplicate-name", apply: () => undefined },
     ],
-    [{ version: 1, name: "   ", apply: () => undefined }],
   ];
 
-  for (const set of invalidSets) {
-    const path = makeDatabasePath(context);
-    assert.throws(() => openDatabase(path, { migrations: set }), /Database migration/);
+  for (const [index, migrations] of invalidSets.entries()) {
+    await context.test(`invalid definition set ${index + 1}`, (subcontext) => {
+      const path = makeDatabasePath(subcontext);
+      assert.throws(() => openDatabase(path, { migrations }), /Database migration/);
+      withFixture(path, (database) => {
+        assert.equal(readUserVersion(database), 0);
+        assert.deepEqual(readSchemaObjects(database), []);
+      });
+    });
   }
 });
 

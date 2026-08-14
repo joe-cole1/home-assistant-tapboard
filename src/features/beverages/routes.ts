@@ -1,11 +1,13 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { sendJson } from "../../infrastructure/http/error-mapper.ts";
 import type { Router } from "../../infrastructure/http/router.ts";
-import { readJsonBody } from "../../infrastructure/http/security/body.ts";
+import { readJsonBody, readRequestBody } from "../../infrastructure/http/security/body.ts";
 import { parseSessionCookie } from "../../infrastructure/http/security/cookie.ts";
 import type { AuthService, AuthenticatedSession } from "../auth/service.ts";
 import { ApplicationError } from "../../shared/errors.ts";
+import { validateDeleteBeverageInput } from "./beverage-validation.ts";
 import type { BeverageService, BeverageDetailResult, BeverageSummaryResult } from "./service.ts";
+import type { BrewfatherAccount, BrewfatherCandidate } from "./types.ts";
 
 export interface BeverageRouteDependencies {
   readonly router: Router;
@@ -91,6 +93,37 @@ function toBeverageSummaryDto(summary: BeverageSummaryResult) {
   };
 }
 
+function toCandidateDto(candidate: BrewfatherCandidate) {
+  return {
+    accountId: candidate.accountId,
+    sourceBatchId: candidate.sourceBatchId,
+    batchName: candidate.batchName,
+    batchNumber: candidate.batchNumber,
+    status: candidate.status,
+    brewer: candidate.brewer,
+    recipeName: candidate.recipeName,
+    style: candidate.style,
+    brewDate: candidate.brewDate,
+    estimatedOg: candidate.estimatedOg,
+    estimatedFg: candidate.estimatedFg,
+    estimatedAbv: candidate.estimatedAbv,
+    estimatedIbu: candidate.estimatedIbu,
+    estimatedSrm: candidate.estimatedSrm,
+    syncedAt: candidate.syncedAt,
+  };
+}
+
+function toAccountDto(account: BrewfatherAccount) {
+  return {
+    id: account.id,
+    userId: account.userId,
+    enabled: account.enabled,
+    discoveryStatuses: account.discoveryStatuses,
+    createdAt: account.createdAt,
+    updatedAt: account.updatedAt,
+  };
+}
+
 function toBeverageDetailDto(detail: BeverageDetailResult) {
   return {
     beverage: {
@@ -109,7 +142,22 @@ function toBeverageDetailDto(detail: BeverageDetailResult) {
     ...(detail.customRecipe ? { customRecipe: detail.customRecipe } : {}),
     ...(detail.brewfatherLink ? { brewfatherLink: detail.brewfatherLink } : {}),
     ...(detail.brewfatherSourceProfile
-      ? { brewfatherSourceProfile: detail.brewfatherSourceProfile }
+      ? {
+          brewfatherSourceProfile: {
+            beverageId: detail.brewfatherSourceProfile.beverageId,
+            name: detail.brewfatherSourceProfile.name,
+            beverageType: detail.brewfatherSourceProfile.beverageType,
+            style: detail.brewfatherSourceProfile.style,
+            abv: detail.brewfatherSourceProfile.abv,
+            ibu: detail.brewfatherSourceProfile.ibu,
+            og: detail.brewfatherSourceProfile.og,
+            fg: detail.brewfatherSourceProfile.fg,
+            srm: detail.brewfatherSourceProfile.srm,
+            displayColor: detail.brewfatherSourceProfile.displayColor,
+            description: detail.brewfatherSourceProfile.description,
+            updatedAt: detail.brewfatherSourceProfile.updatedAt,
+          },
+        }
       : {}),
     ...(detail.presentationOverrides
       ? { presentationOverrides: detail.presentationOverrides }
@@ -215,7 +263,7 @@ export function registerBeverageRoutes(dependencies: BeverageRouteDependencies):
         actorType: "admin",
         sessionId: session.id,
       });
-      sendJson(response, 200, { account });
+      sendJson(response, 200, { account: toAccountDto(account) });
     },
   );
 
@@ -225,7 +273,7 @@ export function registerBeverageRoutes(dependencies: BeverageRouteDependencies):
     (request: IncomingMessage, response: ServerResponse) => {
       requireSession(request, authService);
       const candidates = beverageService.listCandidates();
-      sendJson(response, 200, { candidates });
+      sendJson(response, 200, { candidates: candidates.map(toCandidateDto) });
     },
   );
 
@@ -336,21 +384,26 @@ export function registerBeverageRoutes(dependencies: BeverageRouteDependencies):
     ) => {
       const session = requireMutationAuth(request, authService);
       const id = params.id ?? "";
-      let body: Record<string, unknown> = {};
-      try {
-        body = await readJsonBody(request);
-      } catch {
-        body = {};
+
+      let body: unknown;
+      const rawBody = await readRequestBody(request, { required: false });
+      if (rawBody.length > 0) {
+        try {
+          body = JSON.parse(rawBody.toString("utf-8"));
+        } catch {
+          throw new ApplicationError({
+            category: "validation",
+            code: "http.invalid_json",
+            clientMessage: "The request body is not valid JSON.",
+          });
+        }
       }
 
-      const impact = beverageService.deleteBeverage(
-        id,
-        { ...(typeof body.reason === "string" ? { reason: body.reason } : {}) },
-        {
-          actorType: "admin",
-          sessionId: session.id,
-        },
-      );
+      const validated = validateDeleteBeverageInput(body);
+      const impact = beverageService.deleteBeverage(id, validated, {
+        actorType: "admin",
+        sessionId: session.id,
+      });
 
       sendJson(response, 200, {
         status: "deleted",
