@@ -10,7 +10,9 @@ export const BEVERAGES_SCHEMA_VERSION = 4;
 export const BEVERAGES_MIGRATION_NAME = "custom-and-brewfather-beverages";
 export const FILLS_SCHEMA_VERSION = 5;
 export const FILLS_MIGRATION_NAME = "fills-and-on-deck";
-export const CURRENT_SCHEMA_VERSION = FILLS_SCHEMA_VERSION;
+export const TAPS_SCHEMA_VERSION = 6;
+export const TAPS_MIGRATION_NAME = "taps-and-assignment-lifecycles";
+export const CURRENT_SCHEMA_VERSION = TAPS_SCHEMA_VERSION;
 
 export interface MigrationDefinition {
   readonly version: number;
@@ -701,6 +703,74 @@ export const FILLS_SCHEMA_SQL = `
   CREATE INDEX idx_fills_on_deck_order ON fills (on_deck_order) WHERE on_deck_order IS NOT NULL;
 `;
 
+export const TAPS_SCHEMA_SQL = `
+  CREATE TABLE taps (
+    id TEXT PRIMARY KEY CHECK (length(CAST(id AS BLOB)) = 36),
+    tap_number INTEGER NOT NULL UNIQUE CHECK (tap_number >= 1),
+    name TEXT CHECK (name IS NULL OR length(CAST(name AS BLOB)) BETWEEN 1 AND 120),
+    enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+    first_used_at TEXT,
+    retired_at TEXT,
+    gas_type TEXT CHECK (gas_type IS NULL OR length(CAST(gas_type AS BLOB)) BETWEEN 1 AND 64),
+    serving_pressure_kpa REAL CHECK (serving_pressure_kpa IS NULL OR serving_pressure_kpa >= 0),
+    line_length_mm INTEGER CHECK (line_length_mm IS NULL OR line_length_mm >= 0),
+    line_diameter_mm REAL CHECK (line_diameter_mm IS NULL OR line_diameter_mm > 0),
+    notes TEXT CHECK (notes IS NULL OR length(CAST(notes AS BLOB)) <= 2048),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX idx_taps_tap_number ON taps (tap_number);
+  CREATE TRIGGER trg_taps_first_used_at_monotonic
+    BEFORE UPDATE OF first_used_at ON taps
+    FOR EACH ROW
+    WHEN OLD.first_used_at IS NOT NULL AND (NEW.first_used_at IS NULL OR NEW.first_used_at <> OLD.first_used_at)
+    BEGIN
+      SELECT RAISE(ABORT, 'first_used_at is monotonic and cannot be cleared or changed');
+    END;
+  CREATE TRIGGER trg_taps_no_delete_if_used
+    BEFORE DELETE ON taps
+    FOR EACH ROW
+    WHEN OLD.first_used_at IS NOT NULL OR OLD.retired_at IS NOT NULL
+    BEGIN
+      SELECT RAISE(ABORT, 'used or retired taps cannot be deleted');
+    END;
+
+  CREATE TABLE tap_assignment_lifecycles (
+    id TEXT PRIMARY KEY CHECK (length(CAST(id AS BLOB)) = 36),
+    tap_id TEXT NOT NULL REFERENCES taps(id) ON DELETE RESTRICT,
+    fill_id TEXT NOT NULL REFERENCES fills(id) ON DELETE CASCADE,
+    assigned_at TEXT NOT NULL,
+    ended_at TEXT,
+    end_reason TEXT CHECK (end_reason IS NULL OR length(CAST(end_reason AS BLOB)) <= 255),
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX idx_tap_assignment_lifecycles_tap_id ON tap_assignment_lifecycles (tap_id);
+  CREATE INDEX idx_tap_assignment_lifecycles_fill_id ON tap_assignment_lifecycles (fill_id);
+  CREATE UNIQUE INDEX idx_tap_assignment_lifecycles_active_tap ON tap_assignment_lifecycles (tap_id) WHERE ended_at IS NULL;
+  CREATE UNIQUE INDEX idx_tap_assignment_lifecycles_active_fill ON tap_assignment_lifecycles (fill_id) WHERE ended_at IS NULL;
+  CREATE TRIGGER trg_tap_assignment_lifecycles_no_update_closed
+    BEFORE UPDATE ON tap_assignment_lifecycles
+    FOR EACH ROW
+    WHEN OLD.ended_at IS NOT NULL
+    BEGIN
+      SELECT RAISE(ABORT, 'closed assignment lifecycles are immutable');
+    END;
+  CREATE TRIGGER trg_tap_assignment_lifecycles_immutable_fields
+    BEFORE UPDATE ON tap_assignment_lifecycles
+    FOR EACH ROW
+    WHEN NEW.id <> OLD.id OR NEW.tap_id <> OLD.tap_id OR NEW.fill_id <> OLD.fill_id OR NEW.assigned_at <> OLD.assigned_at OR NEW.created_at <> OLD.created_at
+    BEGIN
+      SELECT RAISE(ABORT, 'assignment lifecycle identities and open timestamps are immutable');
+    END;
+  CREATE TRIGGER trg_tap_assignment_lifecycles_no_open_reason
+    BEFORE UPDATE ON tap_assignment_lifecycles
+    FOR EACH ROW
+    WHEN NEW.ended_at IS NULL AND NEW.end_reason IS NOT NULL
+    BEGIN
+      SELECT RAISE(ABORT, 'open assignment lifecycles cannot have an end reason');
+    END;
+`;
+
 const SECURITY_ACTIVITY_OUTBOX_SCHEMA_OBJECTS = [
   ["table", "admin_credentials"],
   ["table", "activity_log"],
@@ -773,6 +843,22 @@ const FILLS_SCHEMA_OBJECTS = [
   ["index", "idx_fills_keg_id"],
   ["index", "idx_fills_active_keg"],
   ["index", "idx_fills_on_deck_order"],
+] as const;
+
+const TAPS_SCHEMA_OBJECTS = [
+  ...FILLS_SCHEMA_OBJECTS,
+  ["table", "taps"],
+  ["table", "tap_assignment_lifecycles"],
+  ["index", "idx_taps_tap_number"],
+  ["index", "idx_tap_assignment_lifecycles_tap_id"],
+  ["index", "idx_tap_assignment_lifecycles_fill_id"],
+  ["index", "idx_tap_assignment_lifecycles_active_tap"],
+  ["index", "idx_tap_assignment_lifecycles_active_fill"],
+  ["trigger", "trg_taps_first_used_at_monotonic"],
+  ["trigger", "trg_taps_no_delete_if_used"],
+  ["trigger", "trg_tap_assignment_lifecycles_no_update_closed"],
+  ["trigger", "trg_tap_assignment_lifecycles_immutable_fields"],
+  ["trigger", "trg_tap_assignment_lifecycles_no_open_reason"],
 ] as const;
 
 function splitSqlStatements(sql: string): string[] {
@@ -1389,6 +1475,76 @@ function validateFillsSchema(database: DatabaseExecutor): void {
   validateFillsColumns(database);
 }
 
+function validateTapsColumns(database: DatabaseExecutor): void {
+  validateFillsColumns(database);
+  const required: Readonly<Record<string, readonly Omit<TableColumnRow, "cid">[]>> = {
+    taps: [
+      { name: "id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+      { name: "tap_number", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "name", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "enabled", type: "INTEGER", notnull: 1, dflt_value: "1", pk: 0 },
+      { name: "first_used_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "retired_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "gas_type", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "serving_pressure_kpa", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "line_length_mm", type: "INTEGER", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "line_diameter_mm", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "notes", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "created_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    ],
+    tap_assignment_lifecycles: [
+      { name: "id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+      { name: "tap_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "fill_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "assigned_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "ended_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "end_reason", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "created_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    ],
+  };
+
+  for (const [table, columns] of Object.entries(required)) {
+    expectColumns(database, table, columns);
+  }
+}
+
+function validateTapsSchema(database: DatabaseExecutor): void {
+  const expected = new Map(TAPS_SCHEMA_OBJECTS.map(([type, name]) => [`${type}:${name}`, type]));
+  const actual = readSchemaObjects(database).filter(
+    ({ type, name }) => !(type === "index" && name.startsWith("sqlite_autoindex")),
+  );
+  if (
+    actual.length !== expected.size ||
+    actual.some(({ type, name }) => !expected.has(`${type}:${name}`))
+  ) {
+    throw incompatibleSchema("schema objects do not match the supported v6 schema");
+  }
+  const expectedSql = new Map<string, string>();
+  for (const statement of splitSqlStatements(
+    `${SECURITY_ACTIVITY_OUTBOX_SCHEMA_SQL}\n${OUTBOX_OVERFLOW_GUARD_TRIGGERS_SQL}\n${PHYSICAL_KEGS_SCHEMA_SQL}\n${BEVERAGES_SCHEMA_SQL}\n${FILLS_SCHEMA_SQL}\n${TAPS_SCHEMA_SQL}`,
+  )) {
+    const key = schemaDefinitionKey(statement);
+    if (key !== undefined) {
+      expectedSql.set(key, normalizeSql(statement));
+    }
+  }
+  expectedSql.set("table:schema_migrations", normalizeSql(CREATE_SCHEMA_MIGRATIONS_SQL));
+  for (const row of actual) {
+    const expectedType = expected.get(`${row.type}:${row.name}`);
+    const expectedDefinition = expectedSql.get(`${row.type}:${row.name}`);
+    if (
+      expectedType === undefined ||
+      expectedDefinition === undefined ||
+      row.sql === null ||
+      normalizeSql(row.sql) !== expectedDefinition
+    ) {
+      throw incompatibleSchema(`schema object ${row.name} has invalid DDL`);
+    }
+  }
+  validateTapsColumns(database);
+}
+
 function validatePhysicalKegsSchema(database: DatabaseExecutor): void {
   const expected = new Map(
     PHYSICAL_KEGS_SCHEMA_OBJECTS.map(([type, name]) => [`${type}:${name}`, type]),
@@ -1516,6 +1672,15 @@ export const FILLS_MIGRATION: MigrationDefinition = {
   },
 };
 
+export const TAPS_MIGRATION: MigrationDefinition = {
+  version: TAPS_SCHEMA_VERSION,
+  name: TAPS_MIGRATION_NAME,
+  apply(database) {
+    database.execute(TAPS_SCHEMA_SQL);
+    return undefined;
+  },
+};
+
 /** Canonical production migration list. Keep this array identity stable. */
 export const MIGRATIONS: readonly MigrationDefinition[] = [
   FOUNDATION_MIGRATIONS[0]!,
@@ -1523,6 +1688,7 @@ export const MIGRATIONS: readonly MigrationDefinition[] = [
   PHYSICAL_KEGS_MIGRATION,
   BEVERAGES_MIGRATION,
   FILLS_MIGRATION,
+  TAPS_MIGRATION,
 ];
 
 // Compatibility aliases for callers that prefer an explicit application name.
@@ -1584,7 +1750,10 @@ export function initializeSchema(
   }
   validateMigrationLedger(database, currentVersion, migrations);
 
-  if (migrations === MIGRATIONS && currentVersion === FILLS_SCHEMA_VERSION) {
+  if (migrations === MIGRATIONS && currentVersion === TAPS_SCHEMA_VERSION) {
+    validateFoundationLedgerStructure(database);
+    validateTapsSchema(database);
+  } else if (currentVersion === FILLS_SCHEMA_VERSION) {
     validateFoundationLedgerStructure(database);
     validateFillsSchema(database);
   } else if (currentVersion === BEVERAGES_SCHEMA_VERSION) {
