@@ -24,6 +24,8 @@ import { createBeverageService, type BeverageService } from "./features/beverage
 import { registerBeverageRoutes } from "./features/beverages/routes.ts";
 import { createFillService } from "./features/fills/service.ts";
 import { registerFillRoutes } from "./features/fills/routes.ts";
+import { createTapService } from "./features/taps/service.ts";
+import { registerTapRoutes } from "./features/taps/routes.ts";
 import { createLogger, type Logger } from "./shared/logging.ts";
 
 type ApplicationState = "new" | "starting" | "ready" | "stopping" | "stopped" | "failed";
@@ -125,8 +127,10 @@ class FoundationApplication implements Application {
         secretsService,
       });
       this.#beverageService = beverageService;
+      const tapService = createTapService(this.#database);
       const fillService = createFillService(this.#database, {
         beverageService,
+        assignmentPort: tapService.asFillAssignmentPort(),
       });
 
       const router = new Router(this.#logger);
@@ -144,6 +148,7 @@ class FoundationApplication implements Application {
       registerKegRoutes({ router, kegService, authService });
       registerBeverageRoutes({ router, beverageService, authService });
       registerFillRoutes({ router, fillService, authService });
+      registerTapRoutes({ router, tapService, authService });
 
       this.#httpServer = this.#createHttpServer({
         router,

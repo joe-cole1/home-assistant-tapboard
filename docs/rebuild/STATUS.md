@@ -1,7 +1,7 @@
 # Tapboard v2 rebuild status
 
 - Architecture: **FROZEN**
-- Current phase: **Issue #70 Fills and On Deck implemented; Taps and assignment lifecycles (#71) is next**
+- Current phase: **Issue #71 Taps and assignment lifecycles implemented; Telemetry sources, API, and idempotent ingestion (#72) is next**
 - Current branch: `main`
 - Current base: `4efdc78`
 - Frozen v1 source commit: `429cf07e451b64ca1713655a34ffa5ebd376efae`
@@ -30,28 +30,29 @@
 - 16. [#80 — System and local operator functions](https://github.com/joe-cole1/home-assistant-tapboard/issues/80)
 - 17. [#81 — Deployment, documentation, and final acceptance](https://github.com/joe-cole1/home-assistant-tapboard/issues/81)
 
-The list preserves the frozen implementation sequence with #85's local development surface between #67 and #68. Issues #67, #85, #68, and #69 are merged on `main`; issue #70 (Fills and On Deck) is implemented, and issue #71 (Taps and assignment lifecycles) is next.
+The list preserves the frozen implementation sequence with #85's local development surface between #67 and #68. Issues #67, #85, #68, #69, #70, and #71 are implemented; issue #72 (Telemetry sources, API, and idempotent ingestion) is next.
 
 ## Implemented in Foundation
 
 - Node 24 ESM runtime with native erasable TypeScript and `tsc --noEmit` checking;
 - explicit application composition, Node HTTP lifecycle, and exactly `GET /healthz` for local application/database readiness;
 - file-based Eta rendering with default escaping plus layout/partial proof templates;
-- one controlled `better-sqlite3` connection, foreign keys, transactional versioned migrations, exact version-5 schema validation, and resource closure;
+- one controlled `better-sqlite3` connection, foreign keys, transactional versioned migrations, exact version-6 schema validation, and resource closure;
 - shared typed errors, centralized HTTP error mapping, explicit validation, and structured redacting logging;
-- Foundation-, #67-, #68-, #69-, and #70-aware architecture guardrails and negative fixtures;
+- Foundation-, #67-, #68-, #69-, #70-, and #71-aware architecture guardrails and negative fixtures;
 - canonical external-origin/trusted-proxy/session configuration and stdin-only operator PIN/key maintenance commands;
 - schema version 2 security/session, Activity/deletion-audit, stable event, secret, machine-key, and bounded-outbox primitives;
 - #85's coherent development-only Docker image/Compose surface, loopback binding, healthcheck, named-volume persistence, and external-secret/operator workflow;
 - #68 Physical Kegs domain inventory, capacity and tare ownership, prospective append-only tare history, append-only maintenance timeline, synchronous telemetry correction hook seam, deletion impact and audit integration, and authenticated admin HTTP API;
 - #69 Custom and Brewfather-linked Beverages domain entity, custom profile/recipe tree, dynamic effective presentation resolution, 3-state presentation overrides, density resolution precedence, candidate cache, rate-limited Brewfather sync with persistent backoff, atomic unlinking, and bounded recipe snapshots;
 - #70 Physical Keg Fills domain entity, pure derived state resolution (`ended > on_tap > on_deck > available`), partial unique index active keg constraint (`idx_fills_active_keg`), explicit dense 1-indexed On Deck administrative ordering and unauthenticated public projection, atomic Kick Keg local transaction with assignment-close hook and failure rollback, post-commit Brewfather batch completion coordination (`never`, `ask`, `completed`) with terminal status short-circuiting and account-scoped adapter rate-limiting, and isolated last-fill beverage auto-deletion;
+- #71 Physical Taps domain entity, monotonic `first_used_at` retention across fill kicks/deletions, retired tap status preserving number reservations and preventing new assignments, atomic Tap Assignment Lifecycles with partial unique indexes (`idx_tap_assignments_active_tap`, `idx_tap_assignments_active_fill`), on-deck clearance upon tap assignment, atomic fill moves with new UUID generation and rollback safety, occupied tap conflict guards, never-used-only tap deletion with deletion audit, synchronous `TapAssignmentExtensionPort` with `requiresFreshBaseline` signaling, concrete `FillAssignmentLifecyclePort` integration for `#70`, and authenticated admin and unauthenticated public tap projections (`GET /api/public/taps`);
 - #85 architecture guardrails that preserve banned canonical production paths and reject incomplete or unapproved top-level container variants;
 - explicit `not_queued_capacity` degradation semantics; no provider adapters, delivery workers, or browser feature pages;
 - canonical `npm run check` covering format, lint, types, architecture/reuse integrity, and `node:test`;
 - Node 24 CI running `npm ci`, the canonical gate, and changed-line whitespace validation.
 
-Schema version 5 contains typed #67 primitives, #68 Physical Keg tables (`kegs`, `keg_tare_history`, `keg_maintenance_records`), #69 Beverage tables (`beverage_settings`, `beverages`, `custom_beverage_profiles`, `custom_recipes`, `custom_recipe_ingredients`, `custom_recipe_steps`, `beverage_sensory_overrides`, `brewfather_accounts`, `brewfather_candidate_cache`, `brewfather_beverage_links`, `brewfather_source_profiles`, `brewfather_presentation_overrides`, `beverage_source_recipe_snapshots`), #70 Fill tables (`fill_settings`, `fills`), and no v1 data adoption. The PIN remains exactly four ASCII digits with limited stolen-verifier offline resistance; integration encryption relies on independent external `TAPBOARD_SECRET_KEY` material. Activity never recursively enters the outbox, and `not_queued_capacity` is a fixed-slot bounded degradation state rather than a storage-error classification. Domain taps, provider adapters, delivery workers, telemetry, UI, and production deployment remain deferred.
+Schema version 6 contains typed #67 primitives, #68 Physical Keg tables (`kegs`, `keg_tare_history`, `keg_maintenance_records`), #69 Beverage tables (`beverage_settings`, `beverages`, `custom_beverage_profiles`, `custom_recipes`, `custom_recipe_ingredients`, `custom_recipe_steps`, `beverage_sensory_overrides`, `brewfather_accounts`, `brewfather_candidate_cache`, `brewfather_beverage_links`, `brewfather_source_profiles`, `brewfather_presentation_overrides`, `beverage_source_recipe_snapshots`), #70 Fill tables (`fill_settings`, `fills`), #71 Tap tables (`taps`, `tap_assignment_lifecycles`), and no v1 data adoption. The PIN remains exactly four ASCII digits with limited stolen-verifier offline resistance; integration encryption relies on independent external `TAPBOARD_SECRET_KEY` material. Activity never recursively enters the outbox, and `not_queued_capacity` is a fixed-slot bounded degradation state rather than a storage-error classification. Provider adapters, delivery workers, telemetry, UI, and production deployment remain deferred.
 
 ## Post-merge operator handoff
 
