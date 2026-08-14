@@ -3,7 +3,7 @@ import { dirname } from "node:path";
 
 import { loadConfig, type ApplicationConfig, type LoadConfigOptions } from "./config.ts";
 import { openDatabase, type DatabaseConnection } from "./infrastructure/database/connection.ts";
-import { FOUNDATION_SCHEMA_VERSION } from "./infrastructure/database/migrations.ts";
+import { APPLICATION_SCHEMA_VERSION } from "./infrastructure/database/migrations.ts";
 import { sendJson } from "./infrastructure/http/error-mapper.ts";
 import {
   HttpServer,
@@ -98,7 +98,7 @@ class FoundationApplication implements Application {
         }
         sendJson(response, 200, {
           status: "ok",
-          schemaVersion: FOUNDATION_SCHEMA_VERSION,
+          schemaVersion: APPLICATION_SCHEMA_VERSION,
         });
       });
 

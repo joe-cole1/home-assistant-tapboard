@@ -10,9 +10,11 @@ import {
   type DatabaseExecutor,
 } from "../src/infrastructure/database/connection.ts";
 import {
+  CURRENT_SCHEMA_VERSION,
   FOUNDATION_INITIAL_MIGRATION_NAME,
   FOUNDATION_MIGRATIONS,
   FOUNDATION_SCHEMA_VERSION,
+  MIGRATIONS,
   type MigrationDefinition,
 } from "../src/infrastructure/database/migrations.ts";
 
@@ -109,12 +111,12 @@ function readTransactionValues(database: DatabaseConnection): string[] {
     .map((row) => row.value);
 }
 
-void test("a clean file database bootstraps only the Foundation migration ledger", (context) => {
+void test("a clean file database bootstraps the canonical v2 migration ledger", (context) => {
   const path = makeDatabasePath(context);
   const database = openDatabase(path);
 
   try {
-    assert.equal(database.pragma<number>("user_version", { simple: true }), 1);
+    assert.equal(database.pragma<number>("user_version", { simple: true }), CURRENT_SCHEMA_VERSION);
     assert.deepEqual(
       database
         .prepare<[], SchemaObjectRow>(
@@ -124,34 +126,71 @@ void test("a clean file database bootstraps only the Foundation migration ledger
            ORDER BY type, name`,
         )
         .all(),
-      [{ type: "table", name: "schema_migrations" }],
+      [
+        { type: "index", name: "idx_activity_log_occurred_at" },
+        { type: "index", name: "idx_deletion_audit_deleted_at" },
+        { type: "index", name: "idx_outbound_deliveries_destination_state" },
+        { type: "index", name: "idx_outbound_deliveries_due" },
+        { type: "index", name: "idx_outbound_events_created_at" },
+        { type: "index", name: "idx_outbound_events_type_coalescing" },
+        { type: "table", name: "activity_log" },
+        { type: "table", name: "activity_retention" },
+        { type: "table", name: "admin_credentials" },
+        { type: "table", name: "admin_sessions" },
+        { type: "table", name: "deletion_audit" },
+        { type: "table", name: "encrypted_secrets" },
+        { type: "table", name: "login_throttle" },
+        { type: "table", name: "machine_api_keys" },
+        { type: "table", name: "outbound_deliveries" },
+        { type: "table", name: "outbound_destination_versions" },
+        { type: "table", name: "outbound_destinations" },
+        { type: "table", name: "outbound_events" },
+        { type: "table", name: "outbox_degradation" },
+        { type: "table", name: "outbox_overflow_incidents" },
+        { type: "table", name: "schema_migrations" },
+        { type: "table", name: "secret_rotation_state" },
+        { type: "trigger", name: "trg_activity_log_no_update" },
+        { type: "trigger", name: "trg_deletion_audit_no_delete" },
+        { type: "trigger", name: "trg_deletion_audit_no_update" },
+        { type: "trigger", name: "trg_outbound_destination_versions_no_update" },
+        { type: "trigger", name: "trg_outbox_overflow_incidents_no_delete" },
+        { type: "trigger", name: "trg_outbox_overflow_incidents_no_insert" },
+      ],
     );
     const ledger = database
       .prepare<[], LedgerRow>(
         "SELECT version, name, applied_at FROM schema_migrations ORDER BY version",
       )
       .all();
-    assert.equal(ledger.length, 1);
+    assert.equal(ledger.length, 2);
     assert.equal(ledger[0]?.version, FOUNDATION_SCHEMA_VERSION);
     assert.equal(ledger[0]?.name, FOUNDATION_INITIAL_MIGRATION_NAME);
+    assert.equal(ledger[1]?.version, CURRENT_SCHEMA_VERSION);
+    assert.equal(ledger[1]?.name, "security-activity-outbox-primitives");
     assert.match(ledger[0]?.applied_at ?? "", /^\d{4}-\d{2}-\d{2}T/);
   } finally {
     database.close();
   }
 });
 
-void test("an in-memory database bootstraps the same minimal schema", () => {
+void test("an in-memory database bootstraps the same canonical schema", () => {
   const database = openDatabase(":memory:");
 
   try {
-    assert.equal(database.pragma<number>("user_version", { simple: true }), 1);
-    assert.deepEqual(
+    assert.equal(database.pragma<number>("user_version", { simple: true }), CURRENT_SCHEMA_VERSION);
+    assert.equal(
       database
         .prepare<[], SchemaObjectRow>(
           "SELECT type, name FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%'",
         )
-        .all(),
-      [{ type: "table", name: "schema_migrations" }],
+        .all().length,
+      28,
+    );
+    assert.equal(
+      database
+        .prepare<[], { readonly count: number }>("SELECT count(*) AS count FROM schema_migrations")
+        .get()?.count,
+      2,
     );
   } finally {
     database.close();
@@ -180,6 +219,128 @@ void test("foreign-key enforcement is enabled and rejects an invalid reference",
   }
 });
 
+void test("v2 singleton and overflow seeds are present and immutable guards hold", () => {
+  const database = openDatabase(":memory:", { migrations: MIGRATIONS });
+  try {
+    assert.deepEqual(
+      database
+        .prepare<
+          [],
+          { readonly id: number; readonly generation: number; readonly attempt_count: number }
+        >("SELECT id, generation, attempt_count FROM login_throttle")
+        .all(),
+      [{ id: 1, generation: 0, attempt_count: 0 }],
+    );
+    assert.equal(
+      database
+        .prepare<[], { readonly count: number }>(
+          "SELECT count(*) AS count FROM outbox_overflow_incidents",
+        )
+        .get()?.count,
+      16,
+    );
+    assert.equal(
+      database
+        .prepare<[], { readonly is_catchall: number }>(
+          "SELECT is_catchall FROM outbox_overflow_incidents WHERE slot = 15",
+        )
+        .get()?.is_catchall,
+      1,
+    );
+    assert.throws(
+      () =>
+        database
+          .prepare<[number, number]>(
+            "INSERT INTO outbox_overflow_incidents (slot, is_catchall, state, omitted_count) VALUES (?, ?, 'empty', 0)",
+          )
+          .run(16, 0),
+      /rows are fixed/,
+    );
+  } finally {
+    database.close();
+  }
+});
+
+void test("v2 outbound delivery lease fields reject one-sided stale values", () => {
+  const database = openDatabase(":memory:", { migrations: MIGRATIONS });
+  try {
+    database.execute(`
+      INSERT INTO outbound_destinations (id, label, enabled, created_at, updated_at)
+      VALUES ('dest-1', 'Destination', 1, '2026-08-13T00:00:00Z', '2026-08-13T00:00:00Z');
+      INSERT INTO outbound_destination_versions (id, destination_id, version_number, created_at)
+      VALUES ('version-1', 'dest-1', 1, '2026-08-13T00:00:00Z');
+      INSERT INTO outbound_events
+        (id, event_type, schema_version, occurred_at, envelope_json, envelope_bytes, created_at)
+      VALUES ('event-1', 'test.event', 1, '2026-08-13T00:00:00Z', '{}', 2, '2026-08-13T00:00:00Z');
+    `);
+    const insert = database.prepare(
+      `INSERT INTO outbound_deliveries
+       (id, event_id, destination_id, destination_version_id, state, attempt_count,
+        next_attempt_at, lease_owner, lease_expires_at, revision, envelope_bytes,
+        created_at, updated_at)
+       VALUES (?, 'event-1', 'dest-1', 'version-1', 'pending', 0,
+        '2026-08-13T00:00:00Z', ?, ?, 0, 2,
+        '2026-08-13T00:00:00Z', '2026-08-13T00:00:00Z')`,
+    );
+    assert.throws(() => insert.run("delivery-owner-only", "worker-1", null), /CHECK constraint/);
+    assert.throws(
+      () => insert.run("delivery-expiry-only", null, "2026-08-13T00:01:00Z"),
+      /CHECK constraint/,
+    );
+  } finally {
+    database.close();
+  }
+});
+
+void test("an exact v1 database upgrades to v2 with both ledger entries", (context) => {
+  const path = makeDatabasePath(context);
+  openDatabase(path, { migrations: FOUNDATION_MIGRATIONS }).close();
+  const database = openDatabase(path, { migrations: MIGRATIONS });
+  try {
+    assert.equal(database.pragma<number>("user_version", { simple: true }), CURRENT_SCHEMA_VERSION);
+    assert.deepEqual(
+      database
+        .prepare<[], { readonly version: number; readonly name: string }>(
+          "SELECT version, name FROM schema_migrations ORDER BY version",
+        )
+        .all(),
+      [
+        { version: 1, name: FOUNDATION_INITIAL_MIGRATION_NAME },
+        { version: 2, name: "security-activity-outbox-primitives" },
+      ],
+    );
+  } finally {
+    database.close();
+  }
+});
+
+void test("canonical v2 reopen rejects an extra user object", (context) => {
+  const path = makeDatabasePath(context);
+  openDatabase(path, { migrations: MIGRATIONS }).close();
+  withFixture(path, (database) => database.exec("CREATE TABLE unexpected_v2_table (id INTEGER)"));
+  assert.throws(
+    () => openDatabase(path, { migrations: MIGRATIONS }),
+    /schema objects do not match|unexpected schema objects/,
+  );
+});
+
+void test("v2 validation rejects a tampered DDL definition on reopen", (context) => {
+  const path = makeDatabasePath(context);
+  openDatabase(path, { migrations: MIGRATIONS }).close();
+  withFixture(path, (database) => {
+    database.exec("ALTER TABLE activity_log RENAME TO activity_log_original");
+    database.exec("DROP INDEX idx_activity_log_occurred_at");
+    database.exec(
+      "CREATE TABLE activity_log (id TEXT PRIMARY KEY, category TEXT NOT NULL, action TEXT NOT NULL, actor_type TEXT NOT NULL, actor_id TEXT, session_id TEXT, entity_type TEXT, entity_id TEXT, details_json TEXT, occurred_at TEXT NOT NULL)",
+    );
+    database.exec("DROP TABLE activity_log_original");
+  });
+  assert.throws(
+    () => openDatabase(path, { migrations: MIGRATIONS }),
+    /invalid DDL|structure|schema objects/,
+  );
+});
+
 void test("a current database reopens idempotently", (context) => {
   const path = makeDatabasePath(context);
   openDatabase(path).close();
@@ -190,22 +351,22 @@ void test("a current database reopens idempotently", (context) => {
       reopened
         .prepare<[], { readonly count: number }>("SELECT count(*) AS count FROM schema_migrations")
         .get()?.count,
-      1,
+      2,
     );
   } finally {
     reopened.close();
   }
 });
 
-void test("a clean version 0 database upgrades to Foundation version 1", (context) => {
+void test("a clean version 0 database upgrades through the canonical v2 schema", (context) => {
   const path = makeDatabasePath(context);
   withFixture(path, (database) => assert.equal(readUserVersion(database), 0));
 
   openDatabase(path).close();
 
   withFixture(path, (database) => {
-    assert.equal(readUserVersion(database), 1);
-    assert.deepEqual(readSchemaObjects(database), [{ type: "table", name: "schema_migrations" }]);
+    assert.equal(readUserVersion(database), CURRENT_SCHEMA_VERSION);
+    assert.equal(readSchemaObjects(database).length, 28);
   });
 });
 
@@ -233,12 +394,12 @@ void test("migration definitions must be contiguous with nonempty unique names",
 
 void test("an unsupported future schema is rejected without mutation", (context) => {
   const path = makeDatabasePath(context);
-  withFixture(path, (database) => database.exec("PRAGMA user_version = 2"));
+  withFixture(path, (database) => database.exec("PRAGMA user_version = 3"));
 
   assert.throws(() => openDatabase(path), /schema version is newer/);
 
   withFixture(path, (database) => {
-    assert.equal(readUserVersion(database), 2);
+    assert.equal(readUserVersion(database), 3);
     assert.deepEqual(readSchemaObjects(database), []);
   });
 });
@@ -424,7 +585,7 @@ void test("text resembling the canonical CHECK constraint does not validate fake
 
 void test("a failed migration rolls back its DDL, ledger row, and version", (context) => {
   const path = makeDatabasePath(context);
-  openDatabase(path).close();
+  openDatabase(path, { migrations: FOUNDATION_MIGRATIONS }).close();
 
   const failingMigrations: readonly MigrationDefinition[] = [
     FOUNDATION_MIGRATIONS[0]!,
@@ -467,7 +628,7 @@ void test("Promise-like migration results roll back without advancing schema sta
   for (const fixture of cases) {
     await context.test(fixture.name, (subcontext) => {
       const path = makeDatabasePath(subcontext);
-      openDatabase(path).close();
+      openDatabase(path, { migrations: FOUNDATION_MIGRATIONS }).close();
 
       const unsafeApply = ((database: DatabaseExecutor): unknown => {
         database.execute("CREATE TABLE asynchronous_migration_table (id INTEGER)");

@@ -192,6 +192,18 @@ const violations = [
     path: "src/application/database.ts",
     contents: 'export const database = new Database(":memory:");\n',
   },
+  {
+    name: "Activity importing the outbox",
+    rule: "activity-outbox",
+    path: "src/features/activity/operations.ts",
+    contents: 'import { admit } from "../outbox/repository.ts";\nvoid admit;\n',
+  },
+  {
+    name: "integration-secret encryption outside centralized ownership",
+    rule: "secret-crypto",
+    path: "src/features/integrations/credentials.ts",
+    contents: 'import { createCipheriv } from "node:crypto";\nvoid createCipheriv;\n',
+  },
 ] as const;
 
 for (const violation of violations) {
