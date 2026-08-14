@@ -102,6 +102,10 @@ export class Router {
     this.register("PATCH", path, handler);
   }
 
+  put(path: string, handler: RouteHandler): void {
+    this.register("PUT", path, handler);
+  }
+
   delete(path: string, handler: RouteHandler): void {
     this.register("DELETE", path, handler);
   }

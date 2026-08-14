@@ -128,6 +128,11 @@ void test("a clean file database bootstraps the canonical v3 migration ledger", 
         .all(),
       [
         { type: "index", name: "idx_activity_log_occurred_at" },
+        { type: "index", name: "idx_beverage_source_recipe_snapshots_beverage" },
+        { type: "index", name: "idx_beverage_source_recipe_snapshots_linked" },
+        { type: "index", name: "idx_brewfather_candidate_cache_account_status" },
+        { type: "index", name: "idx_custom_recipe_ingredients_recipe" },
+        { type: "index", name: "idx_custom_recipe_steps_recipe" },
         { type: "index", name: "idx_deletion_audit_deleted_at" },
         { type: "index", name: "idx_keg_maintenance_keg_recorded" },
         { type: "index", name: "idx_keg_tare_history_keg_recorded" },
@@ -139,6 +144,19 @@ void test("a clean file database bootstraps the canonical v3 migration ledger", 
         { type: "table", name: "activity_retention" },
         { type: "table", name: "admin_credentials" },
         { type: "table", name: "admin_sessions" },
+        { type: "table", name: "beverage_sensory_overrides" },
+        { type: "table", name: "beverage_settings" },
+        { type: "table", name: "beverage_source_recipe_snapshots" },
+        { type: "table", name: "beverages" },
+        { type: "table", name: "brewfather_accounts" },
+        { type: "table", name: "brewfather_beverage_links" },
+        { type: "table", name: "brewfather_candidate_cache" },
+        { type: "table", name: "brewfather_presentation_overrides" },
+        { type: "table", name: "brewfather_source_profiles" },
+        { type: "table", name: "custom_beverage_profiles" },
+        { type: "table", name: "custom_recipe_ingredients" },
+        { type: "table", name: "custom_recipe_steps" },
+        { type: "table", name: "custom_recipes" },
         { type: "table", name: "deletion_audit" },
         { type: "table", name: "encrypted_secrets" },
         { type: "table", name: "keg_maintenance_records" },
@@ -169,13 +187,15 @@ void test("a clean file database bootstraps the canonical v3 migration ledger", 
         "SELECT version, name, applied_at FROM schema_migrations ORDER BY version",
       )
       .all();
-    assert.equal(ledger.length, 3);
+    assert.equal(ledger.length, 4);
     assert.equal(ledger[0]?.version, FOUNDATION_SCHEMA_VERSION);
     assert.equal(ledger[0]?.name, FOUNDATION_INITIAL_MIGRATION_NAME);
     assert.equal(ledger[1]?.version, 2);
     assert.equal(ledger[1]?.name, "security-activity-outbox-primitives");
     assert.equal(ledger[2]?.version, 3);
     assert.equal(ledger[2]?.name, "physical-kegs");
+    assert.equal(ledger[3]?.version, 4);
+    assert.equal(ledger[3]?.name, "custom-and-brewfather-beverages");
     assert.match(ledger[0]?.applied_at ?? "", /^\d{4}-\d{2}-\d{2}T/);
   } finally {
     database.close();
@@ -193,13 +213,13 @@ void test("an in-memory database bootstraps the same canonical schema", () => {
           "SELECT type, name FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%'",
         )
         .all().length,
-      35,
+      53,
     );
     assert.equal(
       database
         .prepare<[], { readonly count: number }>("SELECT count(*) AS count FROM schema_migrations")
         .get()?.count,
-      3,
+      4,
     );
   } finally {
     database.close();
@@ -301,7 +321,7 @@ void test("v2 outbound delivery lease fields reject one-sided stale values", () 
   }
 });
 
-void test("an exact v1 database upgrades to v3 with all ledger entries", (context) => {
+void test("an exact v1 database upgrades to v4 with all ledger entries", (context) => {
   const path = makeDatabasePath(context);
   openDatabase(path, { migrations: FOUNDATION_MIGRATIONS }).close();
   const database = openDatabase(path, { migrations: MIGRATIONS });
@@ -317,6 +337,7 @@ void test("an exact v1 database upgrades to v3 with all ledger entries", (contex
         { version: 1, name: FOUNDATION_INITIAL_MIGRATION_NAME },
         { version: 2, name: "security-activity-outbox-primitives" },
         { version: 3, name: "physical-kegs" },
+        { version: 4, name: "custom-and-brewfather-beverages" },
       ],
     );
   } finally {
@@ -324,17 +345,17 @@ void test("an exact v1 database upgrades to v3 with all ledger entries", (contex
   }
 });
 
-void test("canonical v3 reopen rejects an extra user object", (context) => {
+void test("canonical v4 reopen rejects an extra user object", (context) => {
   const path = makeDatabasePath(context);
   openDatabase(path, { migrations: MIGRATIONS }).close();
-  withFixture(path, (database) => database.exec("CREATE TABLE unexpected_v3_table (id INTEGER)"));
+  withFixture(path, (database) => database.exec("CREATE TABLE unexpected_v4_table (id INTEGER)"));
   assert.throws(
     () => openDatabase(path, { migrations: MIGRATIONS }),
     /schema objects do not match|unexpected schema objects/,
   );
 });
 
-void test("v3 validation rejects a tampered DDL definition on reopen", (context) => {
+void test("v4 validation rejects a tampered DDL definition on reopen", (context) => {
   const path = makeDatabasePath(context);
   openDatabase(path, { migrations: MIGRATIONS }).close();
   withFixture(path, (database) => {
@@ -361,14 +382,14 @@ void test("a current database reopens idempotently", (context) => {
       reopened
         .prepare<[], { readonly count: number }>("SELECT count(*) AS count FROM schema_migrations")
         .get()?.count,
-      3,
+      4,
     );
   } finally {
     reopened.close();
   }
 });
 
-void test("a clean version 0 database upgrades through the canonical v3 schema", (context) => {
+void test("a clean version 0 database upgrades through the canonical v4 schema", (context) => {
   const path = makeDatabasePath(context);
   withFixture(path, (database) => assert.equal(readUserVersion(database), 0));
 
@@ -376,40 +397,42 @@ void test("a clean version 0 database upgrades through the canonical v3 schema",
 
   withFixture(path, (database) => {
     assert.equal(readUserVersion(database), CURRENT_SCHEMA_VERSION);
-    assert.equal(readSchemaObjects(database).length, 35);
+    assert.equal(readSchemaObjects(database).length, 53);
   });
 });
 
-void test("migration definitions must be contiguous with nonempty unique names", async (context) => {
+void test("migration definitions must be contiguous with nonempty unique names", (context) => {
   const invalidSets: readonly (readonly MigrationDefinition[])[] = [
     [{ version: 2, name: "starts-late", apply: () => undefined }],
-    [{ version: 1, name: "   ", apply: () => undefined }],
     [
-      { version: 1, name: "duplicate", apply: () => undefined },
-      { version: 2, name: "duplicate", apply: () => undefined },
+      { version: 1, name: "ok-1", apply: () => undefined },
+      { version: 3, name: "gap", apply: () => undefined },
     ],
+    [
+      { version: 1, name: "duplicate-version", apply: () => undefined },
+      { version: 1, name: "duplicate-version-2", apply: () => undefined },
+    ],
+    [
+      { version: 1, name: "duplicate-name", apply: () => undefined },
+      { version: 2, name: "duplicate-name", apply: () => undefined },
+    ],
+    [{ version: 1, name: "   ", apply: () => undefined }],
   ];
 
-  for (const [index, migrations] of invalidSets.entries()) {
-    await context.test(`invalid definition set ${index + 1}`, (subcontext) => {
-      const path = makeDatabasePath(subcontext);
-      assert.throws(() => openDatabase(path, { migrations }), /Database migration/);
-      withFixture(path, (database) => {
-        assert.equal(readUserVersion(database), 0);
-        assert.deepEqual(readSchemaObjects(database), []);
-      });
-    });
+  for (const set of invalidSets) {
+    const path = makeDatabasePath(context);
+    assert.throws(() => openDatabase(path, { migrations: set }), /Database migration/);
   }
 });
 
 void test("an unsupported future schema is rejected without mutation", (context) => {
   const path = makeDatabasePath(context);
-  withFixture(path, (database) => database.exec("PRAGMA user_version = 4"));
+  withFixture(path, (database) => database.exec("PRAGMA user_version = 5"));
 
   assert.throws(() => openDatabase(path), /schema version is newer/);
 
   withFixture(path, (database) => {
-    assert.equal(readUserVersion(database), 4);
+    assert.equal(readUserVersion(database), 5);
     assert.deepEqual(readSchemaObjects(database), []);
   });
 });
