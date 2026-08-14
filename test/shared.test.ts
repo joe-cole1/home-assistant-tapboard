@@ -78,11 +78,57 @@ void test("configuration has collision-free defaults and validates injected valu
     port: 3000,
     databasePath: resolve("/tmp/tapboard-config-root/data/tapboard-v2.sqlite3"),
     shutdownGraceMs: 5000,
+    sessionInactivityMs: 2_592_000_000,
+    sessionAbsoluteMs: 31_536_000_000,
+    trustedProxies: [],
+    secretKeyState: "missing",
   });
 
   assert.equal(loadConfig({ env: { TAPBOARD_PORT: "0" } }).port, 0);
   assert.throws(() => loadConfig({ env: { TAPBOARD_PORT: "65536" } }), /invalid value/i);
   assert.throws(() => loadConfig({ env: { TAPBOARD_SHUTDOWN_GRACE_MS: "0" } }), /invalid value/i);
+  assert.deepEqual(
+    loadConfig({
+      env: {
+        TAPBOARD_EXTERNAL_ORIGIN: "https://admin.example",
+        TAPBOARD_TRUSTED_PROXIES: "127.0.0.1,::1",
+        TAPBOARD_SESSION_INACTIVITY_MS: "60000",
+        TAPBOARD_SESSION_ABSOLUTE_MS: "120000",
+      },
+    }),
+    {
+      host: "127.0.0.1",
+      port: 3000,
+      databasePath: resolve(process.cwd(), "data/tapboard-v2.sqlite3"),
+      shutdownGraceMs: 5000,
+      sessionInactivityMs: 60000,
+      sessionAbsoluteMs: 120000,
+      canonicalExternalOrigin: "https://admin.example",
+      trustedProxies: ["127.0.0.1", "::1"],
+      secretKeyState: "missing",
+    },
+  );
+  assert.throws(
+    () => loadConfig({ env: { TAPBOARD_EXTERNAL_ORIGIN: "https://admin.example/" } }),
+    /invalid/i,
+  );
+  assert.throws(
+    () => loadConfig({ env: { TAPBOARD_TRUSTED_PROXIES: "127.0.0.1,127.0.0.1" } }),
+    /invalid/i,
+  );
+  assert.equal(loadConfig({ env: { TAPBOARD_SECRET_KEY: "" } }).secretKeyState, "invalid");
+  const validKey = Buffer.alloc(32, 3).toString("base64url");
+  assert.deepEqual(loadConfig({ env: { TAPBOARD_SECRET_KEY: validKey } }), {
+    host: "127.0.0.1",
+    port: 3000,
+    databasePath: resolve(process.cwd(), "data/tapboard-v2.sqlite3"),
+    shutdownGraceMs: 5000,
+    sessionInactivityMs: 2_592_000_000,
+    sessionAbsoluteMs: 31_536_000_000,
+    trustedProxies: [],
+    secretKey: validKey,
+    secretKeyState: "available",
+  });
 });
 
 void test("structured logging recursively redacts secrets and safely serializes difficult values", () => {

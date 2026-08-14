@@ -1,6 +1,6 @@
 import BetterSqlite3 from "better-sqlite3";
 
-import { FOUNDATION_MIGRATIONS, initializeSchema, type MigrationDefinition } from "./migrations.ts";
+import { DATABASE_MIGRATIONS, initializeSchema, type MigrationDefinition } from "./migrations.ts";
 
 export interface StatementResult {
   readonly changes: number;
@@ -106,10 +106,15 @@ function isPromiseLike(value: unknown): boolean {
 
 function verifyForeignKeys(database: DatabaseExecutor): void {
   database.pragma("foreign_keys = ON");
+  database.pragma("busy_timeout = 5000");
   const enabled = database.pragma<number>("foreign_keys", { simple: true });
 
   if (enabled !== 1) {
     throw new Error("SQLite foreign-key enforcement could not be enabled");
+  }
+  const busyTimeout = database.pragma<number>("busy_timeout", { simple: true });
+  if (busyTimeout !== 5_000) {
+    throw new Error("SQLite busy timeout could not be configured");
   }
 }
 
@@ -136,7 +141,7 @@ export function openDatabase(path: string, options: OpenDatabaseOptions = {}): D
     connection = new ControlledDatabaseConnection(new BetterSqlite3(path));
     verifyForeignKeys(connection);
     verifyDatabaseIntegrity(connection);
-    initializeSchema(connection, options.migrations ?? FOUNDATION_MIGRATIONS);
+    initializeSchema(connection, options.migrations ?? DATABASE_MIGRATIONS);
     verifyDatabaseIntegrity(connection);
     return connection;
   } catch (error) {

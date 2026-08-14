@@ -190,6 +190,21 @@ while IFS= read -r domain_file; do
   fi
 done < <(active_repository_files | grep -E '^src/(core/|domain/|features/[^/]+/domain/).*\.(js|mjs|cjs|ts|mts|cts)$' || true)
 
+while IFS= read -r activity_file; do
+  if grep -Ein "(from|import)[[:space:]]*(\()?[[:space:]]*['\"][^'\"]*/(events|outbox)/" "$activity_file" >/dev/null; then
+    report "[activity-outbox] Activity must not depend on events or outbox: $activity_file"
+  fi
+done < <(active_repository_files | grep -E '^src/features/activity/.*\.(js|mjs|cjs|ts|mts|cts)$' || true)
+
+while IFS= read -r crypto_file; do
+  if [[ "$crypto_file" == "src/features/secrets/crypto.ts" ]]; then
+    continue
+  fi
+  if grep -En '\b(createCipheriv|createDecipheriv)\b' "$crypto_file" >/dev/null; then
+    report "[secret-crypto] integration-secret encryption is outside its centralized owner: $crypto_file"
+  fi
+done < <(active_repository_files | grep -E '^src/.*\.(js|mjs|cjs|ts|mts|cts)$' || true)
+
 while IFS= read -r browser_file; do
   while IFS= read -r import_expression; do
     specifier="$(sed -E "s/^(from|import)[[:space:]]*(\\()?[[:space:]]*['\"]//; s/['\"]$//" <<<"$import_expression")"
@@ -220,7 +235,9 @@ while IFS= read -r sql_file; do
     continue
   fi
 
-  if grep -Ein '\b(SELECT|INSERT|UPDATE|DELETE[[:space:]]+FROM|CREATE[[:space:]]+TABLE|ALTER[[:space:]]+TABLE|DROP[[:space:]]+TABLE|PRAGMA)\b' "$sql_file" >/dev/null; then
+  # Requiring SQL whitespace after standalone keywords avoids treating common
+  # JavaScript methods such as cryptographic `.update(...)` as SQL.
+  if grep -Ein '\b(SELECT|INSERT|UPDATE|PRAGMA)[[:space:]]+|\bDELETE[[:space:]]+FROM\b|\b(CREATE|ALTER|DROP)[[:space:]]+TABLE\b' "$sql_file" >/dev/null; then
     report "[sql-ownership] raw SQL outside approved database ownership: $sql_file"
   fi
 done < <(active_repository_files | grep -E '^(src|app|server)/.*\.(js|mjs|cjs|ts|mts|cts)$' || true)

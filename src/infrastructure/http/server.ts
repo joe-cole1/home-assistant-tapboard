@@ -3,6 +3,7 @@ import type { AddressInfo } from "node:net";
 
 import type { Logger } from "../../shared/logging.ts";
 import type { Router } from "./router.ts";
+import { applySecurityHeaders } from "./security/headers.ts";
 
 export interface HttpServerAddress {
   readonly address: string;
@@ -30,6 +31,7 @@ export class HttpServer {
     this.#shutdownGraceMs = options.shutdownGraceMs;
     const serverFactory = options.createNodeServer ?? createServer;
     this.#server = serverFactory((request, response) => {
+      applySecurityHeaders(response);
       void options.router.handle(request, response).catch((error: unknown) => {
         this.#logger.error("HTTP router failed outside centralized error handling", { error });
         response.destroy();

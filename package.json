@@ -9,6 +9,8 @@
   },
   "scripts": {
     "start": "node src/main.ts",
+    "operator:reset-pin": "node src/operator/reset-pin.ts",
+    "operator:rotate-secret-key": "node src/operator/rotate-secret-key.ts",
     "format": "prettier --write --ignore-unknown .",
     "format:check": "prettier --check --ignore-unknown .",
     "lint": "eslint . --max-warnings=0",

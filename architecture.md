@@ -1,8 +1,8 @@
 # Tapboard architecture
 
-## Implemented Foundation
+## Implemented Foundation and #67 primitives
 
-Issue #66 establishes a Node 24 ESM modular monolith with explicit startup composition. Node executes erasable `.ts` files directly, while TypeScript performs static checking with `tsc --noEmit`. There is no transpiler, backend or application bundler, SPA/client framework, HTTP framework, ORM, query builder, dependency-injection framework, or global service locator.
+Issue #66 establishes a Node 24 ESM modular monolith with explicit startup composition. Issue #67 adds security/session, Activity/deletion-audit, encrypted-secret, machine-key, stable-event, and bounded-outbox primitives. Node executes erasable `.ts` files directly, while TypeScript performs static checking with `tsc --noEmit`. There is no transpiler, backend or application bundler, SPA/client framework, HTTP framework, ORM, query builder, dependency-injection framework, or global service locator.
 
 The implemented source topology is intentionally concise:
 
@@ -12,6 +12,8 @@ The implemented source topology is intentionally concise:
 - `src/infrastructure/http/` owns the small exact-match router, centralized HTTP error mapping, and server lifecycle;
 - `src/infrastructure/rendering/` owns the file-based Eta rendering boundary;
 - `src/main.ts` is the deliberate process bootstrap and signal-handling entry point;
+- `src/operator/` owns stdin-only reset-PIN and root-key rotation commands;
+- `src/features/auth/`, `activity/`, `events/`, `secrets/`, `machine-keys/`, and `outbox/` own typed feature primitives and repository SQL;
 - `views/` contains only layout/partial/escaping proof templates, not a product page;
 - `test/` covers the database, runtime, rendering, shared primitives, native TypeScript execution, and architecture boundaries.
 
@@ -21,7 +23,11 @@ Normal imports are side-effect free. The bootstrap in `src/main.ts` deliberately
 
 The application deterministically creates the database directory, opens and validates the database, creates the renderer, creates the HTTP server, and binds the configured address in that order. Startup and bind errors reject startup and close acquired resources. Shutdown stops HTTP acceptance and connections before closing SQLite, is idempotent, and enforces the configured bounded grace period. `SIGINT` and `SIGTERM` use that same shutdown path.
 
-Exactly one route is registered: `GET /healthz`. When the local application state is ready and the database connection remains open, it returns HTTP 200 and schema version 1. It does not represent integrations, telemetry, Home Assistant, or future feature health. The small router also supplies deterministic 404/405 behavior, and centralized error mapping prevents unexpected implementation details from reaching HTTP clients.
+Exactly one route is registered: `GET /healthz`. When the local application state is ready and the database connection remains open, it returns HTTP 200 and schema version 2. It does not represent integrations, telemetry, Home Assistant, or future feature health. The small router also supplies deterministic 404/405 behavior, and centralized error mapping prevents unexpected implementation details from reaching HTTP clients.
+
+The configured external origin is an exact canonical HTTP(S) origin; trusted proxies are explicit comma-separated addresses and never provide an origin fallback. Session lifetimes default to 30 days inactivity and 365 days absolute, with bounded validation. PIN reset and root-key rotation are local non-TTY stdin commands only; no browser reset flow or default PIN exists.
+
+The PIN is exactly four ASCII decimal digits. Its deliberately small 10,000-value contract has limited offline resistance if a database verifier is stolen; scrypt, durable throttling, opaque digest-only sessions, expiry/revocation, strict Origin, and session-bound CSRF protect online/local use. Integration encryption is independent and uses externally supplied `TAPBOARD_SECRET_KEY` with AES-256-GCM, fresh nonces, identity-bound AAD, safe degraded status, and atomic all-row key rotation.
 
 ## Rendering boundary
 
@@ -31,7 +37,9 @@ Exactly one route is registered: `GET /healthz`. When the local application stat
 
 `src/infrastructure/database/connection.ts` is the sole `better-sqlite3` import and connection-construction boundary. It enables and verifies `foreign_keys=ON`, initializes and validates the schema, runs integrity checks, exposes a synchronous `BEGIN IMMEDIATE` transaction primitive, and provides idempotent close behavior. Raw application SQL is restricted to database infrastructure/migrations and future feature repository ownership by the architecture gate.
 
-Foundation schema version 1 contains exactly one infrastructure table:
+Schema version 2 contains the migration ledger plus typed security/session, encrypted-secret, machine-key, Activity, immutable deletion-audit, event, and bounded-outbox tables. Activity is separate from runtime logs, has bounded retention, and never recursively admits outbox rows. Deletion audit stores minimal impact counts and remains immutable. The stable event registry is an explicit allowlist; durable envelopes are canonical, versioned, and provider-neutral.
+
+Foundation schema version 1 contained exactly one infrastructure table:
 
 ```sql
 CREATE TABLE schema_migrations (
@@ -41,9 +49,9 @@ CREATE TABLE schema_migrations (
 )
 ```
 
-SQLite `user_version` is 1 and the migration machinery uses `schema_migrations` as its ordered history ledger, appending migration 1 as `foundation-schema`. Migration definitions must be contiguous from version 1 with nonempty unique names. A clean empty version-0 database migrates transactionally to version 1. A current version-1 database reopens only when its version, ledger, constraints, and exact schema object set match the supported baseline. Future versions, unknown nonempty version-0 databases, missing or inconsistent ledgers, and unexpected schema objects fail closed without adoption or repair. Failed migrations roll back schema changes, ledger changes, and `user_version`.
+SQLite `user_version` is 2 and the migration machinery uses `schema_migrations` as its ordered history ledger, appending migration 1 as `foundation-schema` and migration 2 as `security-activity-outbox-primitives`. Migration definitions must be contiguous from version 1 with nonempty unique names. A clean empty version-0 database migrates transactionally through version 2. A current version-2 database reopens only when its version, ledger, constraints, and exact schema object set match the supported baseline. Future versions, unknown nonempty version-0 databases, missing or inconsistent ledgers, and unexpected schema objects fail closed without adoption or repair. Failed migrations roll back schema changes, ledger changes, and `user_version`.
 
-The exact-object validation is intentionally the Foundation version-1 baseline, not a claim that future domain tables are forbidden forever. Later migrations must deliberately extend the schema validator alongside their versioned schema changes. There is no v1 data migration, generic settings JSON, or Beverage, Keg, Fill, Tap, security, outbox, or telemetry table.
+The exact-object validation is intentionally the supported schema-version-2 baseline, not a claim that future domain tables are forbidden forever. Later migrations must deliberately extend the schema validator alongside their versioned schema changes. There is no v1 data migration, generic settings JSON, or Beverage, Keg, Fill, Tap, or telemetry table. Outbox admission serializes inside `BEGIN IMMEDIATE`, counts persisted UTF-8 bytes, bounds global/per-destination rows and bytes, and records fixed-slot degradation when it returns `not_queued_capacity`. Leases and compare-and-set delivery results support later at-least-once workers without claiming exactly-once delivery; providers, workers, and domain producers are deferred.
 
 ## Dependencies
 
@@ -60,7 +68,7 @@ The canonical `npm run check` gate combines format, lint, type, architecture, re
 
 ## Not implemented
 
-Foundation does not implement the work assigned to issue #67 or later: PIN authentication, sessions, CSRF, throttling, Activity Log, encrypted integration secrets, API keys, outbox/event delivery, domain entities or workflows, telemetry or pour detection, forecasting or draft health, Admin/public feature pages, SSE, Brew Story, Mystery Tap, Tap Wars, Home Assistant/webhooks, or final Docker deployment.
+The #67 slice intentionally does not implement provider delivery workers, Home Assistant/webhook adapters, domain entities/workflows, telemetry or pour detection, forecasting or draft health, Admin/public feature pages, SSE, Brew Story, Mystery Tap, Tap Wars, or final Docker deployment. Authentication/session, CSRF, throttling, Activity, encrypted secrets, machine API keys, canonical events, and bounded outbox storage are primitives only.
 
 Playwright/browser E2E is also not present because Foundation has no feature UI or browser workflow. No E2E tests ran or passed; the tier is deferred to issue #76.
 
