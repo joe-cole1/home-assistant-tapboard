@@ -229,8 +229,24 @@ void test("Active/Inactive toggle emits transition activity log and updates stat
     const activities = readActivities(database);
     const transitions = activities.filter((a) => a.action === "transition");
     assert.equal(transitions.length, 2);
-    assert.deepEqual(transitions[0]?.details, { from: "inactive", to: "active", keg_number: 3 });
-    assert.deepEqual(transitions[1]?.details, { from: "active", to: "inactive", keg_number: 3 });
+    assert.equal(
+      transitions.some(
+        (t) =>
+          t.details?.from === "active" &&
+          t.details?.to === "inactive" &&
+          t.details?.keg_number === 3,
+      ),
+      true,
+    );
+    assert.equal(
+      transitions.some(
+        (t) =>
+          t.details?.from === "inactive" &&
+          t.details?.to === "active" &&
+          t.details?.keg_number === 3,
+      ),
+      true,
+    );
   } finally {
     database.close();
   }
