@@ -22,6 +22,8 @@ import { createKegService } from "./features/kegs/service.ts";
 import { registerKegRoutes } from "./features/kegs/routes.ts";
 import { createBeverageService, type BeverageService } from "./features/beverages/service.ts";
 import { registerBeverageRoutes } from "./features/beverages/routes.ts";
+import { createFillService } from "./features/fills/service.ts";
+import { registerFillRoutes } from "./features/fills/routes.ts";
 import { createLogger, type Logger } from "./shared/logging.ts";
 
 type ApplicationState = "new" | "starting" | "ready" | "stopping" | "stopped" | "failed";
@@ -123,6 +125,9 @@ class FoundationApplication implements Application {
         secretsService,
       });
       this.#beverageService = beverageService;
+      const fillService = createFillService(this.#database, {
+        beverageService,
+      });
 
       const router = new Router(this.#logger);
       router.get("/healthz", (_request, response) => {
@@ -138,6 +143,7 @@ class FoundationApplication implements Application {
 
       registerKegRoutes({ router, kegService, authService });
       registerBeverageRoutes({ router, beverageService, authService });
+      registerFillRoutes({ router, fillService, authService });
 
       this.#httpServer = this.#createHttpServer({
         router,

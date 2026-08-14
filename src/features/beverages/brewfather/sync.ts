@@ -14,6 +14,7 @@ import {
 } from "../repository.ts";
 import { BrewfatherAdapter } from "./adapter.ts";
 import {
+  STATUS_SET,
   sanitizeBatchSummary,
   sanitizeBatchToSourceProfile,
   sanitizeErrorMessage,
@@ -43,7 +44,13 @@ export class BrewfatherSyncCoordinator {
   readonly #origin?: string | undefined;
   readonly #adapters = new Map<
     string,
-    { adapter: BrewfatherAdapter; userId: string; apiKey: string; origin?: string }
+    {
+      adapter: BrewfatherAdapter;
+      userId: string;
+      apiKey: string;
+      origin?: string;
+      fetchFn?: typeof fetch;
+    }
   >();
 
   constructor(options: { readonly fetchFn?: typeof fetch; readonly origin?: string } = {}) {
@@ -64,7 +71,7 @@ export class BrewfatherSyncCoordinator {
       cached.userId === account.userId &&
       cached.apiKey === apiKey &&
       cached.origin === origin &&
-      !options.fetchFn
+      cached.fetchFn === fetchFn
     ) {
       return cached.adapter;
     }
@@ -79,6 +86,7 @@ export class BrewfatherSyncCoordinator {
       userId: account.userId,
       apiKey,
       ...(origin !== undefined ? { origin } : {}),
+      ...(fetchFn !== undefined ? { fetchFn } : {}),
     });
     return adapter;
   }
@@ -323,5 +331,68 @@ export class BrewfatherSyncCoordinator {
       durationMs: Date.now() - start,
       ...(safeCandidateError !== undefined ? { error: safeCandidateError } : {}),
     };
+  }
+
+  async completeBatch(
+    database: DatabaseExecutor,
+    secretsService: SecretsService,
+    beverageId: string,
+    options: SyncOptions = {},
+  ): Promise<{
+    readonly outcome: "not_applicable" | "already_terminal" | "completed" | "failed";
+    readonly message?: string;
+  }> {
+    const link = listBeverageLinks(database).find((l) => l.beverageId === beverageId);
+    if (!link) {
+      return { outcome: "not_applicable", message: "Beverage is not linked to Brewfather" };
+    }
+
+    const account = readBrewfatherAccount(database, link.accountId);
+    if (!account || !account.enabled) {
+      return {
+        outcome: "not_applicable",
+        message: "Brewfather account is not configured or disabled",
+      };
+    }
+
+    let apiKey: string;
+    try {
+      apiKey = secretsService.revealPrivileged("brewfather", account.id, "api_key");
+    } catch {
+      return { outcome: "failed", message: "Brewfather credentials unavailable" };
+    }
+
+    const adapter = this.#getOrCreateAdapter(account, apiKey, options);
+
+    try {
+      // Step 1: Pre-check batch status
+      const batch = await adapter.getBatch(link.sourceBatchId);
+      if (!batch) {
+        return { outcome: "failed", message: "Batch not found on Brewfather" };
+      }
+
+      const status = typeof batch.status === "string" ? batch.status : "";
+      if (!STATUS_SET.has(status)) {
+        return {
+          outcome: "failed",
+          message: "Batch status was not recognized",
+        };
+      }
+
+      if (status === "Completed" || status === "Archived") {
+        return {
+          outcome: "already_terminal",
+          message: `Batch is already in terminal status: ${status}`,
+        };
+      }
+
+      // Step 2: PATCH batch status -> "Completed"
+      await adapter.updateBatchStatus(link.sourceBatchId, "Completed");
+      return { outcome: "completed", message: "Batch status updated to Completed" };
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : "Brewfather request failed";
+      const safeMsg = sanitizeErrorMessage(msg, 255);
+      return { outcome: "failed", message: safeMsg };
+    }
   }
 }

@@ -40,11 +40,8 @@ export interface KegDeletionImpact {
   readonly kegs: number;
   readonly tareHistoryRecords: number;
   readonly maintenanceRecords: number;
-  readonly impacts: readonly [
-    { readonly code: "kegs"; readonly count: number },
-    { readonly code: "keg_tare_history"; readonly count: number },
-    { readonly code: "keg_maintenance_records"; readonly count: number },
-  ];
+  readonly fills?: number;
+  readonly impacts: readonly { readonly code: string; readonly count: number }[];
 }
 
 export interface CreateKegInput {

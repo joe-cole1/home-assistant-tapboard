@@ -134,6 +134,10 @@ void test("a clean file database bootstraps the canonical v3 migration ledger", 
         { type: "index", name: "idx_custom_recipe_ingredients_recipe" },
         { type: "index", name: "idx_custom_recipe_steps_recipe" },
         { type: "index", name: "idx_deletion_audit_deleted_at" },
+        { type: "index", name: "idx_fills_active_keg" },
+        { type: "index", name: "idx_fills_beverage_id" },
+        { type: "index", name: "idx_fills_keg_id" },
+        { type: "index", name: "idx_fills_on_deck_order" },
         { type: "index", name: "idx_keg_maintenance_keg_recorded" },
         { type: "index", name: "idx_keg_tare_history_keg_recorded" },
         { type: "index", name: "idx_outbound_deliveries_destination_state" },
@@ -159,6 +163,8 @@ void test("a clean file database bootstraps the canonical v3 migration ledger", 
         { type: "table", name: "custom_recipes" },
         { type: "table", name: "deletion_audit" },
         { type: "table", name: "encrypted_secrets" },
+        { type: "table", name: "fill_settings" },
+        { type: "table", name: "fills" },
         { type: "table", name: "keg_maintenance_records" },
         { type: "table", name: "keg_tare_history" },
         { type: "table", name: "kegs" },
@@ -187,7 +193,7 @@ void test("a clean file database bootstraps the canonical v3 migration ledger", 
         "SELECT version, name, applied_at FROM schema_migrations ORDER BY version",
       )
       .all();
-    assert.equal(ledger.length, 4);
+    assert.equal(ledger.length, 5);
     assert.equal(ledger[0]?.version, FOUNDATION_SCHEMA_VERSION);
     assert.equal(ledger[0]?.name, FOUNDATION_INITIAL_MIGRATION_NAME);
     assert.equal(ledger[1]?.version, 2);
@@ -196,6 +202,8 @@ void test("a clean file database bootstraps the canonical v3 migration ledger", 
     assert.equal(ledger[2]?.name, "physical-kegs");
     assert.equal(ledger[3]?.version, 4);
     assert.equal(ledger[3]?.name, "custom-and-brewfather-beverages");
+    assert.equal(ledger[4]?.version, 5);
+    assert.equal(ledger[4]?.name, "fills-and-on-deck");
     assert.match(ledger[0]?.applied_at ?? "", /^\d{4}-\d{2}-\d{2}T/);
   } finally {
     database.close();
@@ -213,13 +221,13 @@ void test("an in-memory database bootstraps the same canonical schema", () => {
           "SELECT type, name FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%'",
         )
         .all().length,
-      53,
+      59,
     );
     assert.equal(
       database
         .prepare<[], { readonly count: number }>("SELECT count(*) AS count FROM schema_migrations")
         .get()?.count,
-      4,
+      5,
     );
   } finally {
     database.close();
@@ -321,7 +329,7 @@ void test("v2 outbound delivery lease fields reject one-sided stale values", () 
   }
 });
 
-void test("an exact v1 database upgrades to v4 with all ledger entries", (context) => {
+void test("an exact v1 database upgrades to v5 with all ledger entries", (context) => {
   const path = makeDatabasePath(context);
   openDatabase(path, { migrations: FOUNDATION_MIGRATIONS }).close();
   const database = openDatabase(path, { migrations: MIGRATIONS });
@@ -338,6 +346,7 @@ void test("an exact v1 database upgrades to v4 with all ledger entries", (contex
         { version: 2, name: "security-activity-outbox-primitives" },
         { version: 3, name: "physical-kegs" },
         { version: 4, name: "custom-and-brewfather-beverages" },
+        { version: 5, name: "fills-and-on-deck" },
       ],
     );
   } finally {
@@ -345,17 +354,17 @@ void test("an exact v1 database upgrades to v4 with all ledger entries", (contex
   }
 });
 
-void test("canonical v4 reopen rejects an extra user object", (context) => {
+void test("canonical v5 reopen rejects an extra user object", (context) => {
   const path = makeDatabasePath(context);
   openDatabase(path, { migrations: MIGRATIONS }).close();
-  withFixture(path, (database) => database.exec("CREATE TABLE unexpected_v4_table (id INTEGER)"));
+  withFixture(path, (database) => database.exec("CREATE TABLE unexpected_v5_table (id INTEGER)"));
   assert.throws(
     () => openDatabase(path, { migrations: MIGRATIONS }),
     /schema objects do not match|unexpected schema objects/,
   );
 });
 
-void test("v4 validation rejects a tampered DDL definition on reopen", (context) => {
+void test("v5 validation rejects a tampered DDL definition on reopen", (context) => {
   const path = makeDatabasePath(context);
   openDatabase(path, { migrations: MIGRATIONS }).close();
   withFixture(path, (database) => {
@@ -382,14 +391,14 @@ void test("a current database reopens idempotently", (context) => {
       reopened
         .prepare<[], { readonly count: number }>("SELECT count(*) AS count FROM schema_migrations")
         .get()?.count,
-      4,
+      5,
     );
   } finally {
     reopened.close();
   }
 });
 
-void test("a clean version 0 database upgrades through the canonical v4 schema", (context) => {
+void test("a clean version 0 database upgrades through the canonical v5 schema", (context) => {
   const path = makeDatabasePath(context);
   withFixture(path, (database) => assert.equal(readUserVersion(database), 0));
 
@@ -397,7 +406,7 @@ void test("a clean version 0 database upgrades through the canonical v4 schema",
 
   withFixture(path, (database) => {
     assert.equal(readUserVersion(database), CURRENT_SCHEMA_VERSION);
-    assert.equal(readSchemaObjects(database).length, 53);
+    assert.equal(readSchemaObjects(database).length, 59);
   });
 });
 
@@ -433,12 +442,12 @@ void test("migration definitions must be contiguous with nonempty unique names",
 
 void test("an unsupported future schema is rejected without mutation", (context) => {
   const path = makeDatabasePath(context);
-  withFixture(path, (database) => database.exec("PRAGMA user_version = 5"));
+  withFixture(path, (database) => database.exec("PRAGMA user_version = 6"));
 
   assert.throws(() => openDatabase(path), /schema version is newer/);
 
   withFixture(path, (database) => {
-    assert.equal(readUserVersion(database), 5);
+    assert.equal(readUserVersion(database), 6);
     assert.deepEqual(readSchemaObjects(database), []);
   });
 });
@@ -914,6 +923,88 @@ void test("keg tare history and maintenance records are append-only and cascade 
         )
         .get()?.count,
       0,
+    );
+  } finally {
+    database.close();
+  }
+});
+
+void test("fills schema enforces active keg uniqueness partial index and check constraints", () => {
+  const database = openDatabase(":memory:");
+  try {
+    database.execute(`
+      INSERT INTO kegs (id, keg_number, label, capacity_ml, current_tare_g, is_active, created_at, updated_at)
+      VALUES ('11111111-1111-4111-8111-111111111111', 1, 'Keg 1', 19000, 4200, 1, '2026-08-14T00:00:00.000Z', '2026-08-14T00:00:00.000Z');
+      INSERT INTO beverages (id, ownership_type, created_at, updated_at)
+      VALUES ('aaaaaaaa-1111-4111-8111-111111111111', 'custom', '2026-08-14T00:00:00.000Z', '2026-08-14T00:00:00.000Z');
+      INSERT INTO custom_beverage_profiles (beverage_id, name, beverage_type, created_at, updated_at)
+      VALUES ('aaaaaaaa-1111-4111-8111-111111111111', 'IPA', 'beer', '2026-08-14T00:00:00.000Z', '2026-08-14T00:00:00.000Z');
+
+      INSERT INTO fills (id, beverage_id, keg_id, fill_date, on_deck_order, ended_at, end_reason, created_at, updated_at)
+      VALUES ('f1111111-1111-4111-8111-111111111111', 'aaaaaaaa-1111-4111-8111-111111111111', '11111111-1111-4111-8111-111111111111', '2026-08-14', 1, NULL, NULL, '2026-08-14T00:00:00.000Z', '2026-08-14T00:00:00.000Z');
+    `);
+
+    // Duplicate active fill on the same keg is blocked by unique index idx_fills_active_keg
+    assert.throws(
+      () =>
+        database.execute(`
+          INSERT INTO fills (id, beverage_id, keg_id, fill_date, on_deck_order, ended_at, end_reason, created_at, updated_at)
+          VALUES ('f2222222-2222-4222-8222-222222222222', 'aaaaaaaa-1111-4111-8111-111111111111', '11111111-1111-4111-8111-111111111111', '2026-08-14', NULL, NULL, NULL, '2026-08-14T00:00:00.000Z', '2026-08-14T00:00:00.000Z');
+        `),
+      /UNIQUE constraint failed: fills\.keg_id/,
+    );
+
+    // After ending fill 1, a new active fill on the same keg succeeds
+    database.execute(`
+      UPDATE fills SET ended_at = '2026-08-14T12:00:00.000Z', on_deck_order = NULL WHERE id = 'f1111111-1111-4111-8111-111111111111';
+    `);
+
+    database.execute(`
+      INSERT INTO fills (id, beverage_id, keg_id, fill_date, on_deck_order, ended_at, end_reason, created_at, updated_at)
+      VALUES ('f2222222-2222-4222-8222-222222222222', 'aaaaaaaa-1111-4111-8111-111111111111', '11111111-1111-4111-8111-111111111111', '2026-08-14', NULL, NULL, NULL, '2026-08-14T00:00:00.000Z', '2026-08-14T00:00:00.000Z');
+    `);
+
+    // Multiple ended fills on the same keg are allowed
+    database.execute(`
+      UPDATE fills SET ended_at = '2026-08-14T18:00:00.000Z' WHERE id = 'f2222222-2222-4222-8222-222222222222';
+    `);
+
+    const count = database
+      .prepare<[], { readonly count: number }>("SELECT count(*) AS count FROM fills")
+      .get()?.count;
+    assert.equal(count, 2);
+  } finally {
+    database.close();
+  }
+});
+
+void test("fills cascade on physical keg or beverage deletion", () => {
+  const database = openDatabase(":memory:");
+  try {
+    database.execute(`
+      INSERT INTO kegs (id, keg_number, label, capacity_ml, current_tare_g, is_active, created_at, updated_at)
+      VALUES ('11111111-1111-4111-8111-111111111111', 1, 'Keg 1', 19000, 4200, 1, '2026-08-14T00:00:00.000Z', '2026-08-14T00:00:00.000Z');
+      INSERT INTO beverages (id, ownership_type, created_at, updated_at)
+      VALUES ('aaaaaaaa-1111-4111-8111-111111111111', 'custom', '2026-08-14T00:00:00.000Z', '2026-08-14T00:00:00.000Z');
+      INSERT INTO custom_beverage_profiles (beverage_id, name, beverage_type, created_at, updated_at)
+      VALUES ('aaaaaaaa-1111-4111-8111-111111111111', 'IPA', 'beer', '2026-08-14T00:00:00.000Z', '2026-08-14T00:00:00.000Z');
+
+      INSERT INTO fills (id, beverage_id, keg_id, fill_date, on_deck_order, ended_at, end_reason, created_at, updated_at)
+      VALUES ('f1111111-1111-4111-8111-111111111111', 'aaaaaaaa-1111-4111-8111-111111111111', '11111111-1111-4111-8111-111111111111', '2026-08-14', NULL, NULL, NULL, '2026-08-14T00:00:00.000Z', '2026-08-14T00:00:00.000Z');
+    `);
+
+    // Deleting keg cascades and deletes fill, but leaves beverage intact
+    database.execute("DELETE FROM kegs WHERE id = '11111111-1111-4111-8111-111111111111'");
+    assert.equal(
+      database.prepare<[], { readonly count: number }>("SELECT count(*) AS count FROM fills").get()
+        ?.count,
+      0,
+    );
+    assert.equal(
+      database
+        .prepare<[], { readonly count: number }>("SELECT count(*) AS count FROM beverages")
+        .get()?.count,
+      1,
     );
   } finally {
     database.close();
