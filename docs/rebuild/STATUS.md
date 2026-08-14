@@ -1,9 +1,9 @@
 # Tapboard v2 rebuild status
 
 - Architecture: **FROZEN**
-- Current phase: **Issue #85 development-only container and operator workflow implemented locally; under validation**
-- Current branch: `codex/issue-85-dev-container`
-- Current base: `a2ba918`
+- Current phase: **Issue #85 development-only container and operator workflow merged on main; issue #68 is next**
+- Current branch: `main`
+- Current base: `4f80a79`
 - Frozen v1 source commit: `429cf07e451b64ca1713655a34ffa5ebd376efae`
 - ADR index: [`docs/adr/README.md`](../adr/README.md)
 - V1 reuse manifest: [`docs/rebuild/v1-reuse-manifest.json`](v1-reuse-manifest.json)
@@ -30,7 +30,7 @@
 - 16. [#80 — System and local operator functions](https://github.com/joe-cole1/home-assistant-tapboard/issues/80)
 - 17. [#81 — Deployment, documentation, and final acceptance](https://github.com/joe-cole1/home-assistant-tapboard/issues/81)
 
-The list preserves the frozen implementation sequence with #85's local development surface between #67 and #68. Issue #67 is merged on `main`. Issue #85 is implemented locally and under validation; no shipping action is claimed or authorized.
+The list preserves the frozen implementation sequence with #85's local development surface between #67 and #68. Issues #67 and #85 are merged on `main`; issue #68 is next and has not begun.
 
 ## Implemented in Foundation
 
@@ -48,7 +48,11 @@ The list preserves the frozen implementation sequence with #85's local developme
 - canonical `npm run check` covering format, lint, types, architecture/reuse integrity, and `node:test`;
 - Node 24 CI running `npm ci`, the canonical gate, and changed-line whitespace validation.
 
-Schema version 2 contains typed #67 primitives and no v1 data adoption. The PIN remains exactly four ASCII digits with limited stolen-verifier offline resistance; integration encryption relies on independent external `TAPBOARD_SECRET_KEY` material. Activity never recursively enters the outbox, and `not_queued_capacity` is a fixed-slot bounded degradation state rather than a storage-error classification. Domain entities/workflows, provider adapters, delivery workers, telemetry, UI, and production deployment remain deferred. The #85 local branch is under validation; no shipping action has been authorized.
+Schema version 2 contains typed #67 primitives and no v1 data adoption. The PIN remains exactly four ASCII digits with limited stolen-verifier offline resistance; integration encryption relies on independent external `TAPBOARD_SECRET_KEY` material. Activity never recursively enters the outbox, and `not_queued_capacity` is a fixed-slot bounded degradation state rather than a storage-error classification. Domain entities/workflows, provider adapters, delivery workers, telemetry, UI, and production deployment remain deferred.
+
+## Post-merge operator handoff
+
+After each completed and merged v2 implementation issue, update `main`, rebuild and recreate the development container without deleting its volume, verify `/healthz`, and manually exercise the delivered behavior. Every future implementation handoff must include a short issue-specific heading `MANUAL DEV TEST` describing what to test after the rebuild. See the normal command order in the root README.
 
 ## Deferred validation tiers
 

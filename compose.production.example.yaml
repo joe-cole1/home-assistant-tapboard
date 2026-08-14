@@ -1,0 +1,33 @@
+# PROVISIONAL ILLUSTRATIVE DEPLOYMENT CONTRACT.
+# This is not runnable until issue #81 supplies the production image.
+# It is not production acceptance; production hardening remains deferred to #81.
+
+services:
+  tapboard:
+    image: example.invalid/tapboard:production-image-not-published
+    env_file: [.env]
+    environment:
+      TAPBOARD_HOST: 0.0.0.0
+      TAPBOARD_PORT: "3000"
+      TAPBOARD_DATABASE_PATH: /app/data/tapboard-v2.sqlite3
+    ports:
+      # Issue #81 owns final LAN/proxy exposure.
+      - "127.0.0.1:3000:3000"
+    restart: unless-stopped
+    volumes:
+      - tapboard-data:/app/data
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - >-
+          fetch("http://127.0.0.1:3000/healthz")
+          .then((response) => process.exit(response.status === 200 ? 0 : 1))
+          .catch(() => process.exit(1))
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+volumes:
+  tapboard-data:

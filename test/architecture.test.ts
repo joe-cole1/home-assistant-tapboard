@@ -109,6 +109,36 @@ void test("allows the exact coherent development container set", () => {
   assert.match(result.output, /Architecture guardrails passed\./);
 });
 
+void test("allows the v2 environment reference and exact provisional production example", () => {
+  const result = runFixture({
+    ".env.example": "TAPBOARD_HOST=127.0.0.1\n",
+    "compose.production.example.yaml":
+      "services:\n  tapboard:\n    image: example.invalid/tapboard:production-image-not-published\n",
+  });
+
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.output, /Architecture guardrails passed\./);
+});
+
+for (const [name, contents] of [
+  [
+    "build",
+    "services:\n  tapboard:\n    image: example.invalid/tapboard:placeholder\n    build: .\n",
+  ],
+  [
+    "Dockerfile.dev",
+    "services:\n  tapboard:\n    image: example.invalid/tapboard:placeholder\n    command: Dockerfile.dev\n",
+  ],
+] as const) {
+  void test(`rejects the provisional production example using ${name}`, () => {
+    const result = runFixture({ "compose.production.example.yaml": contents });
+
+    assert.notEqual(result.status, 0, result.output);
+    assert.match(result.output, /\[production-example\]/);
+    assert.match(result.output, /compose\.production\.example\.yaml/);
+  });
+}
+
 void test("rejects an incomplete development container set", () => {
   const result = runFixture({
     "Dockerfile.dev": "FROM node:24-bookworm-slim\n",

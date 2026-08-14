@@ -46,6 +46,27 @@ Local operator maintenance is stdin-only and never accepts secret positional arg
 
 The runtime has no backend transpiler, application bundler, SPA framework, or HTTP framework. The Docker/Compose surface below is development-only; production image hardening and deployment remain owned by issue #81.
 
+## Updating the local development instance
+
+After a v2 implementation issue is merged, update `main`, rebuild and recreate the development container without deleting its volume, verify readiness, and manually exercise the delivered behavior:
+
+```sh
+git switch main
+git fetch --prune
+git pull --ff-only
+docker compose -f compose.dev.yaml up -d --build --force-recreate
+docker compose -f compose.dev.yaml ps
+curl -fsS http://127.0.0.1:3000/healthz
+```
+
+Follow the service logs when diagnosing a rebuild:
+
+```sh
+docker compose -f compose.dev.yaml logs -f --tail=200 tapboard
+```
+
+Normal rebuilds MUST NOT use `docker compose -f compose.dev.yaml down --volumes`; that intentionally deletes Tapboard development state. `.env.example` is a v2-safe configuration reference to copy into the ignored `.env` file. `compose.production.example.yaml` is only a provisional, non-runnable illustrative deployment contract; it does not claim a production image or acceptance.
+
 ## Development container workflow
 
 Install Docker Desktop with the Compose v2 plugin, then create an ignored local `.env` containing an external canonical 32-byte base64url `TAPBOARD_SECRET_KEY`. No real key or default value belongs in Git. A new key can be written without printing it:

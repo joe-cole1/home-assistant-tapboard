@@ -50,3 +50,7 @@ Before declaring an authentication blocker:
 7. Report expired/invalid authentication only after the real authenticated CLI operation and repository access both fail with an authentication-specific response. Include the commands tested and sanitized error category.
 
 A failing `gh auth status` alone is diagnostic noise, not a blocker. Continue with the verified working CLI or Git credential path when authenticated repository operations succeed.
+
+## v2 implementation handoff workflow
+
+After each completed and merged v2 implementation issue, the operator updates main, rebuilds and recreates the development container without deleting its volume, verifies /healthz, and manually exercises the delivered behavior. Every future implementation handoff must include a short issue-specific heading MANUAL DEV TEST describing what the operator should test after the rebuild.
