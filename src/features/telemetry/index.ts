@@ -40,6 +40,15 @@ export {
   upsertTapTelemetryAuthority,
 } from "./repository.ts";
 export { registerTelemetryRoutes, type TelemetryRouteDependencies } from "./routes.ts";
+export {
+  validateDetectorArbitrationGroupCreate,
+  validateDetectorArbitrationGroupPatch,
+  validateCompleteDetectorConfig,
+  validateDetectorGroupId,
+  validateDetectorTapOverridePatch,
+  validateEmptyOptionalBody,
+  validateGlobalDetectorConfigPatch,
+} from "./detector-validation.ts";
 export { TelemetryService, type TelemetryServiceDependencies } from "./service.ts";
 export {
   validateAssignAuthorityInput,

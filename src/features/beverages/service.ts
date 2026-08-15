@@ -1,5 +1,8 @@
 import { randomUUID } from "node:crypto";
-import type { DatabaseExecutor } from "../../infrastructure/database/connection.ts";
+import {
+  assertSynchronousCompletion,
+  type DatabaseExecutor,
+} from "../../infrastructure/database/connection.ts";
 import { ApplicationError } from "../../shared/errors.ts";
 import { appendActivity } from "../activity/operations.ts";
 import type { SecretsService } from "../secrets/service.ts";
@@ -50,6 +53,7 @@ import { BEVERAGE_TYPES } from "./types.ts";
 import type {
   Beverage,
   BeverageActorOptions,
+  BeverageDensityExtensionPort,
   BeverageDeletionImpact,
   BeverageSensoryOverrides,
   BeverageSettings,
@@ -91,11 +95,17 @@ export interface BeverageServiceOptions {
   readonly idFactory?: () => string;
   readonly secretsService?: SecretsService;
   readonly syncCoordinator?: BrewfatherSyncCoordinator;
+  readonly densityExtensionPort?: BeverageDensityExtensionPort;
 }
 
 function mergeOverrideField<T>(
   fieldInput:
-    { readonly inherit?: boolean; readonly clear?: boolean; readonly value?: T | null } | undefined,
+    | {
+        readonly inherit?: boolean;
+        readonly clear?: boolean;
+        readonly value?: T | null;
+      }
+    | undefined,
   currentPresent: boolean | undefined,
   currentValue: T | null | undefined,
 ): { readonly present: boolean; readonly value: T | null } {
@@ -118,6 +128,7 @@ export class BeverageService {
   readonly #database: DatabaseExecutor;
   readonly #secretsService?: SecretsService | undefined;
   readonly #syncCoordinator: BrewfatherSyncCoordinator;
+  readonly #densityExtensionPort: BeverageDensityExtensionPort;
   readonly #now: () => Date;
   readonly #idFactory: () => string;
   #startupTimer?: NodeJS.Timeout | undefined;
@@ -127,12 +138,18 @@ export class BeverageService {
     this.#database = database;
     this.#secretsService = options.secretsService;
     this.#syncCoordinator = options.syncCoordinator ?? new BrewfatherSyncCoordinator();
+    this.#densityExtensionPort = options.densityExtensionPort ?? {
+      onEffectiveDensityChanged: () => undefined,
+    };
     this.#now = options.now ?? (() => new Date());
     this.#idFactory = options.idFactory ?? randomUUID;
   }
 
   startPeriodicSync(
-    options: { readonly intervalMs?: number; readonly initialDelayMs?: number } = {},
+    options: {
+      readonly intervalMs?: number;
+      readonly initialDelayMs?: number;
+    } = {},
   ): void {
     this.stopPeriodicSync();
     const initialDelay = options.initialDelayMs ?? 1_000;
@@ -167,25 +184,35 @@ export class BeverageService {
     const validated = validateUpdateBeverageSettingsInput(input);
     const now = (actorOptions.now ?? this.#now)().toISOString();
 
-    const updated = updateBeverageSettings(this.#database, validated, now);
+    return this.#database.withTransaction(() => {
+      const previousSettings = readBeverageSettings(this.#database);
+      const previousDensities = this.#effectiveDensities(previousSettings.fallbackFg);
+      const updated = updateBeverageSettings(this.#database, validated, now);
 
-    appendActivity(this.#database, {
-      category: "admin",
-      action: "configuration_changed",
-      actorType: actorOptions.actorType ?? "admin",
-      ...(actorOptions.actorId !== undefined ? { actorId: actorOptions.actorId } : {}),
-      ...(actorOptions.sessionId !== undefined ? { sessionId: actorOptions.sessionId } : {}),
-      entityType: "beverage_settings",
-      entityId: "1",
-      details: {
-        change: "updated",
-        fallback_fg: updated.fallbackFg,
-        brewfather_completion_policy: updated.brewfatherCompletionPolicy,
-      },
-      occurredAt: now,
+      appendActivity(this.#database, {
+        category: "admin",
+        action: "configuration_changed",
+        actorType: actorOptions.actorType ?? "admin",
+        ...(actorOptions.actorId !== undefined ? { actorId: actorOptions.actorId } : {}),
+        ...(actorOptions.sessionId !== undefined ? { sessionId: actorOptions.sessionId } : {}),
+        entityType: "beverage_settings",
+        entityId: "1",
+        details: {
+          change: "updated",
+          fallback_fg: updated.fallbackFg,
+          brewfather_completion_policy: updated.brewfatherCompletionPolicy,
+        },
+        occurredAt: now,
+      });
+
+      for (const [beverageId, previousDensity] of previousDensities) {
+        const nextDensity = this.#resolveDensityForBeverage(beverageId, updated.fallbackFg);
+        if (nextDensity !== undefined)
+          this.#notifyDensityChanged(beverageId, previousDensity, nextDensity, now);
+      }
+
+      return updated;
     });
-
-    return updated;
   }
 
   createCustomBeverage(
@@ -247,7 +274,11 @@ export class BeverageService {
         ...(actorOptions.sessionId !== undefined ? { sessionId: actorOptions.sessionId } : {}),
         entityType: "beverage",
         entityId: id,
-        details: { change: "created", name: customProfile.name, ownershipType: "custom" },
+        details: {
+          change: "created",
+          name: customProfile.name,
+          ownershipType: "custom",
+        },
         occurredAt: now,
       });
 
@@ -292,6 +323,19 @@ export class BeverageService {
         });
       }
 
+      const settings = readBeverageSettings(this.#database);
+      const previousProfile = readCustomProfile(this.#database, id);
+      if (previousProfile === undefined) {
+        throw new ApplicationError({
+          category: "internal",
+          code: "beverage.corrupted",
+          clientMessage: "Custom beverage profile is missing.",
+        });
+      }
+      const previousDensity = resolveBeverageDensity(
+        resolveCustomPresentation(previousProfile),
+        settings.fallbackFg,
+      );
       const customProfile = updateCustomProfile(this.#database, id, validated, now);
 
       let customRecipe: CustomRecipe | undefined = readCustomRecipe(this.#database, id);
@@ -351,11 +395,11 @@ export class BeverageService {
         occurredAt: now,
       });
 
-      const settings = readBeverageSettings(this.#database);
       const effectivePresentation = resolveCustomPresentation(customProfile);
       const density = resolveBeverageDensity(effectivePresentation, settings.fallbackFg);
 
       touchBeverage(this.#database, id, now);
+      this.#notifyDensityChanged(id, previousDensity, density, now);
 
       return {
         beverage: { ...beverage, updatedAt: now },
@@ -538,7 +582,6 @@ export class BeverageService {
         });
       }
 
-      const overrides = this.#applyOverridesToDatabase(beverageId, validated, now);
       const sourceProfile = readSourceProfile(this.#database, beverageId);
       if (sourceProfile === undefined) {
         throw new ApplicationError({
@@ -547,6 +590,15 @@ export class BeverageService {
           clientMessage: "Linked source profile is missing.",
         });
       }
+      const settings = readBeverageSettings(this.#database);
+      const previousDensity = resolveBeverageDensity(
+        resolveLinkedPresentation(
+          sourceProfile,
+          readPresentationOverrides(this.#database, beverageId),
+        ),
+        settings.fallbackFg,
+      );
+      const overrides = this.#applyOverridesToDatabase(beverageId, validated, now);
 
       appendActivity(this.#database, {
         category: "domain",
@@ -560,7 +612,6 @@ export class BeverageService {
         occurredAt: now,
       });
 
-      const settings = readBeverageSettings(this.#database);
       const effectivePresentation = resolveLinkedPresentation(sourceProfile, overrides);
       const density = resolveBeverageDensity(effectivePresentation, settings.fallbackFg);
       const link = readBeverageLink(this.#database, beverageId);
@@ -568,6 +619,7 @@ export class BeverageService {
       const sensoryOverrides = readSensoryOverrides(this.#database, beverageId);
 
       touchBeverage(this.#database, beverageId, now);
+      this.#notifyDensityChanged(beverageId, previousDensity, density, now);
 
       return {
         beverage: { ...beverage, updatedAt: now },
@@ -657,6 +709,59 @@ export class BeverageService {
 
     upsertPresentationOverrides(this.#database, overrides);
     return overrides;
+  }
+
+  #notifyDensityChanged(
+    beverageId: string,
+    previousDensity: DensityResolution,
+    newDensity: DensityResolution,
+    changedAt: string,
+  ): void {
+    if (previousDensity.densityGPerMl === newDensity.densityGPerMl) return;
+    assertSynchronousCompletion(
+      this.#densityExtensionPort.onEffectiveDensityChanged(this.#database, {
+        beverageId,
+        previousDensity,
+        newDensity,
+        changedAt,
+      }),
+      "Beverage density extensions",
+    );
+  }
+
+  #resolveDensityForBeverage(
+    beverageId: string,
+    fallbackFg: number,
+  ): DensityResolution | undefined {
+    const beverage = readBeverage(this.#database, beverageId);
+    if (beverage?.ownershipType === "custom") {
+      const profile = readCustomProfile(this.#database, beverageId);
+      return profile
+        ? resolveBeverageDensity(resolveCustomPresentation(profile), fallbackFg)
+        : undefined;
+    }
+    if (beverage?.ownershipType === "brewfather") {
+      const source = readSourceProfile(this.#database, beverageId);
+      return source
+        ? resolveBeverageDensity(
+            resolveLinkedPresentation(
+              source,
+              readPresentationOverrides(this.#database, beverageId),
+            ),
+            fallbackFg,
+          )
+        : undefined;
+    }
+    return undefined;
+  }
+
+  #effectiveDensities(fallbackFg: number): ReadonlyMap<string, DensityResolution> {
+    const densities = new Map<string, DensityResolution>();
+    for (const beverage of listBeverages(this.#database)) {
+      const density = this.#resolveDensityForBeverage(beverage.id, fallbackFg);
+      if (density !== undefined) densities.set(beverage.id, density);
+    }
+    return densities;
   }
 
   unlinkBeverage(
@@ -958,6 +1063,7 @@ export class BeverageService {
     return this.#syncCoordinator.sync(this.#database, this.#secretsService, {
       now: this.#now,
       ...options,
+      densityExtensionPort: this.#densityExtensionPort,
     });
   }
 

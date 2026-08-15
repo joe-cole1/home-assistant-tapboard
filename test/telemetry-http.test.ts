@@ -15,6 +15,7 @@ import {
 import { createLogger } from "../src/shared/logging.ts";
 import { createTapService } from "../src/features/taps/service.ts";
 import { registerTelemetryRoutes } from "../src/features/telemetry/routes.ts";
+import { DetectorService } from "../src/features/telemetry/detector-service.ts";
 import { TelemetryService } from "../src/features/telemetry/service.ts";
 
 const CANONICAL_ORIGIN = "http://127.0.0.1:3000";
@@ -117,7 +118,12 @@ void test("telemetry HTTP is Bearer-only, strict, and maps durable outcomes", as
     clock: () => now,
   });
   const router = new Router(quietLogger);
-  registerTelemetryRoutes({ router, telemetryService, authService });
+  registerTelemetryRoutes({
+    router,
+    telemetryService,
+    detectorService: new DetectorService(database),
+    authService,
+  });
   const server = new HttpServer({ router, logger: quietLogger, shutdownGraceMs: 250 });
   context.after(async () => {
     await server.stop();
@@ -373,7 +379,12 @@ void test("telemetry HTTP body caps and batch outcomes use the documented status
   const tapService = createTapService(database, { now: () => now });
   const telemetryService = new TelemetryService({ database, machineKeyService, clock: () => now });
   const router = new Router(quietLogger);
-  registerTelemetryRoutes({ router, telemetryService, authService });
+  registerTelemetryRoutes({
+    router,
+    telemetryService,
+    detectorService: new DetectorService(database),
+    authService,
+  });
   const server = new HttpServer({ router, logger: quietLogger, shutdownGraceMs: 250 });
   context.after(async () => {
     await server.stop();
@@ -536,6 +547,211 @@ void test("telemetry HTTP body caps and batch outcomes use the documented status
     "]}",
   ]);
   assert.equal(chunkedBatch.statusCode, 413);
+});
+
+void test("detector admin HTTP routes enforce admin mutation auth and return purpose-built DTOs", async (context) => {
+  const database = openDatabase(":memory:");
+  const authService = createAuthService(database, { canonicalOrigin: CANONICAL_ORIGIN });
+  const machineKeyService = createMachineKeyService(database);
+  const tapService = createTapService(database);
+  const telemetryService = new TelemetryService({ database, machineKeyService });
+  const router = new Router(quietLogger);
+  registerTelemetryRoutes({
+    router,
+    telemetryService,
+    detectorService: new DetectorService(database),
+    authService,
+  });
+  const server = new HttpServer({ router, logger: quietLogger, shutdownGraceMs: 250 });
+  context.after(async () => {
+    await server.stop();
+    database.close();
+  });
+
+  await authService.setPin("1234");
+  const login = await authService.authenticate("1234");
+  assert.ok(login.session);
+  assert.ok(login.csrfToken);
+  const cookie = `tapboard_admin_session=${login.session}`;
+  const headers = {
+    cookie,
+    origin: CANONICAL_ORIGIN,
+    "x-csrf-token": login.csrfToken,
+    "content-type": "application/json",
+  };
+  const address = await server.start("127.0.0.1", 0);
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+  const tap = tapService.createTap({ tapNumber: 1, name: "Detector Tap" });
+
+  assert.equal((await fetch(`${baseUrl}/api/admin/telemetry/detector-config`)).status, 401);
+  assert.equal(
+    (
+      await fetch(`${baseUrl}/api/admin/telemetry/detector-config`, {
+        method: "PATCH",
+        headers: { cookie, "content-type": "application/json" },
+        body: "{}",
+      })
+    ).status,
+    401,
+  );
+  const global = await readJsonResponse(
+    await fetch(`${baseUrl}/api/admin/telemetry/detector-config`, { headers: { cookie } }),
+  );
+  assert.equal(global.response.status, 200);
+  assert.equal(
+    typeof (global.body as { config: { config: { candidateLossMl: number } } }).config.config
+      .candidateLossMl,
+    "number",
+  );
+  assert.equal(
+    (
+      await fetch(`${baseUrl}/api/admin/telemetry/detector-config`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ unknown: 1 }),
+      })
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await fetch(`${baseUrl}/api/admin/telemetry/detector-config`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ candidateSamples: Infinity }),
+      })
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await fetch(`${baseUrl}/api/admin/telemetry/detector-config`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ quietPeriodMs: 20_000, hardTimeoutMs: 10_000 }),
+      })
+    ).status,
+    400,
+  );
+  for (const retainedSpan of [
+    "candidateLookbackMs",
+    "baselineSpanMs",
+    "settledSpanMs",
+    "jumpStableSpanMs",
+  ] as const)
+    assert.equal(
+      (
+        await fetch(`${baseUrl}/api/admin/telemetry/detector-config`, {
+          method: "PATCH",
+          headers,
+          body: JSON.stringify({ historyMs: 500, [retainedSpan]: 501 }),
+        })
+      ).status,
+      400,
+    );
+
+  const override = await readJsonResponse(
+    await fetch(`${baseUrl}/api/admin/taps/${tap.id}/detector-config`, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ candidateLossMl: 12, baselineBandMl: null }),
+    }),
+  );
+  assert.equal(override.response.status, 200);
+  assert.equal(
+    (override.body as { override: { override: { candidateLossMl: number; baselineBandMl: null } } })
+      .override.override.candidateLossMl,
+    12,
+  );
+  const overrideRead = await readJsonResponse(
+    await fetch(`${baseUrl}/api/admin/taps/${tap.id}/detector-config`, { headers: { cookie } }),
+  );
+  assert.equal(
+    (overrideRead.body as { override: { override: { baselineBandMl: null } } }).override.override
+      .baselineBandMl,
+    null,
+  );
+  assert.equal(
+    (
+      await fetch(`${baseUrl}/api/admin/taps/${tap.id}/detector-config`, {
+        method: "DELETE",
+        headers,
+      })
+    ).status,
+    200,
+  );
+
+  const diagnostics = await readJsonResponse(
+    await fetch(`${baseUrl}/api/admin/taps/${tap.id}/telemetry/diagnostics`, {
+      headers: { cookie },
+    }),
+  );
+  assert.equal(diagnostics.response.status, 200);
+  assert.equal(JSON.stringify(diagnostics.body).includes("last_primary_value"), false);
+  assert.equal(
+    (
+      await fetch(`${baseUrl}/api/admin/taps/${tap.id}/telemetry/rebaseline`, {
+        method: "POST",
+        headers: { cookie, "content-type": "application/json" },
+        body: "{}",
+      })
+    ).status,
+    401,
+  );
+  assert.equal(
+    (
+      await fetch(`${baseUrl}/api/admin/taps/${tap.id}/telemetry/rebaseline`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ unexpected: true }),
+      })
+    ).status,
+    400,
+  );
+
+  const createdGroup = await readJsonResponse(
+    await fetch(`${baseUrl}/api/admin/telemetry/arbitration-groups`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ name: "Adjacent taps", tapIds: [tap.id] }),
+    }),
+  );
+  assert.equal(createdGroup.response.status, 201);
+  const groupId = (createdGroup.body as { group: { id: string } }).group.id;
+  const groups = await readJsonResponse(
+    await fetch(`${baseUrl}/api/admin/telemetry/arbitration-groups`, { headers: { cookie } }),
+  );
+  assert.equal((groups.body as { groups: readonly unknown[] }).groups.length, 1);
+  assert.equal(
+    (
+      await fetch(`${baseUrl}/api/admin/telemetry/arbitration-groups/${groupId}`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ name: "Renamed" }),
+      })
+    ).status,
+    200,
+  );
+  assert.equal(
+    (
+      await fetch(`${baseUrl}/api/admin/telemetry/arbitration-groups`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ name: "Duplicate", tapIds: [tap.id, tap.id] }),
+      })
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await fetch(`${baseUrl}/api/admin/telemetry/arbitration-groups`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ name: "Invalid", tapIds: ["invalid"] }),
+      })
+    ).status,
+    400,
+  );
 });
 
 void test("telemetry OpenAPI declares strict schemas, Bearer auth, limits, and error responses", () => {

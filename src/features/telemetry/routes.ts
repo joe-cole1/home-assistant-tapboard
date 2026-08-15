@@ -11,10 +11,22 @@ import {
 } from "../../infrastructure/http/security/body.ts";
 import { parseSessionCookie } from "../../infrastructure/http/security/cookie.ts";
 import type { AuthService, AuthenticatedSession } from "../auth/service.ts";
+import { mergeDetectorConfig } from "./detector-config.ts";
+import type { DetectorService } from "./detector-service.ts";
+import {
+  validateDetectorArbitrationGroupCreate,
+  validateDetectorArbitrationGroupPatch,
+  validateDetectorGroupId,
+  validateDetectorTapOverridePatch,
+  validateCompleteDetectorConfig,
+  validateEmptyOptionalBody,
+  validateGlobalDetectorConfigPatch,
+} from "./detector-validation.ts";
 import type { TelemetryService } from "./service.ts";
 import {
   mapExternalBatchTelemetryPayloadToInternal,
   mapExternalTelemetryPayloadToInternal,
+  validateTapId,
   validateExternalBatchTelemetryPayload,
   validateExternalTelemetryPayload,
 } from "./telemetry-validation.ts";
@@ -23,6 +35,7 @@ import type { BatchIngestResult, SingleIngestResult, TelemetrySource } from "./t
 export interface TelemetryRouteDependencies {
   readonly router: Router;
   readonly telemetryService: TelemetryService;
+  readonly detectorService: DetectorService;
   readonly authService: AuthService;
 }
 
@@ -170,7 +183,7 @@ function singleMachineStatus(result: SingleIngestResult): number {
 }
 
 export function registerTelemetryRoutes(dependencies: TelemetryRouteDependencies): void {
-  const { router, telemetryService, authService } = dependencies;
+  const { router, telemetryService, detectorService, authService } = dependencies;
 
   // ==========================================
   // External Telemetry Ingestion Endpoints (v1)
@@ -208,6 +221,114 @@ export function registerTelemetryRoutes(dependencies: TelemetryRouteDependencies
   // ==========================================
   // Admin Telemetry Endpoints
   // ==========================================
+
+  router.get("/api/admin/telemetry/detector-config", (request, response) => {
+    requireSession(request, authService);
+    sendJson(response, 200, { config: detectorService.getGlobalConfig() });
+  });
+
+  router.patch("/api/admin/telemetry/detector-config", async (request, response) => {
+    const session = requireMutationAuth(request, authService);
+    const patch = validateGlobalDetectorConfigPatch(await readJsonBody(request));
+    const current = detectorService.getGlobalConfig();
+    const next = { ...current.config, ...patch };
+    validateCompleteDetectorConfig(next);
+    const config = detectorService.updateGlobalConfig(next, {
+      actorType: "admin",
+      actorId: session.id,
+      sessionId: session.id,
+    });
+    sendJson(response, 200, { config });
+  });
+
+  router.get("/api/admin/taps/:tapId/detector-config", (request, response, params) => {
+    requireSession(request, authService);
+    const tapId = validateTapId(params.tapId ?? "", "tapId");
+    sendJson(response, 200, {
+      tapId,
+      override: detectorService.getTapOverride(tapId) ?? null,
+      globalConfig: detectorService.getGlobalConfig(),
+    });
+  });
+
+  router.patch("/api/admin/taps/:tapId/detector-config", async (request, response, params) => {
+    const session = requireMutationAuth(request, authService);
+    const tapId = validateTapId(params.tapId ?? "", "tapId");
+    const patch = validateDetectorTapOverridePatch(await readJsonBody(request));
+    const current = detectorService.getTapOverride(tapId)?.override ?? {};
+    const next = { ...current, ...patch };
+    validateCompleteDetectorConfig(
+      mergeDetectorConfig(detectorService.getGlobalConfig().config, next),
+    );
+    const override = detectorService.setTapOverride(tapId, next, {
+      actorType: "admin",
+      actorId: session.id,
+      sessionId: session.id,
+    });
+    sendJson(response, 200, { tapId, override });
+  });
+
+  router.delete("/api/admin/taps/:tapId/detector-config", (request, response, params) => {
+    const session = requireMutationAuth(request, authService);
+    const tapId = validateTapId(params.tapId ?? "", "tapId");
+    const cleared = detectorService.clearTapOverride(tapId, {
+      actorType: "admin",
+      actorId: session.id,
+      sessionId: session.id,
+    });
+    sendJson(response, 200, { tapId, cleared });
+  });
+
+  router.get("/api/admin/taps/:tapId/telemetry/diagnostics", (request, response, params) => {
+    requireSession(request, authService);
+    sendJson(response, 200, {
+      diagnostics: detectorService.diagnostics(validateTapId(params.tapId ?? "", "tapId")),
+    });
+  });
+
+  router.post("/api/admin/taps/:tapId/telemetry/rebaseline", async (request, response, params) => {
+    const session = requireMutationAuth(request, authService);
+    validateEmptyOptionalBody(await readOptionalJsonBody(request));
+    const diagnostics = detectorService.manualRebaseline(
+      validateTapId(params.tapId ?? "", "tapId"),
+      {
+        actorType: "admin",
+        actorId: session.id,
+        sessionId: session.id,
+      },
+    );
+    sendJson(response, 200, { diagnostics });
+  });
+
+  router.get("/api/admin/telemetry/arbitration-groups", (request, response) => {
+    requireSession(request, authService);
+    sendJson(response, 200, { groups: detectorService.listArbitrationGroups() });
+  });
+
+  router.post("/api/admin/telemetry/arbitration-groups", async (request, response) => {
+    const session = requireMutationAuth(request, authService);
+    const input = validateDetectorArbitrationGroupCreate(await readJsonBody(request));
+    const group = detectorService.createArbitrationGroup(input.name, input.tapIds, {
+      actorType: "admin",
+      actorId: session.id,
+      sessionId: session.id,
+    });
+    sendJson(response, 201, { group });
+  });
+
+  router.patch("/api/admin/telemetry/arbitration-groups/:id", async (request, response, params) => {
+    const session = requireMutationAuth(request, authService);
+    const group = detectorService.updateArbitrationGroup(
+      validateDetectorGroupId(params.id ?? "", "id"),
+      validateDetectorArbitrationGroupPatch(await readJsonBody(request)),
+      {
+        actorType: "admin",
+        actorId: session.id,
+        sessionId: session.id,
+      },
+    );
+    sendJson(response, 200, { group });
+  });
 
   // GET /api/admin/telemetry/sources
   router.get(

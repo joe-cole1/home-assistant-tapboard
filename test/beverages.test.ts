@@ -5,6 +5,7 @@ import { openDatabase } from "../src/infrastructure/database/connection.ts";
 import { createSecretsService } from "../src/features/secrets/service.ts";
 import { createAuthService } from "../src/features/auth/service.ts";
 import { createBeverageService } from "../src/features/beverages/service.ts";
+import type { BeverageDensityExtensionPort } from "../src/features/beverages/types.ts";
 import { resolveBeverageDensity } from "../src/features/beverages/density.ts";
 import { resolveLinkedPresentation } from "../src/features/beverages/presentation.ts";
 import {
@@ -26,13 +27,108 @@ import { createLogger } from "../src/shared/logging.ts";
 const ROOT_KEY = Buffer.alloc(32, 1).toString("base64url");
 const quietLogger = createLogger({ sink: () => undefined });
 
-function createTestContext() {
+function createTestContext(densityExtensionPort?: BeverageDensityExtensionPort) {
   const database = openDatabase(":memory:");
   const secretsService = createSecretsService(database, { rootKey: ROOT_KEY });
   const authService = createAuthService(database);
-  const beverageService = createBeverageService(database, { secretsService });
+  const beverageService = createBeverageService(database, {
+    secretsService,
+    ...(densityExtensionPort === undefined ? {} : { densityExtensionPort }),
+  });
   return { database, secretsService, authService, beverageService };
 }
+
+void test("density extension emits only effective density changes", () => {
+  const events: unknown[] = [];
+  const { database, beverageService } = createTestContext({
+    onEffectiveDensityChanged: (_database, event) => events.push(event),
+  });
+  try {
+    const created = beverageService.createCustomBeverage({
+      name: "Density event beer",
+      fg: 1.01,
+    });
+
+    beverageService.updateCustomBeverage(created.beverage.id, { name: "Renamed beer" });
+    assert.equal(events.length, 0);
+
+    beverageService.updateCustomBeverage(created.beverage.id, { manualDensityOverride: 1.013 });
+    assert.equal(events.length, 1);
+    const event = events[0] as {
+      beverageId: string;
+      previousDensity: { densityGPerMl: number; source: string };
+      newDensity: { densityGPerMl: number; source: string };
+      changedAt: string;
+    };
+    assert.equal(event.beverageId, created.beverage.id);
+    assert.deepEqual(event.previousDensity, {
+      densityGPerMl: 1.01,
+      specificGravity: 1.01,
+      source: "fg_derived",
+    });
+    assert.deepEqual(event.newDensity, {
+      densityGPerMl: 1.013,
+      specificGravity: 1.013,
+      source: "manual_override",
+    });
+    assert.match(event.changedAt, /^\d{4}-\d{2}-\d{2}T/);
+  } finally {
+    database.close();
+  }
+});
+
+void test("density extension settings notifications affect only fallback-dependent beverages", () => {
+  const events: Array<{ beverageId: string }> = [];
+  const { database, beverageService } = createTestContext({
+    onEffectiveDensityChanged: (_database, event) => events.push(event),
+  });
+  try {
+    const fallback = beverageService.createCustomBeverage({ name: "Fallback" });
+    const fg = beverageService.createCustomBeverage({ name: "FG", fg: 1.011 });
+    const manual = beverageService.createCustomBeverage({
+      name: "Manual",
+      fg: 1.011,
+      manualDensityOverride: 1.013,
+    });
+
+    beverageService.updateSettings({ fallbackFg: 1.009 });
+    assert.deepEqual(
+      events.map((event) => event.beverageId),
+      [fallback.beverage.id],
+    );
+    assert.notEqual(fg.beverage.id, fallback.beverage.id);
+    assert.notEqual(manual.beverage.id, fallback.beverage.id);
+  } finally {
+    database.close();
+  }
+});
+
+void test("density extension failures roll back custom mutation and activity", () => {
+  const completions: ReadonlyArray<() => unknown> = [
+    () => {
+      throw new Error("extension failed");
+    },
+    () => Promise.resolve(),
+    () => ({ then: () => undefined }),
+  ];
+  for (const completion of completions) {
+    const { database, beverageService } = createTestContext({
+      onEffectiveDensityChanged: () => completion(),
+    });
+    try {
+      const created = beverageService.createCustomBeverage({ name: "Before", fg: 1.01 });
+      const activityCount = readActivities(database).length;
+      assert.throws(
+        () => beverageService.updateCustomBeverage(created.beverage.id, { fg: 1.012 }),
+        /extension failed|must complete synchronously/,
+      );
+      assert.equal(beverageService.getBeverage(created.beverage.id).density.densityGPerMl, 1.01);
+      assert.equal(readActivities(database).length, activityCount);
+    } finally {
+      database.close();
+    }
+  }
+});
 
 void test("density resolution strictly follows frozen precedence", () => {
   // 1. Manual override wins over FG

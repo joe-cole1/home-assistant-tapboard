@@ -411,6 +411,18 @@ export function findActiveAssignmentByTapId(
   return row === undefined ? undefined : mapLifecycleRow(row);
 }
 
+export function listActiveAssignments(database: DatabaseExecutor): TapAssignmentLifecycle[] {
+  return database
+    .prepare<[], LifecycleRow>(
+      `SELECT id, tap_id, fill_id, assigned_at, ended_at, end_reason, created_at
+       FROM tap_assignment_lifecycles
+       WHERE ended_at IS NULL
+       ORDER BY assigned_at, id`,
+    )
+    .all()
+    .map(mapLifecycleRow);
+}
+
 export function findActiveAssignmentByFillId(
   database: DatabaseExecutor,
   fillId: string,

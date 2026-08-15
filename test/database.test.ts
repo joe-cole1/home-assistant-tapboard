@@ -111,7 +111,7 @@ function readTransactionValues(database: DatabaseConnection): string[] {
     .map((row) => row.value);
 }
 
-void test("a clean file database bootstraps the canonical v8 migration ledger", (context) => {
+void test("a clean file database bootstraps the canonical v9 migration ledger", (context) => {
   const path = makeDatabasePath(context);
   const database = openDatabase(path);
 
@@ -134,6 +134,8 @@ void test("a clean file database bootstraps the canonical v8 migration ledger", 
         { type: "index", name: "idx_custom_recipe_ingredients_recipe" },
         { type: "index", name: "idx_custom_recipe_steps_recipe" },
         { type: "index", name: "idx_deletion_audit_deleted_at" },
+        { type: "index", name: "idx_detector_arbitration_groups_name_ci" },
+        { type: "index", name: "idx_detector_arbitration_members_group_id" },
         { type: "index", name: "idx_fills_active_keg" },
         { type: "index", name: "idx_fills_beverage_id" },
         { type: "index", name: "idx_fills_keg_id" },
@@ -144,12 +146,19 @@ void test("a clean file database bootstraps the canonical v8 migration ledger", 
         { type: "index", name: "idx_outbound_deliveries_due" },
         { type: "index", name: "idx_outbound_events_created_at" },
         { type: "index", name: "idx_outbound_events_type_coalescing" },
+        { type: "index", name: "idx_pours_fill_id" },
+        { type: "index", name: "idx_pours_tap_completed_at" },
         { type: "index", name: "idx_tap_assignment_lifecycles_active_fill" },
         { type: "index", name: "idx_tap_assignment_lifecycles_active_tap" },
         { type: "index", name: "idx_tap_assignment_lifecycles_fill_id" },
         { type: "index", name: "idx_tap_assignment_lifecycles_tap_id" },
         { type: "index", name: "idx_tap_telemetry_authority_source" },
         { type: "index", name: "idx_taps_tap_number" },
+        { type: "index", name: "idx_telemetry_epoch_samples_epoch_time" },
+        { type: "index", name: "idx_telemetry_epochs_assignment_id" },
+        { type: "index", name: "idx_telemetry_epochs_fill_id" },
+        { type: "index", name: "idx_telemetry_epochs_open_tap" },
+        { type: "index", name: "idx_telemetry_epochs_started_at" },
         { type: "index", name: "idx_telemetry_measurements_created_at" },
         { type: "index", name: "idx_telemetry_measurements_tap_measured" },
         { type: "index", name: "idx_telemetry_receipts_client_identity" },
@@ -175,6 +184,10 @@ void test("a clean file database bootstraps the canonical v8 migration ledger", 
         { type: "table", name: "custom_recipe_steps" },
         { type: "table", name: "custom_recipes" },
         { type: "table", name: "deletion_audit" },
+        { type: "table", name: "detector_arbitration_groups" },
+        { type: "table", name: "detector_arbitration_members" },
+        { type: "table", name: "detector_global_config" },
+        { type: "table", name: "detector_tap_overrides" },
         { type: "table", name: "encrypted_secrets" },
         { type: "table", name: "fill_settings" },
         { type: "table", name: "fills" },
@@ -189,11 +202,15 @@ void test("a clean file database bootstraps the canonical v8 migration ledger", 
         { type: "table", name: "outbound_events" },
         { type: "table", name: "outbox_degradation" },
         { type: "table", name: "outbox_overflow_incidents" },
+        { type: "table", name: "pours" },
         { type: "table", name: "schema_migrations" },
         { type: "table", name: "secret_rotation_state" },
         { type: "table", name: "tap_assignment_lifecycles" },
         { type: "table", name: "tap_telemetry_authority" },
         { type: "table", name: "taps" },
+        { type: "table", name: "telemetry_epoch_samples" },
+        { type: "table", name: "telemetry_epoch_state" },
+        { type: "table", name: "telemetry_epochs" },
         { type: "table", name: "telemetry_ingest_receipts" },
         { type: "table", name: "telemetry_measurements" },
         { type: "table", name: "telemetry_settings" },
@@ -207,12 +224,14 @@ void test("a clean file database bootstraps the canonical v8 migration ledger", 
         { type: "trigger", name: "trg_outbound_destination_versions_no_update" },
         { type: "trigger", name: "trg_outbox_overflow_incidents_no_delete" },
         { type: "trigger", name: "trg_outbox_overflow_incidents_no_insert" },
+        { type: "trigger", name: "trg_pours_no_update" },
         { type: "trigger", name: "trg_tap_assignment_lifecycles_immutable_fields" },
         { type: "trigger", name: "trg_tap_assignment_lifecycles_no_open_reason" },
         { type: "trigger", name: "trg_tap_assignment_lifecycles_no_update_closed" },
         { type: "trigger", name: "trg_taps_first_used_at_monotonic" },
         { type: "trigger", name: "trg_taps_no_delete_if_used" },
         { type: "trigger", name: "trg_telemetry_assignment_delete_context" },
+        { type: "trigger", name: "trg_telemetry_epochs_close_once" },
         { type: "trigger", name: "trg_telemetry_fill_delete_context" },
         { type: "trigger", name: "trg_telemetry_measurements_no_update" },
         { type: "trigger", name: "trg_telemetry_measurements_validate_attribution" },
@@ -226,7 +245,7 @@ void test("a clean file database bootstraps the canonical v8 migration ledger", 
         "SELECT version, name, applied_at FROM schema_migrations ORDER BY version",
       )
       .all();
-    assert.equal(ledger.length, 8);
+    assert.equal(ledger.length, 9);
     assert.equal(ledger[0]?.version, FOUNDATION_SCHEMA_VERSION);
     assert.equal(ledger[0]?.name, FOUNDATION_INITIAL_MIGRATION_NAME);
     assert.equal(ledger[1]?.version, 2);
@@ -243,6 +262,8 @@ void test("a clean file database bootstraps the canonical v8 migration ledger", 
     assert.equal(ledger[6]?.name, "telemetry-sources-api-and-ingestion");
     assert.equal(ledger[7]?.version, 8);
     assert.equal(ledger[7]?.name, "forensic-qc-telemetry-integrity");
+    assert.equal(ledger[8]?.version, 9);
+    assert.equal(ledger[8]?.name, "telemetry-epochs-and-deterministic-pour-detector");
     assert.match(ledger[0]?.applied_at ?? "", /^\d{4}-\d{2}-\d{2}T/);
   } finally {
     database.close();
@@ -260,13 +281,13 @@ void test("an in-memory database bootstraps the same canonical schema", () => {
           "SELECT type, name FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%'",
         )
         .all().length,
-      92,
+      111,
     );
     assert.equal(
       database
         .prepare<[], { readonly count: number }>("SELECT count(*) AS count FROM schema_migrations")
         .get()?.count,
-      8,
+      9,
     );
   } finally {
     database.close();
@@ -368,7 +389,7 @@ void test("v2 outbound delivery lease fields reject one-sided stale values", () 
   }
 });
 
-void test("an exact v1 database upgrades to v8 with all ledger entries", (context) => {
+void test("an exact v1 database upgrades to v9 with all ledger entries", (context) => {
   const path = makeDatabasePath(context);
   openDatabase(path, { migrations: FOUNDATION_MIGRATIONS }).close();
   const database = openDatabase(path, { migrations: MIGRATIONS });
@@ -389,6 +410,7 @@ void test("an exact v1 database upgrades to v8 with all ledger entries", (contex
         { version: 6, name: "taps-and-assignment-lifecycles" },
         { version: 7, name: "telemetry-sources-api-and-ingestion" },
         { version: 8, name: "forensic-qc-telemetry-integrity" },
+        { version: 9, name: "telemetry-epochs-and-deterministic-pour-detector" },
       ],
     );
   } finally {
@@ -396,7 +418,7 @@ void test("an exact v1 database upgrades to v8 with all ledger entries", (contex
   }
 });
 
-void test("the pre-QC telemetry v7 schema upgrades to v8 without replacing persisted settings", (context) => {
+void test("the pre-QC telemetry v7 schema upgrades to v9 without replacing persisted settings", (context) => {
   const path = makeDatabasePath(context);
   const v7 = openDatabase(path, { migrations: MIGRATIONS.slice(0, 7) });
   v7.execute("UPDATE telemetry_settings SET max_batch_size = 50 WHERE id = 1");
@@ -404,7 +426,7 @@ void test("the pre-QC telemetry v7 schema upgrades to v8 without replacing persi
 
   const upgraded = openDatabase(path);
   try {
-    assert.equal(upgraded.pragma<number>("user_version", { simple: true }), 8);
+    assert.equal(upgraded.pragma<number>("user_version", { simple: true }), 9);
     assert.equal(
       upgraded
         .prepare<[], { readonly max_batch_size: number }>(
@@ -425,11 +447,67 @@ void test("the pre-QC telemetry v7 schema upgrades to v8 without replacing persi
       upgraded
         .prepare<[], { readonly count: number }>("SELECT count(*) AS count FROM schema_migrations")
         .get()?.count,
-      8,
+      9,
     );
   } finally {
     upgraded.close();
   }
+});
+
+void test("a canonical v8 database validates before upgrading once to v9", (context) => {
+  const path = makeDatabasePath(context);
+  const v8 = openDatabase(path, { migrations: MIGRATIONS.slice(0, 8) });
+  v8.execute("UPDATE telemetry_settings SET max_batch_size = 50 WHERE id = 1");
+  v8.close();
+
+  const upgraded = openDatabase(path);
+  try {
+    assert.equal(upgraded.pragma<number>("user_version", { simple: true }), 9);
+    assert.equal(
+      upgraded
+        .prepare<[], { readonly max_batch_size: number }>(
+          "SELECT max_batch_size FROM telemetry_settings WHERE id = 1",
+        )
+        .get()?.max_batch_size,
+      50,
+    );
+    assert.equal(
+      upgraded
+        .prepare<[], { readonly count: number }>(
+          "SELECT count(*) AS count FROM detector_global_config WHERE id = 1",
+        )
+        .get()?.count,
+      1,
+    );
+    assert.deepEqual(
+      upgraded
+        .prepare<[], { readonly version: number }>(
+          "SELECT version FROM schema_migrations WHERE version = 9",
+        )
+        .all(),
+      [{ version: 9 }],
+    );
+  } finally {
+    upgraded.close();
+  }
+});
+
+void test("a corrupt canonical v8 database is rejected before migration 9 can mutate it", (context) => {
+  const path = makeDatabasePath(context);
+  openDatabase(path, { migrations: MIGRATIONS.slice(0, 8) }).close();
+  withFixture(path, (database) => {
+    database.exec("DROP TRIGGER trg_telemetry_measurements_no_update");
+  });
+
+  assert.throws(() => openDatabase(path), /schema objects do not match|invalid DDL/);
+  withFixture(path, (database) => {
+    assert.equal(readUserVersion(database), 8);
+    assert.equal(
+      readSchemaObjects(database).some(({ name }) => name === "telemetry_epochs"),
+      false,
+    );
+    assert.equal(readLedger(database).length, 8);
+  });
 });
 
 void test("a corrupt canonical v6 database is rejected before migration 7 can mutate it", (context) => {
@@ -458,17 +536,17 @@ void test("a canonical database missing required telemetry settings is rejected 
   assert.throws(() => openDatabase(path), /required telemetry_settings state is missing/);
 });
 
-void test("canonical v8 reopen rejects an extra user object", (context) => {
+void test("canonical v9 reopen rejects an extra user object", (context) => {
   const path = makeDatabasePath(context);
   openDatabase(path, { migrations: MIGRATIONS }).close();
-  withFixture(path, (database) => database.exec("CREATE TABLE unexpected_v8_table (id INTEGER)"));
+  withFixture(path, (database) => database.exec("CREATE TABLE unexpected_v9_table (id INTEGER)"));
   assert.throws(
     () => openDatabase(path, { migrations: MIGRATIONS }),
     /schema objects do not match|unexpected schema objects/,
   );
 });
 
-void test("v8 validation rejects a tampered DDL definition on reopen", (context) => {
+void test("v9 validation rejects a tampered DDL definition on reopen", (context) => {
   const path = makeDatabasePath(context);
   openDatabase(path, { migrations: MIGRATIONS }).close();
   withFixture(path, (database) => {
@@ -495,14 +573,14 @@ void test("a current database reopens idempotently", (context) => {
       reopened
         .prepare<[], { readonly count: number }>("SELECT count(*) AS count FROM schema_migrations")
         .get()?.count,
-      8,
+      9,
     );
   } finally {
     reopened.close();
   }
 });
 
-void test("a clean version 0 database upgrades through the canonical v8 schema", (context) => {
+void test("a clean version 0 database upgrades through the canonical v9 schema", (context) => {
   const path = makeDatabasePath(context);
   withFixture(path, (database) => assert.equal(readUserVersion(database), 0));
 
@@ -510,7 +588,7 @@ void test("a clean version 0 database upgrades through the canonical v8 schema",
 
   withFixture(path, (database) => {
     assert.equal(readUserVersion(database), CURRENT_SCHEMA_VERSION);
-    assert.equal(readSchemaObjects(database).length, 92);
+    assert.equal(readSchemaObjects(database).length, 111);
   });
 });
 
@@ -546,12 +624,12 @@ void test("migration definitions must be contiguous with nonempty unique names",
 
 void test("an unsupported future schema is rejected without mutation", (context) => {
   const path = makeDatabasePath(context);
-  withFixture(path, (database) => database.exec("PRAGMA user_version = 9"));
+  withFixture(path, (database) => database.exec("PRAGMA user_version = 10"));
 
   assert.throws(() => openDatabase(path), /schema version is newer/);
 
   withFixture(path, (database) => {
-    assert.equal(readUserVersion(database), 9);
+    assert.equal(readUserVersion(database), 10);
     assert.deepEqual(readSchemaObjects(database), []);
   });
 });

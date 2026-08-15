@@ -88,6 +88,7 @@ export interface KegCorrectionEvent {
   readonly newCapacityMl: number;
   readonly previousTareG: number;
   readonly newTareG: number;
+  readonly changedAt: string;
 }
 
 export type KegCorrectionHook = (database: DatabaseExecutor, event: KegCorrectionEvent) => void;
