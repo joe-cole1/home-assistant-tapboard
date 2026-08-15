@@ -1,4 +1,7 @@
-import type { DatabaseExecutor } from "../../../infrastructure/database/connection.ts";
+import {
+  assertSynchronousCompletion,
+  type DatabaseExecutor,
+} from "../../../infrastructure/database/connection.ts";
 import type { SecretsService } from "../../secrets/service.ts";
 import { appendActivity } from "../../activity/operations.ts";
 import {
@@ -7,11 +10,16 @@ import {
   listBrewfatherAccounts,
   listCandidates,
   readBrewfatherAccount,
+  readBeverageSettings,
+  readPresentationOverrides,
+  readSourceProfile,
   saveRecipeSnapshot,
   updateBeverageLinkState,
   upsertCandidate,
   upsertSourceProfile,
 } from "../repository.ts";
+import { resolveBeverageDensity } from "../density.ts";
+import { resolveLinkedPresentation } from "../presentation.ts";
 import { BrewfatherAdapter } from "./adapter.ts";
 import {
   STATUS_SET,
@@ -20,7 +28,11 @@ import {
   sanitizeErrorMessage,
   sanitizeRecipeSnapshot,
 } from "./sanitizer.ts";
-import type { BrewfatherAccount } from "../types.ts";
+import type {
+  BeverageDensityExtensionPort,
+  BrewfatherAccount,
+  DensityResolution,
+} from "../types.ts";
 
 export interface SyncResult {
   readonly accountId: string;
@@ -36,6 +48,8 @@ export interface SyncOptions {
   readonly now?: () => Date;
   readonly fetchFn?: typeof fetch;
   readonly origin?: string;
+  /** Internal Beverage-owned synchronous extension seam; not exposed by HTTP. */
+  readonly densityExtensionPort?: BeverageDensityExtensionPort;
 }
 
 export class BrewfatherSyncCoordinator {
@@ -201,8 +215,19 @@ export class BrewfatherSyncCoordinator {
 
         // Synchronously persist coherent local state for this ONE linked beverage in a transaction
         database.withTransaction(() => {
+          const settings = readBeverageSettings(database);
+          const previousSourceProfile = readSourceProfile(database, link.beverageId);
+          const previousDensity = previousSourceProfile
+            ? resolveBeverageDensity(
+                resolveLinkedPresentation(
+                  previousSourceProfile,
+                  readPresentationOverrides(database, link.beverageId),
+                ),
+                settings.fallbackFg,
+              )
+            : undefined;
           if (sanitizedProfile !== null) {
-            upsertSourceProfile(database, {
+            const nextSourceProfile = {
               beverageId: link.beverageId,
               name: sanitizedProfile.name,
               beverageType: sanitizedProfile.beverageType,
@@ -217,7 +242,25 @@ export class BrewfatherSyncCoordinator {
               rawSourceJson: sanitizedProfile.rawSourceJson,
               sourceFingerprint: sanitizedProfile.sourceFingerprint,
               updatedAt: nowIso,
-            });
+            } as const;
+            upsertSourceProfile(database, nextSourceProfile);
+            if (previousDensity !== undefined) {
+              const nextDensity = resolveBeverageDensity(
+                resolveLinkedPresentation(
+                  nextSourceProfile,
+                  readPresentationOverrides(database, link.beverageId),
+                ),
+                settings.fallbackFg,
+              );
+              this.#notifyDensityChanged(
+                database,
+                options.densityExtensionPort,
+                link.beverageId,
+                previousDensity,
+                nextDensity,
+                nowIso,
+              );
+            }
           }
 
           if (sanitizedRecipe !== null) {
@@ -333,6 +376,26 @@ export class BrewfatherSyncCoordinator {
     };
   }
 
+  #notifyDensityChanged(
+    database: DatabaseExecutor,
+    port: BeverageDensityExtensionPort | undefined,
+    beverageId: string,
+    previousDensity: DensityResolution,
+    newDensity: DensityResolution,
+    changedAt: string,
+  ): void {
+    if (previousDensity.densityGPerMl === newDensity.densityGPerMl) return;
+    assertSynchronousCompletion(
+      (port ?? { onEffectiveDensityChanged: () => undefined }).onEffectiveDensityChanged(database, {
+        beverageId,
+        previousDensity,
+        newDensity,
+        changedAt,
+      }),
+      "Beverage density extensions",
+    );
+  }
+
   async completeBatch(
     database: DatabaseExecutor,
     secretsService: SecretsService,
@@ -344,7 +407,10 @@ export class BrewfatherSyncCoordinator {
   }> {
     const link = listBeverageLinks(database).find((l) => l.beverageId === beverageId);
     if (!link) {
-      return { outcome: "not_applicable", message: "Beverage is not linked to Brewfather" };
+      return {
+        outcome: "not_applicable",
+        message: "Beverage is not linked to Brewfather",
+      };
     }
 
     const account = readBrewfatherAccount(database, link.accountId);
@@ -359,7 +425,10 @@ export class BrewfatherSyncCoordinator {
     try {
       apiKey = secretsService.revealPrivileged("brewfather", account.id, "api_key");
     } catch {
-      return { outcome: "failed", message: "Brewfather credentials unavailable" };
+      return {
+        outcome: "failed",
+        message: "Brewfather credentials unavailable",
+      };
     }
 
     const adapter = this.#getOrCreateAdapter(account, apiKey, options);
@@ -388,7 +457,10 @@ export class BrewfatherSyncCoordinator {
 
       // Step 2: PATCH batch status -> "Completed"
       await adapter.updateBatchStatus(link.sourceBatchId, "Completed");
-      return { outcome: "completed", message: "Batch status updated to Completed" };
+      return {
+        outcome: "completed",
+        message: "Batch status updated to Completed",
+      };
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : "Brewfather request failed";
       const safeMsg = sanitizeErrorMessage(msg, 255);

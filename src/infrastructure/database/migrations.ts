@@ -16,7 +16,9 @@ export const TELEMETRY_SCHEMA_VERSION = 7;
 export const TELEMETRY_MIGRATION_NAME = "telemetry-sources-api-and-ingestion";
 export const FORENSIC_QC_SCHEMA_VERSION = 8;
 export const FORENSIC_QC_MIGRATION_NAME = "forensic-qc-telemetry-integrity";
-export const CURRENT_SCHEMA_VERSION = FORENSIC_QC_SCHEMA_VERSION;
+export const TELEMETRY_EPOCHS_SCHEMA_VERSION = 9;
+export const TELEMETRY_EPOCHS_MIGRATION_NAME = "telemetry-epochs-and-deterministic-pour-detector";
+export const CURRENT_SCHEMA_VERSION = TELEMETRY_EPOCHS_SCHEMA_VERSION;
 
 export interface MigrationDefinition {
   readonly version: number;
@@ -964,6 +966,108 @@ export const FORENSIC_QC_SCHEMA_SQL = `
     END;
 `;
 
+const DETECTOR_CONFIG_COLUMNS_SQL = `
+    candidate_loss_ml REAL NOT NULL CHECK (typeof(candidate_loss_ml) IN ('integer', 'real') AND candidate_loss_ml > 0),
+    candidate_samples INTEGER NOT NULL CHECK (typeof(candidate_samples) = 'integer' AND candidate_samples >= 1),
+    candidate_sample_window_ms INTEGER NOT NULL CHECK (typeof(candidate_sample_window_ms) = 'integer' AND candidate_sample_window_ms >= 0),
+    candidate_lookback_ms INTEGER NOT NULL CHECK (typeof(candidate_lookback_ms) = 'integer' AND candidate_lookback_ms >= 0),
+    arbitration_ms INTEGER NOT NULL CHECK (typeof(arbitration_ms) = 'integer' AND arbitration_ms >= 0),
+    arbitration_minimum_ml REAL NOT NULL CHECK (typeof(arbitration_minimum_ml) IN ('integer', 'real') AND arbitration_minimum_ml > 0),
+    arbitration_dominance_ratio REAL NOT NULL CHECK (typeof(arbitration_dominance_ratio) IN ('integer', 'real') AND arbitration_dominance_ratio >= 1),
+    meaningful_flow_ml REAL NOT NULL CHECK (typeof(meaningful_flow_ml) IN ('integer', 'real') AND meaningful_flow_ml > 0),
+    quiet_period_ms INTEGER NOT NULL CHECK (typeof(quiet_period_ms) = 'integer' AND quiet_period_ms >= 0),
+    hard_timeout_ms INTEGER NOT NULL CHECK (typeof(hard_timeout_ms) = 'integer' AND hard_timeout_ms > 0),
+    minimum_pour_ml REAL NOT NULL CHECK (typeof(minimum_pour_ml) IN ('integer', 'real') AND minimum_pour_ml > 0),
+    implausible_jump_ml REAL NOT NULL CHECK (typeof(implausible_jump_ml) IN ('integer', 'real') AND implausible_jump_ml > 0),
+    jump_stable_samples INTEGER NOT NULL CHECK (typeof(jump_stable_samples) = 'integer' AND jump_stable_samples >= 1),
+    jump_stable_span_ms INTEGER NOT NULL CHECK (typeof(jump_stable_span_ms) = 'integer' AND jump_stable_span_ms >= 0),
+    jump_band_ml REAL NOT NULL CHECK (typeof(jump_band_ml) IN ('integer', 'real') AND jump_band_ml >= 0),
+    baseline_samples INTEGER NOT NULL CHECK (typeof(baseline_samples) = 'integer' AND baseline_samples >= 1),
+    baseline_span_ms INTEGER NOT NULL CHECK (typeof(baseline_span_ms) = 'integer' AND baseline_span_ms >= 0),
+    baseline_band_ml REAL NOT NULL CHECK (typeof(baseline_band_ml) IN ('integer', 'real') AND baseline_band_ml >= 0),
+    settled_samples INTEGER NOT NULL CHECK (typeof(settled_samples) = 'integer' AND settled_samples >= 1),
+    settled_span_ms INTEGER NOT NULL CHECK (typeof(settled_span_ms) = 'integer' AND settled_span_ms >= 0),
+    settled_band_ml REAL NOT NULL CHECK (typeof(settled_band_ml) IN ('integer', 'real') AND settled_band_ml >= 0),
+    cooldown_ms INTEGER NOT NULL CHECK (typeof(cooldown_ms) = 'integer' AND cooldown_ms >= 0),
+    history_ms INTEGER NOT NULL CHECK (typeof(history_ms) = 'integer' AND history_ms > 0)`;
+const DETECTOR_CONFIG_CONSTRAINTS_SQL = `
+    CHECK (candidate_sample_window_ms <= candidate_lookback_ms),
+    CHECK (hard_timeout_ms >= quiet_period_ms),
+    CHECK (history_ms >= candidate_lookback_ms)`;
+const NULLABLE_DETECTOR_CONFIG_COLUMNS_SQL = `
+    candidate_loss_ml REAL CHECK (candidate_loss_ml IS NULL OR (typeof(candidate_loss_ml) IN ('integer', 'real') AND candidate_loss_ml > 0)),
+    candidate_samples INTEGER CHECK (candidate_samples IS NULL OR (typeof(candidate_samples) = 'integer' AND candidate_samples >= 1)),
+    candidate_sample_window_ms INTEGER CHECK (candidate_sample_window_ms IS NULL OR (typeof(candidate_sample_window_ms) = 'integer' AND candidate_sample_window_ms >= 0)),
+    candidate_lookback_ms INTEGER CHECK (candidate_lookback_ms IS NULL OR (typeof(candidate_lookback_ms) = 'integer' AND candidate_lookback_ms >= 0)),
+    arbitration_ms INTEGER CHECK (arbitration_ms IS NULL OR (typeof(arbitration_ms) = 'integer' AND arbitration_ms >= 0)),
+    arbitration_minimum_ml REAL CHECK (arbitration_minimum_ml IS NULL OR (typeof(arbitration_minimum_ml) IN ('integer', 'real') AND arbitration_minimum_ml > 0)),
+    arbitration_dominance_ratio REAL CHECK (arbitration_dominance_ratio IS NULL OR (typeof(arbitration_dominance_ratio) IN ('integer', 'real') AND arbitration_dominance_ratio >= 1)),
+    meaningful_flow_ml REAL CHECK (meaningful_flow_ml IS NULL OR (typeof(meaningful_flow_ml) IN ('integer', 'real') AND meaningful_flow_ml > 0)),
+    quiet_period_ms INTEGER CHECK (quiet_period_ms IS NULL OR (typeof(quiet_period_ms) = 'integer' AND quiet_period_ms >= 0)),
+    hard_timeout_ms INTEGER CHECK (hard_timeout_ms IS NULL OR (typeof(hard_timeout_ms) = 'integer' AND hard_timeout_ms > 0)),
+    minimum_pour_ml REAL CHECK (minimum_pour_ml IS NULL OR (typeof(minimum_pour_ml) IN ('integer', 'real') AND minimum_pour_ml > 0)),
+    implausible_jump_ml REAL CHECK (implausible_jump_ml IS NULL OR (typeof(implausible_jump_ml) IN ('integer', 'real') AND implausible_jump_ml > 0)),
+    jump_stable_samples INTEGER CHECK (jump_stable_samples IS NULL OR (typeof(jump_stable_samples) = 'integer' AND jump_stable_samples >= 1)),
+    jump_stable_span_ms INTEGER CHECK (jump_stable_span_ms IS NULL OR (typeof(jump_stable_span_ms) = 'integer' AND jump_stable_span_ms >= 0)),
+    jump_band_ml REAL CHECK (jump_band_ml IS NULL OR (typeof(jump_band_ml) IN ('integer', 'real') AND jump_band_ml >= 0)),
+    baseline_samples INTEGER CHECK (baseline_samples IS NULL OR (typeof(baseline_samples) = 'integer' AND baseline_samples >= 1)),
+    baseline_span_ms INTEGER CHECK (baseline_span_ms IS NULL OR (typeof(baseline_span_ms) = 'integer' AND baseline_span_ms >= 0)),
+    baseline_band_ml REAL CHECK (baseline_band_ml IS NULL OR (typeof(baseline_band_ml) IN ('integer', 'real') AND baseline_band_ml >= 0)),
+    settled_samples INTEGER CHECK (settled_samples IS NULL OR (typeof(settled_samples) = 'integer' AND settled_samples >= 1)),
+    settled_span_ms INTEGER CHECK (settled_span_ms IS NULL OR (typeof(settled_span_ms) = 'integer' AND settled_span_ms >= 0)),
+    settled_band_ml REAL CHECK (settled_band_ml IS NULL OR (typeof(settled_band_ml) IN ('integer', 'real') AND settled_band_ml >= 0)),
+    cooldown_ms INTEGER CHECK (cooldown_ms IS NULL OR (typeof(cooldown_ms) = 'integer' AND cooldown_ms >= 0)),
+    history_ms INTEGER CHECK (history_ms IS NULL OR (typeof(history_ms) = 'integer' AND history_ms > 0))`;
+
+export const TELEMETRY_EPOCHS_SCHEMA_SQL = `
+  CREATE TABLE detector_global_config (
+    id INTEGER PRIMARY KEY CHECK (id = 1), revision INTEGER NOT NULL CHECK (revision >= 1),
+    ${DETECTOR_CONFIG_COLUMNS_SQL}, updated_at TEXT NOT NULL, ${DETECTOR_CONFIG_CONSTRAINTS_SQL}
+  );
+  CREATE TABLE detector_tap_overrides (
+    tap_id TEXT PRIMARY KEY REFERENCES taps(id) ON DELETE CASCADE, revision INTEGER NOT NULL CHECK (revision >= 1),
+    ${NULLABLE_DETECTOR_CONFIG_COLUMNS_SQL}, updated_at TEXT NOT NULL
+  );
+  CREATE TABLE detector_arbitration_groups (
+    id TEXT PRIMARY KEY, name TEXT NOT NULL CHECK (length(CAST(name AS BLOB)) BETWEEN 1 AND 128), created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+  );
+  CREATE UNIQUE INDEX idx_detector_arbitration_groups_name_ci ON detector_arbitration_groups (lower(name));
+  CREATE TABLE detector_arbitration_members (
+    tap_id TEXT PRIMARY KEY REFERENCES taps(id) ON DELETE CASCADE, group_id TEXT NOT NULL REFERENCES detector_arbitration_groups(id) ON DELETE CASCADE, joined_at TEXT NOT NULL
+  );
+  CREATE INDEX idx_detector_arbitration_members_group_id ON detector_arbitration_members (group_id);
+  CREATE TABLE telemetry_epochs (
+    id TEXT PRIMARY KEY, tap_id TEXT NOT NULL REFERENCES taps(id) ON DELETE CASCADE, source_id TEXT REFERENCES telemetry_sources(id) ON DELETE RESTRICT, fill_id TEXT NOT NULL REFERENCES fills(id) ON DELETE CASCADE, assignment_id TEXT NOT NULL REFERENCES tap_assignment_lifecycles(id) ON DELETE CASCADE, keg_id TEXT NOT NULL REFERENCES kegs(id) ON DELETE CASCADE,
+    capacity_ml REAL NOT NULL CHECK (typeof(capacity_ml) IN ('integer','real') AND capacity_ml > 0), tare_g REAL NOT NULL CHECK (typeof(tare_g) IN ('integer','real') AND tare_g >= 0), density_g_per_ml REAL NOT NULL CHECK (typeof(density_g_per_ml) IN ('integer','real') AND density_g_per_ml > 0), density_source TEXT NOT NULL CHECK (density_source IN ('manual_override','fg_derived','fallback_fg')), normalization_version INTEGER NOT NULL CHECK (normalization_version = 1), detector_config_version TEXT NOT NULL CHECK (length(CAST(detector_config_version AS BLOB)) > 0), global_config_revision INTEGER NOT NULL CHECK (global_config_revision >= 1), tap_override_revision INTEGER CHECK (tap_override_revision >= 1),
+    ${DETECTOR_CONFIG_COLUMNS_SQL}, arbitration_group_id TEXT REFERENCES detector_arbitration_groups(id) ON DELETE RESTRICT, started_at TEXT NOT NULL, started_at_epoch_ms INTEGER NOT NULL, ended_at TEXT, ended_at_epoch_ms INTEGER, close_reason TEXT CHECK (close_reason IS NULL OR close_reason IN ('assignment_unassigned','assignment_moved','fill_ended','source_changed','capacity_changed','tare_changed','density_changed','detector_config_changed','manual_rebaseline','arbitration_changed')),
+    ${DETECTOR_CONFIG_CONSTRAINTS_SQL},
+    CHECK ((ended_at IS NULL AND ended_at_epoch_ms IS NULL AND close_reason IS NULL) OR (ended_at IS NOT NULL AND ended_at_epoch_ms IS NOT NULL AND close_reason IS NOT NULL AND ended_at_epoch_ms >= started_at_epoch_ms))
+  );
+  CREATE UNIQUE INDEX idx_telemetry_epochs_open_tap ON telemetry_epochs (tap_id) WHERE ended_at IS NULL;
+  CREATE INDEX idx_telemetry_epochs_fill_id ON telemetry_epochs (fill_id);
+  CREATE INDEX idx_telemetry_epochs_assignment_id ON telemetry_epochs (assignment_id);
+  CREATE INDEX idx_telemetry_epochs_started_at ON telemetry_epochs (started_at_epoch_ms);
+  CREATE TRIGGER trg_telemetry_epochs_close_once BEFORE UPDATE ON telemetry_epochs FOR EACH ROW WHEN NOT (OLD.ended_at IS NULL AND NEW.ended_at IS NOT NULL AND NEW.id = OLD.id AND NEW.tap_id = OLD.tap_id AND NEW.source_id IS OLD.source_id AND NEW.fill_id = OLD.fill_id AND NEW.assignment_id = OLD.assignment_id AND NEW.keg_id = OLD.keg_id AND NEW.capacity_ml = OLD.capacity_ml AND NEW.tare_g = OLD.tare_g AND NEW.density_g_per_ml = OLD.density_g_per_ml AND NEW.density_source = OLD.density_source AND NEW.normalization_version = OLD.normalization_version AND NEW.detector_config_version = OLD.detector_config_version AND NEW.global_config_revision = OLD.global_config_revision AND NEW.tap_override_revision IS OLD.tap_override_revision AND NEW.arbitration_group_id IS OLD.arbitration_group_id AND NEW.started_at = OLD.started_at AND NEW.started_at_epoch_ms = OLD.started_at_epoch_ms AND NEW.candidate_loss_ml = OLD.candidate_loss_ml AND NEW.candidate_samples = OLD.candidate_samples AND NEW.candidate_sample_window_ms = OLD.candidate_sample_window_ms AND NEW.candidate_lookback_ms = OLD.candidate_lookback_ms AND NEW.arbitration_ms = OLD.arbitration_ms AND NEW.arbitration_minimum_ml = OLD.arbitration_minimum_ml AND NEW.arbitration_dominance_ratio = OLD.arbitration_dominance_ratio AND NEW.meaningful_flow_ml = OLD.meaningful_flow_ml AND NEW.quiet_period_ms = OLD.quiet_period_ms AND NEW.hard_timeout_ms = OLD.hard_timeout_ms AND NEW.minimum_pour_ml = OLD.minimum_pour_ml AND NEW.implausible_jump_ml = OLD.implausible_jump_ml AND NEW.jump_stable_samples = OLD.jump_stable_samples AND NEW.jump_stable_span_ms = OLD.jump_stable_span_ms AND NEW.jump_band_ml = OLD.jump_band_ml AND NEW.baseline_samples = OLD.baseline_samples AND NEW.baseline_span_ms = OLD.baseline_span_ms AND NEW.baseline_band_ml = OLD.baseline_band_ml AND NEW.settled_samples = OLD.settled_samples AND NEW.settled_span_ms = OLD.settled_span_ms AND NEW.settled_band_ml = OLD.settled_band_ml AND NEW.cooldown_ms = OLD.cooldown_ms AND NEW.history_ms = OLD.history_ms) BEGIN SELECT RAISE(ABORT, 'telemetry epochs are immutable after close'); END;
+  CREATE TABLE telemetry_epoch_state (
+    epoch_id TEXT PRIMARY KEY REFERENCES telemetry_epochs(id) ON DELETE CASCADE, phase TEXT NOT NULL CHECK (phase IN ('waiting_for_measurement','ready','candidate','pouring','cooldown','warning','closed')), baseline_volume_ml REAL, baseline_at_epoch_ms INTEGER, last_measurement_id TEXT, last_measured_at_epoch_ms INTEGER, last_primary_kind TEXT CHECK (last_primary_kind IS NULL OR last_primary_kind IN ('total_weight','remaining_volume','fill_percentage')), last_primary_value REAL, last_temperature_c REAL, last_interpreted_volume_ml REAL, last_stabilized_volume_ml REAL, last_public_volume_ml REAL, last_diagnostic_code TEXT CHECK (last_diagnostic_code IS NULL OR last_diagnostic_code IN ('ok','below_tare','negative_volume','above_capacity','implausible_jump')), candidate_session_id TEXT, candidate_started_at_epoch_ms INTEGER, candidate_baseline_volume_ml REAL, candidate_loss_ml REAL, arbitration_deadline_epoch_ms INTEGER, lowest_flow_volume_ml REAL, last_meaningful_flow_at_epoch_ms INTEGER, quiet_since_epoch_ms INTEGER, timeout_at_epoch_ms INTEGER, cooldown_until_epoch_ms INTEGER, warning_code TEXT CHECK (warning_code IS NULL OR warning_code = 'implausible_jump'), warning_activity_flag INTEGER NOT NULL DEFAULT 0 CHECK (warning_activity_flag IN (0,1)), warning_started_at_epoch_ms INTEGER, warning_reference_volume_ml REAL, last_cancellation_reason TEXT CHECK (last_cancellation_reason IS NULL OR last_cancellation_reason IN ('rebound','timeout','jump','arbitration')), updated_at TEXT NOT NULL,
+    CHECK ((baseline_volume_ml IS NULL) = (baseline_at_epoch_ms IS NULL)),
+    CHECK ((phase IN ('candidate','pouring') AND candidate_session_id IS NOT NULL AND candidate_started_at_epoch_ms IS NOT NULL AND candidate_baseline_volume_ml IS NOT NULL AND candidate_loss_ml IS NOT NULL) OR (phase NOT IN ('candidate','pouring') AND candidate_session_id IS NULL AND candidate_started_at_epoch_ms IS NULL AND candidate_baseline_volume_ml IS NULL AND candidate_loss_ml IS NULL)),
+    CHECK ((phase = 'warning' AND warning_code = 'implausible_jump' AND warning_activity_flag = 1 AND warning_started_at_epoch_ms IS NOT NULL AND warning_reference_volume_ml IS NOT NULL) OR (phase <> 'warning' AND warning_code IS NULL AND warning_activity_flag = 0 AND warning_started_at_epoch_ms IS NULL AND warning_reference_volume_ml IS NULL)),
+    CHECK ((phase = 'cooldown') = (cooldown_until_epoch_ms IS NOT NULL)),
+    CHECK ((phase = 'pouring') = (timeout_at_epoch_ms IS NOT NULL))
+  );
+  CREATE TABLE telemetry_epoch_samples (
+    epoch_id TEXT NOT NULL REFERENCES telemetry_epochs(id) ON DELETE CASCADE, measurement_id TEXT NOT NULL, measured_at_epoch_ms INTEGER NOT NULL, interpreted_volume_ml REAL NOT NULL CHECK (typeof(interpreted_volume_ml) IN ('integer','real') AND interpreted_volume_ml = interpreted_volume_ml), PRIMARY KEY (epoch_id, measurement_id), UNIQUE (epoch_id, measured_at_epoch_ms)
+  );
+  CREATE INDEX idx_telemetry_epoch_samples_epoch_time ON telemetry_epoch_samples (epoch_id, measured_at_epoch_ms);
+  CREATE TABLE pours (
+    id TEXT PRIMARY KEY, effect_key TEXT NOT NULL UNIQUE, fill_id TEXT NOT NULL REFERENCES fills(id) ON DELETE CASCADE, tap_id TEXT NOT NULL REFERENCES taps(id) ON DELETE CASCADE, assignment_id TEXT NOT NULL REFERENCES tap_assignment_lifecycles(id) ON DELETE CASCADE, epoch_id TEXT NOT NULL REFERENCES telemetry_epochs(id) ON DELETE CASCADE, detector_session_id TEXT NOT NULL, canonical_volume_ml REAL NOT NULL CHECK (typeof(canonical_volume_ml) IN ('integer','real') AND canonical_volume_ml > 0), started_at TEXT NOT NULL, completed_at TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE (epoch_id, detector_session_id)
+  );
+  CREATE INDEX idx_pours_fill_id ON pours (fill_id);
+  CREATE INDEX idx_pours_tap_completed_at ON pours (tap_id, completed_at);
+  CREATE TRIGGER trg_pours_no_update BEFORE UPDATE ON pours BEGIN SELECT RAISE(ABORT, 'pours are immutable'); END;
+`;
+
 const SECURITY_ACTIVITY_OUTBOX_SCHEMA_OBJECTS = [
   ["table", "admin_credentials"],
   ["table", "activity_log"],
@@ -1081,6 +1185,29 @@ const FORENSIC_QC_SCHEMA_OBJECTS = [
   ["trigger", "trg_telemetry_receipts_no_update"],
   ["trigger", "trg_telemetry_source_tap_status_validate_insert"],
   ["trigger", "trg_telemetry_source_tap_status_validate_update"],
+] as const;
+
+const TELEMETRY_EPOCHS_SCHEMA_OBJECTS = [
+  ...FORENSIC_QC_SCHEMA_OBJECTS,
+  ["table", "detector_global_config"],
+  ["table", "detector_tap_overrides"],
+  ["table", "detector_arbitration_groups"],
+  ["table", "detector_arbitration_members"],
+  ["table", "telemetry_epochs"],
+  ["table", "telemetry_epoch_state"],
+  ["table", "telemetry_epoch_samples"],
+  ["table", "pours"],
+  ["index", "idx_detector_arbitration_groups_name_ci"],
+  ["index", "idx_detector_arbitration_members_group_id"],
+  ["index", "idx_telemetry_epochs_open_tap"],
+  ["index", "idx_telemetry_epochs_fill_id"],
+  ["index", "idx_telemetry_epochs_assignment_id"],
+  ["index", "idx_telemetry_epochs_started_at"],
+  ["index", "idx_telemetry_epoch_samples_epoch_time"],
+  ["index", "idx_pours_fill_id"],
+  ["index", "idx_pours_tap_completed_at"],
+  ["trigger", "trg_telemetry_epochs_close_once"],
+  ["trigger", "trg_pours_no_update"],
 ] as const;
 
 function splitSqlStatements(sql: string): string[] {
@@ -1922,6 +2049,31 @@ function validateTelemetrySchema(database: DatabaseExecutor): void {
   );
 }
 
+function validateTelemetryEpochsSchema(database: DatabaseExecutor): void {
+  validateTelemetrySchemaDefinition(
+    database,
+    TELEMETRY_EPOCHS_SCHEMA_OBJECTS,
+    `${FORENSIC_QC_SCHEMA_SQL}\n${TELEMETRY_EPOCHS_SCHEMA_SQL}`,
+    TELEMETRY_EPOCHS_SCHEMA_VERSION,
+  );
+  // DDL comparison above is authoritative; these PRAGMA checks additionally guard
+  // against SQLite declaration/column metadata drift in the detector tables.
+  for (const table of [
+    "detector_global_config",
+    "detector_tap_overrides",
+    "detector_arbitration_groups",
+    "detector_arbitration_members",
+    "telemetry_epochs",
+    "telemetry_epoch_state",
+    "telemetry_epoch_samples",
+    "pours",
+  ]) {
+    if (database.pragma<TableColumnRow[]>(`table_info(${table})`).length === 0) {
+      throw incompatibleSchema(`schema table ${table} has invalid columns`);
+    }
+  }
+}
+
 function validatePhysicalKegsSchema(database: DatabaseExecutor): void {
   const expected = new Map(
     PHYSICAL_KEGS_SCHEMA_OBJECTS.map(([type, name]) => [`${type}:${name}`, type]),
@@ -2089,6 +2241,22 @@ export const FORENSIC_QC_MIGRATION: MigrationDefinition = {
   },
 };
 
+function seedDetectorGlobalConfig(database: DatabaseExecutor): void {
+  database.execute(
+    `INSERT INTO detector_global_config (id, revision, candidate_loss_ml, candidate_samples, candidate_sample_window_ms, candidate_lookback_ms, arbitration_ms, arbitration_minimum_ml, arbitration_dominance_ratio, meaningful_flow_ml, quiet_period_ms, hard_timeout_ms, minimum_pour_ml, implausible_jump_ml, jump_stable_samples, jump_stable_span_ms, jump_band_ml, baseline_samples, baseline_span_ms, baseline_band_ml, settled_samples, settled_span_ms, settled_band_ml, cooldown_ms, history_ms, updated_at) VALUES (1, 1, 23.65882365, 3, 400, 3000, 400, 14.78676478125, 1.5, 5.9147059125, 5000, 15000, 29.5735295625, 887.205886875, 5, 3000, 14.78676478125, 5, 800, 8.87205886875, 5, 800, 8.87205886875, 5000, 6000, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`,
+  );
+}
+
+export const TELEMETRY_EPOCHS_MIGRATION: MigrationDefinition = {
+  version: TELEMETRY_EPOCHS_SCHEMA_VERSION,
+  name: TELEMETRY_EPOCHS_MIGRATION_NAME,
+  apply(database) {
+    database.execute(TELEMETRY_EPOCHS_SCHEMA_SQL);
+    seedDetectorGlobalConfig(database);
+    return undefined;
+  },
+};
+
 /** Canonical production migration list. Keep this array identity stable. */
 export const MIGRATIONS: readonly MigrationDefinition[] = [
   FOUNDATION_MIGRATIONS[0]!,
@@ -2099,6 +2267,7 @@ export const MIGRATIONS: readonly MigrationDefinition[] = [
   TAPS_MIGRATION,
   TELEMETRY_MIGRATION,
   FORENSIC_QC_MIGRATION,
+  TELEMETRY_EPOCHS_MIGRATION,
 ];
 
 // Compatibility aliases for callers that prefer an explicit application name.
@@ -2169,6 +2338,9 @@ function validateRequiredCanonicalState(database: DatabaseExecutor, version: num
   if (version >= TELEMETRY_SCHEMA_VERSION) {
     expectRequiredRows(database, "telemetry_settings", "id = 1", 1);
   }
+  if (version >= TELEMETRY_EPOCHS_SCHEMA_VERSION) {
+    expectRequiredRows(database, "detector_global_config", "id = 1", 1);
+  }
 }
 
 function validateCanonicalSchemaAtVersion(database: DatabaseExecutor, version: number): void {
@@ -2192,6 +2364,8 @@ function validateCanonicalSchemaAtVersion(database: DatabaseExecutor, version: n
     validateTelemetryV7Schema(database);
   } else if (version === FORENSIC_QC_SCHEMA_VERSION) {
     validateTelemetrySchema(database);
+  } else if (version === TELEMETRY_EPOCHS_SCHEMA_VERSION) {
+    validateTelemetryEpochsSchema(database);
   } else {
     throw incompatibleSchema("schema version is not a canonical Tapboard version");
   }
@@ -2231,7 +2405,13 @@ export function initializeSchema(
   }
   validateMigrationLedger(database, currentVersion, migrations);
 
-  if (migrations === MIGRATIONS && currentVersion === FORENSIC_QC_SCHEMA_VERSION) {
+  if (
+    isCanonicalMigrationPrefix(migrations) &&
+    currentVersion === TELEMETRY_EPOCHS_SCHEMA_VERSION
+  ) {
+    validateFoundationLedgerStructure(database);
+    validateTelemetryEpochsSchema(database);
+  } else if (currentVersion === FORENSIC_QC_SCHEMA_VERSION) {
     validateFoundationLedgerStructure(database);
     validateTelemetrySchema(database);
   } else if (currentVersion === TELEMETRY_SCHEMA_VERSION) {

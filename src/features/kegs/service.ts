@@ -207,6 +207,7 @@ export class KegService {
             newCapacityMl: nextCapacityMl,
             previousTareG: existing.currentTareG,
             newTareG: nextCurrentTareG,
+            changedAt: now,
           }),
           "Keg correction extensions",
         );

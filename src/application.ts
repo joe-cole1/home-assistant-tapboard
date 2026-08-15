@@ -28,6 +28,7 @@ import { createTapService } from "./features/taps/service.ts";
 import { registerTapRoutes } from "./features/taps/routes.ts";
 import { createMachineKeyService } from "./features/machine-keys/service.ts";
 import { TelemetryService, registerTelemetryRoutes } from "./features/telemetry/index.ts";
+import { DetectorService } from "./features/telemetry/detector-service.ts";
 import { createLogger, type Logger } from "./shared/logging.ts";
 
 type ApplicationState = "new" | "starting" | "ready" | "stopping" | "stopped" | "failed";
@@ -69,6 +70,7 @@ class FoundationApplication implements Application {
   #renderer: Renderer | undefined;
   #httpServer: HttpServerLifecycle | undefined;
   #beverageService: BeverageService | undefined;
+  #detectorService: DetectorService | undefined;
   #address: HttpServerAddress | undefined;
   #starting: Promise<HttpServerAddress> | undefined;
   #stopping: Promise<void> | undefined;
@@ -124,12 +126,17 @@ class FoundationApplication implements Application {
       const secretsService = createSecretsService(this.#database, {
         ...(this.#config.secretKey ? { rootKey: this.#config.secretKey } : {}),
       });
-      const kegService = createKegService(this.#database);
+      const detectorService = new DetectorService(this.#database);
+      this.#detectorService = detectorService;
+      const kegService = createKegService(this.#database, {
+        onKegCorrection: (database, event) => detectorService.onKegCorrection(database, event),
+      });
       const beverageService = createBeverageService(this.#database, {
         secretsService,
+        densityExtensionPort: detectorService,
       });
       this.#beverageService = beverageService;
-      const tapService = createTapService(this.#database);
+      const tapService = createTapService(this.#database, { extensionPort: detectorService });
       const fillService = createFillService(this.#database, {
         beverageService,
         assignmentPort: tapService.asFillAssignmentPort(),
@@ -138,6 +145,8 @@ class FoundationApplication implements Application {
       const telemetryService = new TelemetryService({
         database: this.#database,
         machineKeyService,
+        authorityExtensionPort: detectorService,
+        acceptedExtensionPort: detectorService,
       });
 
       const router = new Router(this.#logger);
@@ -156,7 +165,7 @@ class FoundationApplication implements Application {
       registerBeverageRoutes({ router, beverageService, authService });
       registerFillRoutes({ router, fillService, authService });
       registerTapRoutes({ router, tapService, authService });
-      registerTelemetryRoutes({ router, telemetryService, authService });
+      registerTelemetryRoutes({ router, telemetryService, detectorService, authService });
 
       this.#httpServer = this.#createHttpServer({
         router,
@@ -167,6 +176,9 @@ class FoundationApplication implements Application {
       if (this.#stopRequested) {
         throw new Error("Application startup was interrupted by shutdown");
       }
+      detectorService.startMaintenance({
+        onError: () => this.#logger.error("Detector maintenance failed"),
+      });
       this.#address = address;
       this.#state = "ready";
       beverageService.startPeriodicSync();
@@ -197,6 +209,13 @@ class FoundationApplication implements Application {
     try {
       this.#beverageService?.stopPeriodicSync();
       this.#beverageService = undefined;
+    } catch {
+      // Ignored
+    }
+
+    try {
+      this.#detectorService?.stopMaintenance();
+      this.#detectorService = undefined;
     } catch {
       // Ignored
     }
@@ -241,6 +260,13 @@ class FoundationApplication implements Application {
     try {
       this.#beverageService?.stopPeriodicSync();
       this.#beverageService = undefined;
+    } catch {
+      // Ignored
+    }
+
+    try {
+      this.#detectorService?.stopMaintenance();
+      this.#detectorService = undefined;
     } catch {
       // Ignored
     }

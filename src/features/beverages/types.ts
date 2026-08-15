@@ -1,4 +1,5 @@
 import type { ActivityActorType } from "../activity/types.ts";
+import type { DatabaseExecutor } from "../../infrastructure/database/connection.ts";
 
 export type ActorType = ActivityActorType;
 
@@ -218,11 +219,26 @@ export interface DensityResolution {
   readonly source: DensitySource;
 }
 
+export interface EffectiveDensityChangedEvent {
+  readonly beverageId: string;
+  readonly previousDensity: DensityResolution;
+  readonly newDensity: DensityResolution;
+  readonly changedAt: string;
+}
+
+/** Internal synchronous extension seam for effective beverage-density changes. */
+export interface BeverageDensityExtensionPort {
+  onEffectiveDensityChanged(database: DatabaseExecutor, event: EffectiveDensityChangedEvent): void;
+}
+
 export interface BeverageDeletionImpact {
   readonly beverageId: string;
   readonly name: string;
   readonly ownershipType: BeverageOwnershipType;
-  readonly impacts: readonly { readonly code: string; readonly count: number }[];
+  readonly impacts: readonly {
+    readonly code: string;
+    readonly count: number;
+  }[];
 }
 
 export interface CreateCustomBeverageInput {
