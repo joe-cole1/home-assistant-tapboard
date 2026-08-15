@@ -20,6 +20,7 @@ import {
   validateHealthConfig,
   validateHealthConfigOverride,
   validateHealthEvidence,
+  validateHealthEvaluationInput,
   type HealthConfigOverride,
   type HealthEvaluationInput,
 } from "../src/features/health/index.ts";
@@ -140,6 +141,7 @@ void test("config and evidence validators reject unknowns and unsafe cross-field
 void test("low keg uses canonical volume, exact threshold and settling boundaries", () => {
   const healthy = evaluateLowKeg(input({ currentEpoch: epoch({ stabilizedVolumeMl: 200 }) }));
   assert.equal(healthy.state, "healthy");
+  assert.equal(healthy.reason, "above_threshold");
   const first = evaluateLowKeg(input({ currentEpoch: epoch({ stabilizedVolumeMl: 199 }) }));
   assert.equal(first.state, "degraded");
   assert.equal(first.severity, "info");
@@ -201,6 +203,29 @@ void test("scale uses authority age and measurement time, not receipt time", () 
       }),
     ).severity,
     "critical",
+  );
+  assert.equal(
+    evaluateScaleAvailability(
+      input({
+        latestMeasurement: measurement({ measuredAtMs: NOW - 30 * 60_000, receivedAtMs: NOW }),
+        latestScaleMeasurement: measurement({ measuredAtMs: NOW, receivedAtMs: NOW + 500 }),
+      }),
+    ).state,
+    "healthy",
+  );
+  assert.equal(
+    evaluateScaleAvailability(
+      input({ latestScaleMeasurement: null, latestMeasurement: measurement() }),
+    ).state,
+    "degraded",
+  );
+  assert.equal(
+    validateHealthEvaluationInput({
+      nowMs: NOW,
+      authorityChangedAtMs: NOW,
+      latestScaleMeasurement: null,
+    }).latestScaleMeasurement,
+    null,
   );
 });
 
@@ -434,6 +459,120 @@ void test("leak movement resets only for threshold upward movement", () => {
   );
   assert.notEqual(largeDownward.reason, "leak_movement_reset");
   assert.equal(largeDownward.nextLeakSamples.length, 2);
+});
+
+void test("leak chronology uses measurement time despite receipt latency and irregular cadence", () => {
+  const enabled = {
+    suspected_leak: {
+      enabled: true,
+      lossThresholdMl: 100,
+      windowMs: 15 * 60_000,
+      resetMovementMl: 10_000,
+    },
+  } satisfies HealthConfigOverride;
+  const baselineAt = NOW;
+  const baseline = evaluateSuspectedLeak(
+    input({
+      nowMs: baselineAt + 500,
+      latestMeasurement: measurement({ measuredAtMs: baselineAt, receivedAtMs: baselineAt + 500 }),
+      currentEpoch: epoch({ stabilizedVolumeMl: 900, lastMeasuredAtMs: baselineAt }),
+    }),
+    enabled,
+  );
+  const exactWindow = baselineAt + 15 * 60_000;
+  const exact = evaluateSuspectedLeak(
+    input({
+      nowMs: exactWindow + 500,
+      latestMeasurement: measurement({
+        measuredAtMs: exactWindow,
+        receivedAtMs: exactWindow + 500,
+      }),
+      currentEpoch: epoch({ stabilizedVolumeMl: 700, lastMeasuredAtMs: exactWindow }),
+      previous: { leakSamples: baseline.nextLeakSamples, timers: baseline.nextTimers },
+    }),
+    enabled,
+  );
+  assert.equal(exact.state, "active");
+
+  const irregularAt = baselineAt + 15 * 60_000 + 1_234;
+  const irregular = evaluateSuspectedLeak(
+    input({
+      nowMs: irregularAt + 500,
+      latestMeasurement: measurement({
+        measuredAtMs: irregularAt,
+        receivedAtMs: irregularAt + 500,
+      }),
+      currentEpoch: epoch({ stabilizedVolumeMl: 700, lastMeasuredAtMs: irregularAt }),
+      previous: { leakSamples: baseline.nextLeakSamples, timers: baseline.nextTimers },
+    }),
+    enabled,
+  );
+  assert.equal(irregular.state, "active");
+});
+
+void test("leak continuation stays bounded while retaining a full-window anchor", () => {
+  const enabled = {
+    suspected_leak: {
+      enabled: true,
+      lossThresholdMl: 100,
+      windowMs: 15 * 60_000,
+      resetMovementMl: 10_000,
+      maxSamples: 64,
+    },
+  } satisfies HealthConfigOverride;
+  let currentAt = NOW;
+  let evaluation = evaluateSuspectedLeak(
+    input({ currentEpoch: epoch({ stabilizedVolumeMl: 1_000, lastMeasuredAtMs: currentAt }) }),
+    enabled,
+  );
+  assert.ok(evaluation.nextLeakSamples.length <= 64);
+  for (let index = 1; index <= 70; index += 1) {
+    currentAt = NOW + index * 13_000;
+    evaluation = evaluateSuspectedLeak(
+      input({
+        nowMs: currentAt,
+        latestMeasurement: measurement({ measuredAtMs: currentAt, receivedAtMs: currentAt }),
+        currentEpoch: epoch({
+          stabilizedVolumeMl: 1_000 - index * 2,
+          lastMeasuredAtMs: currentAt,
+        }),
+        previous: { leakSamples: evaluation.nextLeakSamples, timers: evaluation.nextTimers },
+      }),
+      enabled,
+    );
+    assert.ok(evaluation.nextLeakSamples.length <= 64);
+  }
+  assert.equal(evaluation.state, "active");
+  assert.equal(evaluation.reason, "leak_threshold");
+});
+
+void test("leak maxSamples one retains the baseline for comparison", () => {
+  const enabled = {
+    suspected_leak: {
+      enabled: true,
+      lossThresholdMl: 100,
+      windowMs: 15 * 60_000,
+      resetMovementMl: 10_000,
+      maxSamples: 1,
+    },
+  } satisfies HealthConfigOverride;
+  const baseline = evaluateSuspectedLeak(
+    input({ currentEpoch: epoch({ stabilizedVolumeMl: 900 }) }),
+    enabled,
+  );
+  const at = NOW + 15 * 60_000 + 1;
+  const active = evaluateSuspectedLeak(
+    input({
+      nowMs: at,
+      latestMeasurement: measurement({ measuredAtMs: at, receivedAtMs: at }),
+      currentEpoch: epoch({ stabilizedVolumeMl: 700, lastMeasuredAtMs: at }),
+      previous: { leakSamples: baseline.nextLeakSamples, timers: baseline.nextTimers },
+    }),
+    enabled,
+  );
+  assert.equal(active.state, "active");
+  assert.equal(active.nextLeakSamples.length, 1);
+  assert.equal(active.nextLeakSamples[0]?.atMs, NOW);
 });
 
 void test("line cleaning due is historical and exact at due/critical boundaries", () => {

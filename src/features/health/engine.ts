@@ -359,7 +359,7 @@ export function evaluateLowKeg(
       id,
       "healthy",
       "none",
-      "below_threshold",
+      "above_threshold",
       input.nowMs,
       {
         currentVolumeMl: volume,
@@ -438,7 +438,12 @@ export function evaluateScaleAvailability(
     );
   }
   const authorityAtMs = input.authorityChangedAtMs!;
-  const measurement = latestMeasurement(input);
+  // An explicit scale projection, including null, must not fall back to the
+  // generic measurement aliases used by the other checks.
+  const measurement =
+    input.latestScaleMeasurement !== undefined
+      ? input.latestScaleMeasurement
+      : latestMeasurement(input);
   const usable = measurementIsUsable(measurement);
   const ageMs = measurementAgeMs(input.nowMs, measurement);
   if (!usable || ageMs === null || ageMs < 0) {
@@ -655,20 +660,110 @@ function leakEpochUsable(
 function normalizedSamples(
   samples: readonly HealthLeakSample[],
   epochId: string,
-  nowMs: number,
-  windowMs: number,
+  currentAtMs: number,
 ): HealthLeakSample[] {
-  return samples
+  const normalized = samples
     .filter(
       (sample) =>
         sample.epochId === epochId &&
         finite(sample.atMs) !== null &&
         finite(sample.volumeMl) !== null &&
-        sample.atMs <= nowMs &&
-        sample.atMs >= nowMs - windowMs,
+        sample.atMs <= currentAtMs,
     )
     .map((sample) => ({ epochId, atMs: sample.atMs, volumeMl: sample.volumeMl }))
-    .sort((left, right) => left.atMs - right.atMs);
+    .sort(
+      (left, right) =>
+        left.atMs - right.atMs ||
+        left.volumeMl - right.volumeMl ||
+        left.epochId.localeCompare(right.epochId),
+    );
+  // A repeated sweep can feed the same observation back into continuation;
+  // exact deduplication keeps that replay from growing the persisted state.
+  return normalized.filter(
+    (sample, index) =>
+      index === 0 ||
+      sample.atMs !== normalized[index - 1]!.atMs ||
+      sample.volumeMl !== normalized[index - 1]!.volumeMl ||
+      sample.epochId !== normalized[index - 1]!.epochId,
+  );
+}
+
+function sameLeakSample(left: HealthLeakSample, right: HealthLeakSample): boolean {
+  return (
+    left.epochId === right.epochId && left.atMs === right.atMs && left.volumeMl === right.volumeMl
+  );
+}
+
+function compactLeakSamples(
+  prior: readonly HealthLeakSample[],
+  current: HealthLeakSample,
+  windowMs: number,
+  maxSamples: number,
+): HealthLeakSample[] {
+  const combined = normalizedSamples([...prior, current], current.epochId, current.atMs);
+  if (maxSamples === 1) {
+    // With one slot, retain a historical anchor/baseline so the next current
+    // input can still be compared; use current only when no baseline exists.
+    if (prior.length === 0) return [current];
+    const cutoff = current.atMs - windowMs;
+    const anchor =
+      [...prior].reverse().find((sample) => sample.atMs <= cutoff) ?? prior[0] ?? current;
+    return [{ ...anchor }];
+  }
+
+  const cutoff = current.atMs - windowMs;
+  const anchor = [...combined].reverse().find((sample) => sample.atMs <= cutoff);
+  const afterCutoff = combined.filter((sample) => sample.atMs > cutoff);
+  const slots = maxSamples - (anchor === undefined ? 0 : 1);
+  if (afterCutoff.length <= slots) {
+    return [...(anchor === undefined ? [] : [anchor]), ...afterCutoff];
+  }
+
+  const currentIndex = Math.max(
+    0,
+    afterCutoff.findIndex((sample) => sameLeakSample(sample, current)),
+  );
+  const selected = new Set<number>();
+  const add = (index: number) => {
+    if (selected.size < slots && index >= 0 && index < afterCutoff.length) selected.add(index);
+  };
+  // Always retain the current observation, and use the remaining slots for
+  // temporal coverage from the earliest/latest post-cutoff observations.
+  add(currentIndex);
+  if (slots >= 2) add(0);
+  if (slots >= 3) add(afterCutoff.length - 1);
+  for (let slot = 0; selected.size < slots && slot < slots; slot += 1) {
+    const firstAtMs = afterCutoff[0]!.atMs;
+    const lastAtMs = afterCutoff.at(-1)!.atMs;
+    const targetAtMs =
+      slots === 1
+        ? afterCutoff[currentIndex]!.atMs
+        : firstAtMs + ((lastAtMs - firstAtMs) * slot) / Math.max(1, slots - 1);
+    let nearest: number | null = null;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    for (let index = 0; index < afterCutoff.length; index += 1) {
+      if (selected.has(index)) continue;
+      const distance = Math.abs(afterCutoff[index]!.atMs - targetAtMs);
+      if (
+        distance < nearestDistance ||
+        (distance === nearestDistance && (nearest === null || index < nearest))
+      ) {
+        nearest = index;
+        nearestDistance = distance;
+      }
+    }
+    if (nearest === null) break;
+    selected.add(nearest);
+  }
+  const retained = [...selected]
+    .sort((left, right) => left - right)
+    .map((index) => afterCutoff[index]!);
+  return [...(anchor === undefined ? [] : [anchor]), ...retained].sort(
+    (left, right) =>
+      left.atMs - right.atMs ||
+      left.volumeMl - right.volumeMl ||
+      left.epochId.localeCompare(right.epochId),
+  );
 }
 
 /**
@@ -718,12 +813,7 @@ export function evaluateSuspectedLeak(
   const { epoch: current, atMs } = usable;
   const volume = epochVolume(current)!;
   const capacity = current.capacityMl!;
-  const previousSamples = normalizedSamples(
-    samplesFor(input),
-    current.epochId,
-    input.nowMs,
-    config.suspected_leak.windowMs,
-  );
+  const previousSamples = normalizedSamples(samplesFor(input), current.epochId, atMs);
   const hasOtherEpoch = samplesFor(input).some((sample) => sample.epochId !== current.epochId);
   if (hasOtherEpoch) {
     const seeded = [{ epochId: current.epochId, atMs, volumeMl: volume }];
@@ -743,20 +833,20 @@ export function evaluateSuspectedLeak(
   const recentPourAt = finite(input.latestCompletedPourAtMs ?? input.recentPourAtMs);
   const recentPour =
     recentPourAt !== null &&
-    recentPourAt <= input.nowMs &&
-    input.nowMs - recentPourAt <= config.suspected_leak.pourGraceMs;
+    recentPourAt <= atMs &&
+    atMs - recentPourAt <= config.suspected_leak.pourGraceMs;
   const detectorActive =
     input.pourActive === true ||
     phaseIs(current.phase, "candidate") ||
     phaseIs(current.phase, "pouring") ||
     phaseIs(current.phase, "cooldown");
   const currentSuppression =
-    timers.leakSuppressedUntilMs !== null && input.nowMs < timers.leakSuppressedUntilMs;
+    timers.leakSuppressedUntilMs !== null && atMs < timers.leakSuppressedUntilMs;
   const suppression = detectorActive || recentPour || currentSuppression;
   if (suppression) {
     const until =
       detectorActive || recentPour
-        ? input.nowMs + config.suspected_leak.settlingMs
+        ? atMs + config.suspected_leak.settlingMs
         : timers.leakSuppressedUntilMs;
     const seeded = [{ epochId: current.epochId, atMs, volumeMl: volume }];
     return result(
@@ -796,10 +886,13 @@ export function evaluateSuspectedLeak(
       false,
     );
   }
-  const samples = [...previousSamples, { epochId: current.epochId, atMs, volumeMl: volume }].slice(
-    -config.suspected_leak.maxSamples,
+  const samples = compactLeakSamples(
+    previousSamples,
+    { epochId: current.epochId, atMs, volumeMl: volume },
+    config.suspected_leak.windowMs,
+    config.suspected_leak.maxSamples,
   );
-  if (samples.length <= 1) {
+  if (previousSamples.length === 0) {
     return result(
       id,
       "healthy",

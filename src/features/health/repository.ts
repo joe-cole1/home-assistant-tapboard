@@ -245,6 +245,23 @@ export function readHealthTapOverride(
   };
 }
 
+/** Enumerate every persisted Tap override for atomic global-config validation. */
+export function listHealthTapOverrides(database: DatabaseExecutor): HealthTapOverride[] {
+  return database
+    .prepare<[], Record<string, unknown>>(
+      `SELECT tap_id, revision, ${CONFIG_SELECT}, updated_at
+       FROM health_tap_overrides
+       ORDER BY tap_id ASC`,
+    )
+    .all()
+    .map((row) => ({
+      tapId: requireText(row, "tap_id"),
+      revision: rowNumber(row, "revision"),
+      override: mapOverride(row),
+      updatedAt: requireText(row, "updated_at"),
+    }));
+}
+
 function overrideValues(override: HealthConfigOverride): unknown[] {
   return CONFIG_SECTIONS.flatMap(([section, , fields]) =>
     fields.map((field) => {
@@ -930,19 +947,42 @@ export function listHealthLeakSampleRecords(
   limit = 64,
 ): HealthLeakSampleRecord[] {
   const safeLimit = Math.max(1, Math.min(64, Math.trunc(limit)));
+  if (safeLimit === 1) {
+    return database
+      .prepare<[string], LeakSampleRow>(
+        `SELECT tap_id,measurement_id,epoch_id,measured_at_epoch_ms,stabilized_volume_ml,created_at
+         FROM health_leak_samples
+         WHERE tap_id=?
+         ORDER BY measured_at_epoch_ms ASC,measurement_id ASC
+         LIMIT 1`,
+      )
+      .all(tapId)
+      .map(mapLeakSample);
+  }
   return database
     .prepare<[string, string, number], LeakSampleRow>(
-      `SELECT tap_id,measurement_id,epoch_id,measured_at_epoch_ms,stabilized_volume_ml,created_at
-       FROM health_leak_samples
-       WHERE tap_id=? AND measurement_id IN (
-         SELECT measurement_id FROM health_leak_samples
+      `WITH oldest AS (
+         SELECT tap_id,measurement_id,epoch_id,measured_at_epoch_ms,stabilized_volume_ml,created_at
+         FROM health_leak_samples
+         WHERE tap_id=?
+         ORDER BY measured_at_epoch_ms ASC,measurement_id ASC
+         LIMIT 1
+       ), newest AS (
+         SELECT tap_id,measurement_id,epoch_id,measured_at_epoch_ms,stabilized_volume_ml,created_at
+         FROM health_leak_samples
          WHERE tap_id=?
          ORDER BY measured_at_epoch_ms DESC,measurement_id DESC
          LIMIT ?
        )
+       SELECT tap_id,measurement_id,epoch_id,measured_at_epoch_ms,stabilized_volume_ml,created_at
+       FROM (
+         SELECT * FROM oldest
+         UNION
+         SELECT * FROM newest
+       )
        ORDER BY measured_at_epoch_ms ASC,measurement_id ASC`,
     )
-    .all(tapId, tapId, safeLimit)
+    .all(tapId, tapId, safeLimit - 1)
     .map(mapLeakSample);
 }
 
@@ -969,7 +1009,7 @@ export function replaceHealthLeakSamples(
      (tap_id,measurement_id,epoch_id,measured_at_epoch_ms,stabilized_volume_ml,created_at)
      VALUES (?,?,?,?,?,?)`,
   );
-  for (const sample of samples.slice(-64)) {
+  for (const sample of samples.slice(0, 64)) {
     insert.run(
       tapId,
       sample.measurementId,

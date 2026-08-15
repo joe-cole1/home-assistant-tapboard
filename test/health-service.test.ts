@@ -27,6 +27,7 @@ import {
   insertHealthLeakSample,
   listHealthIncidentTransitions,
   listHealthLeakSampleRecords,
+  replaceHealthLeakSamples,
   readHealthCheckState,
   listHealthCheckStates,
   readHealthGlobalConfig,
@@ -116,6 +117,46 @@ void test("health configuration inherits, clears, and does not churn on no-op", 
     [...HEALTH_CHECK_IDS],
   );
   database.close();
+});
+
+void test("global configuration rejects candidates invalidated by any persisted Tap override atomically", () => {
+  const { database, tap, health } = setup();
+  try {
+    health.updateTapOverride(tap.id, { low_keg: { criticalPercent: 15 } }, actor());
+    const beforeLowKeg = readHealthGlobalConfig(database);
+    const beforeLowKegActivities = listActivity(database);
+    assert.throws(
+      () => health.updateGlobalConfig({ low_keg: { thresholdPercent: 10 } }, actor()),
+      (error: unknown) =>
+        error instanceof ApplicationError && error.code === "validation.invalid_value",
+    );
+    assert.deepEqual(readHealthGlobalConfig(database), beforeLowKeg);
+    assert.deepEqual(listActivity(database), beforeLowKegActivities);
+    assert.equal(readHealthTapOverride(database, tap.id)?.override.low_keg?.criticalPercent, 15);
+
+    health.updateGlobalConfig({ low_keg: { thresholdPercent: 16 } }, actor());
+    assert.equal(readHealthGlobalConfig(database).config.low_keg.thresholdPercent, 16);
+
+    health.updateTapOverride(tap.id, { scale_availability: { activeAfterMs: 600_000 } }, actor());
+    const beforeScale = readHealthGlobalConfig(database);
+    const beforeScaleActivities = listActivity(database);
+    assert.throws(
+      () =>
+        health.updateGlobalConfig({ scale_availability: { degradedAfterMs: 700_000 } }, actor()),
+      (error: unknown) =>
+        error instanceof ApplicationError && error.code === "validation.invalid_value",
+    );
+    assert.deepEqual(readHealthGlobalConfig(database), beforeScale);
+    assert.deepEqual(listActivity(database), beforeScaleActivities);
+
+    health.updateGlobalConfig({ scale_availability: { degradedAfterMs: 500_000 } }, actor());
+    assert.equal(
+      readHealthGlobalConfig(database).config.scale_availability.degradedAfterMs,
+      500_000,
+    );
+  } finally {
+    database.close();
+  }
 });
 
 void test("active incidents open once, escalate in place, recover once, and recur after cooldown", () => {
@@ -460,6 +501,39 @@ void test("retired Taps resolve incidents, clear leak samples, and leave disable
   }
 });
 
+void test("leak sample replacement and legacy reads retain the oldest anchor within the hard bound", () => {
+  const { database, tap } = setup();
+  const nextId = ids(1_300);
+  try {
+    const samples = Array.from({ length: 70 }, (_, index) => ({
+      tapId: tap.id,
+      measurementId: nextId(),
+      epochId: "00000000-0000-4000-8000-000000001301",
+      atMs: NOW + index,
+      volumeMl: 19_000 - index,
+      createdAt: new Date(NOW + index).toISOString(),
+    }));
+    for (const sample of samples) insertHealthLeakSample(database, sample);
+
+    const legacyRead = listHealthLeakSampleRecords(database, tap.id, 64);
+    assert.equal(legacyRead.length, 64);
+    assert.equal(legacyRead[0]?.measurementId, samples[0]?.measurementId);
+    assert.equal(legacyRead.at(-1)?.measurementId, samples.at(-1)?.measurementId);
+    assert.equal(
+      listHealthLeakSampleRecords(database, tap.id, 1)[0]?.measurementId,
+      samples[0]?.measurementId,
+    );
+
+    replaceHealthLeakSamples(database, tap.id, samples);
+    const replaced = listHealthLeakSampleRecords(database, tap.id);
+    assert.equal(replaced.length, 64);
+    assert.equal(replaced[0]?.measurementId, samples[0]?.measurementId);
+    assert.equal(replaced.at(-1)?.measurementId, samples[63]?.measurementId);
+  } finally {
+    database.close();
+  }
+});
+
 void test("epoch state isolates health measurement evidence from a prior source status", () => {
   const { database, tap, health } = setup();
   const nextId = ids(700);
@@ -472,9 +546,9 @@ void test("epoch state isolates health measurement evidence from a prior source 
   const epochId = nextId();
   const priorMeasurementId = nextId();
   const currentMeasurementId = nextId();
-  const priorAtMs = NOW;
-  const evaluationAtMs = NOW + 1_000;
-  const epochStartedAtMs = NOW + 500;
+  const priorAtMs = NOW - 31 * 60_000;
+  const evaluationAtMs = NOW;
+  const epochStartedAtMs = NOW - 30_000;
   const priorAt = new Date(priorAtMs).toISOString();
   const evaluationAt = new Date(evaluationAtMs).toISOString();
   const epochStartedAt = new Date(epochStartedAtMs).toISOString();
@@ -534,9 +608,9 @@ void test("epoch state isolates health measurement evidence from a prior source 
       id: priorMeasurementId,
       source_id: sourceId,
       tap_id: tap.id,
-      measured_at: priorAt,
-      measured_at_epoch_ms: priorAtMs,
-      received_at: priorAt,
+      measured_at: evaluationAt,
+      measured_at_epoch_ms: evaluationAtMs,
+      received_at: evaluationAt,
       normalization_version: 1,
       primary_kind: "remaining_volume",
       total_mass_g: null,
@@ -551,9 +625,9 @@ void test("epoch state isolates health measurement evidence from a prior source 
       source_id: sourceId,
       tap_id: tap.id,
       latest_measurement_id: priorMeasurementId,
-      latest_measured_at: priorAt,
-      latest_measured_at_epoch_ms: priorAtMs,
-      latest_received_at: priorAt,
+      latest_measured_at: evaluationAt,
+      latest_measured_at_epoch_ms: evaluationAtMs,
+      latest_received_at: evaluationAt,
       normalization_version: 1,
       primary_kind: "remaining_volume",
       total_mass_g: null,
@@ -562,7 +636,7 @@ void test("epoch state isolates health measurement evidence from a prior source 
       temperature_c: 4,
       captured_assignment_id: null,
       captured_fill_id: null,
-      updated_at: priorAt,
+      updated_at: evaluationAt,
     });
     const epoch: CreateTelemetryEpoch = {
       id: epochId,
@@ -605,8 +679,16 @@ void test("epoch state isolates health measurement evidence from a prior source 
     const temperatureWithoutSample = withoutCurrentEpochSample.checks.find(
       (check) => check.checkId === "serving_temperature",
     );
-    assert.equal(scaleWithoutSample?.state, "degraded");
-    assert.equal(scaleWithoutSample?.reason, "scale_unavailable");
+    assert.equal(scaleWithoutSample?.state, "healthy");
+    assert.equal(scaleWithoutSample?.reason, "scale_fresh");
+    assert.equal(
+      health
+        .listIncidents(tap.id, 200)
+        .some(
+          (incident) => incident.checkId === "scale_availability" && incident.resolvedAtMs === null,
+        ),
+      false,
+    );
     assert.equal(temperatureWithoutSample?.state, "degraded");
     assert.equal(temperatureWithoutSample?.reason, "temperature_invalid");
 
@@ -614,7 +696,7 @@ void test("epoch state isolates health measurement evidence from a prior source 
     const withoutEpochState = health.evaluateTap(tap.id, evaluationAtMs);
     assert.equal(
       withoutEpochState.checks.find((check) => check.checkId === "scale_availability")?.reason,
-      "scale_unavailable",
+      "scale_fresh",
     );
     assert.equal(
       withoutEpochState.checks.find((check) => check.checkId === "serving_temperature")?.reason,

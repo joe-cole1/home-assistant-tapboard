@@ -52,6 +52,7 @@ import {
   listHealthIncidents,
   listHealthLeakSampleRecords,
   listHealthMaintenancePage,
+  listHealthTapOverrides,
   listHealthTapIdPage,
   pruneResolvedHealthIncidents,
   readHealthCheckState,
@@ -366,8 +367,12 @@ export class HealthService
 
   updateGlobalConfig(input: unknown, actor: HealthActorOptions = {}): HealthConfig {
     const at = clock(actor.now ?? this.#now).getTime();
-    const parsed = parseGlobalPatch(input, readHealthGlobalConfig(this.#database).config);
     const result = this.#database.withTransaction(() => {
+      const current = readHealthGlobalConfig(this.#database);
+      const parsed = parseGlobalPatch(input, current.config);
+      for (const override of listHealthTapOverrides(this.#database)) {
+        validateHealthConfig(resolveHealthConfig(parsed, override.override).effective);
+      }
       const updated = updateHealthGlobalConfig(this.#database, parsed, iso(at));
       if (updated.changed) this.#appendConfigActivity(updated.current, actor, at);
       return updated;
@@ -494,9 +499,16 @@ export class HealthService
       authority === undefined
         ? undefined
         : readSourceTapStatus(database, authority.source_id, tap.id);
-    // The detector state is authoritative for the measurement actually used
-    // to derive a settled volume/phase. Fall back to source/tap status only
-    // when no current detector epoch state exists (for scale freshness/authority).
+    const sourceStatusMeasurement = this.#measurement(status, true);
+    const latestScaleMeasurement =
+      sourceStatusMeasurement !== null &&
+      (authorityChangedAtMs === null ||
+        sourceStatusMeasurement.measuredAtMs >= authorityChangedAtMs)
+        ? sourceStatusMeasurement
+        : null;
+    // The detector state is authoritative for the generic measurement used to
+    // derive a settled volume/phase. Scale freshness uses the dedicated source
+    // status projection above even when the current epoch has no detector state.
     const statusMeasurement = this.#measurement(status, epoch === undefined, epochState);
     const measurement =
       statusMeasurement !== null &&
@@ -552,6 +564,7 @@ export class HealthService
         tapId: tap.id,
         authorityChangedAtMs,
         latestMeasurement: measurement,
+        latestScaleMeasurement,
         latestAuthoritativeMeasurement: measurement,
         currentEpoch,
         currentEpochEvidence: currentEpoch,
@@ -610,7 +623,10 @@ export class HealthService
       });
       if (this.#stateChanged(previous, persisted)) changedCheckIds.push(checkId);
       if (checkId === "suspected_leak") {
-        const bounded = evaluation.nextLeakSamples.slice(-effective.suspected_leak.maxSamples);
+        const bounded = evaluation.nextLeakSamples.slice(
+          0,
+          Math.min(64, effective.suspected_leak.maxSamples),
+        );
         replaceHealthLeakSamples(
           database,
           tap.id,
@@ -1250,7 +1266,7 @@ export class HealthService
       existing.map((sample) => [`${sample.epochId}|${sample.atMs}|${sample.volumeMl}`, sample]),
     );
     const ids = new Set<string>();
-    return samples.slice(-64).map((sample) => {
+    return samples.slice(0, 64).map((sample) => {
       const key = `${sample.epochId}|${sample.atMs}|${sample.volumeMl}`;
       const old = byValue.get(key);
       let measurementId =

@@ -184,6 +184,8 @@ export interface HealthEvaluationInput {
   readonly tapId?: string;
   readonly authorityChangedAtMs: number | null;
   readonly latestMeasurement?: HealthAuthoritativeMeasurement | null;
+  /** Explicit scale freshness input; null intentionally suppresses alias fallback. */
+  readonly latestScaleMeasurement?: HealthAuthoritativeMeasurement | null;
   readonly latestAuthoritativeMeasurement?: HealthAuthoritativeMeasurement | null;
   /** Compatibility alias used by repository projections. */
   readonly measurement?: HealthAuthoritativeMeasurement | null;
@@ -229,6 +231,7 @@ export type HealthReason =
   | "detector_activity"
   | "threshold_settling"
   | "below_threshold"
+  | "above_threshold"
   | "scale_fresh"
   | "scale_degraded"
   | "scale_unavailable"
