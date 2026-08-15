@@ -20,7 +20,9 @@ export const TELEMETRY_EPOCHS_SCHEMA_VERSION = 9;
 export const TELEMETRY_EPOCHS_MIGRATION_NAME = "telemetry-epochs-and-deterministic-pour-detector";
 export const FORECASTING_SCHEMA_VERSION = 10;
 export const FORECASTING_MIGRATION_NAME = "pour-history-forecasting";
-export const CURRENT_SCHEMA_VERSION = FORECASTING_SCHEMA_VERSION;
+export const HEALTH_MAINTENANCE_SCHEMA_VERSION = 11;
+export const HEALTH_MAINTENANCE_MIGRATION_NAME = "draft-health-and-tap-maintenance";
+export const CURRENT_SCHEMA_VERSION = HEALTH_MAINTENANCE_SCHEMA_VERSION;
 
 export interface MigrationDefinition {
   readonly version: number;
@@ -1233,6 +1235,207 @@ const FORECASTING_SCHEMA_OBJECTS = [
   ["index", "idx_tap_assignments_fill_assigned_at"],
 ] as const;
 
+const HEALTH_BOOLEAN_CHECK = (column: string): string =>
+  `typeof(${column}) = 'integer' AND ${column} IN (0, 1)`;
+const HEALTH_MAX_DURATION_MS = 31_536_000_000;
+const HEALTH_MAX_VOLUME_ML = 1_000_000_000;
+const HEALTH_MAX_DAYS = 3_650;
+const HEALTH_FINITE_REAL_CHECK = (column: string): string =>
+  `typeof(${column}) IN ('integer', 'real') AND ${column} = ${column} AND ${column} > -1.7976931348623157e308 AND ${column} < 1.7976931348623157e308`;
+const HEALTH_FINITE_NONNEGATIVE_REAL_CHECK = (column: string): string =>
+  `${HEALTH_FINITE_REAL_CHECK(column)} AND ${column} >= 0`;
+const HEALTH_INTEGER_POSITIVE_CHECK = (column: string): string =>
+  `typeof(${column}) = 'integer' AND ${column} >= 1`;
+
+const HEALTH_GLOBAL_CONFIG_COLUMNS_SQL = `
+    low_keg_enabled INTEGER NOT NULL CHECK (${HEALTH_BOOLEAN_CHECK("low_keg_enabled")}),
+    low_keg_threshold_percent REAL NOT NULL CHECK (${HEALTH_FINITE_REAL_CHECK("low_keg_threshold_percent")} AND low_keg_threshold_percent BETWEEN 0 AND 100),
+    low_keg_critical_percent REAL NOT NULL CHECK (${HEALTH_FINITE_REAL_CHECK("low_keg_critical_percent")} AND low_keg_critical_percent BETWEEN 0 AND 100),
+    low_keg_fixed_threshold_ml REAL NOT NULL CHECK (${HEALTH_FINITE_NONNEGATIVE_REAL_CHECK("low_keg_fixed_threshold_ml")} AND low_keg_fixed_threshold_ml <= ${HEALTH_MAX_VOLUME_ML}),
+    low_keg_settling_ms INTEGER NOT NULL CHECK (${HEALTH_INTEGER_POSITIVE_CHECK("low_keg_settling_ms")} AND low_keg_settling_ms <= ${HEALTH_MAX_DURATION_MS}),
+    scale_availability_enabled INTEGER NOT NULL CHECK (${HEALTH_BOOLEAN_CHECK("scale_availability_enabled")}),
+    scale_degraded_after_ms INTEGER NOT NULL CHECK (${HEALTH_INTEGER_POSITIVE_CHECK("scale_degraded_after_ms")} AND scale_degraded_after_ms <= ${HEALTH_MAX_DURATION_MS}),
+    scale_active_after_ms INTEGER NOT NULL CHECK (${HEALTH_INTEGER_POSITIVE_CHECK("scale_active_after_ms")} AND scale_active_after_ms <= ${HEALTH_MAX_DURATION_MS}),
+    suspected_leak_enabled INTEGER NOT NULL CHECK (${HEALTH_BOOLEAN_CHECK("suspected_leak_enabled")}),
+    suspected_leak_loss_threshold_ml REAL NOT NULL CHECK (${HEALTH_FINITE_REAL_CHECK("suspected_leak_loss_threshold_ml")} AND suspected_leak_loss_threshold_ml > 0 AND suspected_leak_loss_threshold_ml <= ${HEALTH_MAX_VOLUME_ML}),
+    suspected_leak_window_ms INTEGER NOT NULL CHECK (${HEALTH_INTEGER_POSITIVE_CHECK("suspected_leak_window_ms")} AND suspected_leak_window_ms <= ${HEALTH_MAX_DURATION_MS}),
+    suspected_leak_pour_grace_ms INTEGER NOT NULL CHECK (${HEALTH_INTEGER_POSITIVE_CHECK("suspected_leak_pour_grace_ms")} AND suspected_leak_pour_grace_ms <= ${HEALTH_MAX_DURATION_MS}),
+    suspected_leak_settling_ms INTEGER NOT NULL CHECK (${HEALTH_INTEGER_POSITIVE_CHECK("suspected_leak_settling_ms")} AND suspected_leak_settling_ms <= ${HEALTH_MAX_DURATION_MS}),
+    suspected_leak_reset_movement_ml REAL NOT NULL CHECK (${HEALTH_FINITE_NONNEGATIVE_REAL_CHECK("suspected_leak_reset_movement_ml")} AND suspected_leak_reset_movement_ml > 0 AND suspected_leak_reset_movement_ml <= ${HEALTH_MAX_VOLUME_ML}),
+    suspected_leak_max_samples INTEGER NOT NULL CHECK (${HEALTH_INTEGER_POSITIVE_CHECK("suspected_leak_max_samples")} AND suspected_leak_max_samples <= 64),
+    serving_temperature_enabled INTEGER NOT NULL CHECK (${HEALTH_BOOLEAN_CHECK("serving_temperature_enabled")}),
+    serving_temperature_normal_min_c REAL NOT NULL CHECK (${HEALTH_FINITE_REAL_CHECK("serving_temperature_normal_min_c")} AND serving_temperature_normal_min_c BETWEEN -100 AND 100),
+    serving_temperature_normal_max_c REAL NOT NULL CHECK (${HEALTH_FINITE_REAL_CHECK("serving_temperature_normal_max_c")} AND serving_temperature_normal_max_c BETWEEN -100 AND 100),
+    serving_temperature_critical_min_c REAL NOT NULL CHECK (${HEALTH_FINITE_REAL_CHECK("serving_temperature_critical_min_c")} AND serving_temperature_critical_min_c BETWEEN -100 AND 100),
+    serving_temperature_critical_max_c REAL NOT NULL CHECK (${HEALTH_FINITE_REAL_CHECK("serving_temperature_critical_max_c")} AND serving_temperature_critical_max_c BETWEEN -100 AND 100),
+    serving_temperature_duration_ms INTEGER NOT NULL CHECK (${HEALTH_INTEGER_POSITIVE_CHECK("serving_temperature_duration_ms")} AND serving_temperature_duration_ms <= ${HEALTH_MAX_DURATION_MS}),
+    line_cleaning_due_enabled INTEGER NOT NULL CHECK (${HEALTH_BOOLEAN_CHECK("line_cleaning_due_enabled")}),
+    line_cleaning_due_interval_days INTEGER NOT NULL CHECK (${HEALTH_INTEGER_POSITIVE_CHECK("line_cleaning_due_interval_days")} AND line_cleaning_due_interval_days <= ${HEALTH_MAX_DAYS}),
+    line_cleaning_due_critical_grace_days INTEGER NOT NULL CHECK (${HEALTH_INTEGER_POSITIVE_CHECK("line_cleaning_due_critical_grace_days")} AND line_cleaning_due_critical_grace_days <= ${HEALTH_MAX_DAYS})`;
+
+const HEALTH_GLOBAL_CONFIG_CONSTRAINTS_SQL = `
+    CHECK (low_keg_critical_percent <= low_keg_threshold_percent),
+    CHECK (scale_degraded_after_ms < scale_active_after_ms),
+    CHECK (serving_temperature_critical_min_c < serving_temperature_normal_min_c),
+    CHECK (serving_temperature_normal_min_c < serving_temperature_normal_max_c),
+    CHECK (serving_temperature_normal_max_c < serving_temperature_critical_max_c)`;
+
+const HEALTH_OVERRIDE_CONFIG_COLUMNS_SQL = `
+    low_keg_enabled INTEGER CHECK (low_keg_enabled IS NULL OR ${HEALTH_BOOLEAN_CHECK("low_keg_enabled")}),
+    low_keg_threshold_percent REAL CHECK (low_keg_threshold_percent IS NULL OR (${HEALTH_FINITE_REAL_CHECK("low_keg_threshold_percent")} AND low_keg_threshold_percent BETWEEN 0 AND 100)),
+    low_keg_critical_percent REAL CHECK (low_keg_critical_percent IS NULL OR (${HEALTH_FINITE_REAL_CHECK("low_keg_critical_percent")} AND low_keg_critical_percent BETWEEN 0 AND 100)),
+    low_keg_fixed_threshold_ml REAL CHECK (low_keg_fixed_threshold_ml IS NULL OR (${HEALTH_FINITE_NONNEGATIVE_REAL_CHECK("low_keg_fixed_threshold_ml")} AND low_keg_fixed_threshold_ml <= ${HEALTH_MAX_VOLUME_ML})),
+    low_keg_settling_ms INTEGER CHECK (low_keg_settling_ms IS NULL OR (${HEALTH_INTEGER_POSITIVE_CHECK("low_keg_settling_ms")} AND low_keg_settling_ms <= ${HEALTH_MAX_DURATION_MS})),
+    scale_availability_enabled INTEGER CHECK (scale_availability_enabled IS NULL OR ${HEALTH_BOOLEAN_CHECK("scale_availability_enabled")}),
+    scale_degraded_after_ms INTEGER CHECK (scale_degraded_after_ms IS NULL OR (${HEALTH_INTEGER_POSITIVE_CHECK("scale_degraded_after_ms")} AND scale_degraded_after_ms <= ${HEALTH_MAX_DURATION_MS})),
+    scale_active_after_ms INTEGER CHECK (scale_active_after_ms IS NULL OR (${HEALTH_INTEGER_POSITIVE_CHECK("scale_active_after_ms")} AND scale_active_after_ms <= ${HEALTH_MAX_DURATION_MS})),
+    suspected_leak_enabled INTEGER CHECK (suspected_leak_enabled IS NULL OR ${HEALTH_BOOLEAN_CHECK("suspected_leak_enabled")}),
+    suspected_leak_loss_threshold_ml REAL CHECK (suspected_leak_loss_threshold_ml IS NULL OR (${HEALTH_FINITE_REAL_CHECK("suspected_leak_loss_threshold_ml")} AND suspected_leak_loss_threshold_ml > 0 AND suspected_leak_loss_threshold_ml <= ${HEALTH_MAX_VOLUME_ML})),
+    suspected_leak_window_ms INTEGER CHECK (suspected_leak_window_ms IS NULL OR (${HEALTH_INTEGER_POSITIVE_CHECK("suspected_leak_window_ms")} AND suspected_leak_window_ms <= ${HEALTH_MAX_DURATION_MS})),
+    suspected_leak_pour_grace_ms INTEGER CHECK (suspected_leak_pour_grace_ms IS NULL OR (${HEALTH_INTEGER_POSITIVE_CHECK("suspected_leak_pour_grace_ms")} AND suspected_leak_pour_grace_ms <= ${HEALTH_MAX_DURATION_MS})),
+    suspected_leak_settling_ms INTEGER CHECK (suspected_leak_settling_ms IS NULL OR (${HEALTH_INTEGER_POSITIVE_CHECK("suspected_leak_settling_ms")} AND suspected_leak_settling_ms <= ${HEALTH_MAX_DURATION_MS})),
+    suspected_leak_reset_movement_ml REAL CHECK (suspected_leak_reset_movement_ml IS NULL OR (${HEALTH_FINITE_NONNEGATIVE_REAL_CHECK("suspected_leak_reset_movement_ml")} AND suspected_leak_reset_movement_ml > 0 AND suspected_leak_reset_movement_ml <= ${HEALTH_MAX_VOLUME_ML})),
+    suspected_leak_max_samples INTEGER CHECK (suspected_leak_max_samples IS NULL OR (${HEALTH_INTEGER_POSITIVE_CHECK("suspected_leak_max_samples")} AND suspected_leak_max_samples <= 64)),
+    serving_temperature_enabled INTEGER CHECK (serving_temperature_enabled IS NULL OR ${HEALTH_BOOLEAN_CHECK("serving_temperature_enabled")}),
+    serving_temperature_normal_min_c REAL CHECK (serving_temperature_normal_min_c IS NULL OR (${HEALTH_FINITE_REAL_CHECK("serving_temperature_normal_min_c")} AND serving_temperature_normal_min_c BETWEEN -100 AND 100)),
+    serving_temperature_normal_max_c REAL CHECK (serving_temperature_normal_max_c IS NULL OR (${HEALTH_FINITE_REAL_CHECK("serving_temperature_normal_max_c")} AND serving_temperature_normal_max_c BETWEEN -100 AND 100)),
+    serving_temperature_critical_min_c REAL CHECK (serving_temperature_critical_min_c IS NULL OR (${HEALTH_FINITE_REAL_CHECK("serving_temperature_critical_min_c")} AND serving_temperature_critical_min_c BETWEEN -100 AND 100)),
+    serving_temperature_critical_max_c REAL CHECK (serving_temperature_critical_max_c IS NULL OR (${HEALTH_FINITE_REAL_CHECK("serving_temperature_critical_max_c")} AND serving_temperature_critical_max_c BETWEEN -100 AND 100)),
+    serving_temperature_duration_ms INTEGER CHECK (serving_temperature_duration_ms IS NULL OR (${HEALTH_INTEGER_POSITIVE_CHECK("serving_temperature_duration_ms")} AND serving_temperature_duration_ms <= ${HEALTH_MAX_DURATION_MS})),
+    line_cleaning_due_enabled INTEGER CHECK (line_cleaning_due_enabled IS NULL OR ${HEALTH_BOOLEAN_CHECK("line_cleaning_due_enabled")}),
+    line_cleaning_due_interval_days INTEGER CHECK (line_cleaning_due_interval_days IS NULL OR (${HEALTH_INTEGER_POSITIVE_CHECK("line_cleaning_due_interval_days")} AND line_cleaning_due_interval_days <= ${HEALTH_MAX_DAYS})),
+    line_cleaning_due_critical_grace_days INTEGER CHECK (line_cleaning_due_critical_grace_days IS NULL OR (${HEALTH_INTEGER_POSITIVE_CHECK("line_cleaning_due_critical_grace_days")} AND line_cleaning_due_critical_grace_days <= ${HEALTH_MAX_DAYS}))`;
+
+const HEALTH_OVERRIDE_CONFIG_CONSTRAINTS_SQL = `
+    CHECK (low_keg_critical_percent IS NULL OR low_keg_threshold_percent IS NULL OR low_keg_critical_percent <= low_keg_threshold_percent),
+    CHECK (scale_degraded_after_ms IS NULL OR scale_active_after_ms IS NULL OR scale_degraded_after_ms < scale_active_after_ms),
+    CHECK (serving_temperature_critical_min_c IS NULL OR serving_temperature_normal_min_c IS NULL OR serving_temperature_critical_min_c < serving_temperature_normal_min_c),
+    CHECK (serving_temperature_normal_min_c IS NULL OR serving_temperature_normal_max_c IS NULL OR serving_temperature_normal_min_c < serving_temperature_normal_max_c),
+    CHECK (serving_temperature_normal_max_c IS NULL OR serving_temperature_critical_max_c IS NULL OR serving_temperature_normal_max_c < serving_temperature_critical_max_c)`;
+
+export const HEALTH_MAINTENANCE_SCHEMA_SQL = `
+  CREATE INDEX idx_pours_epoch_completed ON pours (epoch_id, completed_at DESC, id DESC);
+  CREATE TABLE health_global_config (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    revision INTEGER NOT NULL CHECK (${HEALTH_INTEGER_POSITIVE_CHECK("revision")}),
+    ${HEALTH_GLOBAL_CONFIG_COLUMNS_SQL},
+    updated_at TEXT NOT NULL,
+    ${HEALTH_GLOBAL_CONFIG_CONSTRAINTS_SQL}
+  );
+  CREATE TABLE health_tap_overrides (
+    tap_id TEXT PRIMARY KEY REFERENCES taps(id) ON DELETE CASCADE,
+    revision INTEGER NOT NULL CHECK (${HEALTH_INTEGER_POSITIVE_CHECK("revision")}),
+    ${HEALTH_OVERRIDE_CONFIG_COLUMNS_SQL},
+    updated_at TEXT NOT NULL,
+    ${HEALTH_OVERRIDE_CONFIG_CONSTRAINTS_SQL}
+  );
+  CREATE TABLE health_check_state (
+    tap_id TEXT NOT NULL REFERENCES taps(id) ON DELETE CASCADE,
+    check_id TEXT NOT NULL CHECK (check_id IN ('low_keg', 'scale_availability', 'suspected_leak', 'serving_temperature', 'line_cleaning_due')),
+    state TEXT NOT NULL CHECK (state IN ('not_configured', 'healthy', 'degraded', 'active')),
+    severity TEXT NOT NULL CHECK (severity IN ('none', 'info', 'warning', 'critical')),
+    reason_code TEXT CHECK (reason_code IS NULL OR length(CAST(reason_code AS BLOB)) BETWEEN 1 AND 80),
+    evidence_json TEXT NOT NULL DEFAULT '{}' CHECK (length(CAST(evidence_json AS BLOB)) <= 2048),
+    condition_started_at TEXT,
+    last_observation_at TEXT,
+    suppression_until TEXT,
+    cooldown_until TEXT,
+    revision INTEGER NOT NULL CHECK (${HEALTH_INTEGER_POSITIVE_CHECK("revision")}),
+    evaluated_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (tap_id, check_id)
+  );
+  CREATE TABLE health_incidents (
+    id TEXT PRIMARY KEY CHECK (length(CAST(id AS BLOB)) = 36),
+    tap_id TEXT NOT NULL REFERENCES taps(id) ON DELETE RESTRICT,
+    check_id TEXT NOT NULL CHECK (check_id IN ('low_keg', 'scale_availability', 'suspected_leak', 'serving_temperature', 'line_cleaning_due')),
+    opened_at TEXT NOT NULL,
+    current_severity TEXT NOT NULL CHECK (current_severity IN ('warning', 'critical')),
+    max_severity TEXT NOT NULL CHECK (max_severity IN ('warning', 'critical')),
+    resolved_at TEXT,
+    acknowledged_at TEXT,
+    by_actor_id TEXT CHECK (by_actor_id IS NULL OR length(CAST(by_actor_id AS BLOB)) BETWEEN 1 AND 255),
+    by_session_id TEXT CHECK (by_session_id IS NULL OR length(CAST(by_session_id AS BLOB)) BETWEEN 1 AND 255),
+    open_reason_code TEXT NOT NULL CHECK (length(CAST(open_reason_code AS BLOB)) BETWEEN 1 AND 80),
+    open_evidence_json TEXT NOT NULL CHECK (length(CAST(open_evidence_json AS BLOB)) BETWEEN 1 AND 2048),
+    resolution_reason_code TEXT CHECK (resolution_reason_code IS NULL OR length(CAST(resolution_reason_code AS BLOB)) BETWEEN 1 AND 80),
+    revision INTEGER NOT NULL CHECK (${HEALTH_INTEGER_POSITIVE_CHECK("revision")}),
+    updated_at TEXT NOT NULL,
+    CHECK (current_severity = 'warning' OR max_severity = 'critical'),
+    CHECK ((acknowledged_at IS NULL AND by_actor_id IS NULL AND by_session_id IS NULL) OR (acknowledged_at IS NOT NULL AND by_session_id IS NOT NULL))
+  );
+  CREATE UNIQUE INDEX idx_health_incidents_open_tap_check ON health_incidents (tap_id, check_id) WHERE resolved_at IS NULL;
+  CREATE INDEX idx_health_incidents_tap_opened ON health_incidents (tap_id, opened_at);
+  CREATE INDEX idx_health_incidents_resolved_at ON health_incidents (resolved_at);
+  CREATE TABLE health_incident_transitions (
+    id TEXT PRIMARY KEY CHECK (length(CAST(id AS BLOB)) = 36),
+    incident_id TEXT NOT NULL REFERENCES health_incidents(id) ON DELETE CASCADE,
+    transition_kind TEXT NOT NULL CHECK (transition_kind IN ('opened', 'severity_changed', 'resolved', 'acknowledged', 'cooldown_changed')),
+    state TEXT CHECK (state IS NULL OR state IN ('not_configured', 'healthy', 'degraded', 'active')),
+    severity TEXT CHECK (severity IS NULL OR severity IN ('none', 'info', 'warning', 'critical')),
+    reason_code TEXT CHECK (reason_code IS NULL OR length(CAST(reason_code AS BLOB)) BETWEEN 1 AND 80),
+    evidence_json TEXT NOT NULL DEFAULT '{}' CHECK (length(CAST(evidence_json AS BLOB)) <= 2048),
+    actor_id TEXT CHECK (actor_id IS NULL OR length(CAST(actor_id AS BLOB)) BETWEEN 1 AND 255),
+    session_id TEXT CHECK (session_id IS NULL OR length(CAST(session_id AS BLOB)) BETWEEN 1 AND 255),
+    occurred_at TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX idx_health_incident_transitions_incident_occurred ON health_incident_transitions (incident_id, occurred_at, id);
+  CREATE TRIGGER trg_health_incident_transitions_no_update
+    BEFORE UPDATE ON health_incident_transitions
+    BEGIN
+      SELECT RAISE(ABORT, 'health_incident_transitions is append-only');
+    END;
+  CREATE TABLE health_leak_samples (
+    tap_id TEXT NOT NULL REFERENCES taps(id) ON DELETE CASCADE,
+    measurement_id TEXT NOT NULL CHECK (length(CAST(measurement_id AS BLOB)) = 36),
+    epoch_id TEXT NOT NULL CHECK (length(CAST(epoch_id AS BLOB)) = 36),
+    measured_at_epoch_ms INTEGER NOT NULL CHECK (typeof(measured_at_epoch_ms) = 'integer'),
+    stabilized_volume_ml REAL NOT NULL CHECK (${HEALTH_FINITE_NONNEGATIVE_REAL_CHECK("stabilized_volume_ml")}),
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (tap_id, measurement_id)
+  );
+  CREATE INDEX idx_health_leak_samples_tap_time ON health_leak_samples (tap_id, measured_at_epoch_ms);
+  CREATE TABLE tap_line_maintenance_records (
+    id TEXT PRIMARY KEY CHECK (length(CAST(id AS BLOB)) = 36),
+    tap_id TEXT NOT NULL REFERENCES taps(id) ON DELETE RESTRICT,
+    maintenance_type TEXT NOT NULL CHECK (maintenance_type IN ('line_cleaned', 'sanitized', 'inspection', 'repair', 'other')),
+    performed_at TEXT NOT NULL,
+    notes TEXT CHECK (notes IS NULL OR length(CAST(notes AS BLOB)) BETWEEN 1 AND 2048),
+    actor_type TEXT NOT NULL CHECK (actor_type IN ('operator', 'admin', 'system')),
+    actor_id TEXT CHECK (actor_id IS NULL OR length(CAST(actor_id AS BLOB)) BETWEEN 1 AND 255),
+    session_id TEXT CHECK (session_id IS NULL OR length(CAST(session_id AS BLOB)) BETWEEN 1 AND 255),
+    recorded_at TEXT NOT NULL,
+    resulting_due_at TEXT
+  );
+  CREATE INDEX idx_tap_line_maintenance_records_tap_performed_id ON tap_line_maintenance_records (tap_id, performed_at, id);
+  CREATE TRIGGER trg_tap_line_maintenance_records_no_update
+    BEFORE UPDATE ON tap_line_maintenance_records
+    BEGIN
+      SELECT RAISE(ABORT, 'tap_line_maintenance_records is append-only');
+    END;
+`;
+
+const HEALTH_MAINTENANCE_SCHEMA_OBJECTS = [
+  ...FORECASTING_SCHEMA_OBJECTS,
+  ["index", "idx_pours_epoch_completed"],
+  ["table", "health_global_config"],
+  ["table", "health_tap_overrides"],
+  ["table", "health_check_state"],
+  ["table", "health_incidents"],
+  ["table", "health_incident_transitions"],
+  ["table", "health_leak_samples"],
+  ["table", "tap_line_maintenance_records"],
+  ["index", "idx_health_incidents_open_tap_check"],
+  ["index", "idx_health_incidents_tap_opened"],
+  ["index", "idx_health_incidents_resolved_at"],
+  ["index", "idx_health_incident_transitions_incident_occurred"],
+  ["index", "idx_health_leak_samples_tap_time"],
+  ["index", "idx_tap_line_maintenance_records_tap_performed_id"],
+  ["trigger", "trg_health_incident_transitions_no_update"],
+  ["trigger", "trg_tap_line_maintenance_records_no_update"],
+] as const;
+
 function splitSqlStatements(sql: string): string[] {
   const statements: string[] = [];
   let start = 0;
@@ -2111,6 +2314,268 @@ function validateForecastingSchema(database: DatabaseExecutor): void {
   }
 }
 
+function validateHealthMaintenanceColumns(database: DatabaseExecutor): void {
+  const required: Readonly<Record<string, readonly Omit<TableColumnRow, "cid">[]>> = {
+    health_global_config: [
+      { name: "id", type: "INTEGER", notnull: 0, dflt_value: null, pk: 1 },
+      { name: "revision", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "low_keg_enabled", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "low_keg_threshold_percent", type: "REAL", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "low_keg_critical_percent", type: "REAL", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "low_keg_fixed_threshold_ml", type: "REAL", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "low_keg_settling_ms", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "scale_availability_enabled", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "scale_degraded_after_ms", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "scale_active_after_ms", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "suspected_leak_enabled", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+      {
+        name: "suspected_leak_loss_threshold_ml",
+        type: "REAL",
+        notnull: 1,
+        dflt_value: null,
+        pk: 0,
+      },
+      { name: "suspected_leak_window_ms", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+      {
+        name: "suspected_leak_pour_grace_ms",
+        type: "INTEGER",
+        notnull: 1,
+        dflt_value: null,
+        pk: 0,
+      },
+      { name: "suspected_leak_settling_ms", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+      {
+        name: "suspected_leak_reset_movement_ml",
+        type: "REAL",
+        notnull: 1,
+        dflt_value: null,
+        pk: 0,
+      },
+      { name: "suspected_leak_max_samples", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "serving_temperature_enabled", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+      {
+        name: "serving_temperature_normal_min_c",
+        type: "REAL",
+        notnull: 1,
+        dflt_value: null,
+        pk: 0,
+      },
+      {
+        name: "serving_temperature_normal_max_c",
+        type: "REAL",
+        notnull: 1,
+        dflt_value: null,
+        pk: 0,
+      },
+      {
+        name: "serving_temperature_critical_min_c",
+        type: "REAL",
+        notnull: 1,
+        dflt_value: null,
+        pk: 0,
+      },
+      {
+        name: "serving_temperature_critical_max_c",
+        type: "REAL",
+        notnull: 1,
+        dflt_value: null,
+        pk: 0,
+      },
+      {
+        name: "serving_temperature_duration_ms",
+        type: "INTEGER",
+        notnull: 1,
+        dflt_value: null,
+        pk: 0,
+      },
+      { name: "line_cleaning_due_enabled", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+      {
+        name: "line_cleaning_due_interval_days",
+        type: "INTEGER",
+        notnull: 1,
+        dflt_value: null,
+        pk: 0,
+      },
+      {
+        name: "line_cleaning_due_critical_grace_days",
+        type: "INTEGER",
+        notnull: 1,
+        dflt_value: null,
+        pk: 0,
+      },
+      { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    ],
+    health_tap_overrides: [
+      { name: "tap_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+      { name: "revision", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "low_keg_enabled", type: "INTEGER", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "low_keg_threshold_percent", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "low_keg_critical_percent", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "low_keg_fixed_threshold_ml", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "low_keg_settling_ms", type: "INTEGER", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "scale_availability_enabled", type: "INTEGER", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "scale_degraded_after_ms", type: "INTEGER", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "scale_active_after_ms", type: "INTEGER", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "suspected_leak_enabled", type: "INTEGER", notnull: 0, dflt_value: null, pk: 0 },
+      {
+        name: "suspected_leak_loss_threshold_ml",
+        type: "REAL",
+        notnull: 0,
+        dflt_value: null,
+        pk: 0,
+      },
+      { name: "suspected_leak_window_ms", type: "INTEGER", notnull: 0, dflt_value: null, pk: 0 },
+      {
+        name: "suspected_leak_pour_grace_ms",
+        type: "INTEGER",
+        notnull: 0,
+        dflt_value: null,
+        pk: 0,
+      },
+      { name: "suspected_leak_settling_ms", type: "INTEGER", notnull: 0, dflt_value: null, pk: 0 },
+      {
+        name: "suspected_leak_reset_movement_ml",
+        type: "REAL",
+        notnull: 0,
+        dflt_value: null,
+        pk: 0,
+      },
+      { name: "suspected_leak_max_samples", type: "INTEGER", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "serving_temperature_enabled", type: "INTEGER", notnull: 0, dflt_value: null, pk: 0 },
+      {
+        name: "serving_temperature_normal_min_c",
+        type: "REAL",
+        notnull: 0,
+        dflt_value: null,
+        pk: 0,
+      },
+      {
+        name: "serving_temperature_normal_max_c",
+        type: "REAL",
+        notnull: 0,
+        dflt_value: null,
+        pk: 0,
+      },
+      {
+        name: "serving_temperature_critical_min_c",
+        type: "REAL",
+        notnull: 0,
+        dflt_value: null,
+        pk: 0,
+      },
+      {
+        name: "serving_temperature_critical_max_c",
+        type: "REAL",
+        notnull: 0,
+        dflt_value: null,
+        pk: 0,
+      },
+      {
+        name: "serving_temperature_duration_ms",
+        type: "INTEGER",
+        notnull: 0,
+        dflt_value: null,
+        pk: 0,
+      },
+      { name: "line_cleaning_due_enabled", type: "INTEGER", notnull: 0, dflt_value: null, pk: 0 },
+      {
+        name: "line_cleaning_due_interval_days",
+        type: "INTEGER",
+        notnull: 0,
+        dflt_value: null,
+        pk: 0,
+      },
+      {
+        name: "line_cleaning_due_critical_grace_days",
+        type: "INTEGER",
+        notnull: 0,
+        dflt_value: null,
+        pk: 0,
+      },
+      { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    ],
+    health_check_state: [
+      { name: "tap_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 1 },
+      { name: "check_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 2 },
+      { name: "state", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "severity", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "reason_code", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "evidence_json", type: "TEXT", notnull: 1, dflt_value: "'{}'", pk: 0 },
+      { name: "condition_started_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "last_observation_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "suppression_until", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "cooldown_until", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "revision", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "evaluated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    ],
+    health_incidents: [
+      { name: "id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+      { name: "tap_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "check_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "opened_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "current_severity", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "max_severity", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "resolved_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "acknowledged_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "by_actor_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "by_session_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "open_reason_code", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "open_evidence_json", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "resolution_reason_code", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "revision", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    ],
+    health_incident_transitions: [
+      { name: "id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+      { name: "incident_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "transition_kind", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "state", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "severity", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "reason_code", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "evidence_json", type: "TEXT", notnull: 1, dflt_value: "'{}'", pk: 0 },
+      { name: "actor_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "session_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "occurred_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "created_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    ],
+    health_leak_samples: [
+      { name: "tap_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 1 },
+      { name: "measurement_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 2 },
+      { name: "epoch_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "measured_at_epoch_ms", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "stabilized_volume_ml", type: "REAL", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "created_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    ],
+    tap_line_maintenance_records: [
+      { name: "id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+      { name: "tap_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "maintenance_type", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "performed_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "notes", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "actor_type", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "actor_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "session_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "recorded_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "resulting_due_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+    ],
+  };
+
+  for (const [table, columns] of Object.entries(required)) {
+    expectColumns(database, table, columns);
+  }
+}
+
+function validateHealthMaintenanceSchema(database: DatabaseExecutor): void {
+  validateTelemetrySchemaDefinition(
+    database,
+    HEALTH_MAINTENANCE_SCHEMA_OBJECTS,
+    `${FORENSIC_QC_SCHEMA_SQL}\n${TELEMETRY_EPOCHS_SCHEMA_SQL}\n${FORECASTING_SCHEMA_SQL}\n${HEALTH_MAINTENANCE_SCHEMA_SQL}`,
+    HEALTH_MAINTENANCE_SCHEMA_VERSION,
+  );
+  validateHealthMaintenanceColumns(database);
+}
+
 function validatePhysicalKegsSchema(database: DatabaseExecutor): void {
   const expected = new Map(
     PHYSICAL_KEGS_SCHEMA_OBJECTS.map(([type, name]) => [`${type}:${name}`, type]),
@@ -2311,6 +2776,55 @@ export const FORECASTING_MIGRATION: MigrationDefinition = {
   },
 };
 
+function seedHealthMaintenance(database: DatabaseExecutor): void {
+  database.execute(`
+    INSERT INTO health_global_config (
+      id, revision,
+      low_keg_enabled, low_keg_threshold_percent, low_keg_critical_percent,
+      low_keg_fixed_threshold_ml, low_keg_settling_ms,
+      scale_availability_enabled, scale_degraded_after_ms, scale_active_after_ms,
+      suspected_leak_enabled, suspected_leak_loss_threshold_ml, suspected_leak_window_ms,
+      suspected_leak_pour_grace_ms, suspected_leak_settling_ms,
+      suspected_leak_reset_movement_ml, suspected_leak_max_samples,
+      serving_temperature_enabled, serving_temperature_normal_min_c,
+      serving_temperature_normal_max_c, serving_temperature_critical_min_c,
+      serving_temperature_critical_max_c, serving_temperature_duration_ms,
+      line_cleaning_due_enabled, line_cleaning_due_interval_days,
+      line_cleaning_due_critical_grace_days, updated_at
+    ) VALUES (
+      1, 1,
+      1, 20, 5, 0, 30000,
+      1, 300000, 1800000,
+      0, 236.5882365, 900000, 120000, 600000, 946.352946, 64,
+      0, 1.1111111111111112, 5.555555555555555, -1.1111111111111112, 10, 900000,
+      0, 14, 7, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+    );
+    INSERT INTO health_check_state (
+      tap_id, check_id, state, severity, evidence_json, revision, evaluated_at, updated_at
+    )
+    SELECT taps.id, checks.check_id, 'not_configured', 'none', '{}', 1,
+      strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+    FROM taps
+    CROSS JOIN (
+      SELECT 'low_keg' AS check_id
+      UNION ALL SELECT 'scale_availability'
+      UNION ALL SELECT 'suspected_leak'
+      UNION ALL SELECT 'serving_temperature'
+      UNION ALL SELECT 'line_cleaning_due'
+    ) AS checks;
+  `);
+}
+
+export const HEALTH_MAINTENANCE_MIGRATION: MigrationDefinition = {
+  version: HEALTH_MAINTENANCE_SCHEMA_VERSION,
+  name: HEALTH_MAINTENANCE_MIGRATION_NAME,
+  apply(database) {
+    database.execute(HEALTH_MAINTENANCE_SCHEMA_SQL);
+    seedHealthMaintenance(database);
+    return undefined;
+  },
+};
+
 /** Canonical production migration list. Keep this array identity stable. */
 export const MIGRATIONS: readonly MigrationDefinition[] = [
   FOUNDATION_MIGRATIONS[0]!,
@@ -2323,6 +2837,7 @@ export const MIGRATIONS: readonly MigrationDefinition[] = [
   FORENSIC_QC_MIGRATION,
   TELEMETRY_EPOCHS_MIGRATION,
   FORECASTING_MIGRATION,
+  HEALTH_MAINTENANCE_MIGRATION,
 ];
 
 // Compatibility aliases for callers that prefer an explicit application name.
@@ -2399,6 +2914,9 @@ function validateRequiredCanonicalState(database: DatabaseExecutor, version: num
   if (version >= FORECASTING_SCHEMA_VERSION) {
     expectRequiredRows(database, "forecast_settings", "id = 1", 1);
   }
+  if (version >= HEALTH_MAINTENANCE_SCHEMA_VERSION) {
+    expectRequiredRows(database, "health_global_config", "id = 1", 1);
+  }
 }
 
 function validateCanonicalSchemaAtVersion(database: DatabaseExecutor, version: number): void {
@@ -2426,6 +2944,8 @@ function validateCanonicalSchemaAtVersion(database: DatabaseExecutor, version: n
     validateTelemetryEpochsSchema(database);
   } else if (version === FORECASTING_SCHEMA_VERSION) {
     validateForecastingSchema(database);
+  } else if (version === HEALTH_MAINTENANCE_SCHEMA_VERSION) {
+    validateHealthMaintenanceSchema(database);
   } else {
     throw incompatibleSchema("schema version is not a canonical Tapboard version");
   }
@@ -2465,7 +2985,16 @@ export function initializeSchema(
   }
   validateMigrationLedger(database, currentVersion, migrations);
 
-  if (isCanonicalMigrationPrefix(migrations) && currentVersion === FORECASTING_SCHEMA_VERSION) {
+  if (
+    isCanonicalMigrationPrefix(migrations) &&
+    currentVersion === HEALTH_MAINTENANCE_SCHEMA_VERSION
+  ) {
+    validateFoundationLedgerStructure(database);
+    validateHealthMaintenanceSchema(database);
+  } else if (
+    isCanonicalMigrationPrefix(migrations) &&
+    currentVersion === FORECASTING_SCHEMA_VERSION
+  ) {
     validateFoundationLedgerStructure(database);
     validateForecastingSchema(database);
   } else if (currentVersion === TELEMETRY_EPOCHS_SCHEMA_VERSION) {

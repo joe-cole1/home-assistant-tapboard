@@ -2,7 +2,11 @@ import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 
 import { loadConfig, type ApplicationConfig, type LoadConfigOptions } from "./config.ts";
-import { openDatabase, type DatabaseConnection } from "./infrastructure/database/connection.ts";
+import {
+  openDatabase,
+  type DatabaseConnection,
+  type DatabaseExecutor,
+} from "./infrastructure/database/connection.ts";
 import { APPLICATION_SCHEMA_VERSION } from "./infrastructure/database/migrations.ts";
 import { sendJson } from "./infrastructure/http/error-mapper.ts";
 import {
@@ -25,10 +29,20 @@ import { registerBeverageRoutes } from "./features/beverages/routes.ts";
 import { createFillService } from "./features/fills/service.ts";
 import { registerFillRoutes } from "./features/fills/routes.ts";
 import { createTapService } from "./features/taps/service.ts";
+import type {
+  AssignmentClosedContext,
+  AssignmentOpenedContext,
+  TapAssignmentExtensionPort,
+} from "./features/taps/types.ts";
 import { registerTapRoutes } from "./features/taps/routes.ts";
 import { createMachineKeyService } from "./features/machine-keys/service.ts";
 import { TelemetryService, registerTelemetryRoutes } from "./features/telemetry/index.ts";
 import { DetectorService } from "./features/telemetry/detector-service.ts";
+import {
+  createHealthService,
+  registerHealthRoutes,
+  type HealthService,
+} from "./features/health/index.ts";
 import { createForecastService, registerForecastRoutes } from "./features/forecasting/index.ts";
 import { createLogger, type Logger } from "./shared/logging.ts";
 
@@ -72,6 +86,7 @@ class FoundationApplication implements Application {
   #httpServer: HttpServerLifecycle | undefined;
   #beverageService: BeverageService | undefined;
   #detectorService: DetectorService | undefined;
+  #healthService: HealthService | undefined;
   #address: HttpServerAddress | undefined;
   #starting: Promise<HttpServerAddress> | undefined;
   #stopping: Promise<void> | undefined;
@@ -129,15 +144,50 @@ class FoundationApplication implements Application {
       });
       const detectorService = new DetectorService(this.#database);
       this.#detectorService = detectorService;
+      const healthService = createHealthService(this.#database, {
+        onError: () => this.#logger.error("Health maintenance failed"),
+      });
+      this.#healthService = healthService;
+
+      const tapExtensionPort: TapAssignmentExtensionPort = {
+        onAssignmentOpened: (
+          database: DatabaseExecutor,
+          context: AssignmentOpenedContext,
+        ): void => {
+          detectorService.onAssignmentOpened(database, context);
+          healthService.onAssignmentOpened(database, context);
+        },
+        onAssignmentClosed: (
+          database: DatabaseExecutor,
+          context: AssignmentClosedContext,
+        ): void => {
+          detectorService.onAssignmentClosed(database, context);
+          healthService.onAssignmentClosed(database, context);
+        },
+        onTapCreated: (database: DatabaseExecutor, tapId: string, occurredAt: string): void => {
+          healthService.onTapCreated(database, tapId, occurredAt);
+        },
+        onTapRetired: (database: DatabaseExecutor, tapId: string, occurredAt: string): void => {
+          healthService.onTapRetired(database, tapId, occurredAt);
+        },
+      };
       const kegService = createKegService(this.#database, {
-        onKegCorrection: (database, event) => detectorService.onKegCorrection(database, event),
+        onKegCorrection: (database, event) => {
+          detectorService.onKegCorrection(database, event);
+          healthService.onKegCorrection(database, event);
+        },
       });
       const beverageService = createBeverageService(this.#database, {
         secretsService,
-        densityExtensionPort: detectorService,
+        densityExtensionPort: {
+          onEffectiveDensityChanged: (database, event) => {
+            detectorService.onEffectiveDensityChanged(database, event);
+            healthService.onEffectiveDensityChanged(database, event);
+          },
+        },
       });
       this.#beverageService = beverageService;
-      const tapService = createTapService(this.#database, { extensionPort: detectorService });
+      const tapService = createTapService(this.#database, { extensionPort: tapExtensionPort });
       const fillService = createFillService(this.#database, {
         beverageService,
         assignmentPort: tapService.asFillAssignmentPort(),
@@ -146,8 +196,18 @@ class FoundationApplication implements Application {
       const telemetryService = new TelemetryService({
         database: this.#database,
         machineKeyService,
-        authorityExtensionPort: detectorService,
-        acceptedExtensionPort: detectorService,
+        authorityExtensionPort: {
+          onAuthorityChanged: (database, event) => {
+            detectorService.onAuthorityChanged(database, event);
+            healthService.onAuthorityChanged(database, event);
+          },
+        },
+        acceptedExtensionPort: {
+          onAcceptedSample: (database, event) => {
+            detectorService.onAcceptedSample(database, event);
+            healthService.onAcceptedSample(database, event);
+          },
+        },
       });
       const forecastService = createForecastService(this.#database);
 
@@ -167,6 +227,7 @@ class FoundationApplication implements Application {
       registerBeverageRoutes({ router, beverageService, authService });
       registerFillRoutes({ router, fillService, authService });
       registerTapRoutes({ router, tapService, authService });
+      registerHealthRoutes({ router, healthService, authService });
       registerTelemetryRoutes({ router, telemetryService, detectorService, authService });
       registerForecastRoutes({ router, forecastService, authService });
 
@@ -182,6 +243,7 @@ class FoundationApplication implements Application {
       detectorService.startMaintenance({
         onError: () => this.#logger.error("Detector maintenance failed"),
       });
+      healthService.startMaintenance();
       this.#address = address;
       this.#state = "ready";
       beverageService.startPeriodicSync();
@@ -212,6 +274,13 @@ class FoundationApplication implements Application {
     try {
       this.#beverageService?.stopPeriodicSync();
       this.#beverageService = undefined;
+    } catch {
+      // Ignored
+    }
+
+    try {
+      this.#healthService?.stopMaintenance();
+      this.#healthService = undefined;
     } catch {
       // Ignored
     }
@@ -263,6 +332,13 @@ class FoundationApplication implements Application {
     try {
       this.#beverageService?.stopPeriodicSync();
       this.#beverageService = undefined;
+    } catch {
+      // Ignored
+    }
+
+    try {
+      this.#healthService?.stopMaintenance();
+      this.#healthService = undefined;
     } catch {
       // Ignored
     }

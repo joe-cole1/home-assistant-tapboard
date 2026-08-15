@@ -51,6 +51,8 @@ import type {
   TapActorOptions,
   TapAssignmentExtensionPort,
   TapAssignmentLifecycle,
+  TapCreatedContext,
+  TapRetiredContext,
   TapDeletionImpact,
   UnassignOperationResult,
 } from "./types.ts";
@@ -58,6 +60,8 @@ import type {
 export class DefaultTapAssignmentExtensionPort implements TapAssignmentExtensionPort {
   onAssignmentOpened(_db: DatabaseExecutor, _context: AssignmentOpenedContext): void {}
   onAssignmentClosed(_db: DatabaseExecutor, _context: AssignmentClosedContext): void {}
+  onTapCreated(_db: DatabaseExecutor, _tapId: string, _occurredAt: string): void {}
+  onTapRetired(_db: DatabaseExecutor, _tapId: string, _occurredAt: string): void {}
 }
 
 export interface TapServiceOptions {
@@ -123,6 +127,16 @@ export class TapService {
       };
 
       insertTap(this.#database, tap);
+      const createdContext: TapCreatedContext = { tapId: tap.id, occurredAt: nowIso };
+
+      assertSynchronousCompletion(
+        this.#extensionPort.onTapCreated?.(
+          this.#database,
+          createdContext.tapId,
+          createdContext.occurredAt,
+        ),
+        "Tap lifecycle extensions",
+      );
 
       appendActivity(this.#database, {
         category: "domain",
@@ -701,6 +715,19 @@ export class TapService {
       };
 
       updateTap(this.#database, updatedTap);
+      const retiredContext: TapRetiredContext = {
+        tapId: validatedTapId,
+        occurredAt: nowIso,
+      };
+
+      assertSynchronousCompletion(
+        this.#extensionPort.onTapRetired?.(
+          this.#database,
+          retiredContext.tapId,
+          retiredContext.occurredAt,
+        ),
+        "Tap lifecycle extensions",
+      );
 
       appendActivity(this.#database, {
         category: "domain",

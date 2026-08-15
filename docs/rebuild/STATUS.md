@@ -1,9 +1,10 @@
 # Tapboard v2 rebuild status
 
 - Architecture: **FROZEN**
-- Current phase: **Issue #74 Pour history and Fill forecasting implemented; #75 Draft health and Tap maintenance is next**
-- Current branch: `codex/issue-74-pour-history-forecasting`
-- Current base: `cdbf2f79e4bfb14f2687b2322fc2800649d11b87`
+- Current phase: **Issue #75 Draft health and Tap maintenance implemented; #76 SSR Admin/public dashboard, SSE, and display preferences is next**
+- Current branch: `codex/issue-75-draft-health-tap-maintenance`
+- Current base: `ae127ed21da21ecf3f663731cdec14983a5fbd15`
+- Prebaseline: **333 passing tests** (prebaseline evidence, not a current validation result)
 - Frozen v1 source commit: `429cf07e451b64ca1713655a34ffa5ebd376efae`
 - ADR index: [`docs/adr/README.md`](../adr/README.md)
 - V1 reuse manifest: [`docs/rebuild/v1-reuse-manifest.json`](v1-reuse-manifest.json)
@@ -30,18 +31,18 @@
 - 16. [#80 — System and local operator functions](https://github.com/joe-cole1/home-assistant-tapboard/issues/80)
 - 17. [#81 — Deployment, documentation, and final acceptance](https://github.com/joe-cole1/home-assistant-tapboard/issues/81)
 
-The list preserves the frozen implementation sequence with #85's local development surface between #67 and #68. Issues #67, #85, and #68–#74 are implemented; #75 (Draft health and Tap maintenance) is next.
+The list preserves the frozen implementation sequence with #85's local development surface between #67 and #68. Issues #67, #85, and #68–#75 are implemented; #76 (SSR Admin/public dashboard, SSE, and display preferences) is next.
 
 ## Implemented in Foundation
 
 - Node 24 ESM runtime with native erasable TypeScript and `tsc --noEmit` checking;
 - explicit application composition, Node HTTP lifecycle, and exactly `GET /healthz` for local application/database readiness;
 - file-based Eta rendering with default escaping plus layout/partial proof templates;
-- one controlled `better-sqlite3` connection, foreign keys, transactional versioned migrations, exact version-10 schema validation, and resource closure;
+- one controlled `better-sqlite3` connection, foreign keys, transactional versioned migrations, exact version-11 schema validation, and resource closure;
 - shared typed errors, centralized HTTP error mapping, explicit validation, and structured redacting logging;
 - Foundation- and #67–#74-aware architecture guardrails and negative fixtures;
 - canonical external-origin/trusted-proxy/session configuration and stdin-only operator PIN/key maintenance commands;
-- schema version 2 security/session, Activity/deletion-audit, stable event, secret, machine-key, and bounded-outbox primitives;
+- security/session, Activity/deletion-audit, stable event, secret, machine-key, and bounded-outbox primitives introduced in schema version 2 and retained through current schema version 11;
 - #85's coherent development-only Docker image/Compose surface, loopback binding, healthcheck, named-volume persistence, and external-secret/operator workflow;
 - #68 Physical Kegs domain inventory, capacity and tare ownership, prospective append-only tare history, append-only maintenance timeline, synchronous telemetry correction hook seam, deletion impact and audit integration, and authenticated admin HTTP API;
 - #69 Custom and Brewfather-linked Beverages domain entity, custom profile/recipe tree, dynamic effective presentation resolution, 3-state presentation overrides, density resolution precedence, candidate cache, rate-limited Brewfather sync with persistent backoff, atomic unlinking, and bounded recipe snapshots;
@@ -49,12 +50,13 @@ The list preserves the frozen implementation sequence with #85's local developme
 - #71 Physical Taps domain entity, monotonic `first_used_at` retention across fill kicks/deletions, retired tap status preserving number reservations and preventing new assignments, atomic Tap Assignment Lifecycles with partial unique indexes (`idx_tap_assignments_active_tap`, `idx_tap_assignments_active_fill`), on-deck clearance upon tap assignment, atomic fill moves with new UUID generation and rollback safety, occupied tap conflict guards, never-used-only tap deletion with deletion audit, synchronous `TapAssignmentExtensionPort` with `requiresFreshBaseline` signaling, concrete `FillAssignmentLifecyclePort` integration for `#70`, and authenticated admin and unauthenticated public tap projections (`GET /api/public/taps`);
 - #72 canonical telemetry ingestion and #73 immutable telemetry epochs/provenance snapshots, one-way closure and single-open Tap invariants, fresh settled baselines without historical reuse, canonical→interpreted→stabilized→public-safe volume pipeline, durable timestamp-driven detector/deadline recovery, upward-jump warnings, minimal immutable pours with deterministic `effect_key`, and transaction-local accepted-ingestion extension with rollback;
 - #74 Fill-scoped immutable pour history across Tap moves, first-assignment UTC daily consumption with inclusive zero days, actual stabilized current-open-epoch volume/capacity input, deterministic sufficient-history forecasting (14 days/3 pours; SHA-256-seeded 512-sample seven-day circular moving-block bootstrap), bounded 24 oz-per-four-day fallback, low/medium/high confidence, conservative whole-serving forecasts, serving-size settings defaulting to 354.88235475 mL from v1 12 oz evidence, and authenticated Admin history/forecast/settings routes with no public forecast endpoint;
+- #75 draft health and Tap line maintenance: typed health IDs (`low_keg`, `scale_availability`, `suspected_leak`, `serving_temperature`, `line_cleaning_due`), typed global defaults with nullable per-Tap overrides, low-keg/scale checks enabled by default and leak/temperature/cleaning checks opt-in, authoritative stabilized-volume and epoch-isolated evaluation, disabled-versus-retired semantics with deterministic incident resolution, rebuildable current state distinct from durable incidents/transitions, acknowledgement that does not resolve or hide, bounded cooldown for repeated incident side effects only, 365-day resolved-incident retention in batches of at most 100, append-only line maintenance with server-derived due dates and `line_cleaned` establishing the line-cleaning baseline only, Admin-only overview/detail/configuration/override/incident/acknowledgement/cooldown/maintenance routes and projections, meaningful-Activity filtering, and the safe targeted `HealthTargetedUpdate` DTO seam for #76;
 - #85 architecture guardrails that preserve banned canonical production paths and reject incomplete or unapproved top-level container variants;
 - explicit `not_queued_capacity` degradation semantics; no provider adapters, delivery workers, or browser feature pages;
 - canonical `npm run check` covering format, lint, types, architecture/reuse integrity, and `node:test`;
 - Node 24 CI running `npm ci`, the canonical gate, and changed-line whitespace validation.
 
-Schema version 9 adds persisted global detector defaults, nullable per-Tap overrides, explicit-only arbitration groups, immutable telemetry epochs, mutable durable epoch state, bounded detector samples, and immutable minimal pours. Epochs snapshot source, assignment/Fill, Keg capacity/tare, effective density/provenance, normalization, configuration content hash, and arbitration membership. Assignment/move/unassign/Kick/source/capacity/tare/effective-density/effective-config/manual-rebaseline transitions close an epoch and require a fresh settled baseline; numeric effective-density equality prevents churn, and provenance changes apply to future snapshots. Taps are independent unless grouped explicitly. Detector state and deadlines recover durably, upward jumps warn, and a deterministic `effect_key` guarantees one pour effect. Schema version 10 adds the singleton forecast settings and Fill-history indexes while keeping pours detector-owned and immutable. Forecasting is Fill-scoped across Tap moves, begins at first assignment, includes UTC daily zeros through the current completed-at day, uses the actual stabilized current open-epoch volume and capacity snapshot, and fails closed for waiting/unassigned, ended, or anomalous inputs.
+Schema version 9 adds persisted global detector defaults, nullable per-Tap overrides, explicit-only arbitration groups, immutable telemetry epochs, mutable durable epoch state, bounded detector samples, and immutable minimal pours. Epochs snapshot source, assignment/Fill, Keg capacity/tare, effective density/provenance, normalization, configuration content hash, and arbitration membership. Assignment/move/unassign/Kick/source/capacity/tare/effective-density/effective-config/manual-rebaseline transitions close an epoch and require a fresh settled baseline; numeric effective-density equality prevents churn, and provenance changes apply to future snapshots. Taps are independent unless grouped explicitly. Detector state and deadlines recover durably, upward jumps warn, and a deterministic `effect_key` guarantees one pour effect. Schema version 10 adds the singleton forecast settings and Fill-history indexes while keeping pours detector-owned and immutable. Schema version 11 (`draft-health-and-tap-maintenance`) adds health defaults/overrides, rebuildable current health state, durable incidents/transitions, and append-only Tap line-maintenance records. Forecasting remains Fill-scoped across Tap moves, begins at first assignment, includes UTC daily zeros through the current completed-at day, uses the actual stabilized current open-epoch volume and capacity snapshot, and fails closed for waiting/unassigned, ended, or anomalous inputs.
 
 ## Issue #73 implementation boundary
 
@@ -68,13 +70,27 @@ Accepted samples run through one synchronous transaction that rechecks identity/
 
 The #72 accepted-sample and authority-change ports now invoke #73 transaction-local detector work. Accepted canonical samples are interpreted against the immutable epoch provenance, stabilized, and exposed only as public-safe volume; failures roll back the accepted extension before its receipt finalizes. Manual rebaseline retains the assignment, opens a new epoch, and waits for a new eligible baseline sample. Completed pours are immutable and deduplicated by deterministic terminal `effect_key` across retries, restarts, and replay.
 
+## Issue #75 implementation boundary
+
+The health contract uses exactly `low_keg`, `scale_availability`, `suspected_leak`, `serving_temperature`, and `line_cleaning_due`. Typed global defaults are the baseline and nullable per-Tap overrides selectively replace fields. `low_keg` and `scale_availability` are enabled by default; `suspected_leak`, `serving_temperature`, and `line_cleaning_due` are opt-in. Health reads canonical authoritative telemetry and stabilized volume within the immutable telemetry epoch, preserving authority and epoch isolation. Disabled Taps evaluate; retired Taps skip evaluation and receive deterministic incident resolution.
+
+Rebuildable current health state is separate from durable incidents and transitions. Acknowledgement records acknowledgement only and does not resolve or hide an incident. Cooldown suppresses repeated incident side effects for a bounded period, not health truth. Resolved incidents are retained for 365 days and pruned in deterministic batches of at most 100; open incidents, current state, and Tap `first_used_at` are never pruned. A durable incident and a line-maintenance record each atomically set Tap `first_used_at`.
+
+Tap line maintenance is append-only. The server derives resulting due dates, `line_cleaned` establishes the line-cleaning baseline only, and private notes are available only in Admin maintenance detail. Health evaluation runs after accepted telemetry (following detector processing), assignment, authority, correction, density, configuration, maintenance, and startup changes, plus one coalesced periodic sweep. Only meaningful changes create Activity. Authenticated Admin routes/projections cover overview, detail, configuration, per-Tap override, incidents, acknowledgement, cooldown, and maintenance. The safe targeted `HealthTargetedUpdate` DTO seam is reserved for #76. There is no public health API, SSE/browser UI (#76), or outbound Home Assistant/webhook delivery worker (#79).
+
 ## Post-merge operator handoff
 
 After each completed and merged v2 implementation issue, update `main`, rebuild and recreate the development container without deleting its volume, verify `/healthz`, and manually exercise the delivered behavior. Every future implementation handoff must include a short issue-specific heading `MANUAL DEV TEST` describing what to test after the rebuild. See the normal command order in the root README.
 
 ### MANUAL DEV TEST — Issue #74
 
-After the normal rebuild, verify `/healthz` reports schema version 10. In an ephemeral database, verify one Fill retains pour history across a move between Taps, is waiting after a move until a new measurement then resumes forecasting, does not include another Fill's pours, and reports ended Fill history without forecasting. Do not select arbitrary persistent entities, mutate a real Brewfather batch, assume a default PIN, or delete the Compose volume as cleanup.
+After the normal rebuild, verify `/healthz` reports schema version 11. In an ephemeral database, verify one Fill retains pour history across a move between Taps, is waiting after a move until a new measurement then resumes forecasting, does not include another Fill's pours, and reports ended Fill history without forecasting. Do not select arbitrary persistent entities, mutate a real Brewfather batch, assume a default PIN, or delete the Compose volume as cleanup.
+
+### MANUAL DEV TEST — Issue #75
+
+Persistent, safe read-only checks: after the normal rebuild, verify `/healthz` reports `{"status":"ok","schemaVersion":11}`; inspect the authenticated Admin health overview/detail/configuration/incident and Tap maintenance projections; and confirm that no public health API, SSE stream, or browser feature page is implied. Do not acknowledge an incident, change a default/override/cooldown, record maintenance, or otherwise mutate the persistent development volume during this pass.
+
+Ephemeral, mutating smoke: use a disposable database and disposable Tap to exercise a default-enabled check, an opt-in check, a nullable per-Tap override, incident acknowledgement/cooldown, deterministic retired-Tap handling, and append-only line maintenance with a server-derived due date. Confirm that a durable incident and a maintenance record atomically set `first_used_at`, and that `line_cleaned` establishes the line-cleaning baseline only. Maintenance and incidents permanently mark a Tap used; never run this smoke against a persistent Tap or the normal named volume, and do not delete the Compose volume as cleanup. No tests are claimed as run here; this is an operator test plan.
 
 ## Deferred validation tiers
 
