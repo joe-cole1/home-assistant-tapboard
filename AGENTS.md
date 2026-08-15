@@ -1,52 +1,134 @@
 # Tapboard Repository Instructions
 
-## Mandatory model and subagent orchestration
+The global Sol High / Luna Max policy applies.
 
-Run the primary coordinator as **`gpt-5.6-sol` with high reasoning**. The Sol-high coordinator is the architect, orchestrator, integrator, verifier, and final quality-control owner. If the active primary agent is not running that model/reasoning combination, stop and re-run the task with the required coordinator rather than silently weakening this requirement.
+This file contains only Tapboard-specific requirements.
 
-Use subagents whenever the approved work decomposes into bounded, non-overlapping tasks. Optimize worker assignments for the lowest practical token cost:
+## Coordinator
 
-- Default worker model: **`gpt-5.6-terra` with low reasoning**.
-- Spawn workers with `fork_turns: "none"` and provide a compact, self-contained assignment containing only the necessary repository context, constraints, exact file ownership, deliverable, and verification command.
-- Prefer Terra-low for repository inventories, reference tracing, fixture construction, isolated implementation, focused tests, documentation, and read-only diff review.
-- Increase a worker's reasoning effort only when a specific bounded task demonstrably requires it. Do not use Sol workers for ordinary implementation work merely for convenience.
-- Keep worker reports concise and evidence-based. Workers stop after their assigned deliverable and do not expand scope.
-- Use at most three workers concurrently so the Sol-high coordinator remains active in the fourth slot.
+Primary coordinator: **`gpt-5.6-sol` with high reasoning**.
 
-The Sol-high coordinator must personally:
+Only permitted subagent: **`luna_max`** (`gpt-5.6-luna`, max reasoning).
 
-1. Read all applicable repository instructions, skills, handoffs, and issue requirements completely before delegating.
-2. Inspect the repository, establish the baseline, own the architecture and plan, and resolve cross-cutting decisions.
-3. Define explicit, non-overlapping file ownership before worker edits.
-4. Sequence all work that touches shared integration surfaces. Prefer sequential ownership over concurrent edits to the same file.
-5. Review every worker report and every changed line; never accept a worker success claim without inspection.
-6. Integrate the complete result, resolve conflicts, run focused and full verification, inspect the final diff, and perform final security/reliability QC.
-7. Decide whether the task's acceptance criteria are actually satisfied and produce the final completion report.
+Prefer Luna for recon, bounded implementation, testing, local tooling, Git/GitHub mechanics, documentation, and CI evidence. Sol owns architecture, integration, and final QC.
 
-Subagents must not:
+## Task Start
 
-- Commit, push, merge, change branches, mutate issues/PRs, or otherwise modify external GitHub state.
-- Read or modify `.env`, expose credentials, call live external services, mutate Home Assistant, restart Home Assistant, or touch live production data unless the user has explicitly authorized that exact action and the coordinator has assigned it.
-- Rebuild or restart the local Compose service unless the coordinator explicitly assigns that exact verification after any required approval.
-- Edit files outside their assigned ownership or undo another worker's changes.
-- Make cross-cutting architecture decisions, weaken tests, broaden scope, or treat a focused test as final acceptance.
+Before write-capable work:
 
-After implementation, assign a fresh Terra-low worker a read-only final diff review focused on security, privacy, transaction ordering, failure handling, migration safety, compatibility, and missing tests. The Sol-high coordinator must independently validate every reported concern, implement or reject it with evidence, rerun verification, and retain sole authority for final QC.
+- inspect branch and `git status`
+- fetch current remote state when branch/PR state matters
+- read applicable issues, handoffs, and design docs
+- have Sol produce the authoritative plan
 
-Task-specific handoff prompts may define a more detailed worker split. Those assignments supplement this policy but may not weaken the coordinator, model, cost, file-ownership, safety, or final-QC requirements above.
+If unexplained worktree changes exist:
 
-## GitHub CLI authentication checks in WSL
+`BLOCKED — PRE-EXISTING WORKTREE CHANGES`
 
-Do not report that GitHub authentication is expired or ask the user to reauthenticate based only on `gh auth status`. In this repository's WSL environment, that command can return a stale/cache/config false negative even while the usable GitHub CLI credentials and Git credential flow are valid.
+Do not stash, discard, reset, clean, restore away, or absorb them without Sol's decision.
 
-Before declaring an authentication blocker:
+## Parallel Work
 
-1. Identify the CLI actually being invoked with `type -a gh` and `gh --version`.
-2. Test a real, read-only authenticated CLI operation, such as `gh api user --jq .login`.
-3. Test repository access with a read-only command such as `gh repo view --json nameWithOwner,defaultBranchRef` or the exact `gh pr` read needed for the task.
-4. If WSL exposes more than one `gh` executable/config context, test the usable CLI context before concluding the credentials are invalid. Distinguish a WSL cache/config-path problem from an actual GitHub authentication rejection.
-5. Distinguish authentication errors from sandbox, DNS, proxy, network, and GitHub-service failures. Retry an important command with the required sandbox escalation when the failure may be environmental.
-6. Never run a command that prints an authentication token, and never expose credential/config contents while diagnosing the CLI.
-7. Report expired/invalid authentication only after the real authenticated CLI operation and repository access both fail with an authentication-specific response. Include the commands tested and sanitized error category.
+Read-only Luna workers may share the primary worktree.
 
-A failing `gh auth status` alone is diagnostic noise, not a blocker. Continue with the verified working CLI or Git credential path when authenticated repository operations succeed.
+Concurrent write-capable Luna workers must use isolated Git worktrees with explicit, preferably non-overlapping scope.
+
+Sol owns integration.
+
+## Scope and Dependencies
+
+Luna must not broaden scope, fix unrelated defects, make cross-cutting architecture decisions, weaken tests, or add/change dependencies without Sol approval.
+
+If more scope is required:
+
+`BLOCKED — SCOPE EXPANSION REQUIRED`
+
+Useful unrelated findings may become Sol-approved follow-on GitHub issues.
+
+Unexpected lockfile changes must be explained.
+
+## Environment Safety
+
+### Local Development
+
+Tapboard local development/test infrastructure is disposable unless repository documentation says otherwise.
+
+When delegated, Luna may rebuild/restart/recreate local containers, destroy/recreate local dev volumes, inspect logs/networking, exec into containers, run existing migrations, and reset disposable local state.
+
+### Live Home Assistant / Production
+
+Live Home Assistant and other production systems are non-disposable.
+
+Without explicit user authorization for the exact live action, do not:
+
+- mutate or restart Home Assistant
+- change live configuration
+- modify production data
+- mutate live external services/infrastructure
+
+Git `"ship it"` does not authorize live-system mutation.
+
+## Secrets
+
+Never expose `.env`, credentials, API keys, tokens, authorization headers, private config, or production secrets.
+
+Redact likely secrets and report exposure to Sol.
+
+## Canonical Commands and Validation
+
+If Tapboard defines canonical bootstrap, validation, preflight, local-CI, shipping, or release scripts, they are authoritative.
+
+Targeted commands are fine for debugging but do not replace a required canonical gate.
+
+If a documented local gate materially differs from CI:
+
+`BLOCKED — LOCAL/CI VALIDATION DRIFT`
+
+Validation waivers and `"ship it"` are separate gates. Never report a waived check as passing.
+
+## Final QC
+
+Sol reviews the complete diff for plan/scope compliance, architecture, security/privacy, failure handling, migration/data safety where applicable, tests/regressions, dependency/lockfile drift, generated artifacts, docs drift, and secret exposure.
+
+Respect documented known limitations and intentional design choices.
+
+## GitHub CLI Authentication in WSL
+
+Do not declare GitHub authentication broken based only on:
+
+`gh auth status`
+
+Before reporting an auth blocker:
+
+1. `type -a gh`
+2. `gh --version`
+3. `gh api user --jq .login`
+4. test the required read-only repo/PR operation
+5. distinguish auth failure from sandbox, DNS, proxy, network, GitHub service, or stale-config problems
+6. never print tokens or credential/config contents
+
+Only ask the user to repair auth after real authenticated identity and repository reads fail with authentication-specific responses.
+
+## Shipping
+
+The global `"ship it"` policy applies.
+
+Before push, a Luna SHIP worker freshly verifies repo/branch, reviewed diff, fetched remote/tracking state, current PR state, base branch, checks/review state when relevant, and conflicts/divergence.
+
+If the associated PR is MERGED or CLOSED:
+
+`BLOCKED — EXISTING PR IS NOT OPEN`
+
+If an appropriate PR remains OPEN, the current `"ship it"` permits updating it.
+
+If push unexpectedly indicates a new remote branch for one expected to exist, stop and re-check remote/PR history.
+
+Never merge, enable auto-merge, force-push, rewrite shared history, push directly to `main`/`master`, or delete remote branches.
+
+After shipping, Luna may monitor CI. On failure, gather evidence and stop for Sol triage; do not auto-fix.
+
+## Post-Merge
+
+After merge, return the primary clone to a clean/current default-branch resting state before unrelated new write work.
+
+Do not destructively delete branches or discard user work.

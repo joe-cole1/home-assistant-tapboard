@@ -488,3 +488,92 @@ export function validateCatalog(body) {
   else if (body.target_tap_id !== undefined) output.target_tap_id = tapId(body.target_tap_id);
   return output;
 }
+
+export function validateMysteryConfig(body) {
+  assertObject(body);
+  rejectUnknown(body, new Set(['enabled', 'redacted_categories']));
+  const enabled = boolean(body.enabled);
+  let redacted_categories;
+  if (body.redacted_categories !== undefined) {
+    if (!Array.isArray(body.redacted_categories)) throw new ValidationError('Redacted categories must be an array');
+    redacted_categories = [];
+    const validSet = new Set([
+      'name',
+      'brewery',
+      'style',
+      'description',
+      'image',
+      'sensory',
+      'brew_story',
+      'recipe',
+      'glassware'
+    ]);
+    for (const item of body.redacted_categories) {
+      if (typeof item !== 'string' || !validSet.has(item))
+        throw new ValidationError(`Invalid redacted category: ${item}`);
+      if (!redacted_categories.includes(item)) redacted_categories.push(item);
+    }
+  }
+  return { enabled, redacted_categories };
+}
+
+export function validateBattleDraft(body) {
+  assertObject(body);
+  rejectUnknown(
+    body,
+    new Set([
+      'title',
+      'copy',
+      'description_copy',
+      'theme',
+      'tapIdA',
+      'tapIdB',
+      'contestant_a_tap_id',
+      'contestant_b_tap_id'
+    ])
+  );
+  const title = body.title !== undefined ? text(body.title, 160, { allowEmpty: true }) : 'Tap Wars';
+  const copyVal = body.description_copy !== undefined ? body.description_copy : body.copy;
+  const copy = copyVal !== undefined ? text(copyVal, 500, { allowEmpty: true }) : '';
+  const theme =
+    body.theme !== undefined
+      ? choice(
+          body.theme,
+          new Set([
+            'standard',
+            'ipa_showdown',
+            'lager_clash',
+            'stout_off',
+            'cider_scramble',
+            'classic',
+            'clash',
+            'neon',
+            'vintage'
+          ])
+        )
+      : 'standard';
+  const tapIdA = tapId(body.contestant_a_tap_id ?? body.tapIdA);
+  const tapIdB = tapId(body.contestant_b_tap_id ?? body.tapIdB);
+  if (tapIdA === tapIdB) throw new ValidationError('Battle contestants must be two different taps');
+  return {
+    title: title || 'Tap Wars',
+    copy,
+    theme,
+    tapIdA,
+    tapIdB,
+    contestant_a_tap_id: tapIdA,
+    contestant_b_tap_id: tapIdB,
+    description_copy: copy
+  };
+}
+
+export function validateVote(body) {
+  assertObject(body);
+  rejectUnknown(body, new Set(['battle_id', 'contestant_side']));
+  if (typeof body.battle_id !== 'number' || !Number.isInteger(body.battle_id) || body.battle_id < 1) {
+    throw new ValidationError('Invalid battle_id');
+  }
+  const upperSide = String(body.contestant_side || '').toUpperCase();
+  const contestant_side = choice(upperSide, new Set(['A', 'B']));
+  return { battle_id: body.battle_id, contestant_side };
+}

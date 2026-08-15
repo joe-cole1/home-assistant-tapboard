@@ -2628,3 +2628,176 @@ body.is-authenticated .ondeck-cog-btn {
   flex-direction: column;
   gap: 0.5rem;
 }
+
+/* ---------------------------------------------------------------------
+ * MYSTERY TAP & TAP WARS STYLING
+ * --------------------------------------------------------------------- */
+
+.badge-mystery {
+  background: #7c3aed;
+  color: #ffffff;
+  border: 1px solid #c084fc;
+}
+
+.tap-wars-banner-container {
+  padding: 0.75rem 1.5rem 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.tap-wars-banner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.85rem 1.25rem;
+  border-radius: 0.85rem;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent-color) 25%, var(--bg-card)), var(--bg-card));
+  border: 1px solid var(--accent-color);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+.tap-wars-banner-icon {
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.tap-wars-banner-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+}
+
+.tap-wars-banner-title {
+  font-family: var(--font-title);
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--accent-color);
+  letter-spacing: 0.04em;
+}
+
+.tap-wars-banner-subtitle {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.tap-vote-container {
+  margin-top: 0.75rem;
+  display: flex;
+  align-items: center;
+}
+
+.btn-vote {
+  border: 1px solid var(--accent-color);
+  background: color-mix(in srgb, var(--accent-color) 15%, transparent);
+  color: var(--accent-color);
+  font-family: var(--font-title);
+  font-weight: 700;
+  font-size: 0.9rem;
+  padding: 0.6rem 1.2rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  min-height: 44px;
+  transition:
+    background 0.2s,
+    transform 0.1s;
+}
+
+.btn-vote:hover {
+  background: var(--accent-color);
+  color: #111;
+}
+
+.btn-vote:active {
+  transform: scale(0.96);
+}
+
+.btn-vote.vote-success {
+  background: #22c55e;
+  color: #ffffff;
+  border-color: #22c55e;
+}
+
+/* Tap Wars Public Dialog */
+.tap-wars-dialog {
+  width: min(48rem, calc(100vw - 2rem));
+  margin: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 1rem;
+  padding: clamp(1rem, 3vw, 1.5rem);
+  background: var(--bg-header);
+  color: var(--text-main);
+  box-shadow: var(--card-shadow);
+}
+
+.tap-wars-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(6px);
+}
+
+.tap-wars-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-top: 1rem;
+}
+
+.tap-wars-matchup {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 1rem;
+  align-items: stretch;
+}
+
+@media (max-width: 640px) {
+  .tap-wars-matchup {
+    grid-template-columns: 1fr;
+  }
+}
+
+.tap-wars-contestant-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 1.25rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.75rem;
+  background: var(--bg-card);
+  text-align: center;
+}
+
+.tap-wars-contestant-card.winner-card {
+  border-color: #eab308;
+  background: color-mix(in srgb, #eab308 15%, var(--bg-card));
+}
+
+.tap-wars-vs {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-title);
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--accent-color);
+}
+
+.tap-wars-bar-container {
+  width: 100%;
+  height: 1.25rem;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  overflow: hidden;
+  display: flex;
+}
+
+.tap-wars-bar-fill-a {
+  height: 100%;
+  background: var(--primary-color);
+  transition: width 0.4s ease;
+}
+
+.tap-wars-bar-fill-b {
+  height: 100%;
+  background: var(--secondary-color);
+  transition: width 0.4s ease;
+}

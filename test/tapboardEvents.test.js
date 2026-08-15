@@ -41,7 +41,9 @@ test('catalog covers the wired event types', () => {
     'keg_kicked',
     'brewfather_sync_failed',
     'health_transition',
-    'forecast_gap'
+    'forecast_gap',
+    'battle_started',
+    'battle_ended'
   ]);
   assert.throws(() => buildTapboardEvent('fermentation_started', context, {}), /Unsupported/);
 });

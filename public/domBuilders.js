@@ -38,7 +38,10 @@ export function buildTapCardContent({
   fg,
   volumeReadoutText,
   forecastText,
-  kicked = false
+  kicked = false,
+  isMystery = false,
+  inBattle = false,
+  battleContestantSide = null
 }) {
   const fragment = document.createDocumentFragment();
   const header = element('div', 'tap-card-header');
@@ -77,6 +80,7 @@ export function buildTapCardContent({
   details.appendChild(styleName);
 
   const badges = element('div', 'tap-card-badges');
+  if (isMystery) badges.appendChild(element('span', 'badge badge-mystery', '❓ Mystery Tap'));
   if (lowThreshold !== null && lowThreshold !== undefined && fillPercent <= lowThreshold) {
     badges.appendChild(element('span', 'badge badge-low', 'Low'));
   }
@@ -99,6 +103,17 @@ export function buildTapCardContent({
   details.appendChild(metrics);
 
   if (description) details.appendChild(element('p', 'beer-description', description));
+
+  if (inBattle && battleContestantSide) {
+    const voteBtnContainer = element('div', 'tap-vote-container');
+    const voteBtn = element('button', 'btn btn-vote tap-vote-btn', 'Vote for this tap');
+    voteBtn.type = 'button';
+    voteBtn.dataset.tapId = String(tapId);
+    voteBtn.dataset.contestantSide = String(battleContestantSide);
+    voteBtn.setAttribute('aria-label', `Vote for Tap ${tapId}`);
+    voteBtnContainer.appendChild(voteBtn);
+    details.appendChild(voteBtnContainer);
+  }
 
   const graphicColumn = element('div', 'tap-card-graphic-column');
   const graphic = element('div', 'graphic-container');

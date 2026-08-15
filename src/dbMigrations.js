@@ -1,5 +1,5 @@
 const BASE_SCHEMA_VERSION = 1;
-export const SCHEMA_VERSION = 11;
+export const SCHEMA_VERSION = 12;
 
 function tableExists(db, name) {
   return Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name));
@@ -603,6 +603,52 @@ function migrateHealthRedesignV11(db) {
   `);
 }
 
+function migrateMysteryAndTapWarsV12(db) {
+  addColumnIfMissing(db, 'brewfather_ondeck_preferences', 'target_tap_id', 'INTEGER DEFAULT NULL');
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS keg_mystery_config (
+      lifecycle_id INTEGER PRIMARY KEY,
+      enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0, 1)),
+      redacted_categories_json TEXT NOT NULL DEFAULT '["name","brewery","style","description","image","sensory","brew_story","recipe","glassware"]' CHECK(length(redacted_categories_json) <= 1024),
+      started_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+      revealed_at TEXT,
+      FOREIGN KEY(lifecycle_id) REFERENCES keg_lifecycles(lifecycle_id) ON DELETE RESTRICT ON UPDATE RESTRICT
+    );
+    CREATE TABLE IF NOT EXISTS tap_wars (
+      battle_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL CHECK(length(title) BETWEEN 1 AND 160),
+      copy TEXT NOT NULL DEFAULT '' CHECK(length(copy) <= 500),
+      theme TEXT NOT NULL DEFAULT 'classic' CHECK(theme IN ('classic', 'clash', 'neon', 'vintage')),
+      state TEXT NOT NULL DEFAULT 'draft' CHECK(state IN ('draft', 'active', 'ended', 'revealed')),
+      end_reason TEXT CHECK(end_reason IS NULL OR end_reason IN ('admin_ended', 'tap_reassigned', 'keg_ended')),
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+      started_at TEXT,
+      ended_at TEXT,
+      revealed_at TEXT
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS tap_wars_one_active
+      ON tap_wars(state) WHERE state = 'active';
+    CREATE TABLE IF NOT EXISTS tap_war_contestants (
+      battle_id INTEGER NOT NULL,
+      contestant_side TEXT NOT NULL CHECK(contestant_side IN ('a', 'b')),
+      tap_id INTEGER NOT NULL CHECK(tap_id BETWEEN 1 AND 6),
+      lifecycle_id INTEGER NOT NULL,
+      batch_id TEXT,
+      display_name TEXT NOT NULL CHECK(length(display_name) BETWEEN 1 AND 160),
+      display_style TEXT NOT NULL DEFAULT '' CHECK(length(display_style) <= 120),
+      abv REAL,
+      srm INTEGER,
+      graphic TEXT DEFAULT 'pint_glass',
+      image_url TEXT,
+      vote_count INTEGER NOT NULL DEFAULT 0 CHECK(vote_count >= 0),
+      PRIMARY KEY(battle_id, contestant_side),
+      FOREIGN KEY(battle_id) REFERENCES tap_wars(battle_id) ON DELETE CASCADE ON UPDATE RESTRICT,
+      FOREIGN KEY(lifecycle_id) REFERENCES keg_lifecycles(lifecycle_id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+      FOREIGN KEY(tap_id) REFERENCES taps(tap_id) ON DELETE RESTRICT ON UPDATE RESTRICT
+    );
+  `);
+}
+
 function validateLatestSchema(db) {
   for (const [table, required] of Object.entries({
     settings: ['id', 'admin_pin_hash', 'admin_pin_initialized'],
@@ -680,6 +726,9 @@ function validateLatestSchema(db) {
       'action_at',
       'operator_notes'
     ],
+    keg_mystery_config: ['lifecycle_id', 'enabled', 'redacted_categories_json', 'started_at', 'revealed_at'],
+    tap_wars: ['battle_id', 'title', 'copy', 'theme', 'state', 'end_reason', 'created_at'],
+    tap_war_contestants: ['battle_id', 'contestant_side', 'tap_id', 'lifecycle_id', 'display_name', 'vote_count'],
     schema_migrations: ['version', 'name', 'applied_at']
   })) {
     if (!tableExists(db, table)) throw new Error(`Incompatible schema version ${SCHEMA_VERSION}: missing ${table}`);
@@ -719,7 +768,8 @@ function validateLatestSchema(db) {
     'brewfather_history_sync_due',
     'lifecycle_milestones_kicked_at',
     'health_check_state_severity',
-    'maintenance_record_taps_tap_completed'
+    'maintenance_record_taps_tap_completed',
+    'tap_wars_one_active'
   ]) {
     if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ?").get(index)) {
       throw new Error(`Incompatible schema version ${SCHEMA_VERSION}: missing ${index}`);
@@ -847,13 +897,21 @@ export function migrateDatabase(db) {
         );
         db.pragma('user_version = 11');
       }
+      if (version < 12) {
+        migrateMysteryAndTapWarsV12(db);
+        db.prepare('INSERT OR IGNORE INTO schema_migrations (version, name) VALUES (?, ?)').run(
+          12,
+          'mystery-tap-and-tap-wars'
+        );
+        db.pragma('user_version = 12');
+      }
       // Validation is part of the migration transaction. A malformed legacy
       // table or missing constraint must roll back schema changes, ledger rows,
       // and user_version together.
       validateLatestSchema(db);
     })();
   } else {
-    migrateHealthRedesignV11(db);
+    migrateMysteryAndTapWarsV12(db);
     validateLatestSchema(db);
   }
 }

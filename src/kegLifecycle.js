@@ -28,17 +28,20 @@ export function assignKegLifecycle(
     assignmentKind = batchId?.startsWith('custom:') ? 'custom' : 'brewfather',
     startedAt,
     closeReason = 'reassigned',
-    updateTap
+    updateTap,
+    onLifecycleClosed
   }
 ) {
   const run = db.transaction(() => {
     const current = activeLifecycle(db, tapId);
-    if (current)
+    if (current) {
       db.prepare('UPDATE keg_lifecycles SET closed_at = ?, close_reason = ? WHERE lifecycle_id = ?').run(
         nowIso(startedAt),
         closeReason,
         current.lifecycle_id
       );
+      if (onLifecycleClosed) onLifecycleClosed(current, closeReason);
+    }
     if (updateTap) updateTap();
     const result = db
       .prepare(
@@ -56,15 +59,17 @@ export function assignKegLifecycle(
   return run();
 }
 
-export function closeKegLifecycle(db, { tapId, closedAt, closeReason = 'ended', updateTap }) {
+export function closeKegLifecycle(db, { tapId, closedAt, closeReason = 'ended', updateTap, onLifecycleClosed }) {
   return db.transaction(() => {
     const current = activeLifecycle(db, tapId);
-    if (current)
+    if (current) {
       db.prepare('UPDATE keg_lifecycles SET closed_at = ?, close_reason = ? WHERE lifecycle_id = ?').run(
         nowIso(closedAt),
         closeReason,
         current.lifecycle_id
       );
+      if (onLifecycleClosed) onLifecycleClosed(current, closeReason);
+    }
     if (updateTap) updateTap();
     return current;
   })();

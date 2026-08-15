@@ -46,11 +46,12 @@ function displayMetadata(db, tap) {
 }
 
 export class TapMutationCoordinator {
-  constructor({ db, completeBatch, now = () => new Date() } = {}) {
+  constructor({ db, completeBatch, now = () => new Date(), onLifecycleClosed } = {}) {
     if (!db || typeof completeBatch !== 'function') throw new TypeError('Tap actions require dependencies');
     this.db = db;
     this.completeBatch = completeBatch;
     this.now = now;
+    this.onLifecycleClosed = onLifecycleClosed;
     this.busy = new Set();
     this.clearTap = db.prepare(CLEAR_TAP_SQL);
   }
@@ -94,6 +95,7 @@ export class TapMutationCoordinator {
         tapId,
         closedAt,
         closeReason: 'end_batch',
+        onLifecycleClosed: this.onLifecycleClosed,
         updateTap: () => {
           const current = currentTap(this.db, tapId);
           if (current?.batch_id !== before.batch_id) {
@@ -141,11 +143,15 @@ export class TapMutationCoordinator {
           closeReason: 'kicked',
           clearTap: (id) => this.clearTap.run(id)
         });
+        if (this.onLifecycleClosed && lifecycle) {
+          this.onLifecycleClosed(lifecycle, 'kicked');
+        }
       } else {
         closed = closeKegLifecycle(this.db, {
           tapId,
           closedAt,
           closeReason: reason,
+          onLifecycleClosed: this.onLifecycleClosed,
           updateTap: () => this.clearTap.run(tapId)
         });
       }

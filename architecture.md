@@ -44,6 +44,8 @@ src/
   imageProxy.js           pinned-resolution, bounded HTTPS image retrieval
   fillGraphic.js          reviewed style-to-display-fill mapping
   db.js / dbMigrations.js SQLite startup and schema-v9 migrations
+  mysteryTap.js           mystery tap state management and server-side redactions
+  tapWars.js              Tap Wars state machine, contestant snapshotting, atomic voting
   kegLifecycle.js         immutable lifecycle assignment and attribution
   kegForecast.js          active-lifecycle forecast calculation
   databaseMaintenance.js  verified backup, restore, rotation, and retention
@@ -67,7 +69,7 @@ The canonical measurement contract is `sensor.tap_N_fl_oz` plus `input_number.ta
 
 ## SQLite schema and lifecycle ownership
 
-Startup enforces `foreign_keys=ON` and validates the database. It rejects a future schema version and, for an older supported schema, creates and verifies a fresh backup in `tapboard_backups` before running all ordered migrations in one transaction. Backup verification or migration failure aborts startup; no manual restore marker or empty-volume approval is required. The production empty-volume guard remains separate. The current schema is version 10. Version 10 adds bounded health configuration/state, maintenance records, readiness policy/overrides, capability tags, and forecast-gap transition state. Version 9 removed the obsolete serving-glass setting.
+Startup enforces `foreign_keys=ON` and validates the database. It rejects a future schema version and, for an older supported schema, creates and verifies a fresh backup in `tapboard_backups` before running all ordered migrations in one transaction. Backup verification or migration failure aborts startup; no manual restore marker or empty-volume approval is required. The production empty-volume guard remains separate. The current schema is version 12. Version 12 adds `keg_mystery_config` for server-side mystery tap redaction, and `tap_wars` / `tap_war_contestants` tables (with `tap_wars_one_active` partial unique index) for head-to-head tap battles. Version 11 refined draft health checks. Version 10 added bounded health configuration/state, maintenance records, readiness policy/overrides, capability tags, and forecast-gap transition state. Version 9 removed the obsolete serving-glass setting.
 
 - A tap assignment opens one immutable keg lifecycle; reassignment or an end action closes the existing lifecycle.
 - A pour captures the open lifecycle at pour start. Historical and unassigned pours may have no lifecycle and cannot affect an active keg forecast.

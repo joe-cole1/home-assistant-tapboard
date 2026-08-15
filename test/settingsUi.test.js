@@ -12,11 +12,11 @@ test('General Settings is an accessible, collapsed disclosure workspace with the
 
   assert.equal(dialog.localName, 'dialog');
   assert.equal(dialog.getAttribute('aria-labelledby'), 'generalSettingsTitle');
-  assert.equal(disclosures.length, 6);
+  assert.equal(disclosures.length, 8);
   assert.ok(disclosures.every((details) => !details.hasAttribute('open')));
   assert.deepEqual(
     disclosures.map((details) => details.querySelector('summary')?.firstChild?.textContent.trim()),
-    ['Dashboard', 'Appearance', 'Celebrations', 'Custom Beverage', 'Brewfather', 'Security']
+    ['Dashboard', 'Tap Wars', 'Mystery Tap', 'Appearance', 'Celebrations', 'Custom Beverage', 'Brewfather', 'Security']
   );
   const dashboard = disclosures[0];
   const appearance = disclosures[1];

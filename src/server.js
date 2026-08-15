@@ -59,8 +59,29 @@ import {
   validateSensoryOverride,
   validateTap,
   validateReadinessOverride,
-  validateReadinessPolicy
+  validateReadinessPolicy,
+  validateMysteryConfig,
+  validateBattleDraft,
+  validateVote
 } from './validation.js';
+import {
+  getMysteryConfig,
+  setMysteryConfig,
+  revealMystery,
+  redactTapProjection,
+  redactBrewStory,
+  isMysteryActive
+} from './mysteryTap.js';
+import {
+  createBattleDraft,
+  startBattle,
+  recordVote,
+  endBattle,
+  revealBattle,
+  checkActiveBattleLifecycleInvalidation,
+  getActiveBattle,
+  getBattleHistory
+} from './tapWars.js';
 
 dotenv.config({
   quiet: true,
@@ -102,7 +123,36 @@ function brewfatherCompletion(batchId) {
   });
 }
 
-const tapMutations = new TapMutationCoordinator({ db, completeBatch: brewfatherCompletion });
+const voteRateLimit = new Map();
+
+function publishBattleStartedEvent({ battleId, title, contestantATapId, contestantBTapId }) {
+  publishTapboardEvent(
+    'battle_started',
+    { tap_id: contestantATapId, lifecycle_id: null, batch_id: null, metadata: {} },
+    { battle_id: battleId, title, contestant_a_tap_id: contestantATapId, contestant_b_tap_id: contestantBTapId }
+  );
+}
+
+function publishBattleEndedEvent({ battleId, reason }) {
+  publishTapboardEvent(
+    'battle_ended',
+    { tap_id: null, lifecycle_id: null, batch_id: null, metadata: {} },
+    { battle_id: battleId, reason: reason || 'admin_ended' }
+  );
+}
+
+const tapMutations = new TapMutationCoordinator({
+  db,
+  completeBatch: brewfatherCompletion,
+  onLifecycleClosed: (lifecycle, reason) => {
+    checkActiveBattleLifecycleInvalidation(db, {
+      tapId: lifecycle.tap_id,
+      lifecycleId: lifecycle.lifecycle_id,
+      reason,
+      onEnded: publishBattleEndedEvent
+    });
+  }
+});
 haClient.connect();
 
 // Failed Auth Rate Limiter (IP -> { count, lockUntil })
@@ -176,10 +226,20 @@ function handleError(res, error, context = 'request') {
 }
 
 function allowedMethodsForApiPath(pathname) {
-  if (['/api/state', '/api/brewfather/status'].includes(pathname)) return ['GET'];
+  if (['/api/state', '/api/brewfather/status', '/api/tap-wars/active', '/api/tap-wars/history'].includes(pathname))
+    return ['GET'];
   if (pathname === '/api/draft-health/config') return ['GET', 'POST'];
   if (pathname === '/api/planning/config') return ['GET'];
-  if (['/api/draft-health/acknowledge', '/api/maintenance', '/api/planning/policy'].includes(pathname)) return ['POST'];
+  if (
+    [
+      '/api/draft-health/acknowledge',
+      '/api/maintenance',
+      '/api/planning/policy',
+      '/api/tap-wars/vote',
+      '/api/tap-wars'
+    ].includes(pathname)
+  )
+    return ['POST'];
   if (pathname === '/api/ondeck') return ['GET', 'POST'];
   if (
     ['/api/auth', '/api/settings', '/api/admin/pin', '/api/brewfather/refresh', '/api/custom-beverage'].includes(
@@ -187,7 +247,8 @@ function allowedMethodsForApiPath(pathname) {
     )
   )
     return ['POST'];
-  if (/^\/api\/taps\/[1-6](?:\/(?:end-batch|end-keg))?$/.test(pathname)) return ['POST'];
+  if (/^\/api\/taps\/[1-6](?:\/(?:end-batch|end-keg|mystery|mystery\/reveal))?$/.test(pathname)) return ['POST'];
+  if (/^\/api\/tap-wars\/\d+\/(?:start|end|reveal)$/.test(pathname)) return ['POST'];
   if (/^\/api\/batches\/[A-Za-z0-9_-]{1,256}\/story$/.test(pathname)) return ['GET'];
   if (/^\/api\/batches\/[A-Za-z0-9_-]{1,256}\/sensory$/.test(pathname)) return ['POST'];
   if (/^\/api\/batches\/[A-Za-z0-9_-]{1,256}\/readiness$/.test(pathname)) return ['POST'];
@@ -1007,16 +1068,29 @@ function getFullStateSnapshot() {
     )
     .all();
   const tapCapabilityQuery = db.prepare('SELECT capability FROM tap_capabilities WHERE tap_id=? ORDER BY capability');
-  for (const tap of taps) tap.capabilities = tapCapabilityQuery.all(tap.tap_id).map((row) => row.capability);
+  for (const tap of taps) {
+    tap.capabilities = tapCapabilityQuery.all(tap.tap_id).map((row) => row.capability);
+    const lifecycle = activeLifecycle(db, tap.tap_id);
+    tap.mystery_config = getMysteryConfig(db, lifecycle?.lifecycle_id);
+  }
   const assignedIds = [...new Set(taps.map((tap) => tap.batch_id).filter((id) => id && !id.startsWith('custom:')))];
   const batches = assignedIds.map((batchId) => batchSummary(db, batchId)).filter(Boolean);
   const onDeckBatches = settings.show_ondeck ? onDeckBatchesForPublic().filter((batch) => batch.visible) : [];
   const tapStates = tapStatesFromNativeCache(taps);
 
+  for (const tap of taps) {
+    const tapIdStr = String(tap.tap_id);
+    if (tapStates[tapIdStr]) {
+      tapStates[tapIdStr] = redactTapProjection(tapStates[tapIdStr], tap.mystery_config);
+    }
+  }
+
   const kegKickForecasts = {};
   for (let i = 1; i <= 6; i++) {
     kegKickForecasts[i] = calculateKegKickForecast(i);
   }
+
+  const tapWar = getActiveBattle(db, { isAdmin: false });
 
   return {
     schemaVersion: SCHEMA_VERSION,
@@ -1031,6 +1105,7 @@ function getFullStateSnapshot() {
     lifecycleMilestones: activeLifecycleMilestones(),
     draftHealth: draftHealthProjection,
     tapPlanning: tapPlanningProjection,
+    tapWar,
     timestamp: new Date().toISOString()
   };
 }
@@ -1201,7 +1276,7 @@ const server = http.createServer(async (req, res) => {
           ? null
           : db.prepare('SELECT tap_id, batch_id FROM taps WHERE tap_id=? AND batch_id=?').get(storyTapId, batchId);
       if (storyTapId !== null && !storyTap) throw new ValidationError('Tap does not have this batch assigned');
-      const story = buildBrewStory({
+      let story = buildBrewStory({
         db,
         batchId,
         window,
@@ -1209,8 +1284,32 @@ const server = http.createServer(async (req, res) => {
         forecastForTap: calculateKegKickForecast,
         includeHiddenSensory: authorized
       });
-      if (!story) sendError(res, 404, 'Brew story not found');
-      else sendBoundedJson(res, 200, story);
+      if (!story) {
+        sendError(res, 404, 'Brew story not found');
+      } else {
+        if (!authorized) {
+          let mysteryConfig = null;
+          if (storyTapId !== null) {
+            const lc = activeLifecycle(db, storyTapId);
+            mysteryConfig = getMysteryConfig(db, lc?.lifecycle_id);
+          } else {
+            for (let t = 1; t <= 6; t++) {
+              const lc = activeLifecycle(db, t);
+              if (lc && lc.batch_id === batchId) {
+                const mc = getMysteryConfig(db, lc.lifecycle_id);
+                if (isMysteryActive(mc)) {
+                  mysteryConfig = mc;
+                  break;
+                }
+              }
+            }
+          }
+          if (isMysteryActive(mysteryConfig)) {
+            story = redactBrewStory(story, mysteryConfig);
+          }
+        }
+        sendBoundedJson(res, 200, story);
+      }
     } catch (error) {
       handleError(res, error, requestContext('read Brew Story'));
     }
@@ -2030,6 +2129,175 @@ const server = http.createServer(async (req, res) => {
       sendJson(res, 200, { success: true, customBeverage: customBeverage() });
     } catch (err) {
       handleError(res, err, requestContext('update custom beverage'));
+    }
+    return;
+  }
+
+  // Mystery Tap Endpoints
+  if (url.pathname.match(/^\/api\/taps\/\d+\/mystery$/) && req.method === 'POST') {
+    if (!requireAdmin(req, res)) return;
+    let tapId;
+    try {
+      tapId = validateTapId(url.pathname.split('/')[3]);
+      let lifecycle = activeLifecycle(db, tapId);
+      if (!lifecycle) {
+        const currentTap = db.prepare('SELECT batch_id FROM taps WHERE tap_id=?').get(tapId);
+        if (currentTap?.batch_id) {
+          lifecycle = assignKegLifecycle(db, {
+            tapId,
+            batchId: currentTap.batch_id,
+            startedAt: new Date().toISOString()
+          });
+        }
+      }
+      if (!lifecycle) throw new HttpError(409, 'Tap has no active keg lifecycle or batch assigned');
+      const body = validateMysteryConfig(await readJsonBody(req));
+      ensureServing();
+      const config = setMysteryConfig(db, {
+        lifecycleId: lifecycle.lifecycle_id,
+        enabled: body.enabled,
+        redactedCategories: body.redacted_categories
+      });
+      sseHub.publishImmediate('state_changed', getFullStateSnapshot());
+      sendJson(res, 200, { success: true, mystery: config });
+    } catch (err) {
+      handleError(res, err, requestContext('configure mystery tap', tapId));
+    }
+    return;
+  }
+
+  if (url.pathname.match(/^\/api\/taps\/\d+\/mystery\/reveal$/) && req.method === 'POST') {
+    if (!requireAdmin(req, res)) return;
+    let tapId;
+    try {
+      tapId = validateTapId(url.pathname.split('/')[3]);
+      await readEmptyJsonBody(req);
+      let lifecycle = activeLifecycle(db, tapId);
+      if (!lifecycle) {
+        const currentTap = db.prepare('SELECT batch_id FROM taps WHERE tap_id=?').get(tapId);
+        if (currentTap?.batch_id) {
+          lifecycle = assignKegLifecycle(db, {
+            tapId,
+            batchId: currentTap.batch_id,
+            startedAt: new Date().toISOString()
+          });
+        }
+      }
+      if (!lifecycle) throw new HttpError(409, 'Tap has no active keg lifecycle or batch assigned');
+      ensureServing();
+      const config = revealMystery(db, { lifecycleId: lifecycle.lifecycle_id });
+      sseHub.publishImmediate('state_changed', getFullStateSnapshot());
+      sendJson(res, 200, { success: true, mystery: config });
+    } catch (err) {
+      handleError(res, err, requestContext('reveal mystery tap', tapId));
+    }
+    return;
+  }
+
+  // Tap Wars Endpoints
+  if (url.pathname === '/api/tap-wars/active' && req.method === 'GET') {
+    try {
+      const battle = getActiveBattle(db, { isAdmin: isAuthorized(req) });
+      sendJson(res, 200, { battle });
+    } catch (err) {
+      handleError(res, err, requestContext('read active tap war'));
+    }
+    return;
+  }
+
+  if (url.pathname === '/api/tap-wars/history' && req.method === 'GET') {
+    try {
+      const history = getBattleHistory(db, { isAdmin: isAuthorized(req) });
+      sendJson(res, 200, { history });
+    } catch (err) {
+      handleError(res, err, requestContext('read tap wars history'));
+    }
+    return;
+  }
+
+  if (url.pathname === '/api/tap-wars' && req.method === 'POST') {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const body = validateBattleDraft(await readJsonBody(req));
+      ensureServing();
+      const battle = createBattleDraft(db, body);
+      sseHub.publishImmediate('state_changed', getFullStateSnapshot());
+      sendJson(res, 200, { success: true, battle });
+    } catch (err) {
+      handleError(res, err, requestContext('create tap war draft'));
+    }
+    return;
+  }
+
+  const startBattleMatch = url.pathname.match(/^\/api\/tap-wars\/(\d+)\/start$/);
+  if (startBattleMatch && req.method === 'POST') {
+    if (!requireAdmin(req, res)) return;
+    const battleId = parseInt(startBattleMatch[1], 10);
+    try {
+      await readEmptyJsonBody(req);
+      ensureServing();
+      const battle = startBattle(db, battleId, { onStarted: publishBattleStartedEvent });
+      sseHub.publishImmediate('state_changed', getFullStateSnapshot());
+      sendJson(res, 200, { success: true, battle });
+    } catch (err) {
+      handleError(res, err, requestContext('start tap war', battleId));
+    }
+    return;
+  }
+
+  const endBattleMatch = url.pathname.match(/^\/api\/tap-wars\/(\d+)\/end$/);
+  if (endBattleMatch && req.method === 'POST') {
+    if (!requireAdmin(req, res)) return;
+    const battleId = parseInt(endBattleMatch[1], 10);
+    try {
+      await readEmptyJsonBody(req);
+      ensureServing();
+      const battle = endBattle(db, battleId, { reason: 'admin_ended', onEnded: publishBattleEndedEvent });
+      sseHub.publishImmediate('state_changed', getFullStateSnapshot());
+      sendJson(res, 200, { success: true, battle });
+    } catch (err) {
+      handleError(res, err, requestContext('end tap war', battleId));
+    }
+    return;
+  }
+
+  const revealBattleMatch = url.pathname.match(/^\/api\/tap-wars\/(\d+)\/reveal$/);
+  if (revealBattleMatch && req.method === 'POST') {
+    if (!requireAdmin(req, res)) return;
+    const battleId = parseInt(revealBattleMatch[1], 10);
+    try {
+      await readEmptyJsonBody(req);
+      ensureServing();
+      const battle = revealBattle(db, battleId);
+      sseHub.publishImmediate('state_changed', getFullStateSnapshot());
+      sendJson(res, 200, { success: true, battle });
+    } catch (err) {
+      handleError(res, err, requestContext('reveal tap war', battleId));
+    }
+    return;
+  }
+
+  if (url.pathname === '/api/tap-wars/vote' && req.method === 'POST') {
+    try {
+      const now = Date.now();
+      const tracker = voteRateLimit.get(clientIp) || { count: 0, windowStart: now };
+      if (now - tracker.windowStart > 5000) {
+        tracker.count = 0;
+        tracker.windowStart = now;
+      }
+      tracker.count += 1;
+      voteRateLimit.set(clientIp, tracker);
+      if (tracker.count > 100) {
+        throw new HttpError(429, 'Voting rate limit exceeded. Please slow down.');
+      }
+
+      const body = validateVote(await readJsonBody(req));
+      ensureServing();
+      const result = recordVote(db, { battleId: body.battle_id, contestantSide: body.contestant_side });
+      sseHub.publishImmediate('state_changed', getFullStateSnapshot());
+      sendJson(res, 200, { success: true, ...result });
+    } catch (err) {
+      handleError(res, err, requestContext('vote in tap war'));
     }
     return;
   }

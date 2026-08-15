@@ -38,6 +38,20 @@
       </div>
     </header>
 
+    <!-- Tap Wars Global Banner -->
+    <div class="tap-wars-banner-container" id="tapWarsBannerContainer" hidden>
+      <div class="tap-wars-banner" id="tapWarsBanner">
+        <div class="tap-wars-banner-icon">⚔️</div>
+        <div class="tap-wars-banner-content">
+          <span class="tap-wars-banner-title" id="tapWarsBannerTitle">TAP WARS ACTIVE</span>
+          <span class="tap-wars-banner-subtitle" id="tapWarsBannerSubtitle">Vote for your favorite tap!</span>
+        </div>
+        <button type="button" class="btn btn-sm btn-primary tap-wars-banner-action" id="openTapWarsBtn">
+          View Matchup
+        </button>
+      </div>
+    </div>
+
     <!-- Main Tap Grid Area -->
     <main class="main-content">
       <div class="tap-grid" id="tapGrid">
@@ -56,6 +70,20 @@
 
     <!-- Toast Notification Container for Real-Time Pour Alerts -->
     <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Tap Wars Public Matchup Dialog -->
+    <dialog id="tapWarsDialog" class="tap-wars-dialog" aria-labelledby="tapWarsDialogTitle">
+      <div class="tap-wars-dialog-panel">
+        <header class="app-modal-heading">
+          <div>
+            <p class="settings-kicker">Taproom Event</p>
+            <h2 id="tapWarsDialogTitle">Tap Wars</h2>
+          </div>
+          <button class="btn-icon" id="closeTapWarsBtn" type="button" aria-label="Close Tap Wars">✕</button>
+        </header>
+        <div id="tapWarsDialogBody" class="tap-wars-dialog-body"></div>
+      </div>
+    </dialog>
 
     <dialog id="recipeModal" class="brew-story-dialog" aria-labelledby="recipeTitle">
       <div class="brew-story-shell">
@@ -218,6 +246,25 @@
                 ><input type="checkbox" id="onDeckNewBatchDefaultCheckbox" /> Show newly discovered batches on On Deck
                 <span class="setting-save-status" id="onDeckNewBatchDefaultSaveStatus" aria-live="polite"></span
               ></label>
+            </div>
+          </details>
+
+          <details class="settings-disclosure" id="tapWarsAdminDisclosure">
+            <summary>
+              Tap Wars <span class="settings-summary-help">Head-to-head tap battles · draft, live control, reveal</span>
+            </summary>
+            <div class="settings-disclosure-content" id="tapWarsAdminContent">
+              <p class="settings-help">Loading Tap Wars control panel...</p>
+            </div>
+          </details>
+
+          <details class="settings-disclosure" id="mysteryTapAdminDisclosure">
+            <summary>
+              Mystery Tap
+              <span class="settings-summary-help">Hide identities per assigned lifecycle · reveal when ready</span>
+            </summary>
+            <div class="settings-disclosure-content" id="mysteryTapAdminContent">
+              <p class="settings-help">Loading Mystery Tap settings...</p>
             </div>
           </details>
 

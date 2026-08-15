@@ -38,7 +38,8 @@ test('migrates legacy pour rows without changing IDs, volumes, or timestamps', (
       { version: 8, name: 'lifecycle-experiences' },
       { version: 9, name: 'remove-serving-glass-recommendations' },
       { version: 10, name: 'draft-health-and-tap-planning' },
-      { version: 11, name: 'health-redesign-v11' }
+      { version: 11, name: 'health-redesign-v11' },
+      { version: 12, name: 'mystery-tap-and-tap-wars' }
     ]);
     const settingColumns = db.prepare("SELECT name, dflt_value FROM pragma_table_info('settings')").all();
     assert.deepEqual(
@@ -317,9 +318,9 @@ test('v11 migration is idempotent when run twice consecutively', () => {
   const db = new Database(':memory:');
   try {
     migrateDatabase(db);
-    assert.equal(db.pragma('user_version', { simple: true }), 11);
+    assert.equal(db.pragma('user_version', { simple: true }), SCHEMA_VERSION);
     assert.doesNotThrow(() => migrateDatabase(db));
-    assert.equal(db.pragma('user_version', { simple: true }), 11);
+    assert.equal(db.pragma('user_version', { simple: true }), SCHEMA_VERSION);
   } finally {
     db.close();
   }
@@ -329,7 +330,7 @@ test('a v11 database missing target_tap_id is repaired on startup', () => {
   const db = new Database(':memory:');
   try {
     migrateDatabase(db);
-    assert.equal(db.pragma('user_version', { simple: true }), 11);
+    assert.equal(db.pragma('user_version', { simple: true }), SCHEMA_VERSION);
     db.exec(`
       CREATE TABLE brewfather_ondeck_preferences_old AS SELECT batch_id, visible, first_seen_at, updated_at FROM brewfather_ondeck_preferences;
       DROP TABLE brewfather_ondeck_preferences;

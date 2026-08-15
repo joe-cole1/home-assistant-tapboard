@@ -41,6 +41,16 @@ The proxy must preserve the original Host, avoid buffering long-lived SSE respon
 
 Tapboard denies iframe embedding. Do not weaken `frame-ancestors` or substitute a wildcard if an embedding integration is later needed; design a narrow trusted-origin policy first.
 
+## Public voting security
+
+Tapboard allows unauthenticated public voting via `POST /api/tap-wars/vote` to support frictionless taproom participant voting without PIN credentials. Security controls:
+
+- Enforces Origin checking against `TAPBOARD_PUBLIC_ORIGIN` or request host.
+- Enforces strict JSON body validation via `validateVote` (requires valid numeric `battle_id` and `contestant_side` as `'A'` or `'B'`).
+- Burst protection rate limiter limits IP requests (100 votes per 5 seconds per IP) returning HTTP 429 if exceeded, protecting against machine flooding while ensuring touchscreen hit targets remain responsive for human taproom guests.
+- Voting is active only when a Tap War battle is in `active` state. Attempts to vote on draft, ended, or revealed battles fail with HTTP 409.
+- Administrative battle mutations (creating draft, starting battle, ending battle, revealing winner) require administrator session authentication.
+
 ## Container and secrets
 
 Compose binds only `127.0.0.1:3005`; the application listens on container port `3000`. The service runs as non-root, has a read-only root filesystem, uses a bounded writable `/tmp` tmpfs, drops all capabilities, sets `no-new-privileges`, and uses Docker init. Only the independent `tapboard_data` and `tapboard_backups` named volumes are persistent and writable.

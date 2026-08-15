@@ -34,6 +34,8 @@ All IDs except `event_id` may be `null`. Metadata contains only optional bounded
 | `brewfather_sync_failed` | `reason`, `error_category`, `outcome`, `request_count`, `retry_at`                                                  |
 | `health_transition`      | `check_id`, `transition`, `state`, `severity`, `code`                                                               |
 | `forecast_gap`           | `transition`, `classification`, `candidate_batch_id`, `gap_min_days`, `gap_max_days`, `confidence`, `compatibility` |
+| `battle_started`         | `battle_id`, `title`, `contestant_a_tap_id`, `contestant_b_tap_id`                                                  |
+| `battle_ended`           | `battle_id`, `reason`                                                                                               |
 
 Events are operational and best effort. They are not replayed after a long disconnect. Automation delivery failure does not undo a pour, assignment, or end action. Consumers that need deduplication can retain `event_id` for their own short operational window.
 

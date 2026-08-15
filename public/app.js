@@ -754,6 +754,8 @@ function renderApp() {
   const { taps } = appState;
   applySettingsPreview();
 
+  renderTapWarsBanner();
+
   const tapGrid = document.getElementById('tapGrid');
   if (!tapGrid) return;
 
@@ -867,6 +869,20 @@ function createTapCard(tap) {
   card.setAttribute('data-graphic-style', tap.graphic || 'corny_keg');
   card.setAttribute('data-color-hex', beerColorHex);
 
+  const isMystery = Boolean(tap.mystery_config && tap.mystery_config.enabled && !tap.mystery_config.revealed_at);
+  const activeBattle = appState.tapWar;
+  let inBattle = false;
+  let battleContestantSide = null;
+  if (activeBattle && activeBattle.state === 'active') {
+    if (activeBattle.contestantATapId === tapId) {
+      inBattle = true;
+      battleContestantSide = 'A';
+    } else if (activeBattle.contestantBTapId === tapId) {
+      inBattle = true;
+      battleContestantSide = 'B';
+    }
+  }
+
   card.replaceChildren(
     buildTapCardContent({
       tapId,
@@ -883,9 +899,39 @@ function createTapCard(tap) {
       fg,
       volumeReadoutText,
       forecastText,
-      kicked: Boolean(milestone.kickedAt)
+      kicked: Boolean(milestone.kickedAt),
+      isMystery,
+      inBattle,
+      battleContestantSide
     })
   );
+
+  const voteBtn = card.querySelector('.tap-vote-btn');
+  if (voteBtn) {
+    voteBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const bId = appState.tapWar?.battleId;
+      const side = voteBtn.dataset.contestantSide;
+      if (!bId || !side) return;
+      try {
+        const res = await fetch('/api/tap-wars/vote', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ battle_id: bId, contestant_side: side })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Voting failed');
+        voteBtn.textContent = '✓ Vote counted!';
+        voteBtn.classList.add('vote-success');
+        setTimeout(() => {
+          voteBtn.textContent = 'Vote for this tap';
+          voteBtn.classList.remove('vote-success');
+        }, 1500);
+      } catch (err) {
+        showToast(`⚠️ ${err.message}`);
+      }
+    });
+  }
 
   // Render SVG Graphic initially
   const graphicContainer = card.querySelector(`#graphic-tap-${tapId}`);
@@ -1031,8 +1077,32 @@ function updateTapCard(card, tap) {
     descriptionEl.hidden = !description;
   }
 
+  const isMystery = Boolean(tap.mystery_config && tap.mystery_config.enabled && !tap.mystery_config.revealed_at);
+  const activeBattle = appState.tapWar;
+  let inBattle = false;
+  let battleContestantSide = null;
+  if (activeBattle && activeBattle.state === 'active') {
+    if (activeBattle.contestantATapId === tapId) {
+      inBattle = true;
+      battleContestantSide = 'A';
+    } else if (activeBattle.contestantBTapId === tapId) {
+      inBattle = true;
+      battleContestantSide = 'B';
+    }
+  }
+
   const badges = card.querySelector('.tap-card-badges');
   if (badges) {
+    let mysteryBadge = badges.querySelector('.badge-mystery');
+    if (isMystery && !mysteryBadge) {
+      mysteryBadge = document.createElement('span');
+      mysteryBadge.className = 'badge badge-mystery';
+      mysteryBadge.textContent = '❓ Mystery Tap';
+      badges.prepend(mysteryBadge);
+    } else if (!isMystery && mysteryBadge) {
+      mysteryBadge.remove();
+    }
+
     let lowBadge = badges.querySelector('.badge-low');
     const isLow = measurement.volumeStatus === 'measured' && tap.badge_low_keg > 0 && fillPercent <= tap.badge_low_keg;
     if (isLow && !lowBadge) {
@@ -1072,6 +1142,50 @@ function updateTapCard(card, tap) {
       sensorBadge.remove();
     }
   }
+
+  let voteContainer = card.querySelector('.tap-vote-container');
+  if (inBattle && battleContestantSide) {
+    if (!voteContainer) {
+      voteContainer = document.createElement('div');
+      voteContainer.className = 'tap-vote-container';
+      const voteBtn = document.createElement('button');
+      voteBtn.type = 'button';
+      voteBtn.className = 'btn btn-vote tap-vote-btn';
+      voteBtn.textContent = 'Vote for this tap';
+      voteBtn.dataset.tapId = String(tapId);
+      voteBtn.dataset.contestantSide = String(battleContestantSide);
+      voteBtn.setAttribute('aria-label', `Vote for Tap ${tapId}`);
+      voteBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const bId = appState.tapWar?.battleId;
+        const side = voteBtn.dataset.contestantSide;
+        if (!bId || !side) return;
+        try {
+          const res = await fetch('/api/tap-wars/vote', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ battle_id: bId, contestant_side: side })
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Voting failed');
+          voteBtn.textContent = '✓ Vote counted!';
+          voteBtn.classList.add('vote-success');
+          setTimeout(() => {
+            voteBtn.textContent = 'Vote for this tap';
+            voteBtn.classList.remove('vote-success');
+          }, 1500);
+        } catch (err) {
+          showToast(`⚠️ ${err.message}`);
+        }
+      });
+      voteContainer.appendChild(voteBtn);
+      const details = card.querySelector('.tap-card-content');
+      details?.appendChild(voteContainer);
+    }
+  } else if (!inBattle && voteContainer) {
+    voteContainer.remove();
+  }
+
   updatePhase4Badges(card, tapId);
 
   const metrics = card.querySelectorAll('.metric-value');
@@ -1377,6 +1491,786 @@ function openGlobalSettingsModal() {
 
   showModal('globalSettingsModal');
   loadBrewfatherStatus();
+  renderMysteryTapAdmin();
+  renderTapWarsAdmin();
+}
+
+function renderTapWarsBanner() {
+  const container = document.getElementById('tapWarsBannerContainer');
+  if (!container) return;
+  const battle = appState.tapWar;
+  if (!battle) {
+    container.hidden = true;
+    return;
+  }
+
+  container.hidden = false;
+  const titleEl = document.getElementById('tapWarsBannerTitle');
+  const subtitleEl = document.getElementById('tapWarsBannerSubtitle');
+  const actionBtn = document.getElementById('openTapWarsBtn');
+
+  if (battle.state === 'active') {
+    if (titleEl) titleEl.textContent = `⚔️ TAP WARS: ${battle.title}`;
+    if (subtitleEl) subtitleEl.textContent = battle.descriptionCopy || 'Tap War active! Vote for your favorite tap.';
+  } else if (battle.state === 'ended') {
+    if (titleEl) titleEl.textContent = `⚔️ TAP WARS ENDED: ${battle.title}`;
+    if (subtitleEl) subtitleEl.textContent = 'Voting closed. Results pending reveal!';
+  } else if (battle.state === 'revealed') {
+    if (titleEl) titleEl.textContent = `🏆 TAP WARS WINNER: ${battle.winnerName || 'Battle Complete'}`;
+    if (subtitleEl) subtitleEl.textContent = `Final Result: ${battle.title}`;
+  } else {
+    container.hidden = true;
+  }
+
+  if (actionBtn && !actionBtn.dataset.bound) {
+    actionBtn.dataset.bound = 'true';
+    actionBtn.addEventListener('click', openTapWarsModal);
+  }
+}
+
+function openTapWarsModal() {
+  const dialog = document.getElementById('tapWarsDialog');
+  if (!dialog) return;
+  const body = document.getElementById('tapWarsDialogBody');
+  const closeBtn = document.getElementById('closeTapWarsBtn');
+
+  if (closeBtn && !closeBtn.dataset.bound) {
+    closeBtn.dataset.bound = 'true';
+    closeBtn.addEventListener('click', () => dialog.close());
+  }
+
+  renderTapWarsModalBody(body);
+  if (!dialog.open) dialog.showModal();
+}
+
+function renderTapWarsModalBody(container) {
+  if (!container) return;
+  const battle = appState.tapWar;
+  if (!battle) {
+    const p = document.createElement('p');
+    p.className = 'text-muted';
+    p.textContent = 'No Tap War active currently.';
+    container.replaceChildren(p);
+    return;
+  }
+
+  const { contestantA, contestantB, title, descriptionCopy, state, winnerSide } = battle;
+  const aVotes = contestantA?.voteCount ?? 0;
+  const bVotes = contestantB?.voteCount ?? 0;
+  const total = aVotes + bVotes;
+  const aPct = total > 0 ? Math.round((aVotes / total) * 100) : 50;
+  const bPct = total > 0 ? 100 - aPct : 50;
+
+  const showCounts = state === 'revealed' || Boolean(authToken);
+
+  const wrapper = document.createElement('div');
+
+  const header = document.createElement('div');
+  header.style.cssText = 'text-align: center; margin-bottom: 1rem;';
+  const h3 = document.createElement('h3');
+  h3.style.cssText = 'font-family: var(--font-title); color: var(--accent-color); margin: 0 0 0.25rem;';
+  h3.textContent = title;
+  const descP = document.createElement('p');
+  descP.style.cssText = 'color: var(--text-muted); font-size: 0.9rem; margin: 0;';
+  descP.textContent = descriptionCopy || '';
+  header.append(h3, descP);
+  wrapper.appendChild(header);
+
+  const matchup = document.createElement('div');
+  matchup.className = 'tap-wars-matchup';
+
+  const cardA = document.createElement('div');
+  cardA.className = `tap-wars-contestant-card ${winnerSide === 'A' ? 'winner-card' : ''}`;
+
+  const infoA = document.createElement('div');
+  const tagA = document.createElement('div');
+  tagA.style.cssText = 'font-size: 0.8rem; color: var(--accent-color); font-weight: 700;';
+  tagA.textContent = `TAP ${contestantA?.tapId ?? ''}`;
+  const nameA = document.createElement('h4');
+  nameA.style.cssText = 'margin: 0.35rem 0 0.2rem; font-family: var(--font-title);';
+  nameA.textContent = contestantA?.beerName || `Tap ${contestantA?.tapId ?? ''}`;
+  const styleA = document.createElement('div');
+  styleA.style.cssText = 'color: var(--text-muted); font-size: 0.85rem;';
+  styleA.textContent = contestantA?.style || '';
+  infoA.append(tagA, nameA, styleA);
+
+  const actionBoxA = document.createElement('div');
+  actionBoxA.style.marginTop = '1rem';
+  if (state === 'active') {
+    const btnVoteA = document.createElement('button');
+    btnVoteA.type = 'button';
+    btnVoteA.className = 'btn btn-vote dialog-vote-btn';
+    btnVoteA.style.width = '100%';
+    btnVoteA.dataset.side = 'A';
+    btnVoteA.textContent = `Vote for Tap ${contestantA?.tapId}`;
+    actionBoxA.appendChild(btnVoteA);
+  }
+  if (showCounts) {
+    const countsA = document.createElement('div');
+    countsA.style.cssText = 'margin-top: 0.5rem; font-weight: 700; font-size: 1.1rem; color: var(--primary-color);';
+    countsA.textContent = `${aVotes} votes (${aPct}%)`;
+    actionBoxA.appendChild(countsA);
+  } else if (state === 'ended') {
+    const pendingA = document.createElement('div');
+    pendingA.style.cssText = 'margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-muted);';
+    pendingA.textContent = 'Results Pending';
+    actionBoxA.appendChild(pendingA);
+  }
+  cardA.append(infoA, actionBoxA);
+
+  const vsDiv = document.createElement('div');
+  vsDiv.className = 'tap-wars-vs';
+  vsDiv.textContent = 'VS';
+
+  const cardB = document.createElement('div');
+  cardB.className = `tap-wars-contestant-card ${winnerSide === 'B' ? 'winner-card' : ''}`;
+
+  const infoB = document.createElement('div');
+  const tagB = document.createElement('div');
+  tagB.style.cssText = 'font-size: 0.8rem; color: var(--accent-color); font-weight: 700;';
+  tagB.textContent = `TAP ${contestantB?.tapId ?? ''}`;
+  const nameB = document.createElement('h4');
+  nameB.style.cssText = 'margin: 0.35rem 0 0.2rem; font-family: var(--font-title);';
+  nameB.textContent = contestantB?.beerName || `Tap ${contestantB?.tapId ?? ''}`;
+  const styleB = document.createElement('div');
+  styleB.style.cssText = 'color: var(--text-muted); font-size: 0.85rem;';
+  styleB.textContent = contestantB?.style || '';
+  infoB.append(tagB, nameB, styleB);
+
+  const actionBoxB = document.createElement('div');
+  actionBoxB.style.marginTop = '1rem';
+  if (state === 'active') {
+    const btnVoteB = document.createElement('button');
+    btnVoteB.type = 'button';
+    btnVoteB.className = 'btn btn-vote dialog-vote-btn';
+    btnVoteB.style.width = '100%';
+    btnVoteB.dataset.side = 'B';
+    btnVoteB.textContent = `Vote for Tap ${contestantB?.tapId}`;
+    actionBoxB.appendChild(btnVoteB);
+  }
+  if (showCounts) {
+    const countsB = document.createElement('div');
+    countsB.style.cssText = 'margin-top: 0.5rem; font-weight: 700; font-size: 1.1rem; color: var(--secondary-color);';
+    countsB.textContent = `${bVotes} votes (${bPct}%)`;
+    actionBoxB.appendChild(countsB);
+  } else if (state === 'ended') {
+    const pendingB = document.createElement('div');
+    pendingB.style.cssText = 'margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-muted);';
+    pendingB.textContent = 'Results Pending';
+    actionBoxB.appendChild(pendingB);
+  }
+  cardB.append(infoB, actionBoxB);
+
+  matchup.append(cardA, vsDiv, cardB);
+  wrapper.appendChild(matchup);
+
+  if (showCounts) {
+    const progressSection = document.createElement('div');
+    progressSection.style.marginTop = '1.25rem';
+
+    const labelsRow = document.createElement('div');
+    labelsRow.style.cssText =
+      'display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.35rem;';
+    const lA = document.createElement('span');
+    lA.textContent = `Tap ${contestantA?.tapId}: ${aPct}%`;
+    const lTotal = document.createElement('span');
+    lTotal.textContent = `Total Votes: ${total}`;
+    const lB = document.createElement('span');
+    lB.textContent = `Tap ${contestantB?.tapId}: ${bPct}%`;
+    labelsRow.append(lA, lTotal, lB);
+
+    const barContainer = document.createElement('div');
+    barContainer.className = 'tap-wars-bar-container';
+    const fillA = document.createElement('div');
+    fillA.className = 'tap-wars-bar-fill-a';
+    fillA.style.width = `${aPct}%`;
+    const fillB = document.createElement('div');
+    fillB.className = 'tap-wars-bar-fill-b';
+    fillB.style.width = `${bPct}%`;
+    barContainer.append(fillA, fillB);
+
+    progressSection.append(labelsRow, barContainer);
+    wrapper.appendChild(progressSection);
+  }
+
+  container.replaceChildren(wrapper);
+
+  container.querySelectorAll('.dialog-vote-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const side = btn.dataset.side;
+      if (!battle.battleId || !side) return;
+      try {
+        const res = await fetch('/api/tap-wars/vote', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ battle_id: battle.battleId, contestant_side: side })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Voting failed');
+        btn.textContent = '✓ Vote counted!';
+        btn.classList.add('vote-success');
+        setTimeout(() => {
+          renderTapWarsModalBody(container);
+        }, 1200);
+      } catch (err) {
+        showToast(`⚠️ ${err.message}`);
+      }
+    });
+  });
+}
+
+function renderMysteryTapAdmin() {
+  const container = document.getElementById('mysteryTapAdminContent');
+  if (!container) return;
+
+  const activeTaps = appState.taps.filter((t) => t.enabled === 1);
+  if (!activeTaps.length) {
+    const p = document.createElement('p');
+    p.className = 'settings-help';
+    p.textContent = 'No active taps to configure.';
+    container.replaceChildren(p);
+    return;
+  }
+
+  const grid = document.createElement('div');
+  grid.style.cssText = 'display: grid; gap: 1.25rem;';
+
+  for (const tap of activeTaps) {
+    const tapId = tap.tap_id;
+    const config = tap.mystery_config || {};
+    const isEnabled = Boolean(config.enabled);
+    const isRevealed = Boolean(config.revealed_at);
+    const redacted = config.redacted_categories || [
+      'name',
+      'style',
+      'abv',
+      'description',
+      'sensory',
+      'image',
+      'brew_story'
+    ];
+
+    const card = document.createElement('div');
+    card.style.cssText =
+      'border: 1px solid var(--border-color); border-radius: 0.65rem; padding: 1rem; background: var(--bg-card);';
+    card.dataset.mysteryTap = String(tapId);
+
+    const topRow = document.createElement('div');
+    topRow.style.cssText =
+      'display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;';
+    const title = document.createElement('h4');
+    title.style.cssText = 'margin: 0; font-family: var(--font-title); color: var(--primary-color);';
+    title.textContent = `Tap ${tapId} Mystery Mode`;
+
+    const badge = document.createElement('span');
+    if (isRevealed) {
+      badge.className = 'badge badge-fresh';
+      badge.style.background = '#22c55e';
+      badge.textContent = 'Revealed';
+    } else if (isEnabled) {
+      badge.className = 'badge badge-mystery';
+      badge.textContent = 'Mystery Active';
+    } else {
+      badge.style.cssText = 'color: var(--text-muted); font-size: 0.8rem;';
+      badge.textContent = 'Standard';
+    }
+    topRow.append(title, badge);
+    card.appendChild(topRow);
+
+    if (isRevealed) {
+      const p = document.createElement('p');
+      p.style.cssText = 'font-size: 0.85rem; color: var(--text-muted); margin: 0;';
+      p.textContent = `This mystery tap was revealed at ${new Date(config.revealed_at).toLocaleTimeString()} and cannot be re-hidden for this keg lifecycle.`;
+      card.appendChild(p);
+    } else {
+      const enableLabel = document.createElement('label');
+      enableLabel.className = 'settings-check-row';
+      enableLabel.style.cssText = 'margin-bottom: 0.75rem; font-weight: 700;';
+      const enableCheck = document.createElement('input');
+      enableCheck.type = 'checkbox';
+      enableCheck.className = 'mystery-enable-check';
+      enableCheck.checked = isEnabled;
+      enableLabel.append(enableCheck, document.createTextNode(` Enable Mystery Tap for Tap ${tapId}`));
+      card.appendChild(enableLabel);
+
+      const catGrid = document.createElement('div');
+      catGrid.className = 'mystery-categories-grid';
+      catGrid.style.cssText = `display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.5rem; margin-bottom: 1rem; ${isEnabled ? '' : 'opacity: 0.5; pointer-events: none;'}`;
+
+      ['name', 'style', 'abv', 'description', 'sensory', 'image', 'brew_story'].forEach((cat) => {
+        const catLabel = document.createElement('label');
+        catLabel.className = 'settings-check-row';
+        catLabel.style.fontSize = '0.82rem';
+        const catCheck = document.createElement('input');
+        catCheck.type = 'checkbox';
+        catCheck.value = cat;
+        catCheck.className = 'mystery-cat-check';
+        catCheck.checked = redacted.includes(cat);
+        catLabel.append(catCheck, document.createTextNode(` ${cat.replace('_', ' ')}`));
+        catGrid.appendChild(catLabel);
+      });
+      card.appendChild(catGrid);
+
+      const btnRow = document.createElement('div');
+      btnRow.style.cssText = 'display: flex; gap: 0.75rem; justify-content: flex-end;';
+
+      const saveBtn = document.createElement('button');
+      saveBtn.type = 'button';
+      saveBtn.className = 'btn btn-primary btn-sm save-mystery-btn';
+      saveBtn.textContent = 'Save Mystery Config';
+      btnRow.appendChild(saveBtn);
+
+      if (isEnabled) {
+        const revealBtn = document.createElement('button');
+        revealBtn.type = 'button';
+        revealBtn.className = 'btn btn-secondary btn-sm reveal-mystery-btn';
+        revealBtn.style.cssText = 'background:#7c3aed; color:#fff;';
+        revealBtn.textContent = 'Reveal Mystery Tap';
+        btnRow.appendChild(revealBtn);
+      }
+      card.appendChild(btnRow);
+    }
+
+    grid.appendChild(card);
+  }
+
+  container.replaceChildren(grid);
+
+  container.querySelectorAll('[data-mystery-tap]').forEach((card) => {
+    const tapId = parseInt(card.dataset.mysteryTap, 10);
+    const enableCheck = card.querySelector('.mystery-enable-check');
+    const catGrid = card.querySelector('.mystery-categories-grid');
+    const saveBtn = card.querySelector('.save-mystery-btn');
+    const revealBtn = card.querySelector('.reveal-mystery-btn');
+
+    if (enableCheck && catGrid) {
+      enableCheck.addEventListener('change', () => {
+        catGrid.style.opacity = enableCheck.checked ? '1' : '0.5';
+        catGrid.style.pointerEvents = enableCheck.checked ? 'auto' : 'none';
+      });
+    }
+
+    if (saveBtn) {
+      saveBtn.addEventListener('click', async () => {
+        const enabled = enableCheck.checked;
+        const redactedCategories = Array.from(card.querySelectorAll('.mystery-cat-check:checked')).map((c) => c.value);
+        try {
+          const res = await fetch(`/api/taps/${tapId}/mystery`, {
+            method: 'POST',
+            headers: authHeaders(true),
+            body: JSON.stringify({ enabled, redacted_categories: redactedCategories })
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Failed to save mystery config');
+          const tapObj = appState.taps.find((t) => t.tap_id === tapId);
+          if (tapObj && data.mystery) tapObj.mystery_config = data.mystery;
+          showToast(`Tap ${tapId} mystery configuration saved.`);
+          renderMysteryTapAdmin();
+          scheduleTapUpdates(new Set([String(tapId)]));
+        } catch (err) {
+          showToast(`⚠️ ${err.message}`);
+        }
+      });
+    }
+
+    if (revealBtn) {
+      revealBtn.addEventListener('click', async () => {
+        if (
+          !confirm(
+            `Are you sure you want to reveal Mystery Tap ${tapId}? This cannot be undone for this keg lifecycle.`
+          )
+        )
+          return;
+        try {
+          const res = await fetch(`/api/taps/${tapId}/mystery/reveal`, {
+            method: 'POST',
+            headers: authHeaders(true)
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Failed to reveal mystery tap');
+          const tapObj = appState.taps.find((t) => t.tap_id === tapId);
+          if (tapObj && data.mystery) tapObj.mystery_config = data.mystery;
+          showToast(`✨ Tap ${tapId} mystery revealed!`);
+          renderMysteryTapAdmin();
+          scheduleTapUpdates(new Set([String(tapId)]));
+        } catch (err) {
+          showToast(`⚠️ ${err.message}`);
+        }
+      });
+    }
+  });
+}
+
+async function renderTapWarsAdmin() {
+  const container = document.getElementById('tapWarsAdminContent');
+  if (!container) return;
+
+  const battle = appState.tapWar;
+  let historyData = [];
+  try {
+    const res = await fetch('/api/tap-wars/history', { headers: authHeaders() });
+    if (res.ok) {
+      const payload = await res.json();
+      historyData = payload.history || [];
+    }
+  } catch (err) {
+    console.warn('[Tap Wars Admin] Could not fetch history:', err);
+  }
+
+  const root = document.createElement('div');
+  root.style.cssText = 'display: grid; gap: 1.5rem;';
+
+  if (battle) {
+    const { battleId, contestantA, contestantB, title, descriptionCopy, state } = battle;
+    const aVotes = contestantA?.voteCount ?? 0;
+    const bVotes = contestantB?.voteCount ?? 0;
+
+    const bCard = document.createElement('div');
+    bCard.style.cssText =
+      'border: 2px solid var(--accent-color); border-radius: 0.75rem; padding: 1.25rem; background: var(--bg-card);';
+
+    const header = document.createElement('div');
+    header.style.cssText =
+      'display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;';
+    const h4 = document.createElement('h4');
+    h4.style.cssText = 'margin: 0; font-family: var(--font-title); color: var(--accent-color);';
+    h4.textContent = `Current Battle: ${title}`;
+    const badge = document.createElement('span');
+    badge.className = `badge ${state === 'active' ? 'badge-fresh' : 'badge-low'}`;
+    badge.style.textTransform = 'uppercase';
+    badge.textContent = state;
+    header.append(h4, badge);
+    bCard.appendChild(header);
+
+    const descP = document.createElement('p');
+    descP.style.cssText = 'color: var(--text-muted); font-size: 0.88rem; margin: 0 0 1rem;';
+    descP.textContent = descriptionCopy || '';
+    bCard.appendChild(descP);
+
+    const grid = document.createElement('div');
+    grid.style.cssText =
+      'display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.25rem; text-align: center;';
+
+    const boxA = document.createElement('div');
+    boxA.style.cssText =
+      'background: rgba(0,0,0,0.3); padding: 0.75rem; border-radius: 0.5rem; border: 1px solid var(--primary-color);';
+    const labelA = document.createElement('div');
+    labelA.style.cssText = 'font-weight: 700; color: var(--primary-color);';
+    labelA.textContent = `Tap ${contestantA?.tapId ?? ''}: ${contestantA?.beerName || `Tap ${contestantA?.tapId ?? ''}`}`;
+    const valA = document.createElement('div');
+    valA.style.cssText = 'font-size: 1.4rem; font-weight: 800; margin-top: 0.25rem;';
+    valA.textContent = `${aVotes} Votes`;
+    boxA.append(labelA, valA);
+
+    const boxB = document.createElement('div');
+    boxB.style.cssText =
+      'background: rgba(0,0,0,0.3); padding: 0.75rem; border-radius: 0.5rem; border: 1px solid var(--secondary-color);';
+    const labelB = document.createElement('div');
+    labelB.style.cssText = 'font-weight: 700; color: var(--secondary-color);';
+    labelB.textContent = `Tap ${contestantB?.tapId ?? ''}: ${contestantB?.beerName || `Tap ${contestantB?.tapId ?? ''}`}`;
+    const valB = document.createElement('div');
+    valB.style.cssText = 'font-size: 1.4rem; font-weight: 800; margin-top: 0.25rem;';
+    valB.textContent = `${bVotes} Votes`;
+    boxB.append(labelB, valB);
+
+    grid.append(boxA, boxB);
+    bCard.appendChild(grid);
+
+    const actions = document.createElement('div');
+    actions.style.cssText = 'display: flex; gap: 0.75rem; justify-content: flex-end;';
+
+    if (state === 'draft') {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn btn-primary start-battle-btn';
+      btn.dataset.id = String(battleId);
+      btn.textContent = '▶️ Start Battle';
+      actions.appendChild(btn);
+    } else if (state === 'active') {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn btn-secondary end-battle-btn';
+      btn.style.cssText = 'background:#ef4444; color:#fff;';
+      btn.dataset.id = String(battleId);
+      btn.textContent = '⏹️ End Battle';
+      actions.appendChild(btn);
+    } else if (state === 'ended') {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn btn-primary reveal-battle-btn';
+      btn.style.cssText = 'background:#7c3aed; color:#fff;';
+      btn.dataset.id = String(battleId);
+      btn.textContent = '✨ Reveal Winner';
+      actions.appendChild(btn);
+    } else {
+      const span = document.createElement('span');
+      span.style.cssText = 'color: var(--text-muted); font-size: 0.85rem; align-self: center;';
+      span.textContent = `Battle Complete (${battle.winnerName ? `Winner: ${battle.winnerName}` : 'Tie'})`;
+      actions.appendChild(span);
+    }
+    bCard.appendChild(actions);
+    root.appendChild(bCard);
+  } else {
+    const activeTaps = appState.taps.filter((t) => t.enabled === 1);
+    const fCard = document.createElement('div');
+    fCard.style.cssText =
+      'border: 1px solid var(--border-color); border-radius: 0.75rem; padding: 1.25rem; background: var(--bg-card);';
+    const fh4 = document.createElement('h4');
+    fh4.style.cssText = 'margin: 0 0 1rem; font-family: var(--font-title); color: var(--primary-color);';
+    fh4.textContent = 'Create New Tap War Battle';
+    fCard.appendChild(fh4);
+
+    const form = document.createElement('form');
+    form.id = 'createTapWarForm';
+    form.style.cssText = 'display: grid; gap: 1rem;';
+
+    const tapRow = document.createElement('div');
+    tapRow.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;';
+
+    const groupA = document.createElement('div');
+    groupA.className = 'form-group';
+    const lA = document.createElement('label');
+    lA.className = 'form-label';
+    lA.htmlFor = 'twContestantA';
+    lA.textContent = 'Contestant A (Tap)';
+    const selA = document.createElement('select');
+    selA.id = 'twContestantA';
+    selA.className = 'form-control';
+    selA.required = true;
+    const optA0 = document.createElement('option');
+    optA0.value = '';
+    optA0.textContent = 'Select Tap A...';
+    selA.appendChild(optA0);
+    activeTaps.forEach((t) => {
+      const opt = document.createElement('option');
+      opt.value = String(t.tap_id);
+      opt.textContent = `Tap ${t.tap_id} — ${t.override_name || 'Beer'}`;
+      selA.appendChild(opt);
+    });
+    groupA.append(lA, selA);
+
+    const groupB = document.createElement('div');
+    groupB.className = 'form-group';
+    const lB = document.createElement('label');
+    lB.className = 'form-label';
+    lB.htmlFor = 'twContestantB';
+    lB.textContent = 'Contestant B (Tap)';
+    const selB = document.createElement('select');
+    selB.id = 'twContestantB';
+    selB.className = 'form-control';
+    selB.required = true;
+    const optB0 = document.createElement('option');
+    optB0.value = '';
+    optB0.textContent = 'Select Tap B...';
+    selB.appendChild(optB0);
+    activeTaps.forEach((t) => {
+      const opt = document.createElement('option');
+      opt.value = String(t.tap_id);
+      opt.textContent = `Tap ${t.tap_id} — ${t.override_name || 'Beer'}`;
+      selB.appendChild(opt);
+    });
+    groupB.append(lB, selB);
+
+    tapRow.append(groupA, groupB);
+    form.appendChild(tapRow);
+
+    const groupTitle = document.createElement('div');
+    groupTitle.className = 'form-group';
+    const lTitle = document.createElement('label');
+    lTitle.className = 'form-label';
+    lTitle.htmlFor = 'twTitle';
+    lTitle.textContent = 'Battle Title';
+    const inTitle = document.createElement('input');
+    inTitle.type = 'text';
+    inTitle.id = 'twTitle';
+    inTitle.className = 'form-control';
+    inTitle.placeholder = 'e.g. IPA Showdown: Hazy vs West Coast';
+    inTitle.required = true;
+    groupTitle.append(lTitle, inTitle);
+    form.appendChild(groupTitle);
+
+    const groupCopy = document.createElement('div');
+    groupCopy.className = 'form-group';
+    const lCopy = document.createElement('label');
+    lCopy.className = 'form-label';
+    lCopy.htmlFor = 'twCopy';
+    lCopy.textContent = 'Description / Promo Copy';
+    const inCopy = document.createElement('textarea');
+    inCopy.id = 'twCopy';
+    inCopy.className = 'form-control';
+    inCopy.rows = 2;
+    inCopy.placeholder = 'Vote for your favorite pour! Winner gets bragging rights.';
+    groupCopy.append(lCopy, inCopy);
+    form.appendChild(groupCopy);
+
+    const groupTheme = document.createElement('div');
+    groupTheme.className = 'form-group';
+    const lTheme = document.createElement('label');
+    lTheme.className = 'form-label';
+    lTheme.htmlFor = 'twTheme';
+    lTheme.textContent = 'Battle Theme';
+    const selTheme = document.createElement('select');
+    selTheme.id = 'twTheme';
+    selTheme.className = 'form-control';
+    [
+      ['standard', 'Standard Battle'],
+      ['ipa_showdown', 'IPA Showdown'],
+      ['lager_clash', 'Lager Clash'],
+      ['stout_off', 'Stout Off'],
+      ['cider_scramble', 'Cider Scramble']
+    ].forEach(([val, label]) => {
+      const opt = document.createElement('option');
+      opt.value = val;
+      opt.textContent = label;
+      selTheme.appendChild(opt);
+    });
+    groupTheme.append(lTheme, selTheme);
+    form.appendChild(groupTheme);
+
+    const submitRow = document.createElement('div');
+    submitRow.style.cssText = 'display: flex; justify-content: flex-end;';
+    const subBtn = document.createElement('button');
+    subBtn.type = 'submit';
+    subBtn.className = 'btn btn-primary';
+    subBtn.textContent = 'Create Draft Battle';
+    submitRow.appendChild(subBtn);
+    form.appendChild(submitRow);
+
+    fCard.appendChild(form);
+    root.appendChild(fCard);
+  }
+
+  if (historyData.length) {
+    const hCard = document.createElement('div');
+    hCard.style.cssText =
+      'border: 1px solid var(--border-color); border-radius: 0.75rem; padding: 1.25rem; background: var(--bg-card);';
+    const hh4 = document.createElement('h4');
+    hh4.style.cssText = 'margin: 0 0 0.75rem; font-family: var(--font-title); color: var(--secondary-color);';
+    hh4.textContent = 'Tap Wars Battle History';
+    hCard.appendChild(hh4);
+
+    const hList = document.createElement('div');
+    hList.style.cssText = 'display: grid; gap: 0.5rem; max-height: 240px; overflow-y: auto;';
+
+    historyData.forEach((h) => {
+      const hRow = document.createElement('div');
+      hRow.style.cssText =
+        'display: flex; justify-content: space-between; align-items: center; padding: 0.6rem 0.75rem; border-bottom: 1px dashed var(--border-color); font-size: 0.85rem;';
+      const left = document.createElement('div');
+      const strong = document.createElement('strong');
+      strong.textContent = h.title;
+      const stateSpan = document.createElement('span');
+      stateSpan.style.cssText = 'color: var(--text-muted); margin-left: 0.5rem;';
+      stateSpan.textContent = `(${h.state})`;
+      left.append(strong, stateSpan);
+
+      const right = document.createElement('div');
+      right.style.cssText = 'color: var(--accent-color); font-weight: 700;';
+      right.textContent = `${h.winner_side ? `Winner: Side ${h.winner_side}` : h.state} (${(h.contestant_a_votes || 0) + (h.contestant_b_votes || 0)} votes)`;
+
+      hRow.append(left, right);
+      hList.appendChild(hRow);
+    });
+    hCard.appendChild(hList);
+    root.appendChild(hCard);
+  }
+
+  container.replaceChildren(root);
+
+  const form = container.querySelector('#createTapWarForm');
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const contestantATapId = parseInt(document.getElementById('twContestantA').value, 10);
+      const contestantBTapId = parseInt(document.getElementById('twContestantB').value, 10);
+      const title = document.getElementById('twTitle').value.trim();
+      const descriptionCopy = document.getElementById('twCopy').value.trim();
+      const theme = document.getElementById('twTheme').value;
+
+      if (contestantATapId === contestantBTapId) {
+        showToast('⚠️ Contestant A and Contestant B must be different taps');
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/tap-wars', {
+          method: 'POST',
+          headers: authHeaders(true),
+          body: JSON.stringify({
+            contestant_a_tap_id: contestantATapId,
+            contestant_b_tap_id: contestantBTapId,
+            title,
+            description_copy: descriptionCopy,
+            theme
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to create battle draft');
+        if (data.battle) appState.tapWar = data.battle;
+        showToast('⚔️ Tap War battle draft created!');
+        renderTapWarsAdmin();
+        renderTapWarsBanner();
+      } catch (err) {
+        showToast(`⚠️ ${err.message}`);
+      }
+    });
+  }
+
+  container.querySelector('.start-battle-btn')?.addEventListener('click', async (e) => {
+    const battleId = e.currentTarget.dataset.id;
+    try {
+      const res = await fetch(`/api/tap-wars/${battleId}/start`, {
+        method: 'POST',
+        headers: authHeaders(true)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to start battle');
+      if (data.battle) appState.tapWar = data.battle;
+      showToast('⚔️ Tap War Battle Started!');
+      renderTapWarsAdmin();
+      renderTapWarsBanner();
+    } catch (err) {
+      showToast(`⚠️ ${err.message}`);
+    }
+  });
+
+  container.querySelector('.end-battle-btn')?.addEventListener('click', async (e) => {
+    const battleId = e.currentTarget.dataset.id;
+    if (!confirm('End voting for this Tap War?')) return;
+    try {
+      const res = await fetch(`/api/tap-wars/${battleId}/end`, {
+        method: 'POST',
+        headers: authHeaders(true)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to end battle');
+      if (data.battle) appState.tapWar = data.battle;
+      showToast('⏹️ Tap War Ended. Results pending reveal.');
+      renderTapWarsAdmin();
+      renderTapWarsBanner();
+    } catch (err) {
+      showToast(`⚠️ ${err.message}`);
+    }
+  });
+
+  container.querySelector('.reveal-battle-btn')?.addEventListener('click', async (e) => {
+    const battleId = e.currentTarget.dataset.id;
+    if (!confirm('Reveal the winner of this Tap War?')) return;
+    try {
+      const res = await fetch(`/api/tap-wars/${battleId}/reveal`, {
+        method: 'POST',
+        headers: authHeaders(true)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to reveal battle');
+      if (data.battle) appState.tapWar = data.battle;
+      showToast('✨ Tap War Winner Revealed!');
+      renderTapWarsAdmin();
+      renderTapWarsBanner();
+    } catch (err) {
+      showToast(`⚠️ ${err.message}`);
+    }
+  });
 }
 
 function showModal(id) {

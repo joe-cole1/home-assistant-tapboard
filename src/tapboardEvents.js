@@ -11,7 +11,9 @@ export const TAPBOARD_EVENT_TYPES = Object.freeze([
   'keg_kicked',
   'brewfather_sync_failed',
   'health_transition',
-  'forecast_gap'
+  'forecast_gap',
+  'battle_started',
+  'battle_ended'
 ]);
 
 const EVENT_TYPES = new Set(TAPBOARD_EVENT_TYPES);
@@ -36,7 +38,9 @@ const DATA_KEYS = {
     'gap_max_days',
     'confidence',
     'compatibility'
-  ])
+  ]),
+  battle_started: new Set(['battle_id', 'title', 'contestant_a_tap_id', 'contestant_b_tap_id']),
+  battle_ended: new Set(['battle_id', 'reason'])
 };
 const KEG_END_REASONS = new Set(['end_batch', 'end_keg', 'reassigned', 'cleared', 'kicked', 'removed', 'other']);
 const POUR_CANCEL_REASONS = new Set([
@@ -258,6 +262,20 @@ function normalizeData(eventType, data) {
         gap_max_days: nullableGap(data.gap_max_days, 'data.gap_max_days'),
         confidence,
         compatibility
+      };
+    }
+    case 'battle_started': {
+      return {
+        battle_id: boundedSafeInteger(data.battle_id, 1, Number.MAX_SAFE_INTEGER, 'data.battle_id'),
+        title: boundedText(data.title, 160, 'data.title'),
+        contestant_a_tap_id: boundedSafeInteger(data.contestant_a_tap_id, 1, 6, 'data.contestant_a_tap_id'),
+        contestant_b_tap_id: boundedSafeInteger(data.contestant_b_tap_id, 1, 6, 'data.contestant_b_tap_id')
+      };
+    }
+    case 'battle_ended': {
+      return {
+        battle_id: boundedSafeInteger(data.battle_id, 1, Number.MAX_SAFE_INTEGER, 'data.battle_id'),
+        reason: boundedText(data.reason, 32, 'data.reason')
       };
     }
   }

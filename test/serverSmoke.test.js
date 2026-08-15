@@ -59,7 +59,7 @@ test('healthcheck is lightweight and public HTTP/SSE snapshots use schema v9 hea
     const stateResponse = await fetch(`${baseUrl}/api/state`);
     const stateText = await stateResponse.text();
     const snapshot = JSON.parse(stateText);
-    assert.equal(snapshot.schemaVersion, 11);
+    assert.equal(snapshot.schemaVersion, 12);
     assert.deepEqual(snapshot.settings, {
       id: 1,
       theme: 'modern_dark',
@@ -115,7 +115,7 @@ test('healthcheck is lightweight and public HTTP/SSE snapshots use schema v9 hea
     }
     controller.abort();
     assert.match(eventText, /event: snapshot\n/);
-    assert.match(eventText, /"schemaVersion":11/);
+    assert.match(eventText, /"schemaVersion":12/);
     assert.match(eventText, /"tapStates":/);
     assert.match(eventText, /"draftHealth":/);
     assert.match(eventText, /"tapPlanning":/);
