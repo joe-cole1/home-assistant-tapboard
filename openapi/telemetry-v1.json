@@ -1,0 +1,485 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Tapboard Telemetry Ingestion API",
+    "version": "1.0.0",
+    "description": "Versioned, deterministic telemetry ingestion for machine clients. Requests use the snake_case wire contract. Single-sample JSON bodies are limited to 16 KiB and batch JSON bodies to 256 KiB. Timestamps must be strict RFC3339 with an uppercase T and explicit uppercase Z or +/-HH:MM offset; Tapboard canonicalizes them to UTC ISO-8601 milliseconds."
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Current Tapboard server"
+    }
+  ],
+  "paths": {
+    "/api/v1/telemetry/taps/{tapNumber}": {
+      "post": {
+        "summary": "Ingest one telemetry sample",
+        "description": "Submit one measurement for a tap. The request body is limited to 16 KiB. HTTP 200 is returned for a newly accepted sample or an accepted idempotent duplicate. Durable operational rejections use HTTP 409, except rate_limited, which uses HTTP 429. A same-identity/different-digest conflict also uses HTTP 409 but does not create or replace a durable receipt.",
+        "operationId": "ingestSingleTelemetrySample",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tapNumber",
+            "in": "path",
+            "required": true,
+            "description": "Positive tap number.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TelemetrySample"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Accepted sample or accepted idempotent duplicate.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SingleOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "Durable operational rejections (not_authoritative, tap_retired, stale, future, or out_of_order) are recorded as receipts. A non-durable/no-effect idempotency_conflict means the same identity was submitted with a different payload and no new receipt or measurement is written.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SingleOutcome"
+                }
+              }
+            }
+          },
+          "413": {
+            "$ref": "#/components/responses/ContentTooLarge"
+          },
+          "429": {
+            "description": "Rate limit rejected the sample.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SingleOutcome"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/telemetry/batch": {
+      "post": {
+        "summary": "Ingest a telemetry batch",
+        "description": "Submit 1-100 samples. The request body is limited to 256 KiB. Structural failures use the normal HTTP error responses. Per-item durable conflicts and rate-limit outcomes are represented in the 200 response and do not turn the batch into HTTP 409 or HTTP 429.",
+        "operationId": "ingestTelemetryBatch",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TelemetryBatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Batch processing completed; each item reports accepted, duplicate, conflict, or rate-limit outcome.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/ContentTooLarge"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "tbk_token",
+        "description": "Machine API key in the Authorization header. The Bearer scheme is case-insensitive and must contain exactly one non-whitespace token."
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Malformed JSON or structurally invalid request.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Missing, malformed, invalid, or revoked Bearer machine token.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "The referenced tap does not exist.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "ContentTooLarge": {
+        "description": "The JSON request body exceeded the endpoint limit (16 KiB for a single sample or 256 KiB for a batch).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "MassUnit": {
+        "type": "string",
+        "enum": ["g", "kg", "oz", "lb"]
+      },
+      "VolumeUnit": {
+        "type": "string",
+        "enum": ["ml", "l", "us_fl_oz", "us_gal"]
+      },
+      "TemperatureUnit": {
+        "type": "string",
+        "enum": ["c", "f"]
+      },
+      "PercentageUnit": {
+        "type": "string",
+        "const": "percent"
+      },
+      "TotalWeightMeasurement": {
+        "type": "object",
+        "required": ["kind", "value", "unit"],
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "total_weight"
+          },
+          "value": {
+            "type": "number",
+            "minimum": 0
+          },
+          "unit": {
+            "$ref": "#/components/schemas/MassUnit"
+          }
+        }
+      },
+      "RemainingVolumeMeasurement": {
+        "type": "object",
+        "required": ["kind", "value", "unit"],
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "remaining_volume"
+          },
+          "value": {
+            "type": "number",
+            "minimum": 0
+          },
+          "unit": {
+            "$ref": "#/components/schemas/VolumeUnit"
+          }
+        }
+      },
+      "FillPercentageMeasurement": {
+        "type": "object",
+        "required": ["kind", "value", "unit"],
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "fill_percentage"
+          },
+          "value": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "unit": {
+            "$ref": "#/components/schemas/PercentageUnit"
+          }
+        }
+      },
+      "Measurement": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/TotalWeightMeasurement"
+          },
+          {
+            "$ref": "#/components/schemas/RemainingVolumeMeasurement"
+          },
+          {
+            "$ref": "#/components/schemas/FillPercentageMeasurement"
+          }
+        ],
+        "description": "Exactly one primary measurement, selected by kind."
+      },
+      "Temperature": {
+        "type": "object",
+        "required": ["value", "unit"],
+        "additionalProperties": false,
+        "properties": {
+          "value": {
+            "type": "number",
+            "minimum": -100,
+            "maximum": 150
+          },
+          "unit": {
+            "$ref": "#/components/schemas/TemperatureUnit"
+          }
+        }
+      },
+      "TelemetrySample": {
+        "type": "object",
+        "required": ["measured_at", "measurement"],
+        "additionalProperties": false,
+        "properties": {
+          "client_sample_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[A-Za-z0-9_.:/-]{1,128}$",
+            "description": "Optional idempotency key; when present it cannot be null or blank."
+          },
+          "measured_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?(Z|[+-]\\d{2}:\\d{2})$",
+            "description": "Strict RFC3339 timestamp using date T time and uppercase Z or +/-HH:MM; normalized to UTC ISO milliseconds."
+          },
+          "measurement": {
+            "$ref": "#/components/schemas/Measurement"
+          },
+          "temperature": {
+            "$ref": "#/components/schemas/Temperature"
+          }
+        }
+      },
+      "TelemetryBatchSample": {
+        "type": "object",
+        "required": ["tap_number", "measured_at", "measurement"],
+        "additionalProperties": false,
+        "properties": {
+          "tap_number": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000
+          },
+          "client_sample_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[A-Za-z0-9_.:/-]{1,128}$"
+          },
+          "measured_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?(Z|[+-]\\d{2}:\\d{2})$"
+          },
+          "measurement": {
+            "$ref": "#/components/schemas/Measurement"
+          },
+          "temperature": {
+            "$ref": "#/components/schemas/Temperature"
+          }
+        }
+      },
+      "TelemetryBatch": {
+        "type": "object",
+        "required": ["samples"],
+        "additionalProperties": false,
+        "properties": {
+          "samples": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/TelemetryBatchSample"
+            }
+          }
+        }
+      },
+      "SingleOutcome": {
+        "type": "object",
+        "required": ["outcome", "code", "duplicate", "processed_at"],
+        "additionalProperties": false,
+        "properties": {
+          "outcome": {
+            "type": "string",
+            "enum": ["accepted", "rejected"]
+          },
+          "code": {
+            "type": "string"
+          },
+          "duplicate": {
+            "type": "boolean"
+          },
+          "accepted_measurement_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "processed_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "BatchItemOutcome": {
+        "type": "object",
+        "required": ["index", "tap_number", "outcome", "code", "duplicate", "processed_at"],
+        "additionalProperties": false,
+        "properties": {
+          "index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "tap_number": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000
+          },
+          "client_sample_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "outcome": {
+            "type": "string",
+            "enum": ["accepted", "rejected"]
+          },
+          "code": {
+            "type": "string"
+          },
+          "duplicate": {
+            "type": "boolean"
+          },
+          "accepted_measurement_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "processed_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "BatchOutcome": {
+        "type": "object",
+        "required": [
+          "processed_count",
+          "accepted_count",
+          "rejected_count",
+          "duplicate_count",
+          "results"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "processed_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "accepted_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "rejected_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "duplicate_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BatchItemOutcome"
+            }
+          }
+        }
+      },
+      "ErrorEnvelope": {
+        "type": "object",
+        "required": ["error"],
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": ["code", "message"],
+            "additionalProperties": false,
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "details": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

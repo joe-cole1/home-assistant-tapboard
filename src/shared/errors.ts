@@ -1,5 +1,6 @@
 export type ApplicationErrorCategory =
   | "validation"
+  | "too_large"
   | "unauthorized"
   | "forbidden"
   | "not_found"

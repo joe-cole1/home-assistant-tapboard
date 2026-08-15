@@ -111,7 +111,7 @@ function readTransactionValues(database: DatabaseConnection): string[] {
     .map((row) => row.value);
 }
 
-void test("a clean file database bootstraps the canonical v6 migration ledger", (context) => {
+void test("a clean file database bootstraps the canonical v8 migration ledger", (context) => {
   const path = makeDatabasePath(context);
   const database = openDatabase(path);
 
@@ -148,7 +148,15 @@ void test("a clean file database bootstraps the canonical v6 migration ledger", 
         { type: "index", name: "idx_tap_assignment_lifecycles_active_tap" },
         { type: "index", name: "idx_tap_assignment_lifecycles_fill_id" },
         { type: "index", name: "idx_tap_assignment_lifecycles_tap_id" },
+        { type: "index", name: "idx_tap_telemetry_authority_source" },
         { type: "index", name: "idx_taps_tap_number" },
+        { type: "index", name: "idx_telemetry_measurements_created_at" },
+        { type: "index", name: "idx_telemetry_measurements_tap_measured" },
+        { type: "index", name: "idx_telemetry_receipts_client_identity" },
+        { type: "index", name: "idx_telemetry_receipts_fallback_identity" },
+        { type: "index", name: "idx_telemetry_receipts_processed_at" },
+        { type: "index", name: "idx_telemetry_source_tap_status_tap" },
+        { type: "index", name: "idx_telemetry_sources_current_machine_key" },
         { type: "table", name: "activity_log" },
         { type: "table", name: "activity_retention" },
         { type: "table", name: "admin_credentials" },
@@ -184,7 +192,13 @@ void test("a clean file database bootstraps the canonical v6 migration ledger", 
         { type: "table", name: "schema_migrations" },
         { type: "table", name: "secret_rotation_state" },
         { type: "table", name: "tap_assignment_lifecycles" },
+        { type: "table", name: "tap_telemetry_authority" },
         { type: "table", name: "taps" },
+        { type: "table", name: "telemetry_ingest_receipts" },
+        { type: "table", name: "telemetry_measurements" },
+        { type: "table", name: "telemetry_settings" },
+        { type: "table", name: "telemetry_source_tap_status" },
+        { type: "table", name: "telemetry_sources" },
         { type: "trigger", name: "trg_activity_log_no_update" },
         { type: "trigger", name: "trg_deletion_audit_no_delete" },
         { type: "trigger", name: "trg_deletion_audit_no_update" },
@@ -198,6 +212,13 @@ void test("a clean file database bootstraps the canonical v6 migration ledger", 
         { type: "trigger", name: "trg_tap_assignment_lifecycles_no_update_closed" },
         { type: "trigger", name: "trg_taps_first_used_at_monotonic" },
         { type: "trigger", name: "trg_taps_no_delete_if_used" },
+        { type: "trigger", name: "trg_telemetry_assignment_delete_context" },
+        { type: "trigger", name: "trg_telemetry_fill_delete_context" },
+        { type: "trigger", name: "trg_telemetry_measurements_no_update" },
+        { type: "trigger", name: "trg_telemetry_measurements_validate_attribution" },
+        { type: "trigger", name: "trg_telemetry_receipts_no_update" },
+        { type: "trigger", name: "trg_telemetry_source_tap_status_validate_insert" },
+        { type: "trigger", name: "trg_telemetry_source_tap_status_validate_update" },
       ],
     );
     const ledger = database
@@ -205,7 +226,7 @@ void test("a clean file database bootstraps the canonical v6 migration ledger", 
         "SELECT version, name, applied_at FROM schema_migrations ORDER BY version",
       )
       .all();
-    assert.equal(ledger.length, 6);
+    assert.equal(ledger.length, 8);
     assert.equal(ledger[0]?.version, FOUNDATION_SCHEMA_VERSION);
     assert.equal(ledger[0]?.name, FOUNDATION_INITIAL_MIGRATION_NAME);
     assert.equal(ledger[1]?.version, 2);
@@ -218,6 +239,10 @@ void test("a clean file database bootstraps the canonical v6 migration ledger", 
     assert.equal(ledger[4]?.name, "fills-and-on-deck");
     assert.equal(ledger[5]?.version, 6);
     assert.equal(ledger[5]?.name, "taps-and-assignment-lifecycles");
+    assert.equal(ledger[6]?.version, 7);
+    assert.equal(ledger[6]?.name, "telemetry-sources-api-and-ingestion");
+    assert.equal(ledger[7]?.version, 8);
+    assert.equal(ledger[7]?.name, "forensic-qc-telemetry-integrity");
     assert.match(ledger[0]?.applied_at ?? "", /^\d{4}-\d{2}-\d{2}T/);
   } finally {
     database.close();
@@ -235,13 +260,13 @@ void test("an in-memory database bootstraps the same canonical schema", () => {
           "SELECT type, name FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%'",
         )
         .all().length,
-      71,
+      92,
     );
     assert.equal(
       database
         .prepare<[], { readonly count: number }>("SELECT count(*) AS count FROM schema_migrations")
         .get()?.count,
-      6,
+      8,
     );
   } finally {
     database.close();
@@ -343,7 +368,7 @@ void test("v2 outbound delivery lease fields reject one-sided stale values", () 
   }
 });
 
-void test("an exact v1 database upgrades to v6 with all ledger entries", (context) => {
+void test("an exact v1 database upgrades to v8 with all ledger entries", (context) => {
   const path = makeDatabasePath(context);
   openDatabase(path, { migrations: FOUNDATION_MIGRATIONS }).close();
   const database = openDatabase(path, { migrations: MIGRATIONS });
@@ -362,6 +387,8 @@ void test("an exact v1 database upgrades to v6 with all ledger entries", (contex
         { version: 4, name: "custom-and-brewfather-beverages" },
         { version: 5, name: "fills-and-on-deck" },
         { version: 6, name: "taps-and-assignment-lifecycles" },
+        { version: 7, name: "telemetry-sources-api-and-ingestion" },
+        { version: 8, name: "forensic-qc-telemetry-integrity" },
       ],
     );
   } finally {
@@ -369,17 +396,79 @@ void test("an exact v1 database upgrades to v6 with all ledger entries", (contex
   }
 });
 
-void test("canonical v6 reopen rejects an extra user object", (context) => {
+void test("the pre-QC telemetry v7 schema upgrades to v8 without replacing persisted settings", (context) => {
+  const path = makeDatabasePath(context);
+  const v7 = openDatabase(path, { migrations: MIGRATIONS.slice(0, 7) });
+  v7.execute("UPDATE telemetry_settings SET max_batch_size = 50 WHERE id = 1");
+  v7.close();
+
+  const upgraded = openDatabase(path);
+  try {
+    assert.equal(upgraded.pragma<number>("user_version", { simple: true }), 8);
+    assert.equal(
+      upgraded
+        .prepare<[], { readonly max_batch_size: number }>(
+          "SELECT max_batch_size FROM telemetry_settings WHERE id = 1",
+        )
+        .get()?.max_batch_size,
+      50,
+    );
+    assert.equal(
+      upgraded
+        .prepare<[string], { readonly count: number }>(
+          "SELECT count(*) AS count FROM sqlite_schema WHERE type = 'trigger' AND name = ?",
+        )
+        .get("trg_telemetry_assignment_delete_context")?.count,
+      1,
+    );
+    assert.equal(
+      upgraded
+        .prepare<[], { readonly count: number }>("SELECT count(*) AS count FROM schema_migrations")
+        .get()?.count,
+      8,
+    );
+  } finally {
+    upgraded.close();
+  }
+});
+
+void test("a corrupt canonical v6 database is rejected before migration 7 can mutate it", (context) => {
+  const path = makeDatabasePath(context);
+  openDatabase(path, { migrations: MIGRATIONS.slice(0, 6) }).close();
+  withFixture(path, (database) => {
+    database.exec("DROP TRIGGER trg_taps_first_used_at_monotonic");
+  });
+
+  assert.throws(() => openDatabase(path), /schema objects do not match|invalid DDL/);
+  withFixture(path, (database) => {
+    assert.equal(readUserVersion(database), 6);
+    assert.equal(
+      readSchemaObjects(database).some(({ name }) => name === "telemetry_sources"),
+      false,
+    );
+    assert.equal(readLedger(database).length, 6);
+  });
+});
+
+void test("a canonical database missing required telemetry settings is rejected on reopen", (context) => {
+  const path = makeDatabasePath(context);
+  openDatabase(path).close();
+  withFixture(path, (database) => database.exec("DELETE FROM telemetry_settings WHERE id = 1"));
+
+  assert.throws(() => openDatabase(path), /required telemetry_settings state is missing/);
+});
+
+void test("canonical v8 reopen rejects an extra user object", (context) => {
   const path = makeDatabasePath(context);
   openDatabase(path, { migrations: MIGRATIONS }).close();
-  withFixture(path, (database) => database.exec("CREATE TABLE unexpected_v6_table (id INTEGER)"));
+  withFixture(path, (database) => database.exec("CREATE TABLE unexpected_v8_table (id INTEGER)"));
   assert.throws(
     () => openDatabase(path, { migrations: MIGRATIONS }),
     /schema objects do not match|unexpected schema objects/,
   );
 });
 
-void test("v6 validation rejects a tampered DDL definition on reopen", (context) => {
+void test("v8 validation rejects a tampered DDL definition on reopen", (context) => {
   const path = makeDatabasePath(context);
   openDatabase(path, { migrations: MIGRATIONS }).close();
   withFixture(path, (database) => {
@@ -406,14 +495,14 @@ void test("a current database reopens idempotently", (context) => {
       reopened
         .prepare<[], { readonly count: number }>("SELECT count(*) AS count FROM schema_migrations")
         .get()?.count,
-      6,
+      8,
     );
   } finally {
     reopened.close();
   }
 });
 
-void test("a clean version 0 database upgrades through the canonical v6 schema", (context) => {
+void test("a clean version 0 database upgrades through the canonical v8 schema", (context) => {
   const path = makeDatabasePath(context);
   withFixture(path, (database) => assert.equal(readUserVersion(database), 0));
 
@@ -421,7 +510,7 @@ void test("a clean version 0 database upgrades through the canonical v6 schema",
 
   withFixture(path, (database) => {
     assert.equal(readUserVersion(database), CURRENT_SCHEMA_VERSION);
-    assert.equal(readSchemaObjects(database).length, 71);
+    assert.equal(readSchemaObjects(database).length, 92);
   });
 });
 
@@ -457,12 +546,12 @@ void test("migration definitions must be contiguous with nonempty unique names",
 
 void test("an unsupported future schema is rejected without mutation", (context) => {
   const path = makeDatabasePath(context);
-  withFixture(path, (database) => database.exec("PRAGMA user_version = 7"));
+  withFixture(path, (database) => database.exec("PRAGMA user_version = 9"));
 
   assert.throws(() => openDatabase(path), /schema version is newer/);
 
   withFixture(path, (database) => {
-    assert.equal(readUserVersion(database), 7);
+    assert.equal(readUserVersion(database), 9);
     assert.deepEqual(readSchemaObjects(database), []);
   });
 });
@@ -1149,6 +1238,7 @@ void test("tap assignment lifecycles enforce partial unique indexes and immutabi
 
       INSERT INTO tap_assignment_lifecycles (id, tap_id, fill_id, assigned_at, ended_at, end_reason, created_at)
       VALUES ('a1111111-1111-4111-8111-111111111111', 't1111111-1111-4111-8111-111111111111', 'f1111111-1111-4111-8111-111111111111', '2026-08-14T10:00:00.000Z', NULL, NULL, '2026-08-14T10:00:00.000Z');
+
     `);
 
     // Second open assignment on same Tap is blocked by partial unique index
@@ -1259,6 +1349,157 @@ void test("tap assignment lifecycles cascade on fill deletion, but tap remains w
     assert.throws(
       () => database.execute("DELETE FROM taps WHERE id = 't1111111-1111-4111-8111-111111111111'"),
       /used or retired taps cannot be deleted/,
+    );
+  } finally {
+    database.close();
+  }
+});
+
+void test("telemetry schema enforces source uniqueness, authority foreign keys, and settings bounds", () => {
+  const database = openDatabase(":memory:");
+  try {
+    // 1. Machine key prerequisite
+    database.execute(`
+      INSERT INTO machine_api_keys (id, public_id, verification_digest, label, created_at)
+      VALUES ('k1111111-1111-4111-8111-111111111111', 'pub_key_11111111', zeroblob(32), 'Key 1', '2026-08-14T00:00:00.000Z');
+      INSERT INTO machine_api_keys (id, public_id, verification_digest, label, created_at)
+      VALUES ('k2222222-2222-4222-8222-222222222222', 'pub_key_22222222', zeroblob(32), 'Key 2', '2026-08-14T00:00:00.000Z');
+    `);
+
+    // 2. Insert telemetry source
+    database.execute(`
+      INSERT INTO telemetry_sources (id, name, current_machine_key_id, created_at, updated_at)
+      VALUES ('s1111111-1111-4111-8111-111111111111', 'Brewery ESP32', 'k1111111-1111-4111-8111-111111111111', '2026-08-14T00:00:00.000Z', '2026-08-14T00:00:00.000Z');
+    `);
+
+    // Duplicate source name is rejected
+    assert.throws(
+      () =>
+        database.execute(`
+          INSERT INTO telemetry_sources (id, name, current_machine_key_id, created_at, updated_at)
+          VALUES ('s2222222-2222-4222-8222-222222222222', 'Brewery ESP32', 'k2222222-2222-4222-8222-222222222222', '2026-08-14T00:00:00.000Z', '2026-08-14T00:00:00.000Z');
+        `),
+      /UNIQUE constraint failed/,
+    );
+
+    // 3. Tap authority
+    database.execute(`
+      INSERT INTO taps (id, tap_number, name, enabled, first_used_at, retired_at, created_at, updated_at)
+      VALUES ('t1111111-1111-4111-8111-111111111111', 1, 'Tap 1', 1, NULL, NULL, '2026-08-14T00:00:00.000Z', '2026-08-14T00:00:00.000Z');
+      INSERT INTO tap_telemetry_authority (tap_id, source_id, changed_at)
+      VALUES ('t1111111-1111-4111-8111-111111111111', 's1111111-1111-4111-8111-111111111111', '2026-08-14T00:00:00.000Z');
+    `);
+
+    // Duplicate authority for same tap is rejected (tap_id is PK)
+    assert.throws(
+      () =>
+        database.execute(`
+          INSERT INTO tap_telemetry_authority (tap_id, source_id, changed_at)
+          VALUES ('t1111111-1111-4111-8111-111111111111', 's1111111-1111-4111-8111-111111111111', '2026-08-14T00:00:00.000Z');
+        `),
+      /UNIQUE constraint failed/,
+    );
+
+    // 4. Telemetry settings cross-field constraint
+    assert.throws(
+      () =>
+        database.execute(`
+          UPDATE telemetry_settings SET receipt_retention_seconds = 1000, reconnect_horizon_seconds = 5000;
+        `),
+      /CHECK constraint failed/,
+    );
+  } finally {
+    database.close();
+  }
+});
+
+void test("telemetry ingest receipts enforce identity uniqueness partial indexes and outcome check constraints", () => {
+  const database = openDatabase(":memory:");
+  try {
+    database.execute(`
+      INSERT INTO machine_api_keys (id, public_id, verification_digest, label, created_at)
+      VALUES ('k1111111-1111-4111-8111-111111111111', 'pub_key_11111111', x'0000000000000000000000000000000000000000000000000000000000000000', 'Key 1', '2026-08-14T00:00:00.000Z');
+      INSERT INTO telemetry_sources (id, name, current_machine_key_id, created_at, updated_at)
+      VALUES ('s1111111-1111-4111-8111-111111111111', 'Source 1', 'k1111111-1111-4111-8111-111111111111', '2026-08-14T00:00:00.000Z', '2026-08-14T00:00:00.000Z');
+      INSERT INTO taps (id, tap_number, name, enabled, first_used_at, retired_at, created_at, updated_at)
+      VALUES ('t1111111-1111-4111-8111-111111111111', 1, 'Tap 1', 1, NULL, NULL, '2026-08-14T00:00:00.000Z', '2026-08-14T00:00:00.000Z');
+      INSERT INTO taps (id, tap_number, name, enabled, first_used_at, retired_at, created_at, updated_at)
+      VALUES ('t2222222-2222-4222-8222-222222222222', 2, 'Tap 2', 1, NULL, NULL, '2026-08-14T00:00:00.000Z', '2026-08-14T00:00:00.000Z');
+
+      INSERT INTO telemetry_measurements (id, source_id, tap_id, measured_at, measured_at_epoch_ms, received_at, normalization_version, primary_kind, total_mass_g, remaining_volume_ml, fill_percentage, temperature_c, captured_assignment_id, captured_fill_id, created_at)
+      VALUES ('m1111111-1111-4111-8111-111111111111', 's1111111-1111-4111-8111-111111111111', 't1111111-1111-4111-8111-111111111111', '2026-08-14T12:00:00.000Z', 1786708800000, '2026-08-14T12:00:01.000Z', 1, 'total_weight', 15000, NULL, NULL, NULL, NULL, NULL, '2026-08-14T12:00:01.000Z');
+
+      INSERT INTO telemetry_ingest_receipts (id, source_id, tap_id, identity_kind, client_sample_id, measured_at_epoch_ms, payload_digest, normalization_version, outcome, outcome_code, accepted_measurement_id, measured_at, received_at, processed_at)
+      VALUES ('r1111111-1111-4111-8111-111111111111', 's1111111-1111-4111-8111-111111111111', 't1111111-1111-4111-8111-111111111111', 'client_sample_id', 'sample-1', 1786708800000, '${"a".repeat(64)}', 1, 'accepted', 'telemetry.accepted', 'm1111111-1111-4111-8111-111111111111', '2026-08-14T12:00:00.000Z', '2026-08-14T12:00:01.000Z', '2026-08-14T12:00:01.000Z');
+    `);
+
+    assert.throws(
+      () => database.execute("UPDATE telemetry_measurements SET total_mass_g = 1"),
+      /telemetry measurements are immutable/,
+    );
+    assert.throws(
+      () => database.execute("UPDATE telemetry_ingest_receipts SET outcome_code = 'tampered'"),
+      /telemetry receipts are immutable/,
+    );
+    assert.throws(
+      () =>
+        database.execute(`
+          INSERT INTO telemetry_source_tap_status (source_id, tap_id, latest_measurement_id, latest_measured_at, latest_measured_at_epoch_ms, latest_received_at, normalization_version, primary_kind, total_mass_g, remaining_volume_ml, fill_percentage, temperature_c, captured_assignment_id, captured_fill_id, updated_at)
+          VALUES ('s1111111-1111-4111-8111-111111111111', 't2222222-2222-4222-8222-222222222222', 'm1111111-1111-4111-8111-111111111111', '2026-08-14T12:00:00.000Z', 1786708800000, '2026-08-14T12:00:01.000Z', 1, 'total_weight', 15000, NULL, NULL, NULL, NULL, NULL, '2026-08-14T12:00:01.000Z');
+        `),
+      /telemetry status references inconsistent context/,
+    );
+
+    // Duplicate client_sample_id from same source fails partial unique index
+    assert.throws(
+      () =>
+        database.execute(`
+          INSERT INTO telemetry_ingest_receipts (id, source_id, tap_id, identity_kind, client_sample_id, measured_at_epoch_ms, payload_digest, normalization_version, outcome, outcome_code, accepted_measurement_id, measured_at, received_at, processed_at)
+          VALUES ('r2222222-2222-4222-8222-222222222222', 's1111111-1111-4111-8111-111111111111', 't2222222-2222-4222-8222-222222222222', 'client_sample_id', 'sample-1', 1786708800000, '${"a".repeat(64)}', 1, 'accepted', 'telemetry.accepted', 'm1111111-1111-4111-8111-111111111111', '2026-08-14T12:00:00.000Z', '2026-08-14T12:00:01.000Z', '2026-08-14T12:00:01.000Z');
+        `),
+      /UNIQUE constraint failed/,
+    );
+
+    // Fallback identity without client_sample_id
+    database.execute(`
+      INSERT INTO telemetry_ingest_receipts (id, source_id, tap_id, identity_kind, client_sample_id, measured_at_epoch_ms, payload_digest, normalization_version, outcome, outcome_code, accepted_measurement_id, measured_at, received_at, processed_at)
+      VALUES ('r3333333-3333-4333-8333-333333333333', 's1111111-1111-4111-8111-111111111111', 't1111111-1111-4111-8111-111111111111', 'fallback', NULL, 1786708900000, '${"b".repeat(64)}', 1, 'rejected', 'telemetry.out_of_order', NULL, '2026-08-14T12:01:40.000Z', '2026-08-14T12:01:41.000Z', '2026-08-14T12:01:41.000Z');
+    `);
+
+    // Duplicate fallback identity (same source_id, tap_id, measured_at_epoch_ms) fails partial unique index
+    assert.throws(
+      () =>
+        database.execute(`
+          INSERT INTO telemetry_ingest_receipts (id, source_id, tap_id, identity_kind, client_sample_id, measured_at_epoch_ms, payload_digest, normalization_version, outcome, outcome_code, accepted_measurement_id, measured_at, received_at, processed_at)
+          VALUES ('r4444444-4444-4444-8444-444444444444', 's1111111-1111-4111-8111-111111111111', 't1111111-1111-4111-8111-111111111111', 'fallback', NULL, 1786708900000, '${"c".repeat(64)}', 1, 'rejected', 'telemetry.out_of_order', NULL, '2026-08-14T12:01:40.000Z', '2026-08-14T12:01:41.000Z', '2026-08-14T12:01:41.000Z');
+        `),
+      /UNIQUE constraint failed/,
+    );
+  } finally {
+    database.close();
+  }
+});
+
+void test("telemetry measurements enforce primary kind exclusivity and cascade safely on tap deletion", () => {
+  const database = openDatabase(":memory:");
+  try {
+    database.execute(`
+      INSERT INTO machine_api_keys (id, public_id, verification_digest, label, created_at)
+      VALUES ('k1111111-1111-4111-8111-111111111111', 'pub_key_11111111', x'0000000000000000000000000000000000000000000000000000000000000000', 'Key 1', '2026-08-14T00:00:00.000Z');
+      INSERT INTO telemetry_sources (id, name, current_machine_key_id, created_at, updated_at)
+      VALUES ('s1111111-1111-4111-8111-111111111111', 'Source 1', 'k1111111-1111-4111-8111-111111111111', '2026-08-14T00:00:00.000Z', '2026-08-14T00:00:00.000Z');
+      INSERT INTO taps (id, tap_number, name, enabled, first_used_at, retired_at, created_at, updated_at)
+      VALUES ('t1111111-1111-4111-8111-111111111111', 1, 'Tap 1', 1, NULL, NULL, '2026-08-14T00:00:00.000Z', '2026-08-14T00:00:00.000Z');
+    `);
+
+    // Multiple primary measurements fails CHECK constraint
+    assert.throws(
+      () =>
+        database.execute(`
+          INSERT INTO telemetry_measurements (id, source_id, tap_id, measured_at, measured_at_epoch_ms, received_at, normalization_version, primary_kind, total_mass_g, remaining_volume_ml, fill_percentage, temperature_c, captured_assignment_id, captured_fill_id, created_at)
+          VALUES ('m1111111-1111-4111-8111-111111111111', 's1111111-1111-4111-8111-111111111111', 't1111111-1111-4111-8111-111111111111', '2026-08-14T12:00:00.000Z', 1786708800000, '2026-08-14T12:00:01.000Z', 1, 'total_weight', 15000, 15000, NULL, NULL, NULL, NULL, '2026-08-14T12:00:01.000Z');
+        `),
+      /CHECK constraint failed/,
     );
   } finally {
     database.close();

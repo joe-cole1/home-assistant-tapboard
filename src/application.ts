@@ -26,6 +26,8 @@ import { createFillService } from "./features/fills/service.ts";
 import { registerFillRoutes } from "./features/fills/routes.ts";
 import { createTapService } from "./features/taps/service.ts";
 import { registerTapRoutes } from "./features/taps/routes.ts";
+import { createMachineKeyService } from "./features/machine-keys/service.ts";
+import { TelemetryService, registerTelemetryRoutes } from "./features/telemetry/index.ts";
 import { createLogger, type Logger } from "./shared/logging.ts";
 
 type ApplicationState = "new" | "starting" | "ready" | "stopping" | "stopped" | "failed";
@@ -132,6 +134,11 @@ class FoundationApplication implements Application {
         beverageService,
         assignmentPort: tapService.asFillAssignmentPort(),
       });
+      const machineKeyService = createMachineKeyService(this.#database);
+      const telemetryService = new TelemetryService({
+        database: this.#database,
+        machineKeyService,
+      });
 
       const router = new Router(this.#logger);
       router.get("/healthz", (_request, response) => {
@@ -149,6 +156,7 @@ class FoundationApplication implements Application {
       registerBeverageRoutes({ router, beverageService, authService });
       registerFillRoutes({ router, fillService, authService });
       registerTapRoutes({ router, tapService, authService });
+      registerTelemetryRoutes({ router, telemetryService, authService });
 
       this.#httpServer = this.#createHttpServer({
         router,

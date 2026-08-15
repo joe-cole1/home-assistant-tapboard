@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
 
-import type { DatabaseExecutor } from "../../infrastructure/database/connection.ts";
+import {
+  assertSynchronousCompletion,
+  type DatabaseExecutor,
+} from "../../infrastructure/database/connection.ts";
 import { ApplicationError } from "../../shared/errors.ts";
 import { appendActivity } from "../activity/operations.ts";
 import { appendDeletionAudit } from "../activity/deletion-audit.ts";
@@ -197,13 +200,16 @@ export class KegService {
 
       const capacityChanged = nextCapacityMl !== existing.capacityMl;
       if (capacityChanged || tareChanged) {
-        this.#correctionHook?.(this.#database, {
-          kegId: existing.id,
-          previousCapacityMl: existing.capacityMl,
-          newCapacityMl: nextCapacityMl,
-          previousTareG: existing.currentTareG,
-          newTareG: nextCurrentTareG,
-        });
+        assertSynchronousCompletion(
+          this.#correctionHook?.(this.#database, {
+            kegId: existing.id,
+            previousCapacityMl: existing.capacityMl,
+            newCapacityMl: nextCapacityMl,
+            previousTareG: existing.currentTareG,
+            newTareG: nextCurrentTareG,
+          }),
+          "Keg correction extensions",
+        );
       }
 
       if (nextIsActive !== existing.isActive) {

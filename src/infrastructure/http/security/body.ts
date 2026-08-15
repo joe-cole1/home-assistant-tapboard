@@ -4,9 +4,14 @@ import { TextDecoder } from "node:util";
 import { ApplicationError } from "../../../shared/errors.ts";
 
 export const MAX_JSON_BODY_BYTES = 16_384;
+export const MAX_BATCH_JSON_BODY_BYTES = 262_144;
 
 function bodyError(code: string, message: string): ApplicationError {
-  return new ApplicationError({ category: "validation", code, clientMessage: message });
+  return new ApplicationError({
+    category: code === "http.body_too_large" ? "too_large" : "validation",
+    code,
+    clientMessage: message,
+  });
 }
 
 function oneHeader(value: string | string[] | undefined): string | undefined {
@@ -40,6 +45,12 @@ function declaredLength(headers: IncomingHttpHeaders): number | undefined {
   return parsed;
 }
 
+export function discardRequestBody(request: IncomingMessage): void {
+  if (request.readableEnded || request.destroyed) return;
+  request.on("error", () => undefined);
+  request.resume();
+}
+
 export interface ReadBodyOptions {
   readonly maxBytes?: number;
   readonly required?: boolean;
@@ -50,11 +61,12 @@ export function readRequestBody(
   options: ReadBodyOptions = {},
 ): Promise<Buffer> {
   const maxBytes = options.maxBytes ?? MAX_JSON_BODY_BYTES;
-  if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > MAX_JSON_BODY_BYTES) {
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > MAX_BATCH_JSON_BODY_BYTES) {
     throw new RangeError("Request body limit is invalid");
   }
   const contentLength = declaredLength(request.headers);
   if (contentLength !== undefined && contentLength > maxBytes) {
+    discardRequestBody(request);
     return Promise.reject(bodyError("http.body_too_large", "The request body is too large."));
   }
   if (request.readableEnded) {
@@ -84,7 +96,9 @@ export function readRequestBody(
       total += bytes.byteLength;
       if (total > maxBytes) {
         fail(bodyError("http.body_too_large", "The request body is too large."));
-        request.destroy();
+        // Keep the response channel alive so centralized error mapping can
+        // return 413 while the remainder is drained without buffering.
+        discardRequestBody(request);
         return;
       }
       chunks.push(bytes);
