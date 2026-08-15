@@ -30,6 +30,7 @@ import {
   activateCandidate,
   advanceDetector,
   arbitrateCandidates,
+  nextDetectorDueAt,
   reduceDetector,
   suppressCandidate,
   type DetectorEffect,
@@ -211,8 +212,16 @@ function assertDetectorConfig(config: DetectorConfig): void {
   if (config.quietPeriodMs > config.hardTimeoutMs) {
     throw new RangeError("Detector quiet period cannot exceed hard timeout");
   }
-  if (config.historyMs < config.candidateLookbackMs) {
-    throw new RangeError("Detector history cannot be shorter than candidate lookback");
+  if (
+    config.historyMs <
+    Math.max(
+      config.candidateLookbackMs,
+      config.baselineSpanMs,
+      config.settledSpanMs,
+      config.jumpStableSpanMs,
+    )
+  ) {
+    throw new RangeError("Detector history cannot be shorter than a retained detector span");
   }
 }
 
@@ -400,21 +409,41 @@ export class DetectorService
     const nowMs = now.getTime();
     if (Number.isNaN(nowMs)) throw new TypeError("Invalid detector clock");
     return this.#database.withTransaction(() => {
-      const handledGroups = new Set<string>();
       const handledEpochs = new Set<string>();
-      for (const item of listDueDetectorStates(this.#database, nowMs)) {
-        if (handledEpochs.has(item.epoch.id)) continue;
+      for (let transitions = 0; transitions < 500; transitions += 1) {
+        const next = listDueDetectorStates(this.#database, nowMs)
+          .map((item) => ({
+            item,
+            dueAt: nextDetectorDueAt(
+              item.state,
+              this.#history(this.#database, item.epoch.id),
+              item.epoch.config,
+              nowMs,
+            ),
+          }))
+          .filter((item): item is typeof item & { readonly dueAt: number } => item.dueAt !== null)
+          .sort(
+            (a, b) =>
+              a.dueAt - b.dueAt ||
+              (a.item.state.phase === "pouring" ? 0 : 1) -
+                (b.item.state.phase === "pouring" ? 0 : 1) ||
+              (a.item.epoch.tapId < b.item.epoch.tapId
+                ? -1
+                : a.item.epoch.tapId > b.item.epoch.tapId
+                  ? 1
+                  : 0),
+          )[0];
+        if (next === undefined) break;
+        const { item, dueAt } = next;
         if (item.state.phase === "candidate" && item.epoch.arbitrationGroupId !== null) {
-          if (handledGroups.has(item.epoch.arbitrationGroupId)) continue;
-          handledGroups.add(item.epoch.arbitrationGroupId);
           for (const epochId of this.#arbitrateGroup(
             this.#database,
             item.epoch.arbitrationGroupId,
-            nowMs,
+            dueAt,
           ))
             handledEpochs.add(epochId);
         } else {
-          this.#advanceEpoch(this.#database, item.epoch, nowMs);
+          this.#advanceEpoch(this.#database, item.epoch, dueAt);
           handledEpochs.add(item.epoch.id);
         }
       }
@@ -823,11 +852,20 @@ export class DetectorService
       .sort(
         (a, b) =>
           a.state.arbitrationDeadlineMs! - b.state.arbitrationDeadlineMs! ||
-          a.epoch.tapId.localeCompare(b.epoch.tapId),
+          (a.epoch.tapId < b.epoch.tapId ? -1 : a.epoch.tapId > b.epoch.tapId ? 1 : 0),
       );
     if (due.length === 0) return [];
     const coordinator = due[0]!;
     const decisionAt = coordinator.state.arbitrationDeadlineMs!;
+    for (const item of listOpenPouringDetectorStatesForGroup(database, groupId)) {
+      const terminalAt = nextDetectorDueAt(
+        item.state,
+        this.#history(database, item.epoch.id),
+        item.epoch.config,
+        decisionAt,
+      );
+      if (terminalAt !== null) this.#advanceEpoch(database, item.epoch, terminalAt);
+    }
     const eligible = listOpenCandidateDetectorStatesForGroup(database, groupId).filter(
       (item) =>
         item.state.candidateStartedAtMs !== null && item.state.candidateStartedAtMs <= decisionAt,

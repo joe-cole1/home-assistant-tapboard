@@ -86,8 +86,17 @@ export function validateCompleteDetectorConfig(config: DetectorConfig): void {
     invalid("candidateSampleWindowMs", "must not exceed candidateLookbackMs");
   if (config.quietPeriodMs > config.hardTimeoutMs)
     invalid("quietPeriodMs", "must not exceed hardTimeoutMs");
-  if (config.historyMs < config.candidateLookbackMs)
-    invalid("historyMs", "must not be less than candidateLookbackMs");
+  const requiredHistoryMs = Math.max(
+    config.candidateLookbackMs,
+    config.baselineSpanMs,
+    config.settledSpanMs,
+    config.jumpStableSpanMs,
+  );
+  if (config.historyMs < requiredHistoryMs)
+    invalid(
+      "historyMs",
+      "must not be less than candidateLookbackMs, baselineSpanMs, settledSpanMs, or jumpStableSpanMs",
+    );
 }
 
 export function validateDetectorTapOverridePatch(input: unknown): DetectorConfigOverride {

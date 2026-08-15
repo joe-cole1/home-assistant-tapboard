@@ -221,16 +221,32 @@ export function reduceDetector(
           ],
         };
   }
-  if (s.phase === "cooldown") return { state: s, effects };
+  if (s.phase === "cooldown") {
+    const cooldownUntilMs = s.cooldownUntilMs;
+    if (cooldownUntilMs === null || cur.atMs < cooldownUntilMs) return { state: s, effects };
+    const fresh = h.filter((x) => x.atMs >= cooldownUntilMs),
+      v = flat(fresh, c.baselineSamples, c.baselineSpanMs, c.baselineBandMl);
+    return v === null
+      ? { state: s, effects }
+      : {
+          state: {
+            ...s,
+            phase: "ready",
+            cooldownUntilMs: null,
+            baselineVolumeMl: v,
+            baselineAtMs: cur.atMs,
+            lastStabilizedVolumeMl: v,
+            lastCancellationReason: null,
+          },
+          effects: [{ type: "baseline_established", volumeMl: v }],
+        };
+  }
   const base = flat(h, c.baselineSamples, c.baselineSpanMs, c.baselineBandMl);
   if (s.phase === "ready") {
     if (base !== null)
       s = { ...s, baselineVolumeMl: base, baselineAtMs: cur.atMs, lastStabilizedVolumeMl: base };
     const samples = h.filter((x) => x.atMs >= cur.atMs - c.candidateSampleWindowMs),
-      v =
-        samples.length >= c.candidateSamples
-          ? med(last(samples, c.candidateSamples).map((x) => x.volumeMl))
-          : null,
+      v = samples.length >= c.candidateSamples ? med(samples.map((x) => x.volumeMl)) : null,
       loss =
         v === null ||
         s.baselineVolumeMl === null ||
@@ -257,12 +273,6 @@ export function reduceDetector(
   }
   const robust = med(last(h, 3).map((x) => x.volumeMl)),
     loss = s.candidateBaselineVolumeMl! - robust;
-  if (
-    s.phase === "candidate" &&
-    loss < c.minimumPourMl &&
-    cur.volumeMl >= s.candidateBaselineVolumeMl! - c.candidateLossMl
-  )
-    return suppressCandidate(s, c, cur.atMs, "rebound");
   const flow = (s.lowestFlowVolumeMl ?? robust) - robust;
   s = {
     ...s,
@@ -292,70 +302,92 @@ export function activateCandidate(
         effects: [{ type: "candidate_activated", sessionId: s.candidateSessionId }],
       };
 }
+type DetectorDueDecision =
+  | { readonly type: "activate"; readonly atMs: number }
+  | { readonly type: "complete"; readonly atMs: number; readonly endVolumeMl: number }
+  | { readonly type: "timeout"; readonly atMs: number };
+
+function detectorDueDecision(
+  s: DetectorRuntimeState,
+  h: readonly DetectorSample[],
+  c: DetectorConfig,
+  now: number,
+): DetectorDueDecision | null {
+  if (s.phase === "candidate") {
+    return s.arbitrationDeadlineMs !== null && s.arbitrationDeadlineMs <= now
+      ? { type: "activate", atMs: s.arbitrationDeadlineMs }
+      : null;
+  }
+  if (s.phase !== "pouring") return null;
+  const quietDeadline =
+      s.lastMeaningfulFlowAtMs === null ? null : s.lastMeaningfulFlowAtMs + c.quietPeriodMs,
+    timeout = s.timeoutAtMs;
+  if (
+    quietDeadline !== null &&
+    quietDeadline <= now &&
+    (timeout === null || quietDeadline <= timeout)
+  ) {
+    const checkpoints = [
+      quietDeadline,
+      ...h
+        .filter((sample) => sample.atMs > quietDeadline && sample.atMs <= now)
+        .map((sample) => sample.atMs),
+    ]
+      .filter((atMs, index, values) => values.indexOf(atMs) === index)
+      .sort((a, b) => a - b);
+    for (const checkpoint of checkpoints) {
+      if (timeout !== null && checkpoint > timeout) break;
+      const eligible = h.filter((sample) => sample.atMs <= checkpoint),
+        endVolumeMl = flat(eligible, c.settledSamples, c.settledSpanMs, c.settledBandMl);
+      if (endVolumeMl === null) continue;
+      const atMs = Math.max(
+        quietDeadline,
+        last(eligible, c.settledSamples).at(-1)?.atMs ?? quietDeadline,
+      );
+      if (timeout === null || atMs <= timeout) return { type: "complete", atMs, endVolumeMl };
+    }
+  }
+  return timeout !== null && timeout <= now ? { type: "timeout", atMs: timeout } : null;
+}
+
 export function advanceDetector(
   s: DetectorRuntimeState,
   h: readonly DetectorSample[],
   c: DetectorConfig,
   now: number,
 ): DetectorTransition {
-  const eligible = h.filter((x) => x.atMs <= now);
-  if (s.phase === "candidate" && s.arbitrationDeadlineMs !== null && now >= s.arbitrationDeadlineMs)
-    return activateCandidate(s, s.arbitrationDeadlineMs, c);
-  if (s.phase === "pouring") {
-    const quietDeadline =
-        s.lastMeaningfulFlowAtMs === null ? null : s.lastMeaningfulFlowAtMs + c.quietPeriodMs,
-      timeout = s.timeoutAtMs;
-    if (timeout !== null && now >= timeout && (quietDeadline === null || quietDeadline > timeout))
-      return suppressCandidate(s, c, timeout, "timeout");
-    if (quietDeadline !== null && now >= quietDeadline) {
-      const settled = last(eligible, c.settledSamples),
-        end = flat(eligible, c.settledSamples, c.settledSpanMs, c.settledBandMl),
-        terminalAt = Math.max(quietDeadline, settled.at(-1)?.atMs ?? quietDeadline);
-      if (timeout !== null && terminalAt > timeout && now >= timeout)
-        return suppressCandidate(s, c, timeout, "timeout");
-      if (end !== null) {
-        const raw = s.candidateBaselineVolumeMl! - end;
-        if (raw < c.minimumPourMl) return suppressCandidate(s, c, terminalAt, "rebound");
-        const volumeMl = (Math.round((raw / 29.5735295625) * 10) / 10) * 29.5735295625;
-        const startedAtMs = s.candidateStartedAtMs ?? terminalAt;
-        return {
-          state: cooldown(s, c, terminalAt, null),
-          effects: [
-            {
-              type: "pour_completed",
-              sessionId: s.candidateSessionId!,
-              volumeMl,
-              startedAtMs,
-              completedAtMs: terminalAt,
-            },
-          ],
-        };
-      }
-    }
-    if (timeout !== null && now >= timeout) return suppressCandidate(s, c, timeout, "timeout");
-  }
-  if (s.phase === "cooldown" && s.cooldownUntilMs !== null && now >= s.cooldownUntilMs) {
-    const v = flat(eligible, c.settledSamples, c.settledSpanMs, c.settledBandMl);
-    if (v !== null) {
-      const baselineAt = Math.max(
-        s.cooldownUntilMs,
-        last(eligible, c.settledSamples).at(-1)?.atMs ?? s.cooldownUntilMs,
-      );
-      return {
-        state: {
-          ...s,
-          phase: "ready",
-          cooldownUntilMs: null,
-          baselineVolumeMl: v,
-          baselineAtMs: baselineAt,
-          lastStabilizedVolumeMl: v,
-          lastCancellationReason: null,
+  const decision = detectorDueDecision(s, h, c, now);
+  if (decision?.type === "activate") return activateCandidate(s, decision.atMs, c);
+  if (decision?.type === "timeout") return suppressCandidate(s, c, decision.atMs, "timeout");
+  if (decision?.type === "complete") {
+    const raw = Math.max(0, s.candidateBaselineVolumeMl! - decision.endVolumeMl),
+      volumeMl = (Math.round((raw / 29.5735295625) * 10) / 10) * 29.5735295625;
+    if (volumeMl < c.minimumPourMl) return suppressCandidate(s, c, decision.atMs, "rebound");
+    const startedAtMs = s.candidateStartedAtMs ?? decision.atMs;
+    return {
+      state: cooldown(s, c, decision.atMs, null),
+      effects: [
+        {
+          type: "pour_completed",
+          sessionId: s.candidateSessionId!,
+          volumeMl,
+          startedAtMs,
+          completedAtMs: decision.atMs,
         },
-        effects: [{ type: "baseline_established", volumeMl: v }],
-      };
-    }
+      ],
+    };
   }
   return { state: s, effects: [] };
+}
+
+/** Returns the logical timestamp of the transition that advanceDetector would perform by now. */
+export function nextDetectorDueAt(
+  s: DetectorRuntimeState,
+  h: readonly DetectorSample[],
+  c: DetectorConfig,
+  now: number,
+): number | null {
+  return detectorDueDecision(s, h, c, now)?.atMs ?? null;
 }
 export interface ArbitrationDecision {
   readonly winnerTapId: string | null;

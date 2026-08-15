@@ -406,8 +406,8 @@ void test("due states are deterministically bounded and group candidates explici
     const due = repo.listDueDetectorStates(f.db, 10);
     assert.equal(due.length, 500);
     assert.deepEqual(
-      due.slice(0, 2).map((x) => x.epoch.startedAtEpochMs),
-      [1, 2],
+      due.slice(0, 2).map((x) => x.epoch.id),
+      ["e1", "e10"],
     );
     assert.equal(repo.listOpenCandidateDetectorStatesForGroup(f.db, "g").length, 500);
   } finally {

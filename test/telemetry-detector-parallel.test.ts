@@ -11,6 +11,14 @@ import { DetectorService } from "../src/features/telemetry/detector-service.ts";
 import { TelemetryService } from "../src/features/telemetry/service.ts";
 import type { TelemetrySource } from "../src/features/telemetry/types.ts";
 import { openDatabase } from "../src/infrastructure/database/connection.ts";
+import {
+  laterIdleFalsePositiveTrace,
+  oscillatingPourTrace,
+  slowPourTrace,
+  tap2Trace2035,
+  tap2Trace2046,
+  type TelemetryPourTrace,
+} from "./fixtures/telemetry-pour-traces.ts";
 
 const origin = Date.parse("2026-01-01T00:00:00.000Z");
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
@@ -108,9 +116,10 @@ function setupTap(
   n: number,
   source: TelemetrySource,
   config = fast(),
+  capacityMl = 1_000,
 ) {
   const tap = h.tapService.createTap({ tapNumber: n, name: `Tap ${n}` });
-  const keg = h.kegService.createKeg({ kegNumber: n, capacityMl: 1_000, currentTareG: 100 });
+  const keg = h.kegService.createKeg({ kegNumber: n, capacityMl, currentTareG: 100 });
   const beverage = h.beverageService.createCustomBeverage({
     name: `Beer ${n}`,
     beverageType: "beer",
@@ -121,6 +130,52 @@ function setupTap(
   h.telemetryService.setTapAuthority(tap.id, { sourceId: source.id });
   h.tapService.assignFill(tap.id, { fillId: fill.id });
   return { tap, keg, fill };
+}
+
+const historicalConfig = (override: Partial<typeof DEFAULT_DETECTOR_CONFIG> = {}) => ({
+  ...DEFAULT_DETECTOR_CONFIG,
+  ...override,
+});
+
+function replayUsFloz(
+  h: ReturnType<typeof harness>,
+  source: TelemetrySource,
+  trace: TelemetryPourTrace,
+  offset: number,
+  label: string,
+) {
+  for (const [at, tap, volume] of trace) {
+    const timestamp = offset + at;
+    h.set(timestamp);
+    h.telemetryService.ingestSingle(source, tap, {
+      clientSampleId: `${label}-${tap}-${at}`,
+      measuredAt: new Date(origin + timestamp).toISOString(),
+      remainingVolume: { value: volume, unit: "us_fl_oz" },
+    });
+  }
+}
+
+function feedFlatUsFloz(
+  h: ReturnType<typeof harness>,
+  source: TelemetrySource,
+  tap: number,
+  volume: number,
+  start: number,
+  end: number,
+  label: string,
+) {
+  for (let at = start; at <= end; at += 200) replayUsFloz(h, source, [[at, tap, volume]], 0, label);
+}
+
+function establishHistoricalBaseline(
+  h: ReturnType<typeof harness>,
+  source: TelemetrySource,
+  tap: number,
+  volume: number,
+  offset: number,
+  label: string,
+) {
+  feedFlatUsFloz(h, source, tap, volume, offset - 1_000, offset - 200, label);
 }
 
 void test("ungrouped Taps establish, activate, and complete overlapping pours independently", () => {
@@ -257,6 +312,205 @@ void test("group arbitration excludes future candidates and suppresses them whil
     h.close();
   }
 });
+
+for (const scenario of [
+  {
+    name: "terminal before arbitration with reversed epoch creation",
+    groupOrder: "b-first",
+    bSamples: [400, 450] as const,
+    expectedBPour: true,
+  },
+  {
+    name: "arbitration before terminal with forward epoch creation",
+    groupOrder: "a-first",
+    bSamples: [200, 250] as const,
+    expectedBPour: false,
+  },
+  {
+    name: "terminal wins an equal-deadline tie",
+    groupOrder: "b-first",
+    bSamples: [350, 400] as const,
+    expectedBPour: true,
+  },
+] as const) {
+  void test(`grouped overdue recovery orders ${scenario.name}`, () => {
+    const h = harness();
+    try {
+      const source = h.telemetryService.createSource({ name: "ordered scale" }).source;
+      const groupConfig = { ...fast(100), quietPeriodMs: 200, hardTimeoutMs: 1_000 };
+      const a = setupTap(h, 1, source, groupConfig),
+        b = setupTap(h, 2, source, groupConfig);
+      h.detector.createArbitrationGroup(
+        "ordered group",
+        scenario.groupOrder === "a-first" ? [a.tap.id, b.tap.id] : [b.tap.id, a.tap.id],
+      );
+      for (const [tap, at, volume, id] of [
+        [1, 0, 1_000, "a-base-1"],
+        [2, 0, 1_000, "b-base-1"],
+        [1, 50, 1_000, "a-base-2"],
+        [2, 50, 1_000, "b-base-2"],
+        [1, 100, 970, "a-flow-1"],
+        [1, 150, 950, "a-flow-2"],
+        [2, scenario.bSamples[0], 970, "b-flow-1"],
+        [2, scenario.bSamples[1], 950, "b-flow-2"],
+      ] as const)
+        sample(h, source, tap, at, volume, id);
+      h.set(250);
+      h.detector.processDue();
+      assert.equal(h.detector.diagnostics(a.tap.id).detector?.phase, "pouring");
+      sample(h, source, 1, 300, 950, "a-settled");
+
+      h.set(1_000);
+      h.detector.processDue();
+      assert.equal(h.detector.diagnostics(b.tap.id).detector?.phase, "cooldown");
+      const pours = h.database
+        .prepare<[], { readonly tap_id: string; readonly completed_at: string }>(
+          "SELECT tap_id,completed_at FROM pours ORDER BY completed_at,tap_id",
+        )
+        .all();
+      assert.deepEqual(
+        pours,
+        scenario.expectedBPour
+          ? [
+              { tap_id: a.tap.id, completed_at: new Date(origin + 500).toISOString() },
+              {
+                tap_id: b.tap.id,
+                completed_at: new Date(origin + scenario.bSamples[1] + 300).toISOString(),
+              },
+            ]
+          : [{ tap_id: a.tap.id, completed_at: new Date(origin + 500).toISOString() }],
+      );
+      if (!scenario.expectedBPour)
+        assert.equal(
+          h.database
+            .prepare<[string], { readonly reason: string | null }>(
+              "SELECT last_cancellation_reason AS reason FROM telemetry_epoch_state WHERE epoch_id=?",
+            )
+            .get(h.detector.diagnostics(b.tap.id).epoch!.id)!.reason,
+          "arbitration",
+        );
+    } finally {
+      h.close();
+    }
+  });
+}
+
+for (const [label, trace] of [
+  ["20:35", tap2Trace2035],
+  ["20:46", tap2Trace2046],
+] as const) {
+  void test(`historical v1 ${label} coupled trace selects tap 2 without a paired false pour`, () => {
+    const h = harness();
+    try {
+      const source = h.telemetryService.createSource({ name: "historical scale" }).source;
+      const a = setupTap(h, 1, source, historicalConfig(), 20_000);
+      const b = setupTap(h, 2, source, historicalConfig(), 20_000);
+      h.detector.createArbitrationGroup("historical coupled scale", [a.tap.id, b.tap.id]);
+      const offset = 10_000;
+      establishHistoricalBaseline(h, source, 1, trace[0]![2], offset, `${label}-a-baseline`);
+      establishHistoricalBaseline(h, source, 2, trace[1]![2], offset, `${label}-b-baseline`);
+      replayUsFloz(h, source, trace, offset, `historical-${label}`);
+      const tailStart = label === "20:35" ? 1_600 : 1_800,
+        tailEnd = label === "20:35" ? 5_800 : 6_200,
+        tailVolume = label === "20:35" ? 613.3 : 609.36,
+        completionAt = label === "20:35" ? 6_600 : 6_400;
+      feedFlatUsFloz(
+        h,
+        source,
+        2,
+        tailVolume,
+        offset + tailStart,
+        offset + tailEnd,
+        `${label}-tail`,
+      );
+      h.set(offset + completionAt);
+      h.detector.processDue();
+
+      const pours = h.database
+        .prepare<[], { readonly tap_id: string; readonly fill_id: string }>(
+          "SELECT tap_id, fill_id FROM pours ORDER BY tap_id",
+        )
+        .all();
+      assert.deepEqual(pours, [{ tap_id: b.tap.id, fill_id: b.fill.id }]);
+      assert.equal(
+        pours.some((pour) => pour.tap_id === a.tap.id),
+        false,
+      );
+    } finally {
+      h.close();
+    }
+  });
+}
+
+void test("historical later idle trace does not create a false pour", () => {
+  const h = harness();
+  try {
+    const source = h.telemetryService.createSource({ name: "historical scale" }).source;
+    const { tap } = setupTap(h, 2, source, historicalConfig(), 20_000);
+    const offset = 20_000;
+    establishHistoricalBaseline(
+      h,
+      source,
+      2,
+      laterIdleFalsePositiveTrace[0]![2],
+      offset,
+      "later-idle-baseline",
+    );
+    replayUsFloz(h, source, laterIdleFalsePositiveTrace, offset, "later-idle");
+    h.set(offset + laterIdleFalsePositiveTrace.at(-1)![0] + 1_500);
+    h.detector.processDue();
+    assert.equal(
+      h.database.prepare<[], { readonly n: number }>("SELECT count(*) AS n FROM pours").get()!.n,
+      0,
+    );
+    assert.notEqual(h.detector.diagnostics(tap.id).detector?.phase, "pouring");
+  } finally {
+    h.close();
+  }
+});
+
+for (const [label, trace] of [
+  ["oscillating", oscillatingPourTrace],
+  ["slow", slowPourTrace],
+] as const) {
+  void test(`historical ${label} pour trace detects and completes a pour`, () => {
+    const h = harness();
+    try {
+      const source = h.telemetryService.createSource({ name: "historical scale" }).source;
+      const config =
+        label === "oscillating"
+          ? historicalConfig({ candidateSamples: 2, candidateSampleWindowMs: 500 })
+          : historicalConfig({ candidateSamples: 2, candidateSampleWindowMs: 1_000 });
+      const { tap, fill } = setupTap(h, 1, source, config, 20_000);
+      const offset = 30_000;
+      establishHistoricalBaseline(h, source, 1, trace[0]![2], offset, `${label}-baseline`);
+      replayUsFloz(h, source, trace, offset, label);
+      const tailStart = label === "oscillating" ? 2_000 : 4_200,
+        tailEnd = label === "oscillating" ? 5_600 : 5_000,
+        completionAt = label === "oscillating" ? 5_800 : 9_200;
+      feedFlatUsFloz(
+        h,
+        source,
+        1,
+        trace.at(-1)![2],
+        offset + tailStart,
+        offset + tailEnd,
+        `${label}-tail`,
+      );
+      h.set(offset + completionAt);
+      h.detector.processDue();
+      const pour = h.database
+        .prepare<[], { readonly tap_id: string; readonly fill_id: string }>(
+          "SELECT tap_id, fill_id FROM pours",
+        )
+        .get();
+      assert.deepEqual(pour, { tap_id: tap.id, fill_id: fill.id });
+      assert.equal(h.detector.diagnostics(tap.id).detector?.phase, "cooldown");
+    } finally {
+      h.close();
+    }
+  });
+}
 
 void test("accepted canonical readings use epoch snapshots and retain diagnostic actuals without baselining invalid data", () => {
   const h = harness();

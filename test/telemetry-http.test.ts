@@ -633,6 +633,22 @@ void test("detector admin HTTP routes enforce admin mutation auth and return pur
     ).status,
     400,
   );
+  for (const retainedSpan of [
+    "candidateLookbackMs",
+    "baselineSpanMs",
+    "settledSpanMs",
+    "jumpStableSpanMs",
+  ] as const)
+    assert.equal(
+      (
+        await fetch(`${baseUrl}/api/admin/telemetry/detector-config`, {
+          method: "PATCH",
+          headers,
+          body: JSON.stringify({ historyMs: 500, [retainedSpan]: 501 }),
+        })
+      ).status,
+      400,
+    );
 
   const override = await readJsonResponse(
     await fetch(`${baseUrl}/api/admin/taps/${tap.id}/detector-config`, {

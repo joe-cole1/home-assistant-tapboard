@@ -5,6 +5,7 @@ import {
   activateCandidate,
   advanceDetector,
   arbitrateCandidates,
+  nextDetectorDueAt,
   reduceDetector,
   waitingDetectorState,
   type DetectorRuntimeState,
@@ -74,7 +75,7 @@ void test("noise stays in ready state and sustained median loss creates one cand
     ({ state } = reduceDetector(state, item, history, config, "one"));
   }
   assert.equal(state.phase, "ready");
-  for (const item of [sample(970, 400), sample(965, 500), sample(960, 600)]) {
+  for (const item of [sample(970, 400), sample(965, 500), sample(960, 600), sample(955, 700)]) {
     history = [...history, item];
     ({ state } = reduceDetector(state, item, history, config, "one"));
   }
@@ -135,6 +136,23 @@ void test("candidate median averages an even sample count", () => {
   }
   assert.equal(state.candidateLossMl, 50);
 });
+void test("candidate signal uses every observation in the configured time window", () => {
+  const c = { ...config, candidateLossMl: 20, candidateSamples: 3, candidateSampleWindowMs: 100 };
+  const state: DetectorRuntimeState = {
+    ...waitingDetectorState(),
+    phase: "ready",
+    baselineVolumeMl: 1000,
+    baselineAtMs: 0,
+  };
+  const history = [
+    sample(1000, 10),
+    sample(1000, 20),
+    sample(1000, 30),
+    sample(970, 40),
+    sample(970, 50),
+  ];
+  assert.equal(reduceDetector(state, history.at(-1)!, history, c, "s").state.phase, "ready");
+});
 void test("quiet plateau completes an activated pour with canonical tenth-ounce semantics", () => {
   let state: DetectorRuntimeState = {
     ...waitingDetectorState(),
@@ -156,16 +174,28 @@ void test("quiet plateau completes an activated pour with canonical tenth-ounce 
   assert.equal(result.effects[0]?.type, "pour_completed");
   assert.equal(result.state.phase, "cooldown");
 });
-void test("settled plateaus require the configured span", () => {
-  const s = { ...waitingDetectorState(), phase: "cooldown" as const, cooldownUntilMs: 0 };
-  assert.equal(
-    advanceDetector(s, [sample(10, 0), sample(10, 50), sample(10, 99)], config, 100).state.phase,
-    "cooldown",
-  );
-  assert.equal(
-    advanceDetector(s, [sample(10, 0), sample(10, 50), sample(10, 100)], config, 100).state.phase,
-    "ready",
-  );
+void test("cooldown rebaseline requires a post-boundary measurement plateau", () => {
+  let s: DetectorRuntimeState = {
+    ...waitingDetectorState(),
+    phase: "cooldown",
+    baselineVolumeMl: 1000,
+    baselineAtMs: 0,
+    cooldownUntilMs: 100,
+  };
+  let history = [sample(900, 0), sample(900, 50), sample(900, 99)];
+  assert.equal(advanceDetector(s, history, config, 1000).state.phase, "cooldown");
+  for (const item of [sample(870, 1000), sample(870, 1050)]) {
+    history = [...history, item];
+    ({ state: s } = reduceDetector(s, item, history, config, "new"));
+    assert.equal(s.phase, "cooldown");
+  }
+  const item = sample(870, 1100);
+  history = [...history, item];
+  const result = reduceDetector(s, item, history, config, "new");
+  assert.equal(result.state.phase, "ready");
+  assert.equal(result.state.baselineVolumeMl, 870);
+  assert.equal(result.state.baselineAtMs, 1100);
+  assert.equal(result.effects[0]?.type, "baseline_established");
 });
 void test("stale baseline cannot start a candidate", () => {
   const c = { ...config, candidateLookbackMs: 10 };
@@ -209,6 +239,24 @@ void test("sub-threshold terminal loss cancels as rebound and enters cooldown", 
   assert.equal(r.state.phase, "cooldown");
   assert.equal(r.effects[0]?.type, "candidate_cancelled");
 });
+void test("minimum pour is evaluated after canonical tenth-ounce rounding", () => {
+  const c = { ...config, minimumPourMl: 29.5735295625 };
+  const s = {
+    ...waitingDetectorState(),
+    phase: "pouring" as const,
+    candidateSessionId: "s",
+    candidateBaselineVolumeMl: 1000,
+    lastMeaningfulFlowAtMs: 0,
+    timeoutAtMs: 5000,
+  };
+  const history = [sample(970.5, 0), sample(970.5, 50), sample(970.5, 100)];
+  const result = advanceDetector(s, history, c, 1000);
+  assert.equal(result.effects[0]?.type, "pour_completed");
+  assert.equal(
+    result.effects[0]?.type === "pour_completed" ? result.effects[0].volumeMl : null,
+    29.5735295625,
+  );
+});
 void test("hard timeout cancels and enters cooldown", () => {
   const s = {
     ...waitingDetectorState(),
@@ -220,6 +268,20 @@ void test("hard timeout cancels and enters cooldown", () => {
   const r = advanceDetector(s, [], config, 100);
   assert.equal(r.state.phase, "cooldown");
   assert.equal(r.effects[0]?.type, "candidate_cancelled");
+});
+void test("logical due time reflects settled completion rather than maintenance wake time", () => {
+  const s = {
+    ...waitingDetectorState(),
+    phase: "pouring" as const,
+    candidateSessionId: "s",
+    candidateBaselineVolumeMl: 1000,
+    lastMeaningfulFlowAtMs: 0,
+    timeoutAtMs: 5000,
+  };
+  assert.equal(
+    nextDetectorDueAt(s, [sample(950, 900), sample(950, 950), sample(950, 1000)], config, 2000),
+    1000,
+  );
 });
 void test("quiet completion wins when quiet and timeout share a deadline", () => {
   const s = {

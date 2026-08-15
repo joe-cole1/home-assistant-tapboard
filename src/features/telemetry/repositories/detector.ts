@@ -514,10 +514,10 @@ const due = (r: Record<string, unknown>): DueDetectorState => {
 const dueSelect = `SELECT e.${epochCols.split(",").join(",e.")},s.${stateCols.split(",").join(",s.")},g.id AS group_id_joined,g.name AS group_name,g.created_at AS group_created_at,g.updated_at AS group_updated_at FROM telemetry_epochs e JOIN telemetry_epoch_state s ON s.epoch_id=e.id LEFT JOIN detector_arbitration_groups g ON g.id=e.arbitration_group_id`;
 export function listDueDetectorStates(db: DatabaseExecutor, nowMs: number): DueDetectorState[] {
   return db
-    .prepare<[number, number, number, number], Record<string, unknown>>(
-      `${dueSelect} WHERE e.ended_at IS NULL AND ((s.arbitration_deadline_epoch_ms IS NOT NULL AND s.arbitration_deadline_epoch_ms<=?) OR (s.timeout_at_epoch_ms IS NOT NULL AND s.timeout_at_epoch_ms<=?) OR (s.cooldown_until_epoch_ms IS NOT NULL AND s.cooldown_until_epoch_ms<=?) OR (s.phase='pouring' AND s.last_meaningful_flow_at_epoch_ms+e.quiet_period_ms<=?)) ORDER BY e.started_at_epoch_ms,e.id LIMIT 500`,
+    .prepare<[number, number, number], Record<string, unknown>>(
+      `${dueSelect} WHERE e.ended_at IS NULL AND ((s.phase='candidate' AND s.arbitration_deadline_epoch_ms IS NOT NULL AND s.arbitration_deadline_epoch_ms<=?) OR (s.phase='pouring' AND ((s.timeout_at_epoch_ms IS NOT NULL AND s.timeout_at_epoch_ms<=?) OR (s.last_meaningful_flow_at_epoch_ms IS NOT NULL AND s.last_meaningful_flow_at_epoch_ms+e.quiet_period_ms<=?)))) ORDER BY CASE s.phase WHEN 'candidate' THEN s.arbitration_deadline_epoch_ms WHEN 'pouring' THEN CASE WHEN s.timeout_at_epoch_ms IS NULL THEN s.last_meaningful_flow_at_epoch_ms+e.quiet_period_ms WHEN s.last_meaningful_flow_at_epoch_ms IS NULL OR s.timeout_at_epoch_ms<=s.last_meaningful_flow_at_epoch_ms+e.quiet_period_ms THEN s.timeout_at_epoch_ms ELSE s.last_meaningful_flow_at_epoch_ms+e.quiet_period_ms END END,CASE WHEN s.phase='pouring' THEN 0 ELSE 1 END,e.id COLLATE BINARY LIMIT 500`,
     )
-    .all(nowMs, nowMs, nowMs, nowMs)
+    .all(nowMs, nowMs, nowMs)
     .map(due);
 }
 export function listOpenCandidateDetectorStatesForGroup(
