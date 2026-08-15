@@ -381,6 +381,30 @@ void test("move rollback safety: if target tap fails or hook fails, source assig
   assert.equal(tap2After.isOccupied, false);
 });
 
+void test("Promise-like Tap assignment extensions are rejected and roll back assignment state", () => {
+  const extensionPort: TapAssignmentExtensionPort = {
+    onAssignmentOpened: () => ({ then() {} }),
+    onAssignmentClosed: () => undefined,
+  };
+  const { kegService, beverageService, fillService, tapService } =
+    setupTestEnvironment(extensionPort);
+  const keg = kegService.createKeg({ kegNumber: 1, capacityMl: 19_000 });
+  const beverage = beverageService.createCustomBeverage({
+    name: "Async Hook IPA",
+    beverageType: "beer",
+  });
+  const fill = fillService.createFill({ beverageId: beverage.beverage.id, kegId: keg.id });
+  const tap = tapService.createTap({ tapNumber: 1 });
+
+  assert.throws(
+    () => tapService.assignFill(tap.id, { fillId: fill.id }),
+    /Tap assignment extensions must complete synchronously/,
+  );
+  assert.equal(tapService.getTap(tap.id).isOccupied, false);
+  assert.equal(tapService.getTap(tap.id).firstUsedAt, null);
+  assert.equal(fillService.getFill(fill.id).state, "available");
+});
+
 void test("tap retirement preserves history, permanently reserves tap number, and refuses retirement if tap is occupied", () => {
   const { kegService, beverageService, fillService, tapService } = setupTestEnvironment();
 

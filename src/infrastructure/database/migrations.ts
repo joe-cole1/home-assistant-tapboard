@@ -12,7 +12,11 @@ export const FILLS_SCHEMA_VERSION = 5;
 export const FILLS_MIGRATION_NAME = "fills-and-on-deck";
 export const TAPS_SCHEMA_VERSION = 6;
 export const TAPS_MIGRATION_NAME = "taps-and-assignment-lifecycles";
-export const CURRENT_SCHEMA_VERSION = TAPS_SCHEMA_VERSION;
+export const TELEMETRY_SCHEMA_VERSION = 7;
+export const TELEMETRY_MIGRATION_NAME = "telemetry-sources-api-and-ingestion";
+export const FORENSIC_QC_SCHEMA_VERSION = 8;
+export const FORENSIC_QC_MIGRATION_NAME = "forensic-qc-telemetry-integrity";
+export const CURRENT_SCHEMA_VERSION = FORENSIC_QC_SCHEMA_VERSION;
 
 export interface MigrationDefinition {
   readonly version: number;
@@ -771,6 +775,195 @@ export const TAPS_SCHEMA_SQL = `
     END;
 `;
 
+export const TELEMETRY_SCHEMA_SQL = `
+  CREATE TABLE telemetry_sources (
+    id TEXT PRIMARY KEY CHECK (length(CAST(id AS BLOB)) = 36),
+    name TEXT NOT NULL UNIQUE CHECK (length(CAST(name AS BLOB)) BETWEEN 1 AND 120),
+    current_machine_key_id TEXT NOT NULL UNIQUE REFERENCES machine_api_keys(id) ON DELETE RESTRICT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX idx_telemetry_sources_current_machine_key ON telemetry_sources (current_machine_key_id);
+
+  CREATE TABLE tap_telemetry_authority (
+    tap_id TEXT PRIMARY KEY REFERENCES taps(id) ON DELETE CASCADE,
+    source_id TEXT NOT NULL REFERENCES telemetry_sources(id) ON DELETE RESTRICT,
+    changed_at TEXT NOT NULL
+  );
+  CREATE INDEX idx_tap_telemetry_authority_source ON tap_telemetry_authority (source_id);
+
+  CREATE TABLE telemetry_settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    max_batch_size INTEGER NOT NULL DEFAULT 100 CHECK (max_batch_size BETWEEN 1 AND 100),
+    max_future_skew_seconds INTEGER NOT NULL DEFAULT 300 CHECK (max_future_skew_seconds BETWEEN 0 AND 3600),
+    reconnect_horizon_seconds INTEGER NOT NULL DEFAULT 21600 CHECK (reconnect_horizon_seconds BETWEEN 60 AND 86400),
+    raw_retention_seconds INTEGER NOT NULL DEFAULT 21600 CHECK (raw_retention_seconds BETWEEN 300 AND 86400),
+    receipt_retention_seconds INTEGER NOT NULL DEFAULT 86400 CHECK (receipt_retention_seconds BETWEEN 3600 AND 604800),
+    rate_limit_samples_per_minute INTEGER NOT NULL DEFAULT 600 CHECK (rate_limit_samples_per_minute BETWEEN 1 AND 6000),
+    rate_limit_burst_samples INTEGER NOT NULL DEFAULT 100 CHECK (rate_limit_burst_samples BETWEEN 1 AND 1000),
+    updated_at TEXT NOT NULL,
+    CHECK (receipt_retention_seconds >= reconnect_horizon_seconds AND receipt_retention_seconds >= raw_retention_seconds AND max_batch_size <= rate_limit_burst_samples)
+  );
+
+  CREATE TABLE telemetry_ingest_receipts (
+    id TEXT PRIMARY KEY CHECK (length(CAST(id AS BLOB)) = 36),
+    source_id TEXT NOT NULL REFERENCES telemetry_sources(id) ON DELETE RESTRICT,
+    tap_id TEXT NOT NULL REFERENCES taps(id) ON DELETE CASCADE,
+    identity_kind TEXT NOT NULL CHECK (identity_kind IN ('client_sample_id', 'fallback')),
+    client_sample_id TEXT CHECK (client_sample_id IS NULL OR length(CAST(client_sample_id AS BLOB)) BETWEEN 1 AND 128),
+    measured_at_epoch_ms INTEGER NOT NULL,
+    payload_digest TEXT NOT NULL CHECK (
+      length(CAST(payload_digest AS BLOB)) = 64
+      AND payload_digest NOT GLOB '*[^0-9a-f]*'
+    ),
+    normalization_version INTEGER NOT NULL CHECK (normalization_version = 1),
+    outcome TEXT NOT NULL CHECK (outcome IN ('accepted', 'rejected')),
+    outcome_code TEXT NOT NULL CHECK (length(CAST(outcome_code AS BLOB)) BETWEEN 1 AND 64),
+    accepted_measurement_id TEXT CHECK (accepted_measurement_id IS NULL OR length(CAST(accepted_measurement_id AS BLOB)) = 36),
+    measured_at TEXT NOT NULL,
+    received_at TEXT NOT NULL,
+    processed_at TEXT NOT NULL,
+    CHECK (
+      (outcome = 'accepted' AND accepted_measurement_id IS NOT NULL)
+      OR (outcome = 'rejected' AND accepted_measurement_id IS NULL)
+    ),
+    CHECK (
+      (identity_kind = 'client_sample_id' AND client_sample_id IS NOT NULL)
+      OR (identity_kind = 'fallback' AND client_sample_id IS NULL)
+    )
+  );
+  CREATE UNIQUE INDEX idx_telemetry_receipts_client_identity ON telemetry_ingest_receipts (source_id, client_sample_id) WHERE client_sample_id IS NOT NULL;
+  CREATE UNIQUE INDEX idx_telemetry_receipts_fallback_identity ON telemetry_ingest_receipts (source_id, tap_id, measured_at_epoch_ms) WHERE client_sample_id IS NULL;
+  CREATE INDEX idx_telemetry_receipts_processed_at ON telemetry_ingest_receipts (processed_at);
+
+  CREATE TABLE telemetry_measurements (
+    id TEXT PRIMARY KEY CHECK (length(CAST(id AS BLOB)) = 36),
+    source_id TEXT NOT NULL REFERENCES telemetry_sources(id) ON DELETE RESTRICT,
+    tap_id TEXT NOT NULL REFERENCES taps(id) ON DELETE CASCADE,
+    measured_at TEXT NOT NULL,
+    measured_at_epoch_ms INTEGER NOT NULL,
+    received_at TEXT NOT NULL,
+    normalization_version INTEGER NOT NULL CHECK (normalization_version = 1),
+    primary_kind TEXT NOT NULL CHECK (primary_kind IN ('total_weight', 'remaining_volume', 'fill_percentage')),
+    total_mass_g REAL CHECK (total_mass_g IS NULL OR total_mass_g >= 0),
+    remaining_volume_ml REAL CHECK (remaining_volume_ml IS NULL OR remaining_volume_ml >= 0),
+    fill_percentage REAL CHECK (fill_percentage IS NULL OR (fill_percentage >= 0 AND fill_percentage <= 100)),
+    temperature_c REAL CHECK (temperature_c IS NULL OR (temperature_c >= -273.15 AND temperature_c <= 1000)),
+    captured_assignment_id TEXT REFERENCES tap_assignment_lifecycles(id) ON DELETE SET NULL,
+    captured_fill_id TEXT REFERENCES fills(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL,
+    CHECK ((primary_kind = 'total_weight' AND total_mass_g IS NOT NULL AND remaining_volume_ml IS NULL AND fill_percentage IS NULL) OR (primary_kind = 'remaining_volume' AND remaining_volume_ml IS NOT NULL AND total_mass_g IS NULL AND fill_percentage IS NULL) OR (primary_kind = 'fill_percentage' AND fill_percentage IS NOT NULL AND total_mass_g IS NULL AND remaining_volume_ml IS NULL)),
+    CHECK ((captured_assignment_id IS NULL AND captured_fill_id IS NULL) OR (captured_assignment_id IS NOT NULL AND captured_fill_id IS NOT NULL))
+  );
+  CREATE INDEX idx_telemetry_measurements_tap_measured ON telemetry_measurements (tap_id, measured_at_epoch_ms);
+  CREATE INDEX idx_telemetry_measurements_created_at ON telemetry_measurements (created_at);
+
+  CREATE TABLE telemetry_source_tap_status (
+    source_id TEXT NOT NULL REFERENCES telemetry_sources(id) ON DELETE RESTRICT,
+    tap_id TEXT NOT NULL REFERENCES taps(id) ON DELETE CASCADE,
+    latest_measurement_id TEXT REFERENCES telemetry_measurements(id) ON DELETE SET NULL,
+    latest_measured_at TEXT NOT NULL,
+    latest_measured_at_epoch_ms INTEGER NOT NULL,
+    latest_received_at TEXT NOT NULL,
+    normalization_version INTEGER NOT NULL CHECK (normalization_version = 1),
+    primary_kind TEXT NOT NULL CHECK (primary_kind IN ('total_weight', 'remaining_volume', 'fill_percentage')),
+    total_mass_g REAL CHECK (total_mass_g IS NULL OR total_mass_g >= 0),
+    remaining_volume_ml REAL CHECK (remaining_volume_ml IS NULL OR remaining_volume_ml >= 0),
+    fill_percentage REAL CHECK (fill_percentage IS NULL OR (fill_percentage >= 0 AND fill_percentage <= 100)),
+    temperature_c REAL CHECK (temperature_c IS NULL OR (temperature_c >= -273.15 AND temperature_c <= 1000)),
+    captured_assignment_id TEXT REFERENCES tap_assignment_lifecycles(id) ON DELETE SET NULL,
+    captured_fill_id TEXT REFERENCES fills(id) ON DELETE SET NULL,
+    updated_at TEXT NOT NULL,
+    CHECK ((primary_kind = 'total_weight' AND total_mass_g IS NOT NULL AND remaining_volume_ml IS NULL AND fill_percentage IS NULL) OR (primary_kind = 'remaining_volume' AND remaining_volume_ml IS NOT NULL AND total_mass_g IS NULL AND fill_percentage IS NULL) OR (primary_kind = 'fill_percentage' AND fill_percentage IS NOT NULL AND total_mass_g IS NULL AND remaining_volume_ml IS NULL)),
+    CHECK ((captured_assignment_id IS NULL AND captured_fill_id IS NULL) OR (captured_assignment_id IS NOT NULL AND captured_fill_id IS NOT NULL)),
+    PRIMARY KEY (source_id, tap_id)
+  );
+  CREATE INDEX idx_telemetry_source_tap_status_tap ON telemetry_source_tap_status (tap_id);
+`;
+
+export const FORENSIC_QC_SCHEMA_SQL = `
+  CREATE TRIGGER trg_telemetry_fill_delete_context
+    BEFORE DELETE ON fills
+    FOR EACH ROW
+    BEGIN
+      UPDATE telemetry_source_tap_status
+      SET captured_assignment_id = NULL, captured_fill_id = NULL
+      WHERE captured_fill_id = OLD.id;
+      DELETE FROM telemetry_measurements WHERE captured_fill_id = OLD.id;
+    END;
+  CREATE TRIGGER trg_telemetry_assignment_delete_context
+    BEFORE DELETE ON tap_assignment_lifecycles
+    FOR EACH ROW
+    BEGIN
+      UPDATE telemetry_source_tap_status
+      SET captured_assignment_id = NULL, captured_fill_id = NULL
+      WHERE captured_assignment_id = OLD.id;
+      DELETE FROM telemetry_measurements WHERE captured_assignment_id = OLD.id;
+    END;
+  CREATE TRIGGER trg_telemetry_measurements_no_update
+    BEFORE UPDATE ON telemetry_measurements
+    BEGIN
+      SELECT RAISE(ABORT, 'telemetry measurements are immutable');
+    END;
+  CREATE TRIGGER trg_telemetry_measurements_validate_attribution
+    BEFORE INSERT ON telemetry_measurements
+    FOR EACH ROW
+    WHEN NEW.captured_assignment_id IS NOT NULL AND NOT EXISTS (
+      SELECT 1 FROM tap_assignment_lifecycles
+      WHERE id = NEW.captured_assignment_id
+        AND fill_id = NEW.captured_fill_id
+        AND tap_id = NEW.tap_id
+    )
+    BEGIN
+      SELECT RAISE(ABORT, 'telemetry measurement attribution is inconsistent');
+    END;
+  CREATE TRIGGER trg_telemetry_receipts_no_update
+    BEFORE UPDATE ON telemetry_ingest_receipts
+    BEGIN
+      SELECT RAISE(ABORT, 'telemetry receipts are immutable');
+    END;
+  CREATE TRIGGER trg_telemetry_source_tap_status_validate_insert
+    BEFORE INSERT ON telemetry_source_tap_status
+    FOR EACH ROW
+    WHEN
+      (NEW.captured_assignment_id IS NOT NULL AND NOT EXISTS (
+        SELECT 1 FROM tap_assignment_lifecycles
+        WHERE id = NEW.captured_assignment_id
+          AND fill_id = NEW.captured_fill_id
+          AND tap_id = NEW.tap_id
+      ))
+      OR
+      (NEW.latest_measurement_id IS NOT NULL AND NOT EXISTS (
+        SELECT 1 FROM telemetry_measurements
+        WHERE id = NEW.latest_measurement_id
+          AND source_id = NEW.source_id
+          AND tap_id = NEW.tap_id
+      ))
+    BEGIN
+      SELECT RAISE(ABORT, 'telemetry status references inconsistent context');
+    END;
+  CREATE TRIGGER trg_telemetry_source_tap_status_validate_update
+    BEFORE UPDATE ON telemetry_source_tap_status
+    FOR EACH ROW
+    WHEN
+      (NEW.captured_assignment_id IS NOT NULL AND NOT EXISTS (
+        SELECT 1 FROM tap_assignment_lifecycles
+        WHERE id = NEW.captured_assignment_id
+          AND fill_id = NEW.captured_fill_id
+          AND tap_id = NEW.tap_id
+      ))
+      OR
+      (NEW.latest_measurement_id IS NOT NULL AND NOT EXISTS (
+        SELECT 1 FROM telemetry_measurements
+        WHERE id = NEW.latest_measurement_id
+          AND source_id = NEW.source_id
+          AND tap_id = NEW.tap_id
+      ))
+    BEGIN
+      SELECT RAISE(ABORT, 'telemetry status references inconsistent context');
+    END;
+`;
+
 const SECURITY_ACTIVITY_OUTBOX_SCHEMA_OBJECTS = [
   ["table", "admin_credentials"],
   ["table", "activity_log"],
@@ -859,6 +1052,35 @@ const TAPS_SCHEMA_OBJECTS = [
   ["trigger", "trg_tap_assignment_lifecycles_no_update_closed"],
   ["trigger", "trg_tap_assignment_lifecycles_immutable_fields"],
   ["trigger", "trg_tap_assignment_lifecycles_no_open_reason"],
+] as const;
+
+const TELEMETRY_SCHEMA_OBJECTS = [
+  ...TAPS_SCHEMA_OBJECTS,
+  ["table", "telemetry_sources"],
+  ["table", "tap_telemetry_authority"],
+  ["table", "telemetry_settings"],
+  ["table", "telemetry_ingest_receipts"],
+  ["table", "telemetry_measurements"],
+  ["table", "telemetry_source_tap_status"],
+  ["index", "idx_telemetry_sources_current_machine_key"],
+  ["index", "idx_tap_telemetry_authority_source"],
+  ["index", "idx_telemetry_receipts_client_identity"],
+  ["index", "idx_telemetry_receipts_fallback_identity"],
+  ["index", "idx_telemetry_receipts_processed_at"],
+  ["index", "idx_telemetry_measurements_tap_measured"],
+  ["index", "idx_telemetry_measurements_created_at"],
+  ["index", "idx_telemetry_source_tap_status_tap"],
+] as const;
+
+const FORENSIC_QC_SCHEMA_OBJECTS = [
+  ...TELEMETRY_SCHEMA_OBJECTS,
+  ["trigger", "trg_telemetry_assignment_delete_context"],
+  ["trigger", "trg_telemetry_fill_delete_context"],
+  ["trigger", "trg_telemetry_measurements_no_update"],
+  ["trigger", "trg_telemetry_measurements_validate_attribution"],
+  ["trigger", "trg_telemetry_receipts_no_update"],
+  ["trigger", "trg_telemetry_source_tap_status_validate_insert"],
+  ["trigger", "trg_telemetry_source_tap_status_validate_update"],
 ] as const;
 
 function splitSqlStatements(sql: string): string[] {
@@ -1545,6 +1767,161 @@ function validateTapsSchema(database: DatabaseExecutor): void {
   validateTapsColumns(database);
 }
 
+function validateTelemetryColumns(database: DatabaseExecutor): void {
+  validateTapsColumns(database);
+  const required: Readonly<Record<string, readonly Omit<TableColumnRow, "cid">[]>> = {
+    telemetry_sources: [
+      { name: "id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+      { name: "name", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "current_machine_key_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "created_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    ],
+    tap_telemetry_authority: [
+      { name: "tap_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+      { name: "source_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "changed_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    ],
+    telemetry_settings: [
+      { name: "id", type: "INTEGER", notnull: 0, dflt_value: null, pk: 1 },
+      { name: "max_batch_size", type: "INTEGER", notnull: 1, dflt_value: "100", pk: 0 },
+      { name: "max_future_skew_seconds", type: "INTEGER", notnull: 1, dflt_value: "300", pk: 0 },
+      {
+        name: "reconnect_horizon_seconds",
+        type: "INTEGER",
+        notnull: 1,
+        dflt_value: "21600",
+        pk: 0,
+      },
+      { name: "raw_retention_seconds", type: "INTEGER", notnull: 1, dflt_value: "21600", pk: 0 },
+      {
+        name: "receipt_retention_seconds",
+        type: "INTEGER",
+        notnull: 1,
+        dflt_value: "86400",
+        pk: 0,
+      },
+      {
+        name: "rate_limit_samples_per_minute",
+        type: "INTEGER",
+        notnull: 1,
+        dflt_value: "600",
+        pk: 0,
+      },
+      { name: "rate_limit_burst_samples", type: "INTEGER", notnull: 1, dflt_value: "100", pk: 0 },
+      { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    ],
+    telemetry_ingest_receipts: [
+      { name: "id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+      { name: "source_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "tap_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "identity_kind", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "client_sample_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "measured_at_epoch_ms", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "payload_digest", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "normalization_version", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "outcome", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "outcome_code", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "accepted_measurement_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "measured_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "received_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "processed_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    ],
+    telemetry_measurements: [
+      { name: "id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+      { name: "source_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "tap_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "measured_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "measured_at_epoch_ms", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "received_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "normalization_version", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "primary_kind", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "total_mass_g", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "remaining_volume_ml", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "fill_percentage", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "temperature_c", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "captured_assignment_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "captured_fill_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "created_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    ],
+    telemetry_source_tap_status: [
+      { name: "source_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 1 },
+      { name: "tap_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 2 },
+      { name: "latest_measurement_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "latest_measured_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "latest_measured_at_epoch_ms", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "latest_received_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "normalization_version", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "primary_kind", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { name: "total_mass_g", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "remaining_volume_ml", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "fill_percentage", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "temperature_c", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "captured_assignment_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "captured_fill_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    ],
+  };
+
+  for (const [table, columns] of Object.entries(required)) {
+    expectColumns(database, table, columns);
+  }
+}
+
+function validateTelemetrySchemaDefinition(
+  database: DatabaseExecutor,
+  objects: readonly (readonly [string, string])[],
+  additionalSql: string,
+  version: number,
+): void {
+  const expected = new Map(objects.map(([type, name]) => [`${type}:${name}`, type]));
+  const actual = readSchemaObjects(database).filter(
+    ({ type, name }) => !(type === "index" && name.startsWith("sqlite_autoindex")),
+  );
+  if (
+    actual.length !== expected.size ||
+    actual.some(({ type, name }) => !expected.has(`${type}:${name}`))
+  ) {
+    throw incompatibleSchema(`schema objects do not match the supported v${version} schema`);
+  }
+  const expectedSql = new Map<string, string>();
+  for (const statement of splitSqlStatements(
+    `${SECURITY_ACTIVITY_OUTBOX_SCHEMA_SQL}\n${OUTBOX_OVERFLOW_GUARD_TRIGGERS_SQL}\n${PHYSICAL_KEGS_SCHEMA_SQL}\n${BEVERAGES_SCHEMA_SQL}\n${FILLS_SCHEMA_SQL}\n${TAPS_SCHEMA_SQL}\n${TELEMETRY_SCHEMA_SQL}\n${additionalSql}`,
+  )) {
+    const key = schemaDefinitionKey(statement);
+    if (key !== undefined) {
+      expectedSql.set(key, normalizeSql(statement));
+    }
+  }
+  expectedSql.set("table:schema_migrations", normalizeSql(CREATE_SCHEMA_MIGRATIONS_SQL));
+  for (const row of actual) {
+    const expectedType = expected.get(`${row.type}:${row.name}`);
+    const expectedDefinition = expectedSql.get(`${row.type}:${row.name}`);
+    if (
+      expectedType === undefined ||
+      expectedDefinition === undefined ||
+      row.sql === null ||
+      normalizeSql(row.sql) !== expectedDefinition
+    ) {
+      throw incompatibleSchema(`schema object ${row.name} has invalid DDL`);
+    }
+  }
+  validateTelemetryColumns(database);
+}
+
+function validateTelemetryV7Schema(database: DatabaseExecutor): void {
+  validateTelemetrySchemaDefinition(database, TELEMETRY_SCHEMA_OBJECTS, "", 7);
+}
+
+function validateTelemetrySchema(database: DatabaseExecutor): void {
+  validateTelemetrySchemaDefinition(
+    database,
+    FORENSIC_QC_SCHEMA_OBJECTS,
+    FORENSIC_QC_SCHEMA_SQL,
+    FORENSIC_QC_SCHEMA_VERSION,
+  );
+}
+
 function validatePhysicalKegsSchema(database: DatabaseExecutor): void {
   const expected = new Map(
     PHYSICAL_KEGS_SCHEMA_OBJECTS.map(([type, name]) => [`${type}:${name}`, type]),
@@ -1681,6 +2058,37 @@ export const TAPS_MIGRATION: MigrationDefinition = {
   },
 };
 
+function seedTelemetrySettings(database: DatabaseExecutor): void {
+  database.execute(`
+    INSERT INTO telemetry_settings (
+      id, max_batch_size, max_future_skew_seconds, reconnect_horizon_seconds,
+      raw_retention_seconds, receipt_retention_seconds, rate_limit_samples_per_minute,
+      rate_limit_burst_samples, updated_at
+    ) VALUES (
+      1, 100, 300, 21600, 21600, 86400, 600, 100, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+    );
+  `);
+}
+
+export const TELEMETRY_MIGRATION: MigrationDefinition = {
+  version: TELEMETRY_SCHEMA_VERSION,
+  name: TELEMETRY_MIGRATION_NAME,
+  apply(database) {
+    database.execute(TELEMETRY_SCHEMA_SQL);
+    seedTelemetrySettings(database);
+    return undefined;
+  },
+};
+
+export const FORENSIC_QC_MIGRATION: MigrationDefinition = {
+  version: FORENSIC_QC_SCHEMA_VERSION,
+  name: FORENSIC_QC_MIGRATION_NAME,
+  apply(database) {
+    database.execute(FORENSIC_QC_SCHEMA_SQL);
+    return undefined;
+  },
+};
+
 /** Canonical production migration list. Keep this array identity stable. */
 export const MIGRATIONS: readonly MigrationDefinition[] = [
   FOUNDATION_MIGRATIONS[0]!,
@@ -1689,6 +2097,8 @@ export const MIGRATIONS: readonly MigrationDefinition[] = [
   BEVERAGES_MIGRATION,
   FILLS_MIGRATION,
   TAPS_MIGRATION,
+  TELEMETRY_MIGRATION,
+  FORENSIC_QC_MIGRATION,
 ];
 
 // Compatibility aliases for callers that prefer an explicit application name.
@@ -1719,6 +2129,75 @@ function applyMigration(database: DatabaseExecutor, migration: MigrationDefiniti
   });
 }
 
+function isCanonicalMigrationPrefix(migrations: readonly MigrationDefinition[]): boolean {
+  return (
+    migrations.length <= MIGRATIONS.length &&
+    migrations.every((migration, index) => migration === MIGRATIONS[index])
+  );
+}
+
+function expectRequiredRows(
+  database: DatabaseExecutor,
+  table: string,
+  predicate: string,
+  expectedCount: number,
+): void {
+  const row = database
+    .prepare<[], { readonly count: number }>(
+      `SELECT COUNT(*) AS count FROM ${table} WHERE ${predicate}`,
+    )
+    .get();
+  if (row?.count !== expectedCount) {
+    throw incompatibleSchema(`required ${table} state is missing or invalid`);
+  }
+}
+
+function validateRequiredCanonicalState(database: DatabaseExecutor, version: number): void {
+  if (version >= SECURITY_ACTIVITY_OUTBOX_SCHEMA_VERSION) {
+    expectRequiredRows(database, "activity_retention", "id = 1", 1);
+    expectRequiredRows(database, "secret_rotation_state", "id = 1", 1);
+    expectRequiredRows(database, "login_throttle", "id = 1", 1);
+    expectRequiredRows(database, "outbox_degradation", "id = 1", 1);
+    expectRequiredRows(database, "outbox_overflow_incidents", "slot BETWEEN 0 AND 15", 16);
+  }
+  if (version >= BEVERAGES_SCHEMA_VERSION) {
+    expectRequiredRows(database, "beverage_settings", "id = 1", 1);
+  }
+  if (version >= FILLS_SCHEMA_VERSION) {
+    expectRequiredRows(database, "fill_settings", "id = 1", 1);
+  }
+  if (version >= TELEMETRY_SCHEMA_VERSION) {
+    expectRequiredRows(database, "telemetry_settings", "id = 1", 1);
+  }
+}
+
+function validateCanonicalSchemaAtVersion(database: DatabaseExecutor, version: number): void {
+  if (version === FOUNDATION_SCHEMA_VERSION) {
+    validateFoundationSchema(database);
+    return;
+  }
+
+  validateFoundationLedgerStructure(database);
+  if (version === SECURITY_ACTIVITY_OUTBOX_SCHEMA_VERSION) {
+    validateSecurityActivityOutboxSchema(database);
+  } else if (version === PHYSICAL_KEGS_SCHEMA_VERSION) {
+    validatePhysicalKegsSchema(database);
+  } else if (version === BEVERAGES_SCHEMA_VERSION) {
+    validateBeveragesSchema(database);
+  } else if (version === FILLS_SCHEMA_VERSION) {
+    validateFillsSchema(database);
+  } else if (version === TAPS_SCHEMA_VERSION) {
+    validateTapsSchema(database);
+  } else if (version === TELEMETRY_SCHEMA_VERSION) {
+    validateTelemetryV7Schema(database);
+  } else if (version === FORENSIC_QC_SCHEMA_VERSION) {
+    validateTelemetrySchema(database);
+  } else {
+    throw incompatibleSchema("schema version is not a canonical Tapboard version");
+  }
+  validateRequiredCanonicalState(database, version);
+}
+
 export function initializeSchema(
   database: DatabaseExecutor,
   migrations: readonly MigrationDefinition[],
@@ -1735,7 +2214,9 @@ export function initializeSchema(
     validateCleanVersionZero(database);
   } else {
     validateMigrationLedger(database, userVersion, migrations);
-    if (userVersion === FOUNDATION_SCHEMA_VERSION) {
+    if (isCanonicalMigrationPrefix(migrations)) {
+      validateCanonicalSchemaAtVersion(database, userVersion);
+    } else if (userVersion === FOUNDATION_SCHEMA_VERSION) {
       validateFoundationSchema(database);
     }
   }
@@ -1750,7 +2231,13 @@ export function initializeSchema(
   }
   validateMigrationLedger(database, currentVersion, migrations);
 
-  if (migrations === MIGRATIONS && currentVersion === TAPS_SCHEMA_VERSION) {
+  if (migrations === MIGRATIONS && currentVersion === FORENSIC_QC_SCHEMA_VERSION) {
+    validateFoundationLedgerStructure(database);
+    validateTelemetrySchema(database);
+  } else if (currentVersion === TELEMETRY_SCHEMA_VERSION) {
+    validateFoundationLedgerStructure(database);
+    validateTelemetryV7Schema(database);
+  } else if (currentVersion === TAPS_SCHEMA_VERSION) {
     validateFoundationLedgerStructure(database);
     validateTapsSchema(database);
   } else if (currentVersion === FILLS_SCHEMA_VERSION) {
@@ -1767,5 +2254,9 @@ export function initializeSchema(
     validateSecurityActivityOutboxSchema(database);
   } else if (currentVersion === FOUNDATION_SCHEMA_VERSION) {
     validateFoundationSchema(database);
+  }
+
+  if (isCanonicalMigrationPrefix(migrations)) {
+    validateRequiredCanonicalState(database, currentVersion);
   }
 }

@@ -1,5 +1,8 @@
 import { randomUUID } from "node:crypto";
-import type { DatabaseExecutor } from "../../infrastructure/database/connection.ts";
+import {
+  assertSynchronousCompletion,
+  type DatabaseExecutor,
+} from "../../infrastructure/database/connection.ts";
 import { ApplicationError } from "../../shared/errors.ts";
 import { appendActivity } from "../activity/operations.ts";
 import { appendDeletionAudit } from "../activity/deletion-audit.ts";
@@ -383,13 +386,16 @@ export class TapService {
       insertAssignmentLifecycle(this.#database, lifecycle);
       registerTapFirstUse(this.#database, validatedTapId, nowIso);
 
-      this.#extensionPort.onAssignmentOpened(this.#database, {
-        assignmentId,
-        tapId: validatedTapId,
-        fillId: validated.fillId,
-        occurredAt: nowIso,
-        reason: "assigned",
-      });
+      assertSynchronousCompletion(
+        this.#extensionPort.onAssignmentOpened(this.#database, {
+          assignmentId,
+          tapId: validatedTapId,
+          fillId: validated.fillId,
+          occurredAt: nowIso,
+          reason: "assigned",
+        }),
+        "Tap assignment extensions",
+      );
 
       appendActivity(this.#database, {
         category: "domain",
@@ -446,13 +452,16 @@ export class TapService {
 
       closeAssignmentLifecycle(this.#database, activeAssignment.id, nowIso, "unassigned");
 
-      this.#extensionPort.onAssignmentClosed(this.#database, {
-        assignmentId: activeAssignment.id,
-        tapId: validatedTapId,
-        fillId: activeAssignment.fillId,
-        occurredAt: nowIso,
-        reason: "unassigned",
-      });
+      assertSynchronousCompletion(
+        this.#extensionPort.onAssignmentClosed(this.#database, {
+          assignmentId: activeAssignment.id,
+          tapId: validatedTapId,
+          fillId: activeAssignment.fillId,
+          occurredAt: nowIso,
+          reason: "unassigned",
+        }),
+        "Tap assignment extensions",
+      );
 
       appendActivity(this.#database, {
         category: "domain",
@@ -575,13 +584,16 @@ export class TapService {
 
       closeAssignmentLifecycle(this.#database, sourceAssignment.id, nowIso, "moved");
 
-      this.#extensionPort.onAssignmentClosed(this.#database, {
-        assignmentId: sourceAssignment.id,
-        tapId: sourceTapId,
-        fillId,
-        occurredAt: nowIso,
-        reason: "moved",
-      });
+      assertSynchronousCompletion(
+        this.#extensionPort.onAssignmentClosed(this.#database, {
+          assignmentId: sourceAssignment.id,
+          tapId: sourceTapId,
+          fillId,
+          occurredAt: nowIso,
+          reason: "moved",
+        }),
+        "Tap assignment extensions",
+      );
 
       const newAssignmentId = this.#idFactory();
       const newLifecycle: TapAssignmentLifecycle = {
@@ -597,13 +609,16 @@ export class TapService {
       insertAssignmentLifecycle(this.#database, newLifecycle);
       registerTapFirstUse(this.#database, validated.targetTapId, nowIso);
 
-      this.#extensionPort.onAssignmentOpened(this.#database, {
-        assignmentId: newAssignmentId,
-        tapId: validated.targetTapId,
-        fillId,
-        occurredAt: nowIso,
-        reason: "moved",
-      });
+      assertSynchronousCompletion(
+        this.#extensionPort.onAssignmentOpened(this.#database, {
+          assignmentId: newAssignmentId,
+          tapId: validated.targetTapId,
+          fillId,
+          occurredAt: nowIso,
+          reason: "moved",
+        }),
+        "Tap assignment extensions",
+      );
 
       appendActivity(this.#database, {
         category: "domain",
@@ -811,13 +826,16 @@ export class TapService {
         const assignment = findActiveAssignmentByFillId(database, fillId);
         if (assignment) {
           closeAssignmentLifecycle(database, assignment.id, endedAt, "fill_ended");
-          this.#extensionPort.onAssignmentClosed(database, {
-            assignmentId: assignment.id,
-            tapId: assignment.tapId,
-            fillId,
-            occurredAt: endedAt,
-            reason: "fill_ended",
-          });
+          assertSynchronousCompletion(
+            this.#extensionPort.onAssignmentClosed(database, {
+              assignmentId: assignment.id,
+              tapId: assignment.tapId,
+              fillId,
+              occurredAt: endedAt,
+              reason: "fill_ended",
+            }),
+            "Tap assignment extensions",
+          );
         }
       },
     };

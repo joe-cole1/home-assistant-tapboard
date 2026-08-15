@@ -97,6 +97,28 @@ void test("duplicate keg number is rejected with conflict error and rolled back"
   }
 });
 
+void test("Promise-like Keg correction extensions are rejected and roll back the update", () => {
+  const database = openDatabase(":memory:");
+  const kegService = new KegService(database, {
+    onKegCorrection: () => ({ then() {} }),
+  });
+  try {
+    const keg = kegService.createKeg({
+      kegNumber: 1,
+      capacityMl: 19_500,
+      currentTareG: 4_300,
+    });
+
+    assert.throws(
+      () => kegService.updateKeg(keg.id, { capacityMl: 20_000 }),
+      /Keg correction extensions must complete synchronously/,
+    );
+    assert.equal(kegService.getKeg(keg.id).keg.capacityMl, 19_500);
+  } finally {
+    database.close();
+  }
+});
+
 void test("keg number is reusable only after permanent deletion", () => {
   const { database, kegService } = setupInMemoryKegs();
   try {

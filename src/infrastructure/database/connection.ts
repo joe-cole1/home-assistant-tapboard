@@ -73,9 +73,7 @@ class ControlledDatabaseConnection implements DatabaseConnection {
     const transaction = this.#database.transaction(() => {
       const result: Result = work();
 
-      if (isPromiseLike(result)) {
-        throw new TypeError("Database transactions must complete synchronously");
-      }
+      assertSynchronousCompletion(result, "Database transactions");
 
       return result;
     });
@@ -102,6 +100,13 @@ function isPromiseLike(value: unknown): boolean {
   }
 
   return "then" in value && typeof value.then === "function";
+}
+
+/** Reject work that would escape a synchronous better-sqlite3 transaction. */
+export function assertSynchronousCompletion(value: unknown, boundary: string): void {
+  if (isPromiseLike(value)) {
+    throw new TypeError(`${boundary} must complete synchronously`);
+  }
 }
 
 function verifyForeignKeys(database: DatabaseExecutor): void {
