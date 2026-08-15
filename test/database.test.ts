@@ -111,7 +111,7 @@ function readTransactionValues(database: DatabaseConnection): string[] {
     .map((row) => row.value);
 }
 
-void test("a clean file database bootstraps the canonical v9 migration ledger", (context) => {
+void test("a clean file database bootstraps the canonical v10 migration ledger", (context) => {
   const path = makeDatabasePath(context);
   const database = openDatabase(path);
 
@@ -146,12 +146,14 @@ void test("a clean file database bootstraps the canonical v9 migration ledger", 
         { type: "index", name: "idx_outbound_deliveries_due" },
         { type: "index", name: "idx_outbound_events_created_at" },
         { type: "index", name: "idx_outbound_events_type_coalescing" },
+        { type: "index", name: "idx_pours_fill_completed_at" },
         { type: "index", name: "idx_pours_fill_id" },
         { type: "index", name: "idx_pours_tap_completed_at" },
         { type: "index", name: "idx_tap_assignment_lifecycles_active_fill" },
         { type: "index", name: "idx_tap_assignment_lifecycles_active_tap" },
         { type: "index", name: "idx_tap_assignment_lifecycles_fill_id" },
         { type: "index", name: "idx_tap_assignment_lifecycles_tap_id" },
+        { type: "index", name: "idx_tap_assignments_fill_assigned_at" },
         { type: "index", name: "idx_tap_telemetry_authority_source" },
         { type: "index", name: "idx_taps_tap_number" },
         { type: "index", name: "idx_telemetry_epoch_samples_epoch_time" },
@@ -191,6 +193,7 @@ void test("a clean file database bootstraps the canonical v9 migration ledger", 
         { type: "table", name: "encrypted_secrets" },
         { type: "table", name: "fill_settings" },
         { type: "table", name: "fills" },
+        { type: "table", name: "forecast_settings" },
         { type: "table", name: "keg_maintenance_records" },
         { type: "table", name: "keg_tare_history" },
         { type: "table", name: "kegs" },
@@ -245,7 +248,7 @@ void test("a clean file database bootstraps the canonical v9 migration ledger", 
         "SELECT version, name, applied_at FROM schema_migrations ORDER BY version",
       )
       .all();
-    assert.equal(ledger.length, 9);
+    assert.equal(ledger.length, 10);
     assert.equal(ledger[0]?.version, FOUNDATION_SCHEMA_VERSION);
     assert.equal(ledger[0]?.name, FOUNDATION_INITIAL_MIGRATION_NAME);
     assert.equal(ledger[1]?.version, 2);
@@ -264,6 +267,8 @@ void test("a clean file database bootstraps the canonical v9 migration ledger", 
     assert.equal(ledger[7]?.name, "forensic-qc-telemetry-integrity");
     assert.equal(ledger[8]?.version, 9);
     assert.equal(ledger[8]?.name, "telemetry-epochs-and-deterministic-pour-detector");
+    assert.equal(ledger[9]?.version, 10);
+    assert.equal(ledger[9]?.name, "pour-history-forecasting");
     assert.match(ledger[0]?.applied_at ?? "", /^\d{4}-\d{2}-\d{2}T/);
   } finally {
     database.close();
@@ -281,13 +286,13 @@ void test("an in-memory database bootstraps the same canonical schema", () => {
           "SELECT type, name FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%'",
         )
         .all().length,
-      111,
+      114,
     );
     assert.equal(
       database
         .prepare<[], { readonly count: number }>("SELECT count(*) AS count FROM schema_migrations")
         .get()?.count,
-      9,
+      10,
     );
   } finally {
     database.close();
@@ -389,7 +394,7 @@ void test("v2 outbound delivery lease fields reject one-sided stale values", () 
   }
 });
 
-void test("an exact v1 database upgrades to v9 with all ledger entries", (context) => {
+void test("an exact v1 database upgrades to v10 with all ledger entries", (context) => {
   const path = makeDatabasePath(context);
   openDatabase(path, { migrations: FOUNDATION_MIGRATIONS }).close();
   const database = openDatabase(path, { migrations: MIGRATIONS });
@@ -411,6 +416,7 @@ void test("an exact v1 database upgrades to v9 with all ledger entries", (contex
         { version: 7, name: "telemetry-sources-api-and-ingestion" },
         { version: 8, name: "forensic-qc-telemetry-integrity" },
         { version: 9, name: "telemetry-epochs-and-deterministic-pour-detector" },
+        { version: 10, name: "pour-history-forecasting" },
       ],
     );
   } finally {
@@ -418,7 +424,7 @@ void test("an exact v1 database upgrades to v9 with all ledger entries", (contex
   }
 });
 
-void test("the pre-QC telemetry v7 schema upgrades to v9 without replacing persisted settings", (context) => {
+void test("the pre-QC telemetry v7 schema upgrades to v10 without replacing persisted settings", (context) => {
   const path = makeDatabasePath(context);
   const v7 = openDatabase(path, { migrations: MIGRATIONS.slice(0, 7) });
   v7.execute("UPDATE telemetry_settings SET max_batch_size = 50 WHERE id = 1");
@@ -426,7 +432,7 @@ void test("the pre-QC telemetry v7 schema upgrades to v9 without replacing persi
 
   const upgraded = openDatabase(path);
   try {
-    assert.equal(upgraded.pragma<number>("user_version", { simple: true }), 9);
+    assert.equal(upgraded.pragma<number>("user_version", { simple: true }), 10);
     assert.equal(
       upgraded
         .prepare<[], { readonly max_batch_size: number }>(
@@ -447,14 +453,14 @@ void test("the pre-QC telemetry v7 schema upgrades to v9 without replacing persi
       upgraded
         .prepare<[], { readonly count: number }>("SELECT count(*) AS count FROM schema_migrations")
         .get()?.count,
-      9,
+      10,
     );
   } finally {
     upgraded.close();
   }
 });
 
-void test("a canonical v8 database validates before upgrading once to v9", (context) => {
+void test("a canonical v8 database validates before upgrading once to v10", (context) => {
   const path = makeDatabasePath(context);
   const v8 = openDatabase(path, { migrations: MIGRATIONS.slice(0, 8) });
   v8.execute("UPDATE telemetry_settings SET max_batch_size = 50 WHERE id = 1");
@@ -462,7 +468,7 @@ void test("a canonical v8 database validates before upgrading once to v9", (cont
 
   const upgraded = openDatabase(path);
   try {
-    assert.equal(upgraded.pragma<number>("user_version", { simple: true }), 9);
+    assert.equal(upgraded.pragma<number>("user_version", { simple: true }), 10);
     assert.equal(
       upgraded
         .prepare<[], { readonly max_batch_size: number }>(
@@ -482,10 +488,10 @@ void test("a canonical v8 database validates before upgrading once to v9", (cont
     assert.deepEqual(
       upgraded
         .prepare<[], { readonly version: number }>(
-          "SELECT version FROM schema_migrations WHERE version = 9",
+          "SELECT version FROM schema_migrations WHERE version = 10",
         )
         .all(),
-      [{ version: 9 }],
+      [{ version: 10 }],
     );
   } finally {
     upgraded.close();
@@ -508,6 +514,34 @@ void test("a corrupt canonical v8 database is rejected before migration 9 can mu
     );
     assert.equal(readLedger(database).length, 8);
   });
+});
+
+void test("a canonical v9 database validates before upgrading once to v10", (context) => {
+  const path = makeDatabasePath(context);
+  openDatabase(path, { migrations: MIGRATIONS.slice(0, 9) }).close();
+
+  const upgraded = openDatabase(path);
+  try {
+    assert.equal(upgraded.pragma<number>("user_version", { simple: true }), 10);
+    assert.deepEqual(
+      upgraded
+        .prepare<[], { readonly serving_size_ml: number }>(
+          "SELECT serving_size_ml FROM forecast_settings WHERE id = 1",
+        )
+        .get(),
+      { serving_size_ml: 354.88235475 },
+    );
+    assert.equal(
+      upgraded
+        .prepare<[], { readonly count: number }>(
+          "SELECT count(*) AS count FROM sqlite_schema WHERE type = 'index' AND name IN ('idx_pours_fill_completed_at', 'idx_tap_assignments_fill_assigned_at')",
+        )
+        .get()?.count,
+      2,
+    );
+  } finally {
+    upgraded.close();
+  }
 });
 
 void test("a corrupt canonical v6 database is rejected before migration 7 can mutate it", (context) => {
@@ -536,17 +570,17 @@ void test("a canonical database missing required telemetry settings is rejected 
   assert.throws(() => openDatabase(path), /required telemetry_settings state is missing/);
 });
 
-void test("canonical v9 reopen rejects an extra user object", (context) => {
+void test("canonical v10 reopen rejects an extra user object", (context) => {
   const path = makeDatabasePath(context);
   openDatabase(path, { migrations: MIGRATIONS }).close();
-  withFixture(path, (database) => database.exec("CREATE TABLE unexpected_v9_table (id INTEGER)"));
+  withFixture(path, (database) => database.exec("CREATE TABLE unexpected_v10_table (id INTEGER)"));
   assert.throws(
     () => openDatabase(path, { migrations: MIGRATIONS }),
     /schema objects do not match|unexpected schema objects/,
   );
 });
 
-void test("v9 validation rejects a tampered DDL definition on reopen", (context) => {
+void test("v10 validation rejects a tampered DDL definition on reopen", (context) => {
   const path = makeDatabasePath(context);
   openDatabase(path, { migrations: MIGRATIONS }).close();
   withFixture(path, (database) => {
@@ -573,14 +607,14 @@ void test("a current database reopens idempotently", (context) => {
       reopened
         .prepare<[], { readonly count: number }>("SELECT count(*) AS count FROM schema_migrations")
         .get()?.count,
-      9,
+      10,
     );
   } finally {
     reopened.close();
   }
 });
 
-void test("a clean version 0 database upgrades through the canonical v9 schema", (context) => {
+void test("a clean version 0 database upgrades through the canonical v10 schema", (context) => {
   const path = makeDatabasePath(context);
   withFixture(path, (database) => assert.equal(readUserVersion(database), 0));
 
@@ -588,7 +622,7 @@ void test("a clean version 0 database upgrades through the canonical v9 schema",
 
   withFixture(path, (database) => {
     assert.equal(readUserVersion(database), CURRENT_SCHEMA_VERSION);
-    assert.equal(readSchemaObjects(database).length, 111);
+    assert.equal(readSchemaObjects(database).length, 114);
   });
 });
 
@@ -624,12 +658,12 @@ void test("migration definitions must be contiguous with nonempty unique names",
 
 void test("an unsupported future schema is rejected without mutation", (context) => {
   const path = makeDatabasePath(context);
-  withFixture(path, (database) => database.exec("PRAGMA user_version = 10"));
+  withFixture(path, (database) => database.exec("PRAGMA user_version = 11"));
 
   assert.throws(() => openDatabase(path), /schema version is newer/);
 
   withFixture(path, (database) => {
-    assert.equal(readUserVersion(database), 10);
+    assert.equal(readUserVersion(database), 11);
     assert.deepEqual(readSchemaObjects(database), []);
   });
 });
