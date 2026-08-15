@@ -81,7 +81,7 @@ void test("application starts on an ephemeral port and exposes only local readin
   assert.equal(health.headers.get("cache-control"), "no-store");
   assert.equal(health.headers.get("x-content-type-options"), "nosniff");
   assert.equal(health.headers.get("x-frame-options"), "DENY");
-  assert.deepEqual(await health.json(), { status: "ok", schemaVersion: 9 });
+  assert.deepEqual(await health.json(), { status: "ok", schemaVersion: 10 });
 
   const unknown = await fetch(`http://127.0.0.1:${address.port}/not-a-route`);
   assert.equal(unknown.status, 404);

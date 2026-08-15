@@ -18,7 +18,9 @@ export const FORENSIC_QC_SCHEMA_VERSION = 8;
 export const FORENSIC_QC_MIGRATION_NAME = "forensic-qc-telemetry-integrity";
 export const TELEMETRY_EPOCHS_SCHEMA_VERSION = 9;
 export const TELEMETRY_EPOCHS_MIGRATION_NAME = "telemetry-epochs-and-deterministic-pour-detector";
-export const CURRENT_SCHEMA_VERSION = TELEMETRY_EPOCHS_SCHEMA_VERSION;
+export const FORECASTING_SCHEMA_VERSION = 10;
+export const FORECASTING_MIGRATION_NAME = "pour-history-forecasting";
+export const CURRENT_SCHEMA_VERSION = FORECASTING_SCHEMA_VERSION;
 
 export interface MigrationDefinition {
   readonly version: number;
@@ -1210,6 +1212,27 @@ const TELEMETRY_EPOCHS_SCHEMA_OBJECTS = [
   ["trigger", "trg_pours_no_update"],
 ] as const;
 
+export const FORECASTING_SCHEMA_SQL = `
+  CREATE TABLE forecast_settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    serving_size_ml REAL NOT NULL CHECK (
+      typeof(serving_size_ml) IN ('integer', 'real') AND
+      serving_size_ml > 0 AND
+      serving_size_ml < 1.7976931348623157e308
+    ),
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX idx_pours_fill_completed_at ON pours (fill_id, completed_at DESC, id DESC);
+  CREATE INDEX idx_tap_assignments_fill_assigned_at ON tap_assignment_lifecycles (fill_id, assigned_at, id);
+`;
+
+const FORECASTING_SCHEMA_OBJECTS = [
+  ...TELEMETRY_EPOCHS_SCHEMA_OBJECTS,
+  ["table", "forecast_settings"],
+  ["index", "idx_pours_fill_completed_at"],
+  ["index", "idx_tap_assignments_fill_assigned_at"],
+] as const;
+
 function splitSqlStatements(sql: string): string[] {
   const statements: string[] = [];
   let start = 0;
@@ -2074,6 +2097,20 @@ function validateTelemetryEpochsSchema(database: DatabaseExecutor): void {
   }
 }
 
+function validateForecastingSchema(database: DatabaseExecutor): void {
+  validateTelemetrySchemaDefinition(
+    database,
+    FORECASTING_SCHEMA_OBJECTS,
+    `${FORENSIC_QC_SCHEMA_SQL}\n${TELEMETRY_EPOCHS_SCHEMA_SQL}\n${FORECASTING_SCHEMA_SQL}`,
+    FORECASTING_SCHEMA_VERSION,
+  );
+  for (const table of ["forecast_settings", "pours", "tap_assignment_lifecycles"]) {
+    if (database.pragma<TableColumnRow[]>(`table_info(${table})`).length === 0) {
+      throw incompatibleSchema(`schema table ${table} has invalid columns`);
+    }
+  }
+}
+
 function validatePhysicalKegsSchema(database: DatabaseExecutor): void {
   const expected = new Map(
     PHYSICAL_KEGS_SCHEMA_OBJECTS.map(([type, name]) => [`${type}:${name}`, type]),
@@ -2257,6 +2294,23 @@ export const TELEMETRY_EPOCHS_MIGRATION: MigrationDefinition = {
   },
 };
 
+function seedForecastSettings(database: DatabaseExecutor): void {
+  database.execute(`
+    INSERT INTO forecast_settings (id, serving_size_ml, updated_at)
+    VALUES (1, 354.88235475, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+  `);
+}
+
+export const FORECASTING_MIGRATION: MigrationDefinition = {
+  version: FORECASTING_SCHEMA_VERSION,
+  name: FORECASTING_MIGRATION_NAME,
+  apply(database) {
+    database.execute(FORECASTING_SCHEMA_SQL);
+    seedForecastSettings(database);
+    return undefined;
+  },
+};
+
 /** Canonical production migration list. Keep this array identity stable. */
 export const MIGRATIONS: readonly MigrationDefinition[] = [
   FOUNDATION_MIGRATIONS[0]!,
@@ -2268,6 +2322,7 @@ export const MIGRATIONS: readonly MigrationDefinition[] = [
   TELEMETRY_MIGRATION,
   FORENSIC_QC_MIGRATION,
   TELEMETRY_EPOCHS_MIGRATION,
+  FORECASTING_MIGRATION,
 ];
 
 // Compatibility aliases for callers that prefer an explicit application name.
@@ -2341,6 +2396,9 @@ function validateRequiredCanonicalState(database: DatabaseExecutor, version: num
   if (version >= TELEMETRY_EPOCHS_SCHEMA_VERSION) {
     expectRequiredRows(database, "detector_global_config", "id = 1", 1);
   }
+  if (version >= FORECASTING_SCHEMA_VERSION) {
+    expectRequiredRows(database, "forecast_settings", "id = 1", 1);
+  }
 }
 
 function validateCanonicalSchemaAtVersion(database: DatabaseExecutor, version: number): void {
@@ -2366,6 +2424,8 @@ function validateCanonicalSchemaAtVersion(database: DatabaseExecutor, version: n
     validateTelemetrySchema(database);
   } else if (version === TELEMETRY_EPOCHS_SCHEMA_VERSION) {
     validateTelemetryEpochsSchema(database);
+  } else if (version === FORECASTING_SCHEMA_VERSION) {
+    validateForecastingSchema(database);
   } else {
     throw incompatibleSchema("schema version is not a canonical Tapboard version");
   }
@@ -2405,10 +2465,10 @@ export function initializeSchema(
   }
   validateMigrationLedger(database, currentVersion, migrations);
 
-  if (
-    isCanonicalMigrationPrefix(migrations) &&
-    currentVersion === TELEMETRY_EPOCHS_SCHEMA_VERSION
-  ) {
+  if (isCanonicalMigrationPrefix(migrations) && currentVersion === FORECASTING_SCHEMA_VERSION) {
+    validateFoundationLedgerStructure(database);
+    validateForecastingSchema(database);
+  } else if (currentVersion === TELEMETRY_EPOCHS_SCHEMA_VERSION) {
     validateFoundationLedgerStructure(database);
     validateTelemetryEpochsSchema(database);
   } else if (currentVersion === FORENSIC_QC_SCHEMA_VERSION) {

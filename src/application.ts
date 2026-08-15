@@ -29,6 +29,7 @@ import { registerTapRoutes } from "./features/taps/routes.ts";
 import { createMachineKeyService } from "./features/machine-keys/service.ts";
 import { TelemetryService, registerTelemetryRoutes } from "./features/telemetry/index.ts";
 import { DetectorService } from "./features/telemetry/detector-service.ts";
+import { createForecastService, registerForecastRoutes } from "./features/forecasting/index.ts";
 import { createLogger, type Logger } from "./shared/logging.ts";
 
 type ApplicationState = "new" | "starting" | "ready" | "stopping" | "stopped" | "failed";
@@ -148,6 +149,7 @@ class FoundationApplication implements Application {
         authorityExtensionPort: detectorService,
         acceptedExtensionPort: detectorService,
       });
+      const forecastService = createForecastService(this.#database);
 
       const router = new Router(this.#logger);
       router.get("/healthz", (_request, response) => {
@@ -166,6 +168,7 @@ class FoundationApplication implements Application {
       registerFillRoutes({ router, fillService, authService });
       registerTapRoutes({ router, tapService, authService });
       registerTelemetryRoutes({ router, telemetryService, detectorService, authService });
+      registerForecastRoutes({ router, forecastService, authService });
 
       this.#httpServer = this.#createHttpServer({
         router,

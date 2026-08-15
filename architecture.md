@@ -1,8 +1,8 @@
 # Tapboard architecture
 
-## Implemented Foundation, #67 primitives, #85 dev container, #68–#72 domains, and #73 Telemetry Epochs/Pour Detection
+## Implemented Foundation, #67 primitives, #85 dev container, #68–#73 domains, and #74 Pour History/Fill Forecasting
 
-Issue #66 establishes a Node 24 ESM modular monolith with explicit startup composition. Issues #67–#72 add the security, inventory, beverage, Fill, Tap, and canonical telemetry ingestion boundaries described below. Issue #73 adds immutable telemetry epochs and provenance snapshots, durable deterministic per-Tap pour detection, minimal immutable pours, and administration for detector defaults, nullable per-Tap overrides, and explicit arbitration groups. Node executes erasable `.ts` files directly, while TypeScript performs static checking with `tsc --noEmit`. There is no transpiler, backend or application bundler, SPA/client framework, HTTP framework, ORM, query builder, dependency-injection framework, or global service locator.
+Issue #66 establishes a Node 24 ESM modular monolith with explicit startup composition. Issues #67–#72 add the security, inventory, beverage, Fill, Tap, and canonical telemetry ingestion boundaries described below. Issue #73 adds immutable telemetry epochs and provenance snapshots, durable deterministic per-Tap pour detection, minimal immutable pours, and administration for detector defaults, nullable per-Tap overrides, and explicit arbitration groups. Issue #74 retains those detector-owned pours as immutable Fill-scoped history and derives deterministic Fill forecasts. Node executes erasable `.ts` files directly, while TypeScript performs static checking with `tsc --noEmit`. There is no transpiler, backend or application bundler, SPA/client framework, HTTP framework, ORM, query builder, dependency-injection framework, or global service locator.
 
 The implemented source topology is intentionally concise:
 
@@ -13,7 +13,7 @@ The implemented source topology is intentionally concise:
 - `src/infrastructure/rendering/` owns the file-based Eta rendering boundary;
 - `src/main.ts` is the deliberate process bootstrap and signal-handling entry point;
 - `src/operator/` owns stdin-only reset-PIN and root-key rotation commands;
-- `src/features/auth/`, `activity/`, `events/`, `secrets/`, `machine-keys/`, `outbox/`, `kegs/`, `beverages/`, `fills/`, `taps/`, and `telemetry/` own typed feature primitives and repository SQL;
+- `src/features/auth/`, `activity/`, `events/`, `secrets/`, `machine-keys/`, `outbox/`, `kegs/`, `beverages/`, `fills/`, `taps/`, `telemetry/`, and `forecasting/` own typed feature primitives and repository SQL;
 - `views/` contains only layout/partial/escaping proof templates, not a product page;
 - `openapi/` contains the checked-in OpenAPI 3.1 telemetry ingestion contract;
 - `test/` covers the database, runtime, rendering, shared primitives, native TypeScript execution, and architecture boundaries.
@@ -24,7 +24,7 @@ Normal imports are side-effect free. The bootstrap in `src/main.ts` deliberately
 
 The application deterministically creates the database directory, opens and validates the database, creates the renderer, creates the HTTP server, and binds the configured address in that order. Startup and bind errors reject startup and close acquired resources. Shutdown stops HTTP acceptance and connections before closing SQLite, is idempotent, and enforces the configured bounded grace period. `SIGINT` and `SIGTERM` use that same shutdown path.
 
-Routes registered include `GET /healthz` (returning HTTP 200 and schema version 9), unauthenticated public projections at `GET /api/on-deck` and `GET /api/public/taps`, authenticated Admin endpoints under `/api/admin/kegs`, `/api/admin/beverages`, `/api/admin/fills`, `/api/admin/taps`, and `/api/admin/telemetry`, and authenticated external machine endpoints under `/api/v1/telemetry`. The router supports exact and parameterized routes with deterministic 404/405 behavior, and centralized error mapping prevents unexpected implementation details from reaching HTTP clients.
+Routes registered include `GET /healthz` (returning HTTP 200 and schema version 10), unauthenticated public projections at `GET /api/on-deck` and `GET /api/public/taps`, authenticated Admin endpoints under `/api/admin/kegs`, `/api/admin/beverages`, `/api/admin/fills`, `/api/admin/taps`, `/api/admin/telemetry`, and `/api/admin/forecast`, and authenticated external machine endpoints under `/api/v1/telemetry`. The router supports exact and parameterized routes with deterministic 404/405 behavior, and centralized error mapping prevents unexpected implementation details from reaching HTTP clients.
 
 The configured external origin is an exact canonical HTTP(S) origin; trusted proxies are explicit comma-separated addresses and never provide an origin fallback. Session lifetimes default to 30 days inactivity and 365 days absolute, with bounded validation. PIN reset and root-key rotation are local non-TTY stdin commands only; no browser reset flow or default PIN exists.
 
@@ -42,7 +42,7 @@ The PIN is exactly four ASCII decimal digits. Its deliberately small 10,000-valu
 
 `src/infrastructure/database/connection.ts` is the sole `better-sqlite3` import and connection-construction boundary. It enables and verifies `foreign_keys=ON`, initializes and validates the schema, runs integrity checks, exposes a synchronous `BEGIN IMMEDIATE` transaction primitive, and provides idempotent close behavior. Raw application SQL is restricted to database infrastructure/migrations and future feature repository ownership by the architecture gate.
 
-Schema version 9 adds detector defaults and nullable per-Tap overrides, explicit arbitration groups, immutable `telemetry_epochs` provenance snapshots, mutable durable epoch runtime state, bounded detector samples, and immutable minimal `pours`. Migration 9 is additive to the version-8 telemetry integrity baseline. Each Tap has at most one open epoch and a closed epoch cannot reopen. Activity is separate from runtime logs, has bounded retention, and never recursively admits outbox rows. Deletion audit stores minimal impact counts and remains immutable.
+Schema version 9 adds detector defaults and nullable per-Tap overrides, explicit arbitration groups, immutable `telemetry_epochs` provenance snapshots, mutable durable epoch runtime state, bounded detector samples, and immutable minimal `pours`. Schema version 10 adds the singleton `forecast_settings` row and Fill-history indexes; it leaves detector-owned pours unchanged. Each Tap has at most one open epoch and a closed epoch cannot reopen. Activity is separate from runtime logs, has bounded retention, and never recursively admits outbox rows. Deletion audit stores minimal impact counts and remains immutable.
 
 Foundation schema version 1 contained exactly one infrastructure table:
 
@@ -54,9 +54,9 @@ CREATE TABLE schema_migrations (
 )
 ```
 
-SQLite `user_version` is 9 and the migration machinery uses `schema_migrations` as its ordered history ledger, appending migration 9 as `telemetry-epochs-and-deterministic-pour-detector`. Migration definitions are contiguous from version 1 with nonempty unique names. A clean empty version-0 database migrates transactionally through version 9; current databases reopen only when version, ledger, constraints, required singleton state, and exact schema object set match the supported baseline. Future versions, unknown nonempty version-0 databases, missing or inconsistent ledgers, and unexpected schema objects fail closed without adoption or repair. Failed migrations roll back schema changes, ledger changes, and `user_version`.
+SQLite `user_version` is 10 and the migration machinery uses `schema_migrations` as its ordered history ledger, appending migration 10 as `pour-history-forecasting`. Migration definitions are contiguous from version 1 with nonempty unique names. A clean empty version-0 database migrates transactionally through version 10; current databases reopen only when version, ledger, constraints, required singleton state, and exact schema object set match the supported baseline. Future versions, unknown nonempty version-0 databases, missing or inconsistent ledgers, and unexpected schema objects fail closed without adoption or repair. Failed migrations roll back schema changes, ledger changes, and `user_version`.
 
-The exact-object validation is intentionally the supported schema-version-9 baseline, not a claim that future domain tables are forbidden forever. Later migrations must deliberately extend the schema validator alongside their versioned schema changes. Outbox admission serializes inside `BEGIN IMMEDIATE`, counts persisted UTF-8 bytes, bounds global/per-destination rows and bytes, and records fixed-slot degradation when it returns `not_queued_capacity`. Providers and workers remain deferred.
+The exact-object validation is intentionally the supported schema-version-10 baseline, not a claim that future domain tables are forbidden forever. Later migrations must deliberately extend the schema validator alongside their versioned schema changes. Outbox admission serializes inside `BEGIN IMMEDIATE`, counts persisted UTF-8 bytes, bounds global/per-destination rows and bytes, and records fixed-slot degradation when it returns `not_queued_capacity`. Providers and workers remain deferred.
 
 ## Telemetry ingestion boundary (#72)
 
@@ -82,6 +82,14 @@ Canonical accepted telemetry is interpreted through the epoch snapshot, stabiliz
 
 Detector configuration has persisted global defaults plus nullable per-Tap field overrides; the effective ordered content is hashed and snapshotted by epoch. Completed pours capture only immutable Fill/Tap/assignment/epoch/session, canonical volume, and timestamps. A deterministic terminal `effect_key` makes completion idempotent across retries, batches, restart recovery, and replay. Detector effects run in the accepted-ingestion transaction; the #72 receipt is finalized last, so extension failure rolls back both detector work and accepted telemetry. No outbound worker is introduced.
 
+## Pour history and Fill forecasting (#74)
+
+Forecasting reads completed immutable pours by Fill, including history from each Tap assignment and move; another Fill's pours never contribute. The observation range starts at the Fill's first assignment, and daily UTC buckets include the current `completed_at` day and its zero-consumption days. The current-volume input is the actual stabilized volume of the current open epoch with that epoch's capacity snapshot, rather than a reconstructed historical estimate.
+
+A Fill requires at least 14 observation days and three qualifying pours for the sufficient-history method. It uses a deterministic SHA-256-seeded, 512-sample, seven-day circular moving-block bootstrap. Insufficient history uses the exact 24 oz per four-day fallback: 177.441177375 mL/day median, bounded by 88.7205886875 and 354.88235475 mL/day; method identifiers and bootstrap seeding remain stable. Confidence is low for fallback, stale, or anomaly results, medium for sufficient history, and high only with at least 28 days and eight qualifying pours.
+
+Forecasting fails closed for a waiting/currently unassigned Fill, an ended Fill, unavailable or invalid current volume, and capacity inconsistencies. Invalid, future, or pre-observation pours are excluded from consumption math, recorded as anomaly evidence, and lower confidence. The singleton serving-size setting defaults to 354.88235475 mL, using v1's 12 oz evidence; servings remaining is the conservative whole-serving floor. Authenticated Admin routes provide Fill pour history and forecasts plus forecast settings. The server has a deliberately whitelisted public-safe forecast projection for future use, but #74 registers no public forecast endpoint and does not expose raw telemetry time series, forecast snapshots, health, SSE, Home Assistant, or Tap Planning.
+
 ## Dependencies
 
 The only production dependencies are:
@@ -97,7 +105,7 @@ The canonical `npm run check` gate combines format, lint, type, architecture, re
 
 ## Not implemented
 
-The implemented slices intentionally do not implement pour history/forecasting (#74), provider delivery workers, Home Assistant/webhook adapters, draft health, Admin/public feature pages, SSE, Brew Story, Mystery Tap, Tap Wars, or production Docker hardening/deployment. The `.env.example` reference and provisional production compose illustration do not change the runnable development-only container boundary, and production deployment remains deferred to issue #81.
+The implemented slices intentionally do not implement provider delivery workers, Home Assistant/webhook adapters, draft health and Tap maintenance (#75), Admin/public feature pages, SSE, Brew Story, Mystery Tap, Tap Wars, or production Docker hardening/deployment. The `.env.example` reference and provisional production compose illustration do not change the runnable development-only container boundary, and production deployment remains deferred to issue #81.
 
 Playwright/browser E2E is also not present because Foundation has no feature UI or browser workflow. No E2E tests ran or passed; the tier is deferred to issue #76.
 

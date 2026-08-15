@@ -438,6 +438,24 @@ export function findActiveAssignmentByFillId(
   return row === undefined ? undefined : mapLifecycleRow(row);
 }
 
+/** The original tap assignment for a Fill, retained across later moves. */
+export function findFirstAssignmentByFillId(
+  database: DatabaseExecutor,
+  fillId: string,
+): TapAssignmentLifecycle | undefined {
+  const row = database
+    .prepare<[string], LifecycleRow>(
+      `SELECT id, tap_id, fill_id, assigned_at, ended_at, end_reason, created_at
+       FROM tap_assignment_lifecycles
+       WHERE fill_id = ?
+       ORDER BY assigned_at ASC, id ASC
+       LIMIT 1`,
+    )
+    .get(fillId);
+
+  return row === undefined ? undefined : mapLifecycleRow(row);
+}
+
 export function findAssignmentLifecycleById(
   database: DatabaseExecutor,
   id: string,

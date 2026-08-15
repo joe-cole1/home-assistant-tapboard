@@ -441,6 +441,27 @@ export function readTelemetryEpochState(
     .get(epochId);
   return r && state(r);
 }
+/**
+ * Forecasting reads the detector's internal state rather than the public,
+ * presentation-clamped volume. An open Fill can have at most one active
+ * assignment/epoch, so the newest started epoch is the current one.
+ */
+export function readOpenTelemetryEpochStateForFill(
+  db: DatabaseExecutor,
+  fillId: string,
+): { readonly epoch: TelemetryEpoch; readonly state: TelemetryEpochState } | undefined {
+  const r = db
+    .prepare<[string], Record<string, unknown>>(
+      `SELECT e.${epochCols.split(",").join(",e.")},s.${stateCols.split(",").join(",s.")}
+       FROM telemetry_epochs e
+       JOIN telemetry_epoch_state s ON s.epoch_id=e.id
+       WHERE e.fill_id=? AND e.ended_at IS NULL
+       ORDER BY e.started_at_epoch_ms DESC,e.id DESC
+       LIMIT 1`,
+    )
+    .get(fillId);
+  return r === undefined ? undefined : { epoch: epoch(r), state: state(r) };
+}
 export function updateTelemetryEpochState(db: DatabaseExecutor, s: TelemetryEpochState): boolean {
   return (
     db
@@ -618,6 +639,45 @@ export function listCompletedPoursForFill(db: DatabaseExecutor, fillId: string):
       `SELECT ${pourCols} FROM pours WHERE fill_id=? ORDER BY completed_at,id`,
     )
     .all(fillId)
+    .map(pour);
+}
+
+export interface CompletedPourHistoryCursor {
+  readonly completedAt: string;
+  readonly id: string;
+}
+
+/**
+ * Return an opaque-page candidate set for one Fill only. The extra row lets
+ * the application construct a next cursor without a second count query.
+ * Forecast calculations must use listCompletedPoursForFill instead.
+ */
+export function listCompletedPourHistoryPageForFill(
+  db: DatabaseExecutor,
+  fillId: string,
+  limit: number,
+  cursor?: CompletedPourHistoryCursor,
+): CompletedPour[] {
+  if (cursor === undefined) {
+    return db
+      .prepare<[string, number], Record<string, unknown>>(
+        `SELECT ${pourCols} FROM pours
+         WHERE fill_id=?
+         ORDER BY completed_at DESC,id DESC
+         LIMIT ?`,
+      )
+      .all(fillId, limit + 1)
+      .map(pour);
+  }
+  return db
+    .prepare<[string, string, string, string, number], Record<string, unknown>>(
+      `SELECT ${pourCols} FROM pours
+       WHERE fill_id=?
+         AND (completed_at<? OR (completed_at=? AND id<?))
+       ORDER BY completed_at DESC,id DESC
+       LIMIT ?`,
+    )
+    .all(fillId, cursor.completedAt, cursor.completedAt, cursor.id, limit + 1)
     .map(pour);
 }
 export function countCompletedPoursForFill(db: DatabaseExecutor, fillId: string): number {
