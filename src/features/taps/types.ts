@@ -141,9 +141,33 @@ export interface AssignmentClosedContext {
   readonly reason: "unassigned" | "moved" | "fill_ended";
 }
 
+/** Transaction-local notification emitted after a Tap row is inserted. */
+export interface TapCreatedContext {
+  readonly tapId: string;
+  readonly occurredAt: string;
+}
+
+/** Transaction-local notification emitted after a Tap is persisted as retired. */
+export interface TapRetiredContext {
+  readonly tapId: string;
+  readonly occurredAt: string;
+}
+
 export interface TapAssignmentExtensionPort {
   onAssignmentOpened(db: DatabaseExecutor, context: AssignmentOpenedContext): void;
   onAssignmentClosed(db: DatabaseExecutor, context: AssignmentClosedContext): void;
+  /** Optional for backwards-compatible extension ports that do not track Tap lifecycle. */
+  onTapCreated?(
+    db: DatabaseExecutor,
+    tapId: TapCreatedContext["tapId"],
+    occurredAt: TapCreatedContext["occurredAt"],
+  ): void;
+  /** Optional for backwards-compatible extension ports that do not track Tap lifecycle. */
+  onTapRetired?(
+    db: DatabaseExecutor,
+    tapId: TapRetiredContext["tapId"],
+    occurredAt: TapRetiredContext["occurredAt"],
+  ): void;
 }
 
 export interface AssignmentOperationResult {

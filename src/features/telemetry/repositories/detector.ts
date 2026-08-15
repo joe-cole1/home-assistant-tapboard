@@ -633,6 +633,28 @@ export function readCompletedPourByEpochSession(
     .get(epochId, detectorSessionId);
   return r && pour(r);
 }
+
+/**
+ * Return the newest completed pour for one detector epoch.  Health consumes
+ * this narrow projection so it never has to inspect raw pour history (or
+ * identify a telemetry source) while deciding whether leak detection should
+ * be suppressed.
+ */
+export function readLatestCompletedPourForEpoch(
+  db: DatabaseExecutor,
+  epochId: string,
+): CompletedPour | undefined {
+  const r = db
+    .prepare<[string], Record<string, unknown>>(
+      `SELECT ${pourCols}
+       FROM pours
+       WHERE epoch_id=?
+       ORDER BY completed_at DESC,id DESC
+       LIMIT 1`,
+    )
+    .get(epochId);
+  return r && pour(r);
+}
 export function listCompletedPoursForFill(db: DatabaseExecutor, fillId: string): CompletedPour[] {
   return db
     .prepare<[string], Record<string, unknown>>(

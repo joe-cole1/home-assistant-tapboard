@@ -111,7 +111,7 @@ function readTransactionValues(database: DatabaseConnection): string[] {
     .map((row) => row.value);
 }
 
-void test("a clean file database bootstraps the canonical v10 migration ledger", (context) => {
+void test("a clean file database bootstraps the canonical v11 migration ledger", (context) => {
   const path = makeDatabasePath(context);
   const database = openDatabase(path);
 
@@ -140,12 +140,18 @@ void test("a clean file database bootstraps the canonical v10 migration ledger",
         { type: "index", name: "idx_fills_beverage_id" },
         { type: "index", name: "idx_fills_keg_id" },
         { type: "index", name: "idx_fills_on_deck_order" },
+        { type: "index", name: "idx_health_incident_transitions_incident_occurred" },
+        { type: "index", name: "idx_health_incidents_open_tap_check" },
+        { type: "index", name: "idx_health_incidents_resolved_at" },
+        { type: "index", name: "idx_health_incidents_tap_opened" },
+        { type: "index", name: "idx_health_leak_samples_tap_time" },
         { type: "index", name: "idx_keg_maintenance_keg_recorded" },
         { type: "index", name: "idx_keg_tare_history_keg_recorded" },
         { type: "index", name: "idx_outbound_deliveries_destination_state" },
         { type: "index", name: "idx_outbound_deliveries_due" },
         { type: "index", name: "idx_outbound_events_created_at" },
         { type: "index", name: "idx_outbound_events_type_coalescing" },
+        { type: "index", name: "idx_pours_epoch_completed" },
         { type: "index", name: "idx_pours_fill_completed_at" },
         { type: "index", name: "idx_pours_fill_id" },
         { type: "index", name: "idx_pours_tap_completed_at" },
@@ -154,6 +160,7 @@ void test("a clean file database bootstraps the canonical v10 migration ledger",
         { type: "index", name: "idx_tap_assignment_lifecycles_fill_id" },
         { type: "index", name: "idx_tap_assignment_lifecycles_tap_id" },
         { type: "index", name: "idx_tap_assignments_fill_assigned_at" },
+        { type: "index", name: "idx_tap_line_maintenance_records_tap_performed_id" },
         { type: "index", name: "idx_tap_telemetry_authority_source" },
         { type: "index", name: "idx_taps_tap_number" },
         { type: "index", name: "idx_telemetry_epoch_samples_epoch_time" },
@@ -194,6 +201,12 @@ void test("a clean file database bootstraps the canonical v10 migration ledger",
         { type: "table", name: "fill_settings" },
         { type: "table", name: "fills" },
         { type: "table", name: "forecast_settings" },
+        { type: "table", name: "health_check_state" },
+        { type: "table", name: "health_global_config" },
+        { type: "table", name: "health_incident_transitions" },
+        { type: "table", name: "health_incidents" },
+        { type: "table", name: "health_leak_samples" },
+        { type: "table", name: "health_tap_overrides" },
         { type: "table", name: "keg_maintenance_records" },
         { type: "table", name: "keg_tare_history" },
         { type: "table", name: "kegs" },
@@ -209,6 +222,7 @@ void test("a clean file database bootstraps the canonical v10 migration ledger",
         { type: "table", name: "schema_migrations" },
         { type: "table", name: "secret_rotation_state" },
         { type: "table", name: "tap_assignment_lifecycles" },
+        { type: "table", name: "tap_line_maintenance_records" },
         { type: "table", name: "tap_telemetry_authority" },
         { type: "table", name: "taps" },
         { type: "table", name: "telemetry_epoch_samples" },
@@ -222,6 +236,7 @@ void test("a clean file database bootstraps the canonical v10 migration ledger",
         { type: "trigger", name: "trg_activity_log_no_update" },
         { type: "trigger", name: "trg_deletion_audit_no_delete" },
         { type: "trigger", name: "trg_deletion_audit_no_update" },
+        { type: "trigger", name: "trg_health_incident_transitions_no_update" },
         { type: "trigger", name: "trg_keg_maintenance_records_no_update" },
         { type: "trigger", name: "trg_keg_tare_history_no_update" },
         { type: "trigger", name: "trg_outbound_destination_versions_no_update" },
@@ -231,6 +246,7 @@ void test("a clean file database bootstraps the canonical v10 migration ledger",
         { type: "trigger", name: "trg_tap_assignment_lifecycles_immutable_fields" },
         { type: "trigger", name: "trg_tap_assignment_lifecycles_no_open_reason" },
         { type: "trigger", name: "trg_tap_assignment_lifecycles_no_update_closed" },
+        { type: "trigger", name: "trg_tap_line_maintenance_records_no_update" },
         { type: "trigger", name: "trg_taps_first_used_at_monotonic" },
         { type: "trigger", name: "trg_taps_no_delete_if_used" },
         { type: "trigger", name: "trg_telemetry_assignment_delete_context" },
@@ -248,7 +264,7 @@ void test("a clean file database bootstraps the canonical v10 migration ledger",
         "SELECT version, name, applied_at FROM schema_migrations ORDER BY version",
       )
       .all();
-    assert.equal(ledger.length, 10);
+    assert.equal(ledger.length, 11);
     assert.equal(ledger[0]?.version, FOUNDATION_SCHEMA_VERSION);
     assert.equal(ledger[0]?.name, FOUNDATION_INITIAL_MIGRATION_NAME);
     assert.equal(ledger[1]?.version, 2);
@@ -269,6 +285,8 @@ void test("a clean file database bootstraps the canonical v10 migration ledger",
     assert.equal(ledger[8]?.name, "telemetry-epochs-and-deterministic-pour-detector");
     assert.equal(ledger[9]?.version, 10);
     assert.equal(ledger[9]?.name, "pour-history-forecasting");
+    assert.equal(ledger[10]?.version, 11);
+    assert.equal(ledger[10]?.name, "draft-health-and-tap-maintenance");
     assert.match(ledger[0]?.applied_at ?? "", /^\d{4}-\d{2}-\d{2}T/);
   } finally {
     database.close();
@@ -286,13 +304,13 @@ void test("an in-memory database bootstraps the same canonical schema", () => {
           "SELECT type, name FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%'",
         )
         .all().length,
-      114,
+      130,
     );
     assert.equal(
       database
         .prepare<[], { readonly count: number }>("SELECT count(*) AS count FROM schema_migrations")
         .get()?.count,
-      10,
+      11,
     );
   } finally {
     database.close();
@@ -394,7 +412,7 @@ void test("v2 outbound delivery lease fields reject one-sided stale values", () 
   }
 });
 
-void test("an exact v1 database upgrades to v10 with all ledger entries", (context) => {
+void test("an exact v1 database upgrades to v11 with all ledger entries", (context) => {
   const path = makeDatabasePath(context);
   openDatabase(path, { migrations: FOUNDATION_MIGRATIONS }).close();
   const database = openDatabase(path, { migrations: MIGRATIONS });
@@ -417,6 +435,7 @@ void test("an exact v1 database upgrades to v10 with all ledger entries", (conte
         { version: 8, name: "forensic-qc-telemetry-integrity" },
         { version: 9, name: "telemetry-epochs-and-deterministic-pour-detector" },
         { version: 10, name: "pour-history-forecasting" },
+        { version: 11, name: "draft-health-and-tap-maintenance" },
       ],
     );
   } finally {
@@ -424,7 +443,7 @@ void test("an exact v1 database upgrades to v10 with all ledger entries", (conte
   }
 });
 
-void test("the pre-QC telemetry v7 schema upgrades to v10 without replacing persisted settings", (context) => {
+void test("the pre-QC telemetry v7 schema upgrades to v11 without replacing persisted settings", (context) => {
   const path = makeDatabasePath(context);
   const v7 = openDatabase(path, { migrations: MIGRATIONS.slice(0, 7) });
   v7.execute("UPDATE telemetry_settings SET max_batch_size = 50 WHERE id = 1");
@@ -432,7 +451,7 @@ void test("the pre-QC telemetry v7 schema upgrades to v10 without replacing pers
 
   const upgraded = openDatabase(path);
   try {
-    assert.equal(upgraded.pragma<number>("user_version", { simple: true }), 10);
+    assert.equal(upgraded.pragma<number>("user_version", { simple: true }), 11);
     assert.equal(
       upgraded
         .prepare<[], { readonly max_batch_size: number }>(
@@ -453,14 +472,14 @@ void test("the pre-QC telemetry v7 schema upgrades to v10 without replacing pers
       upgraded
         .prepare<[], { readonly count: number }>("SELECT count(*) AS count FROM schema_migrations")
         .get()?.count,
-      10,
+      11,
     );
   } finally {
     upgraded.close();
   }
 });
 
-void test("a canonical v8 database validates before upgrading once to v10", (context) => {
+void test("a canonical v8 database validates before upgrading once to v11", (context) => {
   const path = makeDatabasePath(context);
   const v8 = openDatabase(path, { migrations: MIGRATIONS.slice(0, 8) });
   v8.execute("UPDATE telemetry_settings SET max_batch_size = 50 WHERE id = 1");
@@ -468,7 +487,7 @@ void test("a canonical v8 database validates before upgrading once to v10", (con
 
   const upgraded = openDatabase(path);
   try {
-    assert.equal(upgraded.pragma<number>("user_version", { simple: true }), 10);
+    assert.equal(upgraded.pragma<number>("user_version", { simple: true }), 11);
     assert.equal(
       upgraded
         .prepare<[], { readonly max_batch_size: number }>(
@@ -493,6 +512,14 @@ void test("a canonical v8 database validates before upgrading once to v10", (con
         .all(),
       [{ version: 10 }],
     );
+    assert.deepEqual(
+      upgraded
+        .prepare<[], { readonly version: number }>(
+          "SELECT version FROM schema_migrations WHERE version = 11",
+        )
+        .all(),
+      [{ version: 11 }],
+    );
   } finally {
     upgraded.close();
   }
@@ -516,13 +543,13 @@ void test("a corrupt canonical v8 database is rejected before migration 9 can mu
   });
 });
 
-void test("a canonical v9 database validates before upgrading once to v10", (context) => {
+void test("a canonical v9 database validates before upgrading once to v11", (context) => {
   const path = makeDatabasePath(context);
   openDatabase(path, { migrations: MIGRATIONS.slice(0, 9) }).close();
 
   const upgraded = openDatabase(path);
   try {
-    assert.equal(upgraded.pragma<number>("user_version", { simple: true }), 10);
+    assert.equal(upgraded.pragma<number>("user_version", { simple: true }), 11);
     assert.deepEqual(
       upgraded
         .prepare<[], { readonly serving_size_ml: number }>(
@@ -542,6 +569,323 @@ void test("a canonical v9 database validates before upgrading once to v10", (con
   } finally {
     upgraded.close();
   }
+});
+
+void test("v10 to v11 seeds typed health defaults and one state row per Tap", (context) => {
+  const path = makeDatabasePath(context);
+  const firstTapId = "11111111-1111-4111-8111-111111111111";
+  const secondTapId = "22222222-2222-4222-8222-222222222222";
+  const v10 = openDatabase(path, { migrations: MIGRATIONS.slice(0, 10) });
+  v10.execute(`
+    INSERT INTO taps (id, tap_number, created_at, updated_at)
+    VALUES
+      ('${firstTapId}', 1, '2026-08-15T00:00:00.000Z', '2026-08-15T00:00:00.000Z'),
+      ('${secondTapId}', 2, '2026-08-15T00:00:00.000Z', '2026-08-15T00:00:00.000Z');
+  `);
+  v10.close();
+
+  const upgraded = openDatabase(path);
+  try {
+    assert.equal(upgraded.pragma<number>("user_version", { simple: true }), 11);
+    assert.deepEqual(
+      upgraded
+        .prepare(
+          `SELECT id, revision, low_keg_enabled, low_keg_threshold_percent,
+             low_keg_critical_percent, low_keg_fixed_threshold_ml, low_keg_settling_ms,
+             scale_availability_enabled, scale_degraded_after_ms, scale_active_after_ms,
+             suspected_leak_enabled, suspected_leak_loss_threshold_ml,
+             suspected_leak_window_ms, suspected_leak_pour_grace_ms,
+             suspected_leak_settling_ms, suspected_leak_reset_movement_ml,
+             suspected_leak_max_samples, serving_temperature_enabled,
+             serving_temperature_normal_min_c, serving_temperature_normal_max_c,
+             serving_temperature_critical_min_c, serving_temperature_critical_max_c,
+             serving_temperature_duration_ms, line_cleaning_due_enabled,
+             line_cleaning_due_interval_days, line_cleaning_due_critical_grace_days
+           FROM health_global_config WHERE id = 1`,
+        )
+        .get(),
+      {
+        id: 1,
+        revision: 1,
+        low_keg_enabled: 1,
+        low_keg_threshold_percent: 20,
+        low_keg_critical_percent: 5,
+        low_keg_fixed_threshold_ml: 0,
+        low_keg_settling_ms: 30000,
+        scale_availability_enabled: 1,
+        scale_degraded_after_ms: 300000,
+        scale_active_after_ms: 1800000,
+        suspected_leak_enabled: 0,
+        suspected_leak_loss_threshold_ml: 236.5882365,
+        suspected_leak_window_ms: 900000,
+        suspected_leak_pour_grace_ms: 120000,
+        suspected_leak_settling_ms: 600000,
+        suspected_leak_reset_movement_ml: 946.352946,
+        suspected_leak_max_samples: 64,
+        serving_temperature_enabled: 0,
+        serving_temperature_normal_min_c: 1.1111111111111112,
+        serving_temperature_normal_max_c: 5.555555555555555,
+        serving_temperature_critical_min_c: -1.1111111111111112,
+        serving_temperature_critical_max_c: 10,
+        serving_temperature_duration_ms: 900000,
+        line_cleaning_due_enabled: 0,
+        line_cleaning_due_interval_days: 14,
+        line_cleaning_due_critical_grace_days: 7,
+      },
+    );
+    assert.deepEqual(
+      upgraded
+        .prepare<
+          [],
+          {
+            readonly tap_id: string;
+            readonly check_id: string;
+            readonly state: string;
+            readonly severity: string;
+            readonly evidence_json: string;
+            readonly revision: number;
+          }
+        >(
+          `SELECT tap_id, check_id, state, severity, evidence_json, revision
+           FROM health_check_state ORDER BY tap_id, check_id`,
+        )
+        .all(),
+      [
+        {
+          tap_id: firstTapId,
+          check_id: "line_cleaning_due",
+          state: "not_configured",
+          severity: "none",
+          evidence_json: "{}",
+          revision: 1,
+        },
+        {
+          tap_id: firstTapId,
+          check_id: "low_keg",
+          state: "not_configured",
+          severity: "none",
+          evidence_json: "{}",
+          revision: 1,
+        },
+        {
+          tap_id: firstTapId,
+          check_id: "scale_availability",
+          state: "not_configured",
+          severity: "none",
+          evidence_json: "{}",
+          revision: 1,
+        },
+        {
+          tap_id: firstTapId,
+          check_id: "serving_temperature",
+          state: "not_configured",
+          severity: "none",
+          evidence_json: "{}",
+          revision: 1,
+        },
+        {
+          tap_id: firstTapId,
+          check_id: "suspected_leak",
+          state: "not_configured",
+          severity: "none",
+          evidence_json: "{}",
+          revision: 1,
+        },
+        {
+          tap_id: secondTapId,
+          check_id: "line_cleaning_due",
+          state: "not_configured",
+          severity: "none",
+          evidence_json: "{}",
+          revision: 1,
+        },
+        {
+          tap_id: secondTapId,
+          check_id: "low_keg",
+          state: "not_configured",
+          severity: "none",
+          evidence_json: "{}",
+          revision: 1,
+        },
+        {
+          tap_id: secondTapId,
+          check_id: "scale_availability",
+          state: "not_configured",
+          severity: "none",
+          evidence_json: "{}",
+          revision: 1,
+        },
+        {
+          tap_id: secondTapId,
+          check_id: "serving_temperature",
+          state: "not_configured",
+          severity: "none",
+          evidence_json: "{}",
+          revision: 1,
+        },
+        {
+          tap_id: secondTapId,
+          check_id: "suspected_leak",
+          state: "not_configured",
+          severity: "none",
+          evidence_json: "{}",
+          revision: 1,
+        },
+      ],
+    );
+  } finally {
+    upgraded.close();
+  }
+});
+
+void test("v11 health constraints protect overrides, incidents, samples, and maintenance history", (context) => {
+  const path = makeDatabasePath(context);
+  const tapId = "33333333-3333-4333-8333-333333333333";
+  const incidentId = "44444444-4444-4444-8444-444444444444";
+  const secondIncidentId = "55555555-5555-4555-8555-555555555555";
+  const transitionId = "66666666-6666-4666-8666-666666666666";
+  const maintenanceId = "77777777-7777-4777-8777-777777777777";
+  const database = openDatabase(path);
+  try {
+    database.execute(`
+      INSERT INTO taps (id, tap_number, created_at, updated_at)
+      VALUES ('${tapId}', 1, '2026-08-15T00:00:00.000Z', '2026-08-15T00:00:00.000Z');
+      INSERT INTO health_tap_overrides (tap_id, revision, updated_at)
+      VALUES ('${tapId}', 1, '2026-08-15T00:00:00.000Z');
+    `);
+    assert.throws(
+      () =>
+        database.execute(
+          "UPDATE health_global_config SET low_keg_critical_percent = 21 WHERE id = 1",
+        ),
+      /CHECK constraint/,
+    );
+    assert.throws(
+      () =>
+        database.execute(
+          "UPDATE health_global_config SET scale_degraded_after_ms = 1800001 WHERE id = 1",
+        ),
+      /CHECK constraint/,
+    );
+    assert.throws(
+      () =>
+        database.execute(
+          `UPDATE health_tap_overrides
+           SET low_keg_threshold_percent = 10, low_keg_critical_percent = 11
+           WHERE tap_id = '${tapId}'`,
+        ),
+      /CHECK constraint/,
+    );
+    assert.throws(
+      () => database.execute("UPDATE health_global_config SET low_keg_enabled = 2 WHERE id = 1"),
+      /CHECK constraint/,
+    );
+
+    database.execute(`
+      INSERT INTO health_incidents (
+        id, tap_id, check_id, opened_at, current_severity, max_severity,
+        open_reason_code, open_evidence_json, revision, updated_at
+      ) VALUES (
+        '${incidentId}', '${tapId}', 'low_keg', '2026-08-15T00:00:00.000Z', 'warning', 'warning',
+        'below_threshold', '{}', 1, '2026-08-15T00:00:00.000Z'
+      );
+    `);
+    assert.throws(
+      () =>
+        database.execute(`
+        INSERT INTO health_incidents (
+          id, tap_id, check_id, opened_at, current_severity, max_severity,
+          open_reason_code, open_evidence_json, revision, updated_at
+        ) VALUES (
+          '${secondIncidentId}', '${tapId}', 'low_keg', '2026-08-15T00:01:00.000Z', 'warning', 'warning',
+          'below_threshold', '{}', 1, '2026-08-15T00:01:00.000Z'
+        )
+      `),
+      /UNIQUE constraint/,
+    );
+    assert.throws(
+      () =>
+        database.execute(
+          `UPDATE health_incidents SET acknowledged_at = '2026-08-15T00:02:00.000Z' WHERE id = '${incidentId}'`,
+        ),
+      /CHECK constraint/,
+    );
+    assert.throws(
+      () =>
+        database.execute(
+          `UPDATE health_incidents SET by_session_id = 'session-only' WHERE id = '${incidentId}'`,
+        ),
+      /CHECK constraint/,
+    );
+    database.execute(`
+      UPDATE health_incidents
+      SET acknowledged_at = '2026-08-15T00:02:00.000Z', by_session_id = 'session-1', updated_at = '2026-08-15T00:02:00.000Z'
+      WHERE id = '${incidentId}';
+      INSERT INTO health_incident_transitions (id, incident_id, transition_kind, occurred_at, created_at)
+      VALUES ('${transitionId}', '${incidentId}', 'acknowledged', '2026-08-15T00:02:00.000Z', '2026-08-15T00:02:00.000Z');
+    `);
+    assert.throws(
+      () =>
+        database.execute(
+          `UPDATE health_incident_transitions SET reason_code = 'tampered' WHERE id = '${transitionId}'`,
+        ),
+      /append-only/,
+    );
+    database.execute(`
+      UPDATE health_incidents SET resolved_at = '2026-08-15T00:03:00.000Z', updated_at = '2026-08-15T00:03:00.000Z' WHERE id = '${incidentId}';
+      INSERT INTO health_incidents (
+        id, tap_id, check_id, opened_at, current_severity, max_severity,
+        open_reason_code, open_evidence_json, revision, updated_at
+      ) VALUES (
+        '${secondIncidentId}', '${tapId}', 'low_keg', '2026-08-15T00:04:00.000Z', 'critical', 'critical',
+        'below_critical_threshold', '{}', 1, '2026-08-15T00:04:00.000Z'
+      );
+    `);
+    assert.throws(
+      () =>
+        database.execute(`
+        INSERT INTO health_leak_samples (tap_id, measurement_id, epoch_id, measured_at_epoch_ms, stabilized_volume_ml, created_at)
+        VALUES ('${tapId}', 'bad-measurement-id', '88888888-8888-4888-8888-888888888888', 1, 1, '2026-08-15T00:05:00.000Z')
+      `),
+      /CHECK constraint/,
+    );
+    assert.throws(
+      () =>
+        database.execute(`
+        INSERT INTO tap_line_maintenance_records (
+          id, tap_id, maintenance_type, performed_at, notes, actor_type, recorded_at
+        ) VALUES (
+          '${maintenanceId}', '${tapId}', 'line_cleaned', '2026-08-15T00:06:00.000Z', replace(hex(zeroblob(2049)), '00', 'x'), 'operator', '2026-08-15T00:06:00.000Z'
+        )
+      `),
+      /CHECK constraint/,
+    );
+    database.execute(`
+      INSERT INTO tap_line_maintenance_records (
+        id, tap_id, maintenance_type, performed_at, notes, actor_type, recorded_at
+      ) VALUES (
+        '${maintenanceId}', '${tapId}', 'line_cleaned', '2026-08-15T00:06:00.000Z', NULL, 'operator', '2026-08-15T00:06:00.000Z'
+      );
+    `);
+    assert.throws(
+      () =>
+        database.execute(
+          `UPDATE tap_line_maintenance_records SET notes = 'tampered' WHERE id = '${maintenanceId}'`,
+        ),
+      /append-only/,
+    );
+  } finally {
+    database.close();
+  }
+});
+
+void test("v11 canonical validation rejects a tampered health trigger on reopen", (context) => {
+  const path = makeDatabasePath(context);
+  openDatabase(path).close();
+  withFixture(path, (database) =>
+    database.exec("DROP TRIGGER trg_health_incident_transitions_no_update"),
+  );
+  assert.throws(() => openDatabase(path), /schema objects do not match|invalid DDL/);
 });
 
 void test("a corrupt canonical v6 database is rejected before migration 7 can mutate it", (context) => {
@@ -570,17 +914,17 @@ void test("a canonical database missing required telemetry settings is rejected 
   assert.throws(() => openDatabase(path), /required telemetry_settings state is missing/);
 });
 
-void test("canonical v10 reopen rejects an extra user object", (context) => {
+void test("canonical v11 reopen rejects an extra user object", (context) => {
   const path = makeDatabasePath(context);
   openDatabase(path, { migrations: MIGRATIONS }).close();
-  withFixture(path, (database) => database.exec("CREATE TABLE unexpected_v10_table (id INTEGER)"));
+  withFixture(path, (database) => database.exec("CREATE TABLE unexpected_v11_table (id INTEGER)"));
   assert.throws(
     () => openDatabase(path, { migrations: MIGRATIONS }),
     /schema objects do not match|unexpected schema objects/,
   );
 });
 
-void test("v10 validation rejects a tampered DDL definition on reopen", (context) => {
+void test("v11 validation rejects a tampered DDL definition on reopen", (context) => {
   const path = makeDatabasePath(context);
   openDatabase(path, { migrations: MIGRATIONS }).close();
   withFixture(path, (database) => {
@@ -607,14 +951,14 @@ void test("a current database reopens idempotently", (context) => {
       reopened
         .prepare<[], { readonly count: number }>("SELECT count(*) AS count FROM schema_migrations")
         .get()?.count,
-      10,
+      11,
     );
   } finally {
     reopened.close();
   }
 });
 
-void test("a clean version 0 database upgrades through the canonical v10 schema", (context) => {
+void test("a clean version 0 database upgrades through the canonical v11 schema", (context) => {
   const path = makeDatabasePath(context);
   withFixture(path, (database) => assert.equal(readUserVersion(database), 0));
 
@@ -622,7 +966,7 @@ void test("a clean version 0 database upgrades through the canonical v10 schema"
 
   withFixture(path, (database) => {
     assert.equal(readUserVersion(database), CURRENT_SCHEMA_VERSION);
-    assert.equal(readSchemaObjects(database).length, 114);
+    assert.equal(readSchemaObjects(database).length, 130);
   });
 });
 
@@ -658,12 +1002,12 @@ void test("migration definitions must be contiguous with nonempty unique names",
 
 void test("an unsupported future schema is rejected without mutation", (context) => {
   const path = makeDatabasePath(context);
-  withFixture(path, (database) => database.exec("PRAGMA user_version = 11"));
+  withFixture(path, (database) => database.exec("PRAGMA user_version = 12"));
 
   assert.throws(() => openDatabase(path), /schema version is newer/);
 
   withFixture(path, (database) => {
-    assert.equal(readUserVersion(database), 11);
+    assert.equal(readUserVersion(database), 12);
     assert.deepEqual(readSchemaObjects(database), []);
   });
 });
