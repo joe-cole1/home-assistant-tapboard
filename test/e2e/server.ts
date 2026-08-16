@@ -78,6 +78,19 @@ const measuredBeverage = beverages.createCustomBeverage({
   beverageType: "beer",
   style: "Pale Ale",
   abv: 5,
+  recipe: {
+    notes: "Bounded fixture recipe <safe-note>",
+    ingredients: [{ name: "Pale <malt>", amount: 4.5, unit: "kg", note: "safe & measured" }],
+    steps: [{ name: "Mash & hold", temperatureC: 66, timeMinutes: 60, note: "step <note>" }],
+  },
+});
+beverages.updateSensoryOverrides(measuredBeverage.beverage.id, {
+  bitterness: 3,
+  sweetness: 2,
+  body: 3,
+  roast: 0,
+  tartness: 1,
+  alcohol: 2,
 });
 const measuredKeg = kegs.createKeg({
   kegNumber: 2,
@@ -93,6 +106,60 @@ const measuredFill = fills.createFill({
 const measuredTap = taps.listTaps().find((tap) => tap.tapNumber === 1)!;
 telemetry.setTapAuthority(measuredTap.id, { sourceId: source.id });
 taps.assignFill(measuredTap.id, { fillId: measuredFill.id });
+const mysteryBeverage = beverages.createCustomBeverage({
+  name: "MYSTERY_SECRET_DO_NOT_LEAK_77 name",
+  beverageType: "beer",
+  style: "MYSTERY_SECRET_DO_NOT_LEAK_77 style",
+  abv: 7.1,
+  displayColor: "#8B5CF6",
+  description: "MYSTERY_SECRET_DO_NOT_LEAK_77 description",
+  recipe: {
+    notes: "MYSTERY_SECRET_DO_NOT_LEAK_77 recipe notes",
+    ingredients: [
+      {
+        name: "MYSTERY_SECRET_DO_NOT_LEAK_77 ingredient",
+        amount: 1,
+        unit: "kg",
+        note: "MYSTERY_SECRET_DO_NOT_LEAK_77 ingredient note",
+      },
+    ],
+    steps: [
+      {
+        name: "MYSTERY_SECRET_DO_NOT_LEAK_77 step",
+        temperatureC: 66,
+        timeMinutes: 60,
+        note: "MYSTERY_SECRET_DO_NOT_LEAK_77 step note",
+      },
+    ],
+  },
+});
+const mysteryKeg = kegs.createKeg({
+  kegNumber: 3,
+  label: "Mystery fixture keg",
+  capacityMl: 19_000,
+  currentTareG: 4_200,
+});
+const mysteryFill = fills.createFill({
+  beverageId: mysteryBeverage.beverage.id,
+  kegId: mysteryKeg.id,
+  fillDate: "2026-08-15",
+});
+const mysteryTap = taps.listTaps().find((tap) => tap.tapNumber === 3)!;
+taps.assignFill(mysteryTap.id, { fillId: mysteryFill.id });
+taps.updateAssignmentMystery(mysteryTap.id, {
+  enabled: true,
+  revealBeverageType: false,
+  revealStyle: false,
+  revealAbv: false,
+  revealIbu: false,
+  revealOg: false,
+  revealFg: false,
+  revealSrm: false,
+  revealDescription: false,
+  revealRecipe: false,
+  revealSensory: false,
+  revealHistory: false,
+});
 const measurementStart = Date.now();
 for (let index = 0; index < 5; index += 1) {
   telemetry.ingestSingle(source, 1, {

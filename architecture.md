@@ -1,8 +1,8 @@
 # Tapboard architecture
 
-## Implemented Foundation through #76 SSR Admin/public dashboard
+## Implemented Foundation through #77 Brew Story, sensory guidance, and Mystery Tap
 
-Issue #66 establishes a Node 24 ESM modular monolith with explicit startup composition. Issues #67–#75 add the security, domain, telemetry, forecasting, and health boundaries described below. Issue #76 adds authoritative Eta SSR, purpose-built browser projections, a bounded in-process SSE delivery adapter, and typed shared-to-local display preferences. Node executes erasable `.ts` files directly, while TypeScript performs static checking with `tsc --noEmit`. There is no transpiler, backend or frontend bundler, SPA/client framework, HTTP framework, ORM, query builder, dependency-injection framework, or global service locator.
+Issue #66 establishes a Node 24 ESM modular monolith with explicit startup composition. Issues #67–#75 add the security, domain, telemetry, forecasting, and health boundaries described below. Issue #76 adds authoritative Eta SSR, purpose-built browser projections, a bounded in-process SSE delivery adapter, and typed shared-to-local display preferences. Issue #77 adds the read-only Brew Story projection, sensory guidance, Mystery Tap assignment controls, and finite Beverage-owned presentation. Node executes erasable `.ts` files directly, while TypeScript performs static checking with `tsc --noEmit`. There is no transpiler, backend or frontend bundler, SPA/client framework, HTTP framework, ORM, query builder, dependency-injection framework, or global service locator.
 
 The implemented source topology is intentionally concise:
 
@@ -14,7 +14,7 @@ The implemented source topology is intentionally concise:
 - `src/infrastructure/rendering/` owns the file-based Eta rendering boundary;
 - `src/main.ts` is the deliberate process bootstrap and signal-handling entry point;
 - `src/operator/` owns stdin-only reset-PIN and root-key rotation commands;
-- `src/features/auth/`, `activity/`, `events/`, `secrets/`, `machine-keys/`, `outbox/`, `kegs/`, `beverages/`, `fills/`, `taps/`, `telemetry/`, `forecasting/`, `health/`, `display/`, `dashboard/`, `live/`, and `web/` own typed feature primitives and feature repositories/routes;
+- `src/features/auth/`, `activity/`, `events/`, `secrets/`, `machine-keys/`, `outbox/`, `kegs/`, `beverages/`, `fills/`, `taps/`, `telemetry/`, `forecasting/`, `health/`, `display/`, `dashboard/`, `story/`, `live/`, and `web/` own typed feature primitives and feature repositories/routes;
 - `views/` contains Eta public/Admin layouts, page templates, and escaped partials; `public/` contains shared plain CSS and small page-specific browser ES modules;
 - `openapi/` contains the checked-in OpenAPI 3.1 telemetry ingestion contract;
 - `test/` covers the database, runtime, rendering, shared primitives, native TypeScript execution, and architecture boundaries.
@@ -25,7 +25,7 @@ Normal imports are side-effect free. The bootstrap in `src/main.ts` deliberately
 
 The application deterministically creates the database directory, opens and validates the database, creates the renderer, creates the HTTP server, and binds the configured address in that order. Startup and bind errors reject startup and close acquired resources. Shutdown stops HTTP acceptance and connections before closing SQLite, is idempotent, and enforces the configured bounded grace period. `SIGINT` and `SIGTERM` use that same shutdown path.
 
-Routes include `GET /healthz` (schema version 12), authoritative public SSR at `/`, narrow public dashboard refresh projections under `/api/public/dashboard`, public live events at `/api/public/events`, browser Admin pages under `/admin/*`, authenticated Admin events at `/api/admin/events`, existing Admin JSON APIs, and machine telemetry under `/api/v1/telemetry`. Existing JSON APIs retain API-style authorization failures; browser Admin pages redirect to the exact four-digit PIN login and ordinary mutations use strict bounded URL-encoded parsing, session-bound CSRF, exact Origin enforcement, and POST→303→GET.
+Routes include `GET /healthz` (schema version 13), authoritative public SSR at `/`, narrow public dashboard refresh projections under `/api/public/dashboard`, legacy public taps under `/api/public/taps`, read-only Brew Story SSR at `/taps/:tapId/story` and JSON under `/api/public/taps/:tapId/story`, public live events at `/api/public/events`, browser Admin pages under `/admin/*`, authenticated Admin events at `/api/admin/events`, existing Admin JSON APIs, and machine telemetry under `/api/v1/telemetry`. Existing JSON APIs retain API-style authorization failures; browser Admin pages redirect to the exact four-digit PIN login and ordinary mutations use strict bounded URL-encoded parsing, session-bound CSRF, exact Origin enforcement, and POST→303→GET.
 
 The configured external origin is an exact canonical HTTP(S) origin; trusted proxies are explicit comma-separated addresses and never provide an origin fallback. Session lifetimes default to 30 days inactivity and 365 days absolute, with bounded validation. PIN reset and root-key rotation are local non-TTY stdin commands only; no browser reset flow or default PIN exists.
 
@@ -45,7 +45,7 @@ Small external browser modules progressively enhance only the pages that need th
 
 `src/infrastructure/database/connection.ts` is the sole `better-sqlite3` import and connection-construction boundary. It enables and verifies `foreign_keys=ON`, initializes and validates the schema, runs integrity checks, exposes a synchronous `BEGIN IMMEDIATE` transaction primitive, and provides idempotent close behavior. Raw application SQL is restricted to database infrastructure/migrations and future feature repository ownership by the architecture gate.
 
-Schema version 9 adds detector state, version 10 adds forecast settings, and version 11 adds health and Tap maintenance. Schema version 12 (`ssr-dashboard-display-settings`) adds the constrained singleton `display_settings` row with deterministic defaults and revision-aware updates. It contains only shared defaults; browser overrides, SSE clients/queues, and rotation state remain ephemeral.
+Schema version 9 adds detector state, version 10 adds forecast settings/history indexes, and version 11 adds health and Tap maintenance. Schema version 12 (`ssr-dashboard-display-settings`) adds the constrained singleton `display_settings` row with deterministic defaults and revision-aware updates. Schema version 13 (`brew-story-sensory-mystery`) adds the active-assignment-owned `tap_assignment_mystery` row with typed reveal flags. Browser overrides, SSE clients/queues, rotation state, effective sensory values, and public Story projections remain ephemeral/derived.
 
 Foundation schema version 1 contained exactly one infrastructure table:
 
@@ -57,9 +57,9 @@ CREATE TABLE schema_migrations (
 )
 ```
 
-SQLite `user_version` is 12 and the migration machinery uses `schema_migrations` as its ordered history ledger. A clean database migrates transactionally through version 12; a canonical v11 database upgrades without changing existing state; and current databases reopen only when version, ledger, exact DDL, constraints, required singleton state, and exact schema object set match. Future versions, unknown schemas, missing or inconsistent ledgers, corrupted canonical DDL, and unexpected objects fail closed. Failed migrations roll back schema, ledger, and `user_version` together.
+SQLite `user_version` is 13 and the migration machinery uses `schema_migrations` as its ordered history ledger. A clean database migrates transactionally through version 13; a canonical v12 database upgrades without changing existing state; and current databases reopen only when version, ledger, exact DDL, constraints, required singleton state, and exact schema object set match. Future versions, unknown schemas, missing or inconsistent ledgers, corrupted canonical DDL, and unexpected objects fail closed. Failed migrations roll back schema, ledger, and `user_version` together.
 
-The exact-object validation is intentionally the supported schema-version-12 baseline, not a claim that future feature-owned tables are forbidden. Later migrations must deliberately extend the validator alongside their versioned schema changes.
+The exact-object validation is intentionally the supported schema-version-13 baseline, not a claim that future feature-owned tables are forbidden. Later migrations must deliberately extend the validator alongside their versioned schema changes.
 
 ## Telemetry ingestion boundary (#72)
 
@@ -111,6 +111,12 @@ Health is evaluated after accepted telemetry completes detector processing and a
 
 Shared display defaults are a typed, revisioned feature-owned row. No-op updates do not create Activity or revision churn. Sparse browser overrides use localStorage key `tapboard.v2.display-preferences.v1`, record version 1, exact known keys, and allowlisted enums. An external synchronous bootstrap runs before CSS and applies only validated `data-*` attributes; normal modules reconcile shared changes field-by-field and use the `storage` event for same-origin peer tabs. Storage exceptions and corrupt data fail to shared defaults.
 
+## Brew Story, sensory guidance, and Mystery Tap (#77)
+
+`src/features/story/` owns the read-only public Story contract and its pure profile, recipe, visibility, and vessel helpers. `PublicStoryService` is the central projection boundary used by the dashboard, legacy public taps, Story HTML/JSON, and targeted refreshes; it redacts before serialization/rendering and returns only bounded, JSON-safe DTOs. Mystery is persisted on the active Tap assignment in `tap_assignment_mystery`, defaults every eligible reveal to false, uses the exact title `Mystery Tap`, and never reveals Beverage or custom Tap names. The explicit reveal allowlist is `beverage_type`, `style`, `abv`, `ibu`, `og`, `fg`, `srm`, `description`, `recipe`, `sensory`, and `history`; physical Tap number, display color, Fill Glass, remaining/fill percentage, forecast/days/servings, and serving temperature are always-visible exemptions. Unassign, move, and reassign lifecycle transitions reset the new assignment's Mystery state.
+
+Sensory guidance contains only bitterness, sweetness, body, roast, tartness, and alcohol. Each axis independently resolves manual override, bounded recipe prediction, composable style baseline, or unavailable; effective values are derived and not persisted, and tasting/malt/hops source layers are excluded. Custom recipes are separately editable; linked, detached, and superseded source snapshots are read-only and retain provenance. Vessels use a finite Beverage-owned 17-ID catalog with safe deterministic descriptors and SRM/display-color fallback. Story and Admin HTML are SSR and no-JavaScript usable; browser modules progressively enhance targeted refreshes, preserve the root `.tap-graphic` SVG node, and consume only allowlisted graphic descriptors. Post-commit public events carry dirty Tap identifiers rather than Story state.
+
 ## Dependencies
 
 The only production dependencies are:
@@ -126,7 +132,7 @@ The canonical `npm run check` gate combines format, lint, type, architecture, re
 
 ## Not implemented
 
-The implemented slices intentionally do not implement provider delivery workers, Home Assistant/webhook adapters, Brew Story, sensory guidance, Mystery Tap, Tap Wars domain/voting, complete System/session/retention/operator administration, or production Docker hardening/deployment. The Tap Wars and System pages are honest navigation seams only. Public health remains an aggregate presentation rather than an evidence/detail API. Production deployment remains deferred to issue #81.
+The implemented slices intentionally do not implement provider delivery workers, Home Assistant/webhook adapters, Tap Wars domain/voting, complete System/session/retention/operator administration, or production Docker hardening/deployment. The Tap Wars and System pages are honest navigation seams only. Public health remains an aggregate presentation rather than an evidence/detail API. Production deployment remains deferred to issue #81. Issue #77 is implemented locally on its task branch; validation and PR review remain in progress, so merged/shipped status is not claimed here.
 
 ## Historical v1
 

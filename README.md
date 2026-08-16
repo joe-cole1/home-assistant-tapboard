@@ -1,8 +1,8 @@
 # Tapboard v2
 
-Tapboard v2 is an ESM modular monolith. Issues #66 and #67 establish the Node 24 Foundation and security/Activity/event/secret/machine-key/bounded-outbox primitives; #85 adds the development-only container workflow; #68–#75 add the domain, telemetry, forecasting, and health boundaries; and #76 adds the Eta-rendered Admin/public browser surface, bounded SSE, and display preferences. Production deployment remains deferred to #81.
+Tapboard v2 is an ESM modular monolith. Issues #66 and #67 establish the Node 24 Foundation and security/Activity/event/secret/machine-key/bounded-outbox primitives; #85 adds the development-only container workflow; #68–#75 add the domain, telemetry, forecasting, and health boundaries; #76 adds the Eta-rendered Admin/public browser surface, bounded SSE, and display preferences; and #77 adds Brew Story, sensory guidance, Mystery Tap, and Beverage-owned presentation. Production deployment remains deferred to #81.
 
-The current implementation includes Issues #66–#76 and the #85 development container. `/` is the authoritative server-rendered public dashboard; `/admin/*` provides the authenticated progressive Admin shell. Home Assistant/webhook delivery, Brew Story/Mystery Tap, Tap Wars domain behavior, complete System administration, and production deployment remain assigned to later issues.
+The current branch implements Issues #66–#77 and the #85 development container. Issue #77 is implemented locally and is in validation before its PR; it is not yet merged. `/` is the authoritative server-rendered public dashboard; `/admin/*` provides the authenticated progressive Admin shell. Home Assistant/webhook delivery, Tap Wars domain behavior, complete System administration, and production deployment remain assigned to later issues.
 
 The frozen v1 application remains available at commit `429cf07e451b64ca1713655a34ffa5ebd376efae` and through Git history. Reusable v1 evidence is indexed in [`docs/rebuild/v1-reuse-manifest.json`](docs/rebuild/v1-reuse-manifest.json); it is reference material, not an active dependency or import source for v2.
 
@@ -36,7 +36,7 @@ The defaults are:
 | `TAPBOARD_SESSION_ABSOLUTE_MS`   | `31536000000` (365 days)                                     |
 | `TAPBOARD_SECRET_KEY`            | unset; optional canonical 32-byte base64url key              |
 
-The runtime creates the database parent directory when needed. A ready process returns HTTP 200 from `GET /healthz` with `{"status":"ok","schemaVersion":12}`. This is local application/database readiness only; it does not check external integrations. Public connectivity is a deliberately aggregate dashboard projection; health administration remains authenticated.
+The runtime creates the database parent directory when needed. A ready process returns HTTP 200 from `GET /healthz` with `{"status":"ok","schemaVersion":13}`. This is local application/database readiness only; it does not check external integrations. Public connectivity is a deliberately aggregate dashboard projection; health administration remains authenticated.
 
 The Admin PIN contract is exactly four ASCII decimal digits (`[0-9]{4}`), including every value from `0000` through `9999`; input is never trimmed or Unicode-normalized. Scrypt, durable SQLite throttling, opaque sessions, CSRF, and strict Origin checks protect online/local access, but the 10,000-value space has limited offline resistance if the SQLite verifier is stolen. The PIN never derives or protects `TAPBOARD_SECRET_KEY`.
 
@@ -149,11 +149,21 @@ npm run test:e2e
 
 CI installs Chromium and runs `npm run test:e2e` in its own Node 24 job.
 
-Schema version 12 is the current supported schema. Migration 12, `ssr-dashboard-display-settings`, adds one typed singleton `display_settings` row with constrained Tapboard name, theme, font, accent, unit system, public-temperature flag, layout mode, and revision. Browser-local overrides and live/SSE state are never persisted in SQLite. `/healthz` reports `schemaVersion: 12` when the database is ready.
+Schema version 13 (`brew-story-sensory-mystery`) is the current supported schema. It adds assignment-owned `tap_assignment_mystery` typed reveal flags with a default-hidden allowlist and preserves assignment-reset semantics. Browser-local overrides, live/SSE state, and effective sensory projections are never persisted in SQLite. `/healthz` reports `schemaVersion: 13` when the database is ready.
 
 The event registry is an explicit allowlist with durable IDs and canonical UTC envelopes. Outbox admission uses hard global/per-destination row and UTF-8 byte bounds, bounded terminal pruning, restricted semantic coalescing, fixed overflow slots, and explicit `not_queued_capacity` degradation semantics. Delivery state is designed for at-least-once processing with leases and compare-and-set results; it does not claim exactly-once network delivery. Providers, workers, webhooks, Home Assistant delivery, and domain producers remain deferred.
 
 The public and Admin pages are Eta SSR with semantic HTML and ordinary forms. Small external ES modules progressively add targeted live refresh, rotation, and per-display preferences; there is no SPA, hydration framework, frontend router, bundler, or client-side application state snapshot.
+
+## Issue #77 Brew Story, sensory guidance, and Mystery Tap
+
+Brew Story is a read-only, server-rendered projection backed by local Tapboard state. The central public projection/redaction boundary serves the dashboard, legacy public taps, Story HTML/JSON, and targeted refreshes; public SSE carries dirty identifiers only. Mystery is owned by the active Tap assignment, uses the exact title `Mystery Tap`, hides Beverage and custom Tap names, and defaults every eligible field to hidden. Its typed reveal allowlist is `beverage_type`, `style`, `abv`, `ibu`, `og`, `fg`, `srm`, `description`, `recipe`, `sensory`, and `history`; Tap number, display color, Fill Glass, remaining/fill percentage, forecast/days/servings, and serving temperature remain visible exemptions.
+
+Sensory guidance exposes only bitterness, sweetness, body, roast, tartness, and alcohol on a bounded 0–5 scale. Each axis resolves independently as manual override, recipe prediction, style baseline, or unavailable; tasting data, malt/hops detail, and fabricated fallback values are not used. Custom recipes are separately editable, while linked, detached, and superseded source snapshots remain read-only and provenance-labelled. Beverage-owned presentation uses a finite 17-ID Fill Glass catalog and safe deterministic display color/SRM fallback; arbitrary artwork is not accepted.
+
+### MANUAL DEV TEST — Issue #77
+
+After the normal non-destructive rebuild (`docker compose -f compose.dev.yaml up -d --build --force-recreate`; never use `down --volumes`), verify `/healthz` reports schema version 13. Using disposable entities where mutation is needed, open a normal Brew Story with JavaScript disabled and inspect custom, linked, and detached recipe provenance; check each sensory axis and clear a manual override to expose the next precedence layer. Enable Mystery on an active assignment, confirm the exact `Mystery Tap` title, protected identity, selective reveals, always-visible exemptions, assignment reset after unassign/move, live redaction updates, and dirty-ID-only SSE. Change at least two finite Fill Glass choices and display-color/SRM inputs, confirming distinct safe graphics and stable SVG root identity. Do not delete or repurpose the persistent development volume.
 
 ## Issue #75 health and Tap maintenance
 

@@ -65,9 +65,9 @@ export interface PublicTapView {
   readonly tapNumber: number;
   readonly name: string | null;
   readonly activeFill: {
-    readonly fillId: string;
-    readonly beverageName: string;
-    readonly beverageType: string;
+    readonly fillId: string | null;
+    readonly beverageName: string | null;
+    readonly beverageType: string | null;
     readonly beverageStyle: string | null;
     readonly beverageAbv: number | null;
   } | null;
@@ -193,6 +193,44 @@ export interface TapActorOptions {
   readonly actorType?: ActivityActorType;
   readonly actorId?: string;
   readonly sessionId?: string;
+}
+
+export const MYSTERY_REVEAL_FIELDS = [
+  "revealBeverageType",
+  "revealStyle",
+  "revealAbv",
+  "revealIbu",
+  "revealOg",
+  "revealFg",
+  "revealSrm",
+  "revealDescription",
+  "revealRecipe",
+  "revealSensory",
+  "revealHistory",
+] as const;
+
+export type MysteryRevealField = (typeof MYSTERY_REVEAL_FIELDS)[number];
+
+export interface TapAssignmentMysteryConfig {
+  readonly enabled: boolean;
+  readonly revealBeverageType: boolean;
+  readonly revealStyle: boolean;
+  readonly revealAbv: boolean;
+  readonly revealIbu: boolean;
+  readonly revealOg: boolean;
+  readonly revealFg: boolean;
+  readonly revealSrm: boolean;
+  readonly revealDescription: boolean;
+  readonly revealRecipe: boolean;
+  readonly revealSensory: boolean;
+  readonly revealHistory: boolean;
+}
+
+export type UpdateTapAssignmentMysteryInput = TapAssignmentMysteryConfig;
+
+export interface UpdateTapAssignmentMysteryResult {
+  readonly config: TapAssignmentMysteryConfig;
+  readonly changed: boolean;
 }
 
 export type { FillAssignmentLifecyclePort };

@@ -48,6 +48,35 @@ main[data-dashboard] {
   -webkit-line-clamp: 3;
   line-clamp: 3;
 }
+.story-link {
+  display: inline-block;
+  margin-top: 0.45rem;
+  font-weight: 700;
+}
+.story-page {
+  max-width: 60rem;
+  margin-inline: auto;
+  padding: 1rem clamp(0.75rem, 3vw, 3rem) 3rem;
+}
+.story-page section,
+.story-header {
+  margin-block: 1.25rem;
+  padding: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.story-page dl {
+  display: grid;
+  grid-template-columns: minmax(9rem, 0.4fr) 1fr;
+  gap: 0.35rem 1rem;
+}
+.story-page dt {
+  font-weight: 700;
+}
+.story-page dd {
+  margin: 0;
+}
 .tap-visual {
   display: flex;
   flex-direction: column;

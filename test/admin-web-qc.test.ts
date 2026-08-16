@@ -337,7 +337,8 @@ void test("admin web pages and mutations keep projections safe and PRG-protected
   assert.doesNotMatch(beverageHtml, /<script>/);
   for (const secret of [rawSourceSecret, recipeSecret, sensorySecret, "secret-fill-glass"])
     assert.doesNotMatch(beverageHtml, new RegExp(secret));
-  assert.doesNotMatch(beverageHtml, /Fill Glass|Brew Story|sensory guidance/);
+  assert.match(beverageHtml, /Fill Glass/);
+  assert.match(beverageHtml, /Sensory guidance/);
 
   const kegHtml = await (await fetch(`${base}/admin/kegs`, { headers: getHeaders })).text();
   assert.match(kegHtml, /Fill history/);
@@ -384,6 +385,7 @@ void test("admin web pages and mutations keep projections safe and PRG-protected
       abv: { value: 6.4 },
       displayColor: { inherit: true },
       description: { value: "Local description" },
+      fillGlass: { value: "" },
     },
     actor: { actorType: "admin", sessionId: SESSION_ID },
   });

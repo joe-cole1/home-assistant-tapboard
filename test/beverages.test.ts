@@ -6,6 +6,8 @@ import { createSecretsService } from "../src/features/secrets/service.ts";
 import { createAuthService } from "../src/features/auth/service.ts";
 import { createBeverageService } from "../src/features/beverages/service.ts";
 import type { BeverageDensityExtensionPort } from "../src/features/beverages/types.ts";
+import { validateUpdateBeverageSensoryOverridesInput } from "../src/features/beverages/beverage-validation.ts";
+import { saveRecipeSnapshot } from "../src/features/beverages/repository.ts";
 import { resolveBeverageDensity } from "../src/features/beverages/density.ts";
 import { resolveLinkedPresentation } from "../src/features/beverages/presentation.ts";
 import {
@@ -297,6 +299,302 @@ void test("custom beverage lifecycle: create, recipe, sensory, update, delete", 
 
   // Verify not found after delete
   assert.throws(() => beverageService.getBeverage(created.beverage.id), /not found/i);
+});
+
+void test("sensory override validation is strict while legacy APIs retain 0..10 compatibility", () => {
+  assert.deepEqual(
+    validateUpdateBeverageSensoryOverridesInput({
+      bitterness: 0,
+      sweetness: null,
+      alcohol: 5,
+    }),
+    {
+      bitterness: 0,
+      sweetness: null,
+      alcohol: 5,
+    },
+  );
+  assert.throws(() => validateUpdateBeverageSensoryOverridesInput(null), /plain object/i);
+  assert.throws(() => validateUpdateBeverageSensoryOverridesInput([]), /plain object/i);
+  assert.throws(() => validateUpdateBeverageSensoryOverridesInput({}), /at least one axis/i);
+  assert.throws(
+    () => validateUpdateBeverageSensoryOverridesInput({ bitterness: 1, unknown: 2 }),
+    /Unknown field 'unknown'/i,
+  );
+  assert.throws(
+    () => validateUpdateBeverageSensoryOverridesInput({ bitterness: Number.NaN }),
+    /finite number/i,
+  );
+  assert.throws(
+    () => validateUpdateBeverageSensoryOverridesInput({ sweetness: Number.POSITIVE_INFINITY }),
+    /finite number/i,
+  );
+  assert.throws(
+    () => validateUpdateBeverageSensoryOverridesInput({ body: -0.1 }),
+    /between 0 and 5/i,
+  );
+  assert.throws(
+    () => validateUpdateBeverageSensoryOverridesInput({ roast: 5.1 }),
+    /between 0 and 5/i,
+  );
+  assert.throws(
+    () => validateUpdateBeverageSensoryOverridesInput({ tartness: undefined }),
+    /finite number/i,
+  );
+
+  const { database, beverageService } = createTestContext();
+  try {
+    const legacyCustom = beverageService.createCustomBeverage({
+      name: "Legacy ten-point custom",
+      sensoryOverrides: { bitterness: 10, sweetness: 9 },
+    });
+    assert.equal(legacyCustom.sensoryOverrides?.bitterness, 10);
+    const legacyCustomUpdate = beverageService.updateCustomBeverage(legacyCustom.beverage.id, {
+      sensoryOverrides: { body: 10 },
+    });
+    assert.equal(legacyCustomUpdate.sensoryOverrides?.body, 10);
+
+    beverageService.configureBrewfatherAccount({ userId: "legacy-ten-user" });
+
+    database
+      .prepare(
+        `INSERT INTO brewfather_candidate_cache
+         (id, account_id, source_batch_id, batch_name, status, raw_summary_json,
+          summary_fingerprint, synced_at)
+         VALUES (?, 'default', ?, ?, 'Completed', ?, ?, ?)`,
+      )
+      .run(
+        randomUUID(),
+        "legacy-ten-batch",
+        "Legacy ten-point Brewfather",
+        '{"beverageType":"beer"}',
+        "a".repeat(64),
+        "2026-08-15T00:00:00.000Z",
+      );
+    const legacyLinked = beverageService.linkBrewfatherCandidate({
+      sourceBatchId: "legacy-ten-batch",
+      sensoryOverrides: { alcohol: 10 },
+    });
+    assert.equal(legacyLinked.sensoryOverrides?.alcohol, 10);
+  } finally {
+    database.close();
+  }
+});
+
+void test("sensory overrides merge across ownership types and suppress exact no-ops", () => {
+  const densityEvents: unknown[] = [];
+  const { database, beverageService } = createTestContext({
+    onEffectiveDensityChanged: (_database, event) => densityEvents.push(event),
+  });
+  try {
+    const t1 = new Date("2026-08-15T10:00:00.000Z");
+    const t2 = new Date("2026-08-15T11:00:00.000Z");
+    const t3 = new Date("2026-08-15T12:00:00.000Z");
+    const t4 = new Date("2026-08-15T13:00:00.000Z");
+    const t5 = new Date("2026-08-15T14:00:00.000Z");
+    const custom = beverageService.createCustomBeverage(
+      { name: "Sensory merge custom" },
+      { now: () => t1 },
+    );
+
+    const beforeMissingRowNoOp = {
+      beverageUpdatedAt: beverageService.getBeverage(custom.beverage.id).beverage.updatedAt,
+      activityIds: readActivities(database).map((activity) => activity.id),
+      sensoryRow: database
+        .prepare("SELECT updated_at FROM beverage_sensory_overrides WHERE beverage_id = ?")
+        .get(custom.beverage.id),
+    };
+    const missingRowNoOp = beverageService.updateSensoryOverrides(
+      custom.beverage.id,
+      { bitterness: null },
+      { now: () => t2 },
+    );
+    assert.equal(missingRowNoOp.changed, false);
+    assert.deepEqual(
+      {
+        beverageUpdatedAt: beverageService.getBeverage(custom.beverage.id).beverage.updatedAt,
+        activityIds: readActivities(database).map((activity) => activity.id),
+        sensoryRow: database
+          .prepare("SELECT updated_at FROM beverage_sensory_overrides WHERE beverage_id = ?")
+          .get(custom.beverage.id),
+      },
+      beforeMissingRowNoOp,
+    );
+    assert.equal(densityEvents.length, 0);
+
+    const firstChange = beverageService.updateSensoryOverrides(
+      custom.beverage.id,
+      { bitterness: 2, sweetness: 3 },
+      { now: () => t3 },
+    );
+    assert.equal(firstChange.changed, true);
+    assert.deepEqual(
+      {
+        bitterness: firstChange.sensoryOverrides.bitterness,
+        sweetness: firstChange.sensoryOverrides.sweetness,
+        body: firstChange.sensoryOverrides.body,
+      },
+      { bitterness: 2, sweetness: 3, body: null },
+    );
+    const changeActivities = readActivities(database).filter(
+      (activity) =>
+        activity.entityId === custom.beverage.id &&
+        activity.details?.change === "sensory_overrides_updated",
+    );
+    assert.equal(changeActivities.length, 1);
+    assert.deepEqual(changeActivities[0]?.details, { change: "sensory_overrides_updated" });
+
+    const beforeNoOp = {
+      beverageUpdatedAt: beverageService.getBeverage(custom.beverage.id).beverage.updatedAt,
+      sensoryUpdatedAt: database
+        .prepare<[string], { readonly beverage_id: string; readonly updated_at: string }>(
+          "SELECT beverage_id, updated_at FROM beverage_sensory_overrides WHERE beverage_id = ?",
+        )
+        .get(custom.beverage.id),
+      activityIds: readActivities(database).map((activity) => activity.id),
+    };
+    const noOp = beverageService.updateSensoryOverrides(
+      custom.beverage.id,
+      { bitterness: 2 },
+      { now: () => t4 },
+    );
+    assert.equal(noOp.changed, false);
+    assert.deepEqual(
+      {
+        beverageUpdatedAt: beverageService.getBeverage(custom.beverage.id).beverage.updatedAt,
+        sensoryUpdatedAt: database
+          .prepare<[string], { readonly beverage_id: string; readonly updated_at: string }>(
+            "SELECT beverage_id, updated_at FROM beverage_sensory_overrides WHERE beverage_id = ?",
+          )
+          .get(custom.beverage.id),
+        activityIds: readActivities(database).map((activity) => activity.id),
+      },
+      beforeNoOp,
+    );
+    assert.equal(densityEvents.length, 0);
+
+    const cleared = beverageService.updateSensoryOverrides(
+      custom.beverage.id,
+      { sweetness: null, body: 4 },
+      { now: () => t5 },
+    );
+    assert.equal(cleared.changed, true);
+    assert.deepEqual(
+      {
+        bitterness: cleared.sensoryOverrides.bitterness,
+        sweetness: cleared.sensoryOverrides.sweetness,
+        body: cleared.sensoryOverrides.body,
+      },
+      { bitterness: 2, sweetness: null, body: 4 },
+    );
+
+    beverageService.configureBrewfatherAccount({ userId: "sensory-linked-user" });
+    database
+      .prepare(
+        `INSERT INTO brewfather_candidate_cache
+         (id, account_id, source_batch_id, batch_name, status, raw_summary_json,
+          summary_fingerprint, synced_at)
+         VALUES (?, 'default', ?, ?, 'Fermenting', ?, ?, ?)`,
+      )
+      .run(
+        randomUUID(),
+        "sensory-linked-batch",
+        "Sensory linked",
+        '{"beverageType":"beer"}',
+        "b".repeat(64),
+        "2026-08-15T00:00:00.000Z",
+      );
+    const linked = beverageService.linkBrewfatherCandidate({
+      sourceBatchId: "sensory-linked-batch",
+      sensoryOverrides: { roast: 1 },
+    });
+    const linkedChange = beverageService.updateSensoryOverrides(
+      linked.beverage.id,
+      { roast: 2, tartness: null },
+      { now: () => t5 },
+    );
+    assert.equal(linkedChange.changed, true);
+    assert.equal(linkedChange.sensoryOverrides.roast, 2);
+    assert.equal(linkedChange.sensoryOverrides.tartness, null);
+  } finally {
+    database.close();
+  }
+});
+
+void test("getRecipeSnapshots returns immutable source history after unlink and custom recipe creation", () => {
+  const { database, beverageService } = createTestContext();
+  try {
+    beverageService.configureBrewfatherAccount({ userId: "history-user" });
+    database
+      .prepare(
+        `INSERT INTO brewfather_candidate_cache
+         (id, account_id, source_batch_id, batch_name, status, raw_summary_json,
+          summary_fingerprint, synced_at)
+         VALUES (?, 'default', ?, ?, 'Completed', ?, ?, ?)`,
+      )
+      .run(
+        randomUUID(),
+        "history-batch",
+        "History batch",
+        '{"beverageType":"beer"}',
+        "c".repeat(64),
+        "2026-08-15T00:00:00.000Z",
+      );
+    const linked = beverageService.linkBrewfatherCandidate({ sourceBatchId: "history-batch" });
+    const snapshotInput = {
+      beverageId: linked.beverage.id,
+      accountId: "default",
+      sourceBatchId: "history-batch",
+      sourceRecipeId: "history-recipe-1",
+      state: "linked_current" as const,
+      recipeJson: '{"title":"Historical recipe one"}',
+      recipeFingerprint: "1".repeat(64),
+      createdAt: "2026-08-15T01:00:00.000Z",
+    };
+    saveRecipeSnapshot(database, snapshotInput, randomUUID);
+    saveRecipeSnapshot(
+      database,
+      {
+        ...snapshotInput,
+        sourceRecipeId: "history-recipe-2",
+        recipeJson: '{"title":"Historical recipe two"}',
+        recipeFingerprint: "2".repeat(64),
+        createdAt: "2026-08-15T02:00:00.000Z",
+      },
+      randomUUID,
+    );
+
+    beverageService.unlinkBeverage(linked.beverage.id);
+    assert.deepEqual(
+      beverageService.getRecipeSnapshots(linked.beverage.id).map((snapshot) => ({
+        version: snapshot.version,
+        state: snapshot.state,
+      })),
+      [
+        { version: 2, state: "detached" },
+        { version: 1, state: "superseded" },
+      ],
+    );
+    beverageService.updateCustomBeverage(linked.beverage.id, {
+      recipe: { notes: "Custom recipe created after unlink" },
+    });
+
+    const snapshots = beverageService.getRecipeSnapshots(linked.beverage.id);
+    assert.deepEqual(
+      snapshots.map((snapshot) => ({ version: snapshot.version, state: snapshot.state })),
+      [
+        { version: 2, state: "superseded" },
+        { version: 1, state: "superseded" },
+      ],
+    );
+    assert.deepEqual(
+      snapshots.map((snapshot) => snapshot.sourceRecipeId),
+      ["history-recipe-2", "history-recipe-1"],
+    );
+    assert.throws(() => beverageService.getRecipeSnapshots("missing-beverage"), /not found/i);
+  } finally {
+    database.close();
+  }
 });
 
 void test("updateCustomBeverage persists updated_at to beverages table and is visible in getBeverage", () => {

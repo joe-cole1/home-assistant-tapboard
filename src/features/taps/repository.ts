@@ -6,6 +6,7 @@ import type {
   PublicTapView,
   Tap,
   TapAssignmentLifecycle,
+  TapAssignmentMysteryConfig,
 } from "./types.ts";
 
 interface TapRow {
@@ -53,6 +54,113 @@ interface PublicTapJoinedRow {
 
 interface CountRow {
   readonly count: number;
+}
+
+interface MysteryRow {
+  readonly reveal_beverage_type: number;
+  readonly reveal_style: number;
+  readonly reveal_abv: number;
+  readonly reveal_ibu: number;
+  readonly reveal_og: number;
+  readonly reveal_fg: number;
+  readonly reveal_srm: number;
+  readonly reveal_description: number;
+  readonly reveal_recipe: number;
+  readonly reveal_sensory: number;
+  readonly reveal_history: number;
+}
+
+const DEFAULT_MYSTERY_CONFIG: TapAssignmentMysteryConfig = {
+  enabled: false,
+  revealBeverageType: false,
+  revealStyle: false,
+  revealAbv: false,
+  revealIbu: false,
+  revealOg: false,
+  revealFg: false,
+  revealSrm: false,
+  revealDescription: false,
+  revealRecipe: false,
+  revealSensory: false,
+  revealHistory: false,
+};
+
+export function findAssignmentMysteryConfig(
+  database: DatabaseExecutor,
+  assignmentId: string,
+): TapAssignmentMysteryConfig {
+  const row = database
+    .prepare<[string], MysteryRow>(
+      `SELECT reveal_beverage_type, reveal_style, reveal_abv, reveal_ibu, reveal_og, reveal_fg, reveal_srm, reveal_description, reveal_recipe, reveal_sensory, reveal_history FROM tap_assignment_mystery WHERE assignment_id = ?`,
+    )
+    .get(assignmentId);
+  if (!row) return DEFAULT_MYSTERY_CONFIG;
+  return {
+    enabled: true,
+    revealBeverageType: row.reveal_beverage_type === 1,
+    revealStyle: row.reveal_style === 1,
+    revealAbv: row.reveal_abv === 1,
+    revealIbu: row.reveal_ibu === 1,
+    revealOg: row.reveal_og === 1,
+    revealFg: row.reveal_fg === 1,
+    revealSrm: row.reveal_srm === 1,
+    revealDescription: row.reveal_description === 1,
+    revealRecipe: row.reveal_recipe === 1,
+    revealSensory: row.reveal_sensory === 1,
+    revealHistory: row.reveal_history === 1,
+  };
+}
+
+export function upsertAssignmentMysteryConfig(
+  database: DatabaseExecutor,
+  assignmentId: string,
+  config: TapAssignmentMysteryConfig,
+  updatedAt: string,
+): void {
+  database
+    .prepare<
+      [
+        string,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        string,
+      ]
+    >(
+      `INSERT INTO tap_assignment_mystery (assignment_id, reveal_beverage_type, reveal_style, reveal_abv, reveal_ibu, reveal_og, reveal_fg, reveal_srm, reveal_description, reveal_recipe, reveal_sensory, reveal_history, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(assignment_id) DO UPDATE SET reveal_beverage_type=excluded.reveal_beverage_type, reveal_style=excluded.reveal_style, reveal_abv=excluded.reveal_abv, reveal_ibu=excluded.reveal_ibu, reveal_og=excluded.reveal_og, reveal_fg=excluded.reveal_fg, reveal_srm=excluded.reveal_srm, reveal_description=excluded.reveal_description, reveal_recipe=excluded.reveal_recipe, reveal_sensory=excluded.reveal_sensory, reveal_history=excluded.reveal_history, updated_at=excluded.updated_at`,
+    )
+    .run(
+      assignmentId,
+      +config.revealBeverageType,
+      +config.revealStyle,
+      +config.revealAbv,
+      +config.revealIbu,
+      +config.revealOg,
+      +config.revealFg,
+      +config.revealSrm,
+      +config.revealDescription,
+      +config.revealRecipe,
+      +config.revealSensory,
+      +config.revealHistory,
+      updatedAt,
+    );
+}
+
+export function deleteAssignmentMysteryConfig(
+  database: DatabaseExecutor,
+  assignmentId: string,
+): void {
+  database
+    .prepare<[string]>(`DELETE FROM tap_assignment_mystery WHERE assignment_id = ?`)
+    .run(assignmentId);
 }
 
 function mapTapRow(row: TapRow): Tap {

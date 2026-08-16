@@ -34,6 +34,10 @@ void test("Brewfather link connectivity follows enabled account state and clears
         linked ? [{ beverage: { id: "beverage-1", ownershipType: "brewfather" } }] : [],
       getBeverage: () => ({ brewfatherLink: { syncState } }),
     },
+    publicStoryService: {
+      listCards: () => [],
+      getCard: () => undefined,
+    },
   } as never);
 
   assert.equal(service.getHeader().connectivity, "degraded");

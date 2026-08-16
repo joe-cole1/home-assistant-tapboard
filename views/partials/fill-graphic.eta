@@ -1,6 +1,25 @@
-<% const graphicPercent = typeof it.tap.fillPercent === "number" ? Math.max(0, Math.min(100, it.tap.fillPercent)) : 0; const graphicLabel = it.tap.tapName || it.tap.beverageName || ("Tap " + it.tap.tapNumber); %><svg class="tap-graphic" data-graphic-id="<%= it.tap.graphicId || "default" %>" viewBox="0 0 270 250" role="img" aria-label="<%= graphicLabel %> fill level">
-  <defs><clipPath id="fill-clip-<%= it.tap.id %>"><path d="M58 45h154l-18 180H76z" /></clipPath></defs>
-  <path class="glass" d="M58 45h154l-18 180H76z" />
-  <rect class="liquid" x="58" y="<%= 225 - (180 * graphicPercent / 100) %>" width="154" height="<%= 180 * graphicPercent / 100 %>" clip-path="url(#fill-clip-<%= it.tap.id %>)" fill="<%= it.tap.displayColor || "currentColor" %>" data-field="fill-graphic" data-fill-percent="<%= graphicPercent %>" />
-  <path class="rim" d="M58 45h154" />
+<%
+  const graphic = it.tap.graphic || { id: "pint_glass", token: "vessel/pint-glass", width: 1, height: 1.3, bowlWidth: 0.92, stemHeight: 0 };
+  const bodyWidth = 150 * graphic.width;
+  const bodyHeight = Math.max(105, Math.min(190, 150 / graphic.height));
+  const vesselOrder = ["corny_keg", "pint_glass", "tulip_glass", "wheat_glass", "mug", "stout_glass", "snifter", "nonic_pint", "shaker_pint", "pilsner_flute", "stange", "goblet", "teku", "thistle", "ipa_glass", "tasting_glass", "stemmed_lager"];
+  const bodyTop = 225 - bodyHeight + Math.max(0, vesselOrder.indexOf(graphic.id)) * 0.8;
+  const topWidth = bodyWidth * graphic.bowlWidth;
+  const left = 135 - bodyWidth / 2;
+  const right = 135 + bodyWidth / 2;
+  const topLeft = 135 - topWidth / 2;
+  const topRight = 135 + topWidth / 2;
+  const stem = Math.max(0, Math.min(55, graphic.stemHeight * 100));
+  const path = `M ${topLeft.toFixed(1)} ${bodyTop.toFixed(1)} C ${topLeft.toFixed(1)} ${(bodyTop - 10).toFixed(1)} ${topRight.toFixed(1)} ${(bodyTop - 10).toFixed(1)} ${topRight.toFixed(1)} ${bodyTop.toFixed(1)} L ${right.toFixed(1)} ${(225 - stem).toFixed(1)} Q 135 232 ${left.toFixed(1)} ${(225 - stem).toFixed(1)} Z`;
+  const clipId = `fill-clip-${String(it.tap.id)}`;
+  const percent = typeof it.tap.fillPercent === "number" ? Math.max(0, Math.min(100, it.tap.fillPercent)) : 0;
+  const graphicLabel = it.tap.accessibleLabel || it.tap.title || `Tap ${it.tap.tapNumber}`;
+  const color = typeof it.tap.displayColor === "string" && /^#[0-9A-Fa-f]{6}$/u.test(it.tap.displayColor) ? it.tap.displayColor : "currentColor";
+%>
+<svg class="tap-graphic" data-graphic-id="<%= graphic.id %>" data-graphic-token="<%= graphic.token %>" viewBox="0 0 270 250" role="img" aria-label="<%= graphicLabel %> fill level">
+  <title><%= graphicLabel %> fill level</title>
+  <defs><clipPath id="<%= clipId %>"><path d="<%= path %>" /></clipPath></defs>
+  <path class="glass" d="<%= path %>" />
+  <rect class="liquid" x="0" y="<%= 225 - 1.8 * percent %>" width="270" height="<%= 1.8 * percent %>" clip-path="url(#<%= clipId %>)" fill="<%= color %>" data-field="fill-graphic" data-fill-percent="<%= percent %>" />
+  <path class="rim" d="M <%= topLeft.toFixed(1) %> <%= bodyTop.toFixed(1) %> H <%= topRight.toFixed(1) %>" />
 </svg>

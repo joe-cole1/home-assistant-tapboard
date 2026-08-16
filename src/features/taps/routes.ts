@@ -5,12 +5,14 @@ import type { Router } from "../../infrastructure/http/router.ts";
 import { readJsonBody, readRequestBody } from "../../infrastructure/http/security/body.ts";
 import { parseSessionCookie } from "../../infrastructure/http/security/cookie.ts";
 import type { AuthService, AuthenticatedSession } from "../auth/service.ts";
+import type { PublicStoryService } from "../story/service.ts";
 import type { TapService } from "./service.ts";
 
 export interface TapRouteDependencies {
   readonly router: Router;
   readonly tapService: TapService;
   readonly authService: AuthService;
+  readonly storyService: PublicStoryService;
 }
 
 function requireSession(request: IncomingMessage, authService: AuthService): AuthenticatedSession {
@@ -83,11 +85,11 @@ async function readOptionalJsonBody(request: IncomingMessage): Promise<unknown> 
 }
 
 export function registerTapRoutes(dependencies: TapRouteDependencies): void {
-  const { router, tapService, authService } = dependencies;
+  const { router, tapService, authService, storyService } = dependencies;
 
   // GET /api/public/taps
   router.get("/api/public/taps", (_request: IncomingMessage, response: ServerResponse) => {
-    const taps = tapService.listPublicTaps();
+    const taps = storyService.listLegacyTaps();
     sendJson(response, 200, { taps });
   });
 

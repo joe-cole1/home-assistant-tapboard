@@ -38,39 +38,133 @@ function createUnitTextElement(field, className) {
   return element;
 }
 
+const VESSEL_IDS = new Set([
+  "corny_keg",
+  "pint_glass",
+  "tulip_glass",
+  "wheat_glass",
+  "mug",
+  "stout_glass",
+  "snifter",
+  "nonic_pint",
+  "shaker_pint",
+  "pilsner_flute",
+  "stange",
+  "goblet",
+  "teku",
+  "thistle",
+  "ipa_glass",
+  "tasting_glass",
+  "stemmed_lager",
+]);
+const DEFAULT_GRAPHIC = Object.freeze({
+  id: "pint_glass",
+  token: "vessel/pint-glass",
+  width: 1,
+  height: 1.3,
+  bowlWidth: 0.92,
+  stemHeight: 0,
+});
+
+function safeGraphic(tap) {
+  const candidate = tap.graphic && typeof tap.graphic === "object" ? tap.graphic : undefined;
+  const candidateId =
+    candidate && typeof candidate.id === "string" && VESSEL_IDS.has(candidate.id)
+      ? candidate.id
+      : undefined;
+  const expectedToken =
+    candidateId === undefined ? undefined : `vessel/${candidateId.replace(/_/gu, "-")}`;
+  if (candidateId !== undefined && candidate?.token !== expectedToken)
+    return { ...DEFAULT_GRAPHIC };
+  const id = candidateId ?? (VESSEL_IDS.has(tap.graphicId) ? tap.graphicId : DEFAULT_GRAPHIC.id);
+  const value = (name, fallback, minimum, maximum) => {
+    const raw = candidate?.[name];
+    return typeof raw === "number" && Number.isFinite(raw) && raw >= minimum && raw <= maximum
+      ? raw
+      : fallback;
+  };
+  const token = candidateId === undefined ? `vessel/${id.replace(/_/gu, "-")}` : expectedToken;
+  return {
+    id,
+    token,
+    width: value("width", DEFAULT_GRAPHIC.width, 0.45, 1.2),
+    height: value("height", DEFAULT_GRAPHIC.height, 0.7, 2),
+    bowlWidth: value("bowlWidth", DEFAULT_GRAPHIC.bowlWidth, 0.45, 1.2),
+    stemHeight: value("stemHeight", DEFAULT_GRAPHIC.stemHeight, 0, 0.6),
+  };
+}
+
+function pathForGraphic(graphic) {
+  const variant = [...VESSEL_IDS].indexOf(graphic.id);
+  const bodyWidth = 150 * graphic.width;
+  const bodyHeight = Math.max(105, Math.min(190, 150 / graphic.height));
+  const bodyTop = 225 - bodyHeight + variant * 0.8;
+  const topWidth = bodyWidth * graphic.bowlWidth;
+  const left = 135 - bodyWidth / 2;
+  const right = 135 + bodyWidth / 2;
+  const topLeft = 135 - topWidth / 2;
+  const topRight = 135 + topWidth / 2;
+  const stem = Math.max(0, Math.min(55, graphic.stemHeight * 100));
+  const path = `M ${topLeft.toFixed(1)} ${bodyTop.toFixed(1)} C ${topLeft.toFixed(1)} ${(bodyTop - 10).toFixed(1)} ${topRight.toFixed(1)} ${(bodyTop - 10).toFixed(1)} ${topRight.toFixed(1)} ${bodyTop.toFixed(1)} L ${right.toFixed(1)} ${(225 - stem).toFixed(1)} Q 135 232 ${left.toFixed(1)} ${(225 - stem).toFixed(1)} Z`;
+  const rim = `M ${topLeft.toFixed(1)} ${bodyTop.toFixed(1)} H ${topRight.toFixed(1)}`;
+  return { path, rim };
+}
+
+function safeColor(value) {
+  return typeof value === "string" && /^#[0-9A-Fa-f]{6}$/u.test(value) ? value : "currentColor";
+}
+
+function applyGraphic(svg, tap) {
+  const graphic = safeGraphic(tap);
+  const paths = pathForGraphic(graphic);
+  const clipId = `fill-clip-${String(tap.id)
+    .replace(/[^a-zA-Z0-9_-]/gu, "-")
+    .slice(0, 80)}`;
+  svg.dataset.graphicId = graphic.id;
+  svg.dataset.graphicToken = graphic.token;
+  const clip = svg.querySelector("clipPath");
+  const clipShape = clip?.querySelector("path");
+  if (clip) clip.id = clipId;
+  if (clipShape) clipShape.setAttribute("d", paths.path);
+  const glass = svg.querySelector(".glass");
+  if (glass) glass.setAttribute("d", paths.path);
+  const rim = svg.querySelector(".rim");
+  if (rim) rim.setAttribute("d", paths.rim);
+  const liquid = svg.querySelector(".liquid");
+  if (liquid) {
+    liquid.setAttribute("clip-path", `url(#${clipId})`);
+    liquid.setAttribute("fill", safeColor(tap.displayColor));
+  }
+}
+
 function createGraphic(tap) {
   const svg = document.createElementNS(SVG_NS, "svg");
   svg.classList.add("tap-graphic");
   svg.setAttribute("viewBox", "0 0 270 250");
   svg.setAttribute("role", "img");
-  svg.dataset.graphicId = String(tap.graphicId || "pint_glass");
 
   const title = document.createElementNS(SVG_NS, "title");
   svg.append(title);
   const definitions = document.createElementNS(SVG_NS, "defs");
   const clip = document.createElementNS(SVG_NS, "clipPath");
-  const clipId = `fill-clip-${tap.id}`;
-  clip.setAttribute("id", clipId);
+  clip.setAttribute("id", "fill-clip");
   const clipShape = document.createElementNS(SVG_NS, "path");
-  clipShape.setAttribute("d", "M58 45h154l-18 180H76z");
   clip.append(clipShape);
   definitions.append(clip);
   svg.append(definitions);
   const glass = document.createElementNS(SVG_NS, "path");
   glass.classList.add("glass");
-  glass.setAttribute("d", "M58 45h154l-18 180H76z");
   svg.append(glass);
   const liquid = document.createElementNS(SVG_NS, "rect");
   liquid.classList.add("liquid");
   liquid.dataset.field = "fill-graphic";
-  liquid.setAttribute("x", "58");
-  liquid.setAttribute("width", "154");
-  liquid.setAttribute("clip-path", `url(#${clipId})`);
+  liquid.setAttribute("x", "0");
+  liquid.setAttribute("width", "270");
   svg.append(liquid);
   const rim = document.createElementNS(SVG_NS, "path");
   rim.classList.add("rim");
-  rim.setAttribute("d", "M58 45h154");
   svg.append(rim);
+  applyGraphic(svg, tap);
   return svg;
 }
 
@@ -90,6 +184,15 @@ function createCard(tap) {
     createTextElement("p", "forecast", "status"),
     createUnitTextElement("temperature", "temperature"),
   );
+  if (typeof tap.storyPath === "string" && tap.storyPath.startsWith("/taps/")) {
+    const storyLink = document.createElement("a");
+    storyLink.className = "story-link";
+    storyLink.href = tap.storyPath;
+    storyLink.dataset.field = "story-link";
+    storyLink.textContent = "Story";
+    storyLink.setAttribute("aria-label", tap.accessibleLabel || `${tap.title || "Tap"} story`);
+    copy.append(storyLink);
+  }
   const visual = document.createElement("div");
   visual.className = "tap-visual";
   visual.append(createGraphic(tap), createUnitTextElement("volume", "volume"));
@@ -147,9 +250,10 @@ function patchTap(tap) {
   text(card.querySelector('[data-field="tap-number"]'), `Tap ${tap.tapNumber}`);
   text(
     card.querySelector('[data-field="tap-name"]'),
-    tap.tapName || tap.beverageName || `Tap ${tap.tapNumber}`,
+    tap.title || tap.tapName || tap.beverageName || `Tap ${tap.tapNumber}`,
   );
-  text(card.querySelector('[data-field="beverage-name"]'), tap.beverageName || "Unassigned");
+  const beverageName = tap.beverageName || (tap.title === "Mystery Tap" ? null : "Unassigned");
+  optionalText(card.querySelector('[data-field="beverage-name"]'), beverageName);
   optionalText(card.querySelector('[data-field="style"]'), tap.style);
   optionalText(
     card.querySelector('[data-field="abv"]'),
@@ -169,10 +273,10 @@ function patchTap(tap) {
   text(card.querySelector('[data-field="forecast"]'), forecast);
   const svg = card.querySelector(".tap-graphic");
   if (svg) {
-    svg.dataset.graphicId = String(tap.graphicId || "pint_glass");
+    applyGraphic(svg, tap);
     text(
       svg.querySelector("title"),
-      `${tap.tapName || tap.beverageName || `Tap ${tap.tapNumber}`} fill level`,
+      `${tap.accessibleLabel || tap.title || tap.tapName || tap.beverageName || `Tap ${tap.tapNumber}`} fill level`,
     );
   }
   const liquid = card.querySelector(".liquid");
@@ -180,7 +284,25 @@ function patchTap(tap) {
     liquid.dataset.fillPercent = String(percentage);
     liquid.setAttribute("y", String(225 - percentage * 1.8));
     liquid.setAttribute("height", String(percentage * 1.8));
-    liquid.setAttribute("fill", tap.displayColor || "currentColor");
+    liquid.setAttribute("fill", safeColor(tap.displayColor));
+  }
+  const storyLink = card.querySelector('[data-field="story-link"]');
+  if (storyLink) {
+    if (typeof tap.storyPath === "string" && tap.storyPath.startsWith("/taps/")) {
+      storyLink.hidden = false;
+      storyLink.setAttribute("href", tap.storyPath);
+      storyLink.setAttribute("aria-label", tap.accessibleLabel || `${tap.title || "Tap"} story`);
+    } else {
+      storyLink.remove();
+    }
+  } else if (typeof tap.storyPath === "string" && tap.storyPath.startsWith("/taps/")) {
+    const link = document.createElement("a");
+    link.className = "story-link";
+    link.dataset.field = "story-link";
+    link.href = tap.storyPath;
+    link.textContent = "Story";
+    link.setAttribute("aria-label", tap.accessibleLabel || `${tap.title || "Tap"} story`);
+    card.querySelector(".tap-copy")?.append(link);
   }
   patchUnits(card);
   grid.append(
@@ -347,6 +469,15 @@ const RECONNECT_RETRY_MS = 1500;
 let reconnectReconciling = false;
 let reconnectDirtyOverflow = false;
 let reconnectPromise;
+
+grid?.addEventListener("click", (event) => {
+  const target = event.target;
+  if (target === null || typeof target !== "object" || !("closest" in target)) return;
+  if (target.closest("a,button,input,select,textarea,summary")) return;
+  const card = target.closest("[data-tap-id]");
+  const storyLink = card?.querySelector('[data-field="story-link"]');
+  if (storyLink?.tagName === "A" && storyLink.getAttribute("href")) storyLink.click();
+});
 
 function queueDirty(target) {
   if (!reconnectReconciling) {

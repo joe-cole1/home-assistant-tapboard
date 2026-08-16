@@ -1,0 +1,33 @@
+<% layout("/layouts/public", { sharedDisplay: it.sharedDisplay, header: it.header }) %>
+<%~ include("/partials/public-header", { header: it.header }) %>
+<main id="main-content" class="story-page">
+  <% if (!it.story) { %>
+    <section aria-labelledby="story-not-found"><h1 id="story-not-found">Story unavailable</h1><p>This tap story is not available.</p><p><a href="/">Return to the dashboard</a></p></section>
+  <% } else { const story = it.story; const presentation = story.presentation; const current = story.currentFill; %>
+    <header class="story-header"><p class="tap-number">Tap <%= story.tapNumber %></p><h1><%= story.title %></h1><p><%= story.accessibleLabel %></p></header>
+    <section aria-labelledby="story-overview"><h2 id="story-overview">Overview</h2><dl>
+      <% if (presentation.beverageName) { %><dt>Name</dt><dd><%= presentation.beverageName %></dd><% } %>
+      <% if (presentation.beverageType) { %><dt>Type</dt><dd><%= presentation.beverageType %></dd><% } %>
+      <% if (presentation.style) { %><dt>Style</dt><dd><%= presentation.style %></dd><% } %>
+      <% if (presentation.abv !== null) { %><dt>ABV</dt><dd><%= presentation.abv %>%</dd><% } %>
+      <% if (presentation.ibu !== null) { %><dt>IBU</dt><dd><%= presentation.ibu %></dd><% } %>
+      <% if (presentation.og !== null) { %><dt>OG</dt><dd><%= presentation.og %></dd><% } %>
+      <% if (presentation.fg !== null) { %><dt>FG</dt><dd><%= presentation.fg %></dd><% } %>
+      <% if (presentation.srm !== null) { %><dt>SRM</dt><dd><%= presentation.srm %></dd><% } %>
+    </dl><% if (presentation.description) { %><p><%= presentation.description %></p><% } %></section>
+    <section aria-labelledby="story-fill"><h2 id="story-fill">Current Fill</h2><dl>
+      <% if (current.fillDate) { %><dt>Filled</dt><dd><%= current.fillDate %></dd><% } %>
+      <% if (current.assignedAt) { %><dt>Assigned</dt><dd><%= current.assignedAt %></dd><% } %>
+      <% if (current.fillPercent !== null) { %><dt>Remaining</dt><dd><%= current.fillPercent %>%</dd><% } %>
+      <% if (current.remainingVolumeMl !== null && current.capacityMl !== null) { %><dt>Volume</dt><dd><%= current.remainingVolumeMl %> mL / <%= current.capacityMl %> mL</dd><% } %>
+      <% if (current.servingsRemaining !== null) { %><dt>Servings</dt><dd><%= current.servingsRemaining %></dd><% } %>
+      <% if (current.daysRemaining !== null) { %><dt>Forecast</dt><dd><%= current.daysRemaining %> days</dd><% } %>
+      <% if (current.temperatureC !== null) { %><dt>Serving temperature</dt><dd><%= current.temperatureC %> °C</dd><% } %>
+      <dt>Fill Glass</dt><dd><%= story.vessel.graphicId %></dd>
+    </dl><% if (current.waitingForMeasurement) { %><p>Waiting for a current measurement.</p><% } %></section>
+    <% if (story.sensory) { %><section aria-labelledby="story-sensory"><h2 id="story-sensory">Sensory profile</h2><dl><% for (const axis of ["bitterness", "sweetness", "body", "roast", "tartness", "alcohol"]) { const result = story.sensory[axis]; %><dt><%= axis[0].toUpperCase() + axis.slice(1) %></dt><dd><% if (result.value === null) { %>Unavailable<% } else { %><%= result.value %> / 5<% } %> · <%= result.source.replace(/_/gu, " ") %><% if (result.confidence) { %> · <%= result.confidence %> confidence<% } %></dd><% } %></dl></section><% } %>
+    <% if (story.recipes) { %><section aria-labelledby="story-recipes"><h2 id="story-recipes">Recipe</h2><% if (story.recipes.custom) { const recipe = story.recipes.custom; %><h3>Custom recipe</h3><% if (recipe.notes) { %><p><%= recipe.notes %></p><% } %><ul><% for (const ingredient of recipe.ingredients) { %><li><%= ingredient.name %><% if (ingredient.amount !== null) { %> — <%= ingredient.amount %><% } %><% if (ingredient.unit) { %> <%= ingredient.unit %><% } %><% if (ingredient.note) { %> (<%= ingredient.note %>)<% } %></li><% } %></ul><ol><% for (const step of recipe.steps) { %><li><%= step.name || step.text %><% if (step.temperatureC !== null) { %> · <%= step.temperatureC %> °C<% } %><% if (step.timeMinutes !== null) { %> · <%= step.timeMinutes %> min<% } %><% if (step.note) { %> — <%= step.note %><% } %></li><% } %></ol><% } %><% for (const recipe of story.recipes.sources) { %><h3><%= recipe.provenance?.label || "Source recipe" %></h3><p><%= recipe.status %></p><% if (recipe.notes) { %><p><%= recipe.notes %></p><% } %><ul><% for (const ingredient of recipe.ingredients) { %><li><%= ingredient.name %><% if (ingredient.amount !== null) { %> — <%= ingredient.amount %><% } %><% if (ingredient.unit) { %> <%= ingredient.unit %><% } %></li><% } %></ul><% } %></section><% } %>
+    <% if (story.history) { %><section aria-labelledby="story-history"><h2 id="story-history">Fill history</h2><ol><% for (const item of story.history) { %><li><%= item.volumeMl %> mL · <%= item.startedAt %> to <%= item.completedAt %></li><% } %></ol></section><% } %>
+    <p><a href="/">Return to the dashboard</a></p>
+  <% } %>
+</main>

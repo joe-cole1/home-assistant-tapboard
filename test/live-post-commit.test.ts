@@ -56,6 +56,56 @@ void test("local live observers run only after successful synchronous and asynch
   assert.deepEqual(observed, ["committed:one", "committed:two"]);
 });
 
+void test("projection observers emit only changed, targeted post-commit events", () => {
+  const events: string[] = [];
+  const assigned = new Map([
+    ["beverage-1", ["tap-1", "tap-2"]],
+    ["beverage-2", ["tap-3"]],
+  ]);
+  const service = {
+    updateAssignmentMystery(tapId: string, changed: boolean): { changed: boolean } {
+      if (tapId === "fail") throw new Error("rollback");
+      return { changed };
+    },
+    updateSensoryOverrides(beverageId: string, changed: boolean): { changed: boolean } {
+      if (beverageId === "fail") throw new Error("rollback");
+      return { changed };
+    },
+  };
+  const wrapped = observeCommittedCalls(service, {
+    updateAssignmentMystery: (result, args) => {
+      if (
+        typeof result === "object" &&
+        result !== null &&
+        "changed" in result &&
+        result.changed === true &&
+        typeof args[0] === "string"
+      ) {
+        events.push(`tap.updated:${args[0]}`);
+      }
+    },
+    updateSensoryOverrides: (result, args) => {
+      if (
+        typeof result !== "object" ||
+        result === null ||
+        !("changed" in result) ||
+        result.changed !== true ||
+        typeof args[0] !== "string"
+      )
+        return;
+      for (const tapId of assigned.get(args[0]) ?? []) events.push(`fill.updated:${tapId}`);
+    },
+  });
+
+  wrapped.updateAssignmentMystery("tap-1", false);
+  wrapped.updateAssignmentMystery("tap-1", true);
+  wrapped.updateSensoryOverrides("beverage-1", false);
+  wrapped.updateSensoryOverrides("beverage-1", true);
+  assert.throws(() => wrapped.updateAssignmentMystery("fail", true));
+  assert.throws(() => wrapped.updateSensoryOverrides("fail", true));
+  assert.deepEqual(events, ["tap.updated:tap-1", "fill.updated:tap-1", "fill.updated:tap-2"]);
+});
+
 void test("public live events contain only the named dirty-target contract", () => {
   const writes: string[] = [];
   const response = {

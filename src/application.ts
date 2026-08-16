@@ -48,6 +48,7 @@ import {
 import { createForecastService, registerForecastRoutes } from "./features/forecasting/index.ts";
 import { createDisplaySettingsService } from "./features/display/index.ts";
 import { createDashboardService } from "./features/dashboard/index.ts";
+import { createPublicStoryService } from "./features/story/index.ts";
 import { LiveUpdateService, observeCommittedCalls } from "./features/live/index.ts";
 import { registerWebRoutes } from "./features/web/index.ts";
 import { createLogger, type Logger } from "./shared/logging.ts";
@@ -196,6 +197,7 @@ class FoundationApplication implements Application {
           healthService.onTapRetired(database, tapId, occurredAt);
         },
       };
+      const rawTapService = createTapService(this.#database, { extensionPort: tapExtensionPort });
       const rawKegService = createKegService(this.#database, {
         onKegCorrection: (database, event) => {
           rawDetectorService.onKegCorrection(database, event);
@@ -228,6 +230,18 @@ class FoundationApplication implements Application {
           publishAllTaps("fill.updated");
         },
         updateCustomBeverage: () => publishAllTaps("fill.updated"),
+        updateSensoryOverrides: (result, args) => {
+          const changed =
+            typeof result === "object" &&
+            result !== null &&
+            "changed" in result &&
+            result.changed === true;
+          if (!changed || typeof args[0] !== "string") return;
+          for (const tap of rawTapService.listTaps()) {
+            if (tap.activeAssignment?.beverageId !== args[0]) continue;
+            liveUpdates.publish({ name: "fill.updated", tapId: tap.id });
+          }
+        },
         updatePresentationOverrides: () => publishAllTaps("fill.updated"),
         unlinkBeverage: () => {
           liveUpdates.publish({ name: "integration_status.updated", target: "header" });
@@ -244,10 +258,19 @@ class FoundationApplication implements Application {
           liveUpdates.publish({ name: "integration_status.updated", target: "header" });
         },
       });
-      const rawTapService = createTapService(this.#database, { extensionPort: tapExtensionPort });
       const tapService = observeCommittedCalls(rawTapService, {
         createTap: () => publishAllTaps("tap.updated"),
         updateTap: () => publishAllTaps("tap.updated"),
+        updateAssignmentMystery: (result, args) => {
+          const changed =
+            typeof result === "object" &&
+            result !== null &&
+            "changed" in result &&
+            result.changed === true;
+          if (changed && typeof args[0] === "string") {
+            liveUpdates.publish({ name: "tap.updated", tapId: args[0] });
+          }
+        },
         assignFill: () => {
           publishAllTaps("tap.updated");
           liveUpdates.publish({ name: "ondeck.updated", target: "ondeck" });
@@ -348,6 +371,14 @@ class FoundationApplication implements Application {
       const displayService = observeCommittedCalls(rawDisplayService, {
         updateSettings: () => liveUpdates.publish({ name: "display.updated", target: "display" }),
       });
+      const storyService = createPublicStoryService({
+        tapService,
+        beverageService,
+        fillService,
+        detectorService,
+        forecastService,
+        healthService,
+      });
       const dashboardService = createDashboardService({
         displayService,
         tapService,
@@ -357,6 +388,7 @@ class FoundationApplication implements Application {
         forecastService,
         healthService,
         telemetryService,
+        storyService,
       });
 
       const router = new Router(this.#logger);
@@ -374,7 +406,7 @@ class FoundationApplication implements Application {
       registerKegRoutes({ router, kegService, authService });
       registerBeverageRoutes({ router, beverageService, authService });
       registerFillRoutes({ router, fillService, authService });
-      registerTapRoutes({ router, tapService, authService });
+      registerTapRoutes({ router, tapService, authService, storyService });
       registerHealthRoutes({ router, healthService, authService });
       registerTelemetryRoutes({ router, telemetryService, detectorService, authService });
       registerForecastRoutes({ router, forecastService, authService });
@@ -386,6 +418,7 @@ class FoundationApplication implements Application {
           : { canonicalOrigin: this.#config.canonicalExternalOrigin }),
         authService,
         dashboardService,
+        storyService,
         displayService,
         beverageService,
         kegService,

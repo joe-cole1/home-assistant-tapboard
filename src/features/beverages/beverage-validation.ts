@@ -2,6 +2,8 @@ import { ApplicationError, type SafeErrorDetails } from "../../shared/errors.ts"
 import { STATUS_SET } from "./brewfather/sanitizer.ts";
 import {
   BEVERAGE_TYPES,
+  BEVERAGE_SENSORY_AXES,
+  type BeverageSensoryAxis,
   type BeverageType,
   type BrewfatherCompletionPolicy,
   type ConfigureBrewfatherAccountInput,
@@ -9,6 +11,7 @@ import {
   type LinkBrewfatherCandidateInput,
   type UpdateBeverageSettingsInput,
   type UpdateCustomBeverageInput,
+  type UpdateBeverageSensoryOverridesInput,
   type UpdatePresentationOverridesInput,
 } from "./types.ts";
 
@@ -28,6 +31,17 @@ function assertPlainObject(
   message: string,
 ): asserts value is Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    invalidRequest(message);
+  }
+}
+
+function assertStrictPlainObject(
+  value: unknown,
+  message: string,
+): asserts value is Record<string, unknown> {
+  assertPlainObject(value, message);
+  const prototype = Reflect.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) {
     invalidRequest(message);
   }
 }
@@ -402,6 +416,35 @@ export function validateUpdateCustomBeverageInput(input: unknown): UpdateCustomB
         alcohol: cleanOptionalNumber(input.sensoryOverrides.alcohol, 0, 10, "alcohol"),
       };
     }
+  }
+
+  return result;
+}
+
+export function validateUpdateBeverageSensoryOverridesInput(
+  input: unknown,
+): UpdateBeverageSensoryOverridesInput {
+  assertStrictPlainObject(input, "Sensory overrides input must be a plain object.");
+  assertKnownFields(input, BEVERAGE_SENSORY_AXES, "sensory overrides");
+
+  const presentAxes = BEVERAGE_SENSORY_AXES.filter((axis) =>
+    Object.prototype.hasOwnProperty.call(input, axis),
+  );
+  if (presentAxes.length === 0) {
+    invalidRequest("Sensory overrides input must include at least one axis.");
+  }
+
+  const result: Partial<Record<BeverageSensoryAxis, number | null>> = {};
+  for (const axis of presentAxes) {
+    const value = input[axis];
+    if (value === null) {
+      result[axis] = null;
+      continue;
+    }
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 5) {
+      invalidRequest(`${axis} must be a finite number between 0 and 5 or null.`);
+    }
+    result[axis] = value;
   }
 
   return result;

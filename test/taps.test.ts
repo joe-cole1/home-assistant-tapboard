@@ -6,6 +6,7 @@ import { createSecretsService } from "../src/features/secrets/service.ts";
 import { createKegService } from "../src/features/kegs/service.ts";
 import { createBeverageService } from "../src/features/beverages/service.ts";
 import { createFillService } from "../src/features/fills/service.ts";
+import { PublicStoryService } from "../src/features/story/service.ts";
 import {
   createTapService,
   registerTapRoutes,
@@ -57,6 +58,14 @@ function setupTestEnvironment(extensionPort?: TapAssignmentExtensionPort) {
     beverageService,
     assignmentPort: tapService.asFillAssignmentPort(),
   });
+  const storyService = new PublicStoryService({
+    tapService,
+    beverageService,
+    fillService,
+    detectorService: {} as never,
+    forecastService: {} as never,
+    healthService: {} as never,
+  });
 
   return {
     database,
@@ -66,6 +75,7 @@ function setupTestEnvironment(extensionPort?: TapAssignmentExtensionPort) {
     beverageService,
     tapService,
     fillService,
+    storyService,
   };
 }
 
@@ -347,6 +357,90 @@ void test("tap assignment lifecycles: assign, clear on deck, first_used_at monot
   assert.equal(extensionPort.closedEvents[1]?.reason, "unassigned");
 });
 
+void test("assignment mystery is active-lifecycle scoped, canonical, and auditable", () => {
+  const { database, kegService, beverageService, fillService, tapService } = setupTestEnvironment();
+  const keg = kegService.createKeg({ kegNumber: 90, capacityMl: 19000 });
+  const secondKeg = kegService.createKeg({ kegNumber: 91, capacityMl: 19000 });
+  const beverage = beverageService.createCustomBeverage({ name: "Hidden", beverageType: "beer" });
+  const fill = fillService.createFill({ beverageId: beverage.beverage.id, kegId: keg.id });
+  const secondFill = fillService.createFill({
+    beverageId: beverage.beverage.id,
+    kegId: secondKeg.id,
+  });
+  const tap = tapService.createTap({ tapNumber: 90 });
+
+  assert.deepEqual(tapService.getAssignmentMystery(tap.id), {
+    enabled: false,
+    revealBeverageType: false,
+    revealStyle: false,
+    revealAbv: false,
+    revealIbu: false,
+    revealOg: false,
+    revealFg: false,
+    revealSrm: false,
+    revealDescription: false,
+    revealRecipe: false,
+    revealSensory: false,
+    revealHistory: false,
+  });
+  assert.throws(
+    () => tapService.updateAssignmentMystery(tap.id, { enabled: true }),
+    ApplicationError,
+  );
+  const firstAssignment = tapService.assignFill(tap.id, { fillId: fill.id }).assignment;
+  const enabled = tapService.updateAssignmentMystery(tap.id, {
+    enabled: true,
+    revealBeverageType: true,
+    revealStyle: false,
+    revealAbv: false,
+    revealIbu: false,
+    revealOg: false,
+    revealFg: false,
+    revealSrm: false,
+    revealDescription: false,
+    revealRecipe: false,
+    revealSensory: false,
+    revealHistory: false,
+  });
+  assert.equal(enabled.changed, true);
+  assert.equal(tapService.updateAssignmentMystery(tap.id, enabled.config).changed, false);
+  assert.equal(tapService.getAssignmentMystery(tap.id).revealBeverageType, true);
+  tapService.unassign(tap.id);
+  assert.equal(tapService.getAssignmentMystery(tap.id).enabled, false);
+  const secondAssignment = tapService.assignFill(tap.id, { fillId: secondFill.id }).assignment;
+  assert.notEqual(secondAssignment.id, firstAssignment.id);
+  assert.deepEqual(tapService.getAssignmentMystery(tap.id), {
+    enabled: false,
+    revealBeverageType: false,
+    revealStyle: false,
+    revealAbv: false,
+    revealIbu: false,
+    revealOg: false,
+    revealFg: false,
+    revealSrm: false,
+    revealDescription: false,
+    revealRecipe: false,
+    revealSensory: false,
+    revealHistory: false,
+  });
+  assert.equal(
+    database
+      .prepare<[string], { readonly assignment_id: string; readonly reveal_beverage_type: number }>(
+        "SELECT assignment_id, reveal_beverage_type FROM tap_assignment_mystery WHERE assignment_id = ?",
+      )
+      .get(firstAssignment.id)?.assignment_id,
+    firstAssignment.id,
+  );
+  assert.equal(
+    database
+      .prepare<[string], { readonly count: number }>(
+        "SELECT count(*) AS count FROM tap_assignment_mystery WHERE assignment_id = ?",
+      )
+      .get(secondAssignment.id)?.count,
+    0,
+  );
+});
+
 void test("move rollback safety: if target tap fails or hook fails, source assignment remains open", () => {
   const extensionPort = new MockExtensionPort();
   const { kegService, beverageService, fillService, tapService } =
@@ -553,8 +647,15 @@ void test("real FillAssignmentLifecyclePort integrates with FillService on kick 
 });
 
 void test("HTTP API: full Tap and assignment lifecycle smoke test with auth, CSRF, and unknown field rejection", async (context) => {
-  const { database, authService, kegService, beverageService, fillService, tapService } =
-    setupTestEnvironment();
+  const {
+    database,
+    authService,
+    kegService,
+    beverageService,
+    fillService,
+    tapService,
+    storyService,
+  } = setupTestEnvironment();
   await authService.setPin("1234");
   const loginResult = await authService.authenticate("1234");
   assert.ok(loginResult.authenticated);
@@ -562,7 +663,7 @@ void test("HTTP API: full Tap and assignment lifecycle smoke test with auth, CSR
   const csrfToken = loginResult.csrfToken!;
 
   const router = new Router(quietLogger);
-  registerTapRoutes({ router, tapService, authService });
+  registerTapRoutes({ router, tapService, authService, storyService });
 
   const server = new HttpServer({
     router,
@@ -777,8 +878,15 @@ void test("HTTP API: full Tap and assignment lifecycle smoke test with auth, CSR
 });
 
 void test("linked beverage tap projections honor 3-state presentation overrides (beverageType override, explicit clear for style and abv)", async () => {
-  const { database, beverageService, tapService, fillService, kegService, authService } =
-    setupTestEnvironment();
+  const {
+    database,
+    beverageService,
+    tapService,
+    fillService,
+    kegService,
+    authService,
+    storyService,
+  } = setupTestEnvironment();
 
   // 0. Set up Brewfather account
   beverageService.configureBrewfatherAccount({
@@ -873,7 +981,7 @@ void test("linked beverage tap projections honor 3-state presentation overrides 
 
   // 7. Assert HTTP API endpoints match canonical effective presentation
   const router = new Router(quietLogger);
-  registerTapRoutes({ router, tapService, authService });
+  registerTapRoutes({ router, tapService, authService, storyService });
   const server = new HttpServer({
     router,
     logger: quietLogger,

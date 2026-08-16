@@ -17,6 +17,8 @@ import {
   countActiveAssignmentsByTapId,
   countHistoricalAssignmentsByTapId,
   deleteTapById,
+  deleteAssignmentMysteryConfig,
+  findAssignmentMysteryConfig,
   findActiveAssignmentByFillId,
   findActiveAssignmentByTapId,
   findAdminTapViewById,
@@ -28,6 +30,7 @@ import {
   listPublicTapViews,
   registerTapFirstUse,
   updateTap,
+  upsertAssignmentMysteryConfig,
 } from "./repository.ts";
 import {
   validateAssignTapInput,
@@ -38,6 +41,7 @@ import {
   validateRetireTapInput,
   validateTapId,
   validateUpdateTapInput,
+  validateUpdateTapAssignmentMysteryInput,
 } from "./tap-validation.ts";
 import type {
   AdminTapView,
@@ -55,6 +59,8 @@ import type {
   TapRetiredContext,
   TapDeletionImpact,
   UnassignOperationResult,
+  TapAssignmentMysteryConfig,
+  UpdateTapAssignmentMysteryResult,
 } from "./types.ts";
 
 export class DefaultTapAssignmentExtensionPort implements TapAssignmentExtensionPort {
@@ -76,6 +82,26 @@ function timestamp(nowFactory: () => Date): string {
     throw new TypeError("Invalid clock in tap service");
   }
   return value.toISOString();
+}
+
+function sameMysteryConfig(
+  left: TapAssignmentMysteryConfig,
+  right: TapAssignmentMysteryConfig,
+): boolean {
+  return (
+    left.enabled === right.enabled &&
+    left.revealBeverageType === right.revealBeverageType &&
+    left.revealStyle === right.revealStyle &&
+    left.revealAbv === right.revealAbv &&
+    left.revealIbu === right.revealIbu &&
+    left.revealOg === right.revealOg &&
+    left.revealFg === right.revealFg &&
+    left.revealSrm === right.revealSrm &&
+    left.revealDescription === right.revealDescription &&
+    left.revealRecipe === right.revealRecipe &&
+    left.revealSensory === right.revealSensory &&
+    left.revealHistory === right.revealHistory
+  );
 }
 
 export class TapService {
@@ -294,6 +320,82 @@ export class TapService {
 
   listPublicTaps(): readonly PublicTapView[] {
     return listPublicTapViews(this.#database);
+  }
+
+  getAssignmentMystery(tapId: unknown): TapAssignmentMysteryConfig {
+    const validatedTapId = validateTapId(tapId);
+    const assignment = findActiveAssignmentByTapId(this.#database, validatedTapId);
+    if (!assignment)
+      return {
+        enabled: false,
+        revealBeverageType: false,
+        revealStyle: false,
+        revealAbv: false,
+        revealIbu: false,
+        revealOg: false,
+        revealFg: false,
+        revealSrm: false,
+        revealDescription: false,
+        revealRecipe: false,
+        revealSensory: false,
+        revealHistory: false,
+      };
+    return findAssignmentMysteryConfig(this.#database, assignment.id);
+  }
+
+  updateAssignmentMystery(
+    tapId: unknown,
+    input: unknown,
+    options: TapActorOptions = {},
+  ): UpdateTapAssignmentMysteryResult {
+    const validatedTapId = validateTapId(tapId);
+    const requested = validateUpdateTapAssignmentMysteryInput(input);
+    const nowIso = timestamp(this.#now);
+    const actorType = options.actorType ?? "operator";
+    return this.#database.withTransaction(() => {
+      const assignment = findActiveAssignmentByTapId(this.#database, validatedTapId);
+      if (!assignment)
+        throw new ApplicationError({
+          category: "conflict",
+          code: "tap.not_assigned",
+          clientMessage: "Tap is not currently assigned to any fill.",
+          details: { tapId: validatedTapId },
+        });
+      const current = findAssignmentMysteryConfig(this.#database, assignment.id);
+      const desired = requested.enabled
+        ? requested
+        : {
+            enabled: false,
+            revealBeverageType: false,
+            revealStyle: false,
+            revealAbv: false,
+            revealIbu: false,
+            revealOg: false,
+            revealFg: false,
+            revealSrm: false,
+            revealDescription: false,
+            revealRecipe: false,
+            revealSensory: false,
+            revealHistory: false,
+          };
+      if (sameMysteryConfig(current, desired)) return { config: current, changed: false };
+      if (desired.enabled)
+        upsertAssignmentMysteryConfig(this.#database, assignment.id, desired, nowIso);
+      else deleteAssignmentMysteryConfig(this.#database, assignment.id);
+      const config = desired;
+      appendActivity(this.#database, {
+        category: "domain",
+        action: "entity_changed",
+        actorType,
+        ...(options.actorId !== undefined ? { actorId: options.actorId } : {}),
+        ...(options.sessionId !== undefined ? { sessionId: options.sessionId } : {}),
+        entityType: "tap",
+        entityId: validatedTapId,
+        details: { change: "mystery_updated", enabled: config.enabled },
+        occurredAt: nowIso,
+      });
+      return { config, changed: true };
+    });
   }
 
   assignFill(

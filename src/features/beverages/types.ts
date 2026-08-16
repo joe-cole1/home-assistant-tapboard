@@ -20,6 +20,17 @@ export const BEVERAGE_TYPES = [
 
 export type BeverageType = (typeof BEVERAGE_TYPES)[number];
 
+export const BEVERAGE_SENSORY_AXES = [
+  "bitterness",
+  "sweetness",
+  "body",
+  "roast",
+  "tartness",
+  "alcohol",
+] as const;
+
+export type BeverageSensoryAxis = (typeof BEVERAGE_SENSORY_AXES)[number];
+
 export type BrewfatherCompletionPolicy = "never" | "ask" | "completed";
 export type BrewfatherSyncState = "synced" | "stale" | "error" | "pending";
 export type RecipeSnapshotState = "linked_current" | "detached" | "superseded";
@@ -94,6 +105,20 @@ export interface BeverageSensoryOverrides {
   readonly tartness: number | null;
   readonly alcohol: number | null;
   readonly updatedAt: string;
+}
+
+export interface UpdateBeverageSensoryOverridesInput {
+  readonly bitterness?: number | null;
+  readonly sweetness?: number | null;
+  readonly body?: number | null;
+  readonly roast?: number | null;
+  readonly tartness?: number | null;
+  readonly alcohol?: number | null;
+}
+
+export interface UpdateBeverageSensoryOverridesResult {
+  readonly sensoryOverrides: BeverageSensoryOverrides;
+  readonly changed: boolean;
 }
 
 export interface BrewfatherAccount {
