@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en" data-theme="<%= it.sharedDisplay.theme %>" data-font="<%= it.sharedDisplay.font %>" data-accent="<%= it.sharedDisplay.accent %>" data-unit-system="<%= it.sharedDisplay.unitSystem %>" data-show-serving-temperature="<%= it.sharedDisplay.showServingTemperature %>" data-layout-mode="<%= it.sharedDisplay.layoutMode %>" data-shared-theme="<%= it.sharedDisplay.theme %>" data-shared-font="<%= it.sharedDisplay.font %>" data-shared-accent="<%= it.sharedDisplay.accent %>" data-shared-unit-system="<%= it.sharedDisplay.unitSystem %>" data-shared-show-serving-temperature="<%= it.sharedDisplay.showServingTemperature %>" data-shared-layout-mode="<%= it.sharedDisplay.layoutMode %>" data-display-revision="<%= it.sharedDisplay.revision %>">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title><%= it.header.tapboardName %></title>
+    <script src="/assets/js/preference-bootstrap.js"></script>
+    <link rel="stylesheet" href="/assets/css/tokens.css" />
+    <link rel="stylesheet" href="/assets/css/components.css" />
+    <link rel="stylesheet" href="/assets/css/dashboard.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to dashboard</a>
+    <%~ it.body %>
+  </body>
+</html>

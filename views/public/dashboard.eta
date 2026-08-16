@@ -1,0 +1,4 @@
+<% layout("/layouts/public", { sharedDisplay: it.sharedDisplay, header: it.header }) %>
+<%~ include("/partials/public-header", { header: it.header }) %>
+<main id="main-content" data-dashboard data-sse-path="<%= it.ssePath %>"><section aria-label="Current taps"><div class="tap-grid" data-tap-grid><% for (const tap of it.taps) { %><%~ include("/partials/tap-card", { tap, sharedDisplay: it.sharedDisplay }) %><% } %></div><div class="tap-wars-slot" hidden data-tap-wars></div></section><%~ include("/partials/on-deck", { onDeck: it.onDeck }) %></main>
+<script type="module" src="/assets/js/dashboard.js"></script>

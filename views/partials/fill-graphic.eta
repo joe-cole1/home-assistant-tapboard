@@ -1,0 +1,6 @@
+<% const graphicPercent = typeof it.tap.fillPercent === "number" ? Math.max(0, Math.min(100, it.tap.fillPercent)) : 0; const graphicLabel = it.tap.tapName || it.tap.beverageName || ("Tap " + it.tap.tapNumber); %><svg class="tap-graphic" data-graphic-id="<%= it.tap.graphicId || "default" %>" viewBox="0 0 270 250" role="img" aria-label="<%= graphicLabel %> fill level">
+  <defs><clipPath id="fill-clip-<%= it.tap.id %>"><path d="M58 45h154l-18 180H76z" /></clipPath></defs>
+  <path class="glass" d="M58 45h154l-18 180H76z" />
+  <rect class="liquid" x="58" y="<%= 225 - (180 * graphicPercent / 100) %>" width="154" height="<%= 180 * graphicPercent / 100 %>" clip-path="url(#fill-clip-<%= it.tap.id %>)" fill="<%= it.tap.displayColor || "currentColor" %>" data-field="fill-graphic" data-fill-percent="<%= graphicPercent %>" />
+  <path class="rim" d="M58 45h154" />
+</svg>

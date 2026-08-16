@@ -5,16 +5,19 @@ import { PassThrough } from "node:stream";
 import test from "node:test";
 
 import {
+  ADMIN_CSRF_COOKIE,
   ADMIN_SESSION_COOKIE,
   authorizeCookieMutation,
   containedStaticPath,
   decodeContainedPath,
   parseCanonicalOrigin,
   parseCookieHeader,
+  parseCsrfCookie,
   parseSessionCookie,
   readJsonBody,
   resolveContainedPath,
   securityResponseHeaders,
+  serializeCsrfCookie,
   serializeSessionCookie,
   validateMutationOrigin,
   csrfDigest,
@@ -28,6 +31,16 @@ void test("cookie, origin, and CSRF primitives fail closed", () => {
     secure: true,
   });
   assert.match(cookie, new RegExp(`${ADMIN_SESSION_COOKIE}=${token}`));
+  assert.match(cookie, /HttpOnly/u);
+  const csrfCookie = serializeCsrfCookie(csrf, "2026-08-14T00:00:00.000Z", {
+    now: new Date("2026-08-13T00:00:00.000Z"),
+    secure: true,
+  });
+  assert.match(csrfCookie, new RegExp(`${ADMIN_CSRF_COOKIE}=${csrf}`));
+  assert.doesNotMatch(csrfCookie, /HttpOnly/u);
+  assert.match(csrfCookie, /SameSite=Strict/u);
+  assert.match(csrfCookie, /Secure/u);
+  assert.equal(parseCsrfCookie(`${ADMIN_CSRF_COOKIE}=${csrf}`), csrf);
   assert.equal(parseSessionCookie(`${ADMIN_SESSION_COOKIE}=${token}`), token);
   assert.throws(() => parseCookieHeader(`${ADMIN_SESSION_COOKIE}=x; ${ADMIN_SESSION_COOKIE}=y`));
   assert.equal(parseCanonicalOrigin("https://example.test"), "https://example.test");

@@ -1,0 +1,137 @@
+main[data-dashboard] {
+  padding: 1rem clamp(0.75rem, 3vw, 3rem);
+}
+.tap-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(0.65rem, 1.2vw, 1.15rem);
+  align-items: stretch;
+}
+.tap-card {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(7rem, 34%);
+  gap: 0.7rem;
+  overflow: hidden;
+  padding: clamp(0.75rem, 1.2vw, 1.15rem);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.tap-card[data-health="degraded"] {
+  border-color: var(--warning);
+}
+.tap-copy,
+.tap-visual {
+  min-width: 0;
+}
+.tap-card h2,
+.tap-card p {
+  margin: 0.2rem 0;
+  overflow-wrap: anywhere;
+}
+.tap-card h2 {
+  font-size: clamp(1rem, 1.5vw, 1.5rem);
+  line-height: 1.12;
+}
+.beverage-name {
+  font-size: clamp(1rem, 1.3vw, 1.25rem);
+  font-weight: 800;
+}
+.description {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--muted);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+.tap-visual {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-align: center;
+}
+.tap-graphic {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: min(22vh, 13rem);
+}
+.glass,
+.rim {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 5;
+}
+.liquid {
+  opacity: 0.9;
+  transition:
+    y 250ms ease,
+    height 250ms ease;
+}
+.volume {
+  white-space: normal;
+}
+html[data-unit-system="metric"] [data-unit="us"],
+html[data-unit-system="us"] [data-unit="metric"] {
+  display: none;
+}
+[data-show-serving-temperature="false"] .temperature {
+  display: none;
+}
+.on-deck {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.on-deck h2 {
+  margin: 0 0 0.4rem;
+  font-size: 1rem;
+}
+.on-deck ul {
+  display: flex;
+  gap: 0.6rem 1.2rem;
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tap-wars-slot[hidden] {
+  display: none;
+}
+@media (max-width: 60rem) {
+  .tap-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 34rem) {
+  .tap-grid {
+    grid-template-columns: 1fr;
+  }
+  .public-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+@media (min-width: 150rem) {
+  .tap-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+  .tap-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tap-graphic {
+    max-height: 24vh;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .liquid {
+    transition: none;
+  }
+}

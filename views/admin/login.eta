@@ -1,0 +1,11 @@
+<% layout("/layouts/admin", { page: it.page }) %>
+<main id="main-content" class="login">
+  <h1>Admin sign in</h1>
+  <p>Enter the four-digit Admin PIN.</p>
+  <%~ include("/partials/admin-messages", { page: it.page }) %>
+  <form action="/admin/login" method="post">
+    <label for="pin">Admin PIN</label>
+    <input id="pin" name="pin" type="password" inputmode="numeric" autocomplete="current-password" pattern="[0-9]{4}" minlength="4" maxlength="4" required />
+    <button type="submit">Sign in</button>
+  </form>
+</main>

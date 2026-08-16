@@ -1,5 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { loadConfig, type ApplicationConfig, type LoadConfigOptions } from "./config.ts";
 import {
@@ -15,6 +16,7 @@ import {
   type HttpServerOptions,
 } from "./infrastructure/http/server.ts";
 import { Router } from "./infrastructure/http/router.ts";
+import { registerStaticAssets } from "./infrastructure/http/static-assets.ts";
 import {
   createRenderer,
   type CreateRendererOptions,
@@ -44,6 +46,10 @@ import {
   type HealthService,
 } from "./features/health/index.ts";
 import { createForecastService, registerForecastRoutes } from "./features/forecasting/index.ts";
+import { createDisplaySettingsService } from "./features/display/index.ts";
+import { createDashboardService } from "./features/dashboard/index.ts";
+import { LiveUpdateService, observeCommittedCalls } from "./features/live/index.ts";
+import { registerWebRoutes } from "./features/web/index.ts";
 import { createLogger, type Logger } from "./shared/logging.ts";
 
 type ApplicationState = "new" | "starting" | "ready" | "stopping" | "stopped" | "failed";
@@ -87,6 +93,7 @@ class FoundationApplication implements Application {
   #beverageService: BeverageService | undefined;
   #detectorService: DetectorService | undefined;
   #healthService: HealthService | undefined;
+  #liveUpdates: LiveUpdateService | undefined;
   #address: HttpServerAddress | undefined;
   #starting: Promise<HttpServerAddress> | undefined;
   #stopping: Promise<void> | undefined;
@@ -142,26 +149,44 @@ class FoundationApplication implements Application {
       const secretsService = createSecretsService(this.#database, {
         ...(this.#config.secretKey ? { rootKey: this.#config.secretKey } : {}),
       });
-      const detectorService = new DetectorService(this.#database);
-      this.#detectorService = detectorService;
+      const liveUpdates = new LiveUpdateService(authService);
+      this.#liveUpdates = liveUpdates;
+      const rawDetectorService = new DetectorService(this.#database);
+      this.#detectorService = rawDetectorService;
       const healthService = createHealthService(this.#database, {
         onError: () => this.#logger.error("Health maintenance failed"),
+        onTargetedUpdate: (update) => {
+          liveUpdates.publish({ name: "health.updated", tapId: update.tapId });
+        },
       });
       this.#healthService = healthService;
+
+      const publishAllTaps = (name: "tap.updated" | "fill.updated"): void => {
+        for (const tap of rawTapService.listTaps()) {
+          liveUpdates.publish({ name, tapId: tap.id });
+        }
+      };
+      const publishTapByNumber = (tapNumber: unknown): void => {
+        if (typeof tapNumber !== "number") return;
+        const tap = rawTapService.listTaps().find((candidate) => candidate.tapNumber === tapNumber);
+        if (tap !== undefined) {
+          liveUpdates.publish({ name: "telemetry.updated", tapId: tap.id });
+        }
+      };
 
       const tapExtensionPort: TapAssignmentExtensionPort = {
         onAssignmentOpened: (
           database: DatabaseExecutor,
           context: AssignmentOpenedContext,
         ): void => {
-          detectorService.onAssignmentOpened(database, context);
+          rawDetectorService.onAssignmentOpened(database, context);
           healthService.onAssignmentOpened(database, context);
         },
         onAssignmentClosed: (
           database: DatabaseExecutor,
           context: AssignmentClosedContext,
         ): void => {
-          detectorService.onAssignmentClosed(database, context);
+          rawDetectorService.onAssignmentClosed(database, context);
           healthService.onAssignmentClosed(database, context);
         },
         onTapCreated: (database: DatabaseExecutor, tapId: string, occurredAt: string): void => {
@@ -171,45 +196,168 @@ class FoundationApplication implements Application {
           healthService.onTapRetired(database, tapId, occurredAt);
         },
       };
-      const kegService = createKegService(this.#database, {
+      const rawKegService = createKegService(this.#database, {
         onKegCorrection: (database, event) => {
-          detectorService.onKegCorrection(database, event);
+          rawDetectorService.onKegCorrection(database, event);
           healthService.onKegCorrection(database, event);
         },
       });
-      const beverageService = createBeverageService(this.#database, {
+      const kegService = observeCommittedCalls(rawKegService, {
+        createKeg: () => publishAllTaps("fill.updated"),
+        updateKeg: () => publishAllTaps("fill.updated"),
+        deleteKeg: () => publishAllTaps("fill.updated"),
+      });
+      const rawBeverageService = createBeverageService(this.#database, {
         secretsService,
         densityExtensionPort: {
           onEffectiveDensityChanged: (database, event) => {
-            detectorService.onEffectiveDensityChanged(database, event);
+            rawDetectorService.onEffectiveDensityChanged(database, event);
             healthService.onEffectiveDensityChanged(database, event);
           },
         },
+        onSyncCompleted: () => {
+          liveUpdates.publish({ name: "integration_status.updated", target: "header" });
+          publishAllTaps("fill.updated");
+        },
       });
-      this.#beverageService = beverageService;
-      const tapService = createTapService(this.#database, { extensionPort: tapExtensionPort });
-      const fillService = createFillService(this.#database, {
+      this.#beverageService = rawBeverageService;
+      const beverageService = observeCommittedCalls(rawBeverageService, {
+        createCustomBeverage: () => publishAllTaps("fill.updated"),
+        linkBrewfatherCandidate: () => {
+          liveUpdates.publish({ name: "integration_status.updated", target: "header" });
+          publishAllTaps("fill.updated");
+        },
+        updateCustomBeverage: () => publishAllTaps("fill.updated"),
+        updatePresentationOverrides: () => publishAllTaps("fill.updated"),
+        unlinkBeverage: () => {
+          liveUpdates.publish({ name: "integration_status.updated", target: "header" });
+          publishAllTaps("fill.updated");
+        },
+        deleteBeverage: () => {
+          liveUpdates.publish({ name: "integration_status.updated", target: "header" });
+          publishAllTaps("fill.updated");
+        },
+        configureBrewfatherAccount: () => {
+          liveUpdates.publish({ name: "integration_status.updated", target: "header" });
+        },
+        removeBrewfatherApiKey: () => {
+          liveUpdates.publish({ name: "integration_status.updated", target: "header" });
+        },
+      });
+      const rawTapService = createTapService(this.#database, { extensionPort: tapExtensionPort });
+      const tapService = observeCommittedCalls(rawTapService, {
+        createTap: () => publishAllTaps("tap.updated"),
+        updateTap: () => publishAllTaps("tap.updated"),
+        assignFill: () => {
+          publishAllTaps("tap.updated");
+          liveUpdates.publish({ name: "ondeck.updated", target: "ondeck" });
+        },
+        unassign: () => {
+          publishAllTaps("tap.updated");
+          liveUpdates.publish({ name: "ondeck.updated", target: "ondeck" });
+        },
+        moveFill: () => publishAllTaps("tap.updated"),
+        retireTap: () => publishAllTaps("tap.updated"),
+        deleteTap: () => publishAllTaps("tap.updated"),
+      });
+      const rawFillService = createFillService(this.#database, {
         beverageService,
-        assignmentPort: tapService.asFillAssignmentPort(),
+        assignmentPort: rawTapService.asFillAssignmentPort(),
+      });
+      const fillService = observeCommittedCalls(rawFillService, {
+        createFill: () => {
+          liveUpdates.publish({ name: "ondeck.updated", target: "ondeck" });
+        },
+        markOnDeck: () => liveUpdates.publish({ name: "ondeck.updated", target: "ondeck" }),
+        removeFromOnDeck: () => liveUpdates.publish({ name: "ondeck.updated", target: "ondeck" }),
+        reorderOnDeck: () => liveUpdates.publish({ name: "ondeck.updated", target: "ondeck" }),
+        kickFill: () => {
+          liveUpdates.publish({ name: "ondeck.updated", target: "ondeck" });
+          publishAllTaps("fill.updated");
+        },
+        deleteFill: () => {
+          liveUpdates.publish({ name: "ondeck.updated", target: "ondeck" });
+          publishAllTaps("fill.updated");
+        },
       });
       const machineKeyService = createMachineKeyService(this.#database);
-      const telemetryService = new TelemetryService({
+      const rawTelemetryService = new TelemetryService({
         database: this.#database,
         machineKeyService,
         authorityExtensionPort: {
           onAuthorityChanged: (database, event) => {
-            detectorService.onAuthorityChanged(database, event);
+            rawDetectorService.onAuthorityChanged(database, event);
             healthService.onAuthorityChanged(database, event);
           },
         },
         acceptedExtensionPort: {
           onAcceptedSample: (database, event) => {
-            detectorService.onAcceptedSample(database, event);
+            rawDetectorService.onAcceptedSample(database, event);
             healthService.onAcceptedSample(database, event);
           },
         },
       });
+      const telemetryService = observeCommittedCalls(rawTelemetryService, {
+        ingestSingle: (result, args) => {
+          const outcome = result as { readonly outcome?: string; readonly duplicate?: boolean };
+          if (outcome.outcome === "accepted" && outcome.duplicate !== true)
+            publishTapByNumber(args[1]);
+        },
+        ingestBatch: (result) => {
+          const batch = result as {
+            readonly results?: readonly {
+              readonly tapNumber?: number;
+              readonly outcome?: string;
+              readonly duplicate?: boolean;
+            }[];
+          };
+          const dirty = new Set(
+            (batch.results ?? [])
+              .filter((item) => item.outcome === "accepted" && item.duplicate !== true)
+              .map((item) => item.tapNumber),
+          );
+          for (const tapNumber of dirty) publishTapByNumber(tapNumber);
+        },
+        setTapAuthority: (_result, args) => {
+          if (typeof args[0] === "string") {
+            liveUpdates.publish({ name: "telemetry.updated", tapId: args[0] });
+          }
+          liveUpdates.publish({ name: "integration_status.updated", target: "header" });
+        },
+        createSource: () =>
+          liveUpdates.publish({ name: "integration_status.updated", target: "header" }),
+        rotateSourceKey: () =>
+          liveUpdates.publish({ name: "integration_status.updated", target: "header" }),
+      });
+      const detectorService = observeCommittedCalls(rawDetectorService, {
+        manualRebaseline: (_result, args) => {
+          if (typeof args[0] === "string")
+            liveUpdates.publish({ name: "telemetry.updated", tapId: args[0] });
+        },
+        setTapOverride: (_result, args) => {
+          if (typeof args[0] === "string")
+            liveUpdates.publish({ name: "telemetry.updated", tapId: args[0] });
+        },
+        clearTapOverride: (_result, args) => {
+          if (typeof args[0] === "string")
+            liveUpdates.publish({ name: "telemetry.updated", tapId: args[0] });
+        },
+      });
       const forecastService = createForecastService(this.#database);
+      const rawDisplayService = createDisplaySettingsService(this.#database);
+      const displayService = observeCommittedCalls(rawDisplayService, {
+        updateSettings: () => liveUpdates.publish({ name: "display.updated", target: "display" }),
+      });
+      const dashboardService = createDashboardService({
+        displayService,
+        tapService,
+        beverageService,
+        fillService,
+        detectorService,
+        forecastService,
+        healthService,
+        telemetryService,
+      });
 
       const router = new Router(this.#logger);
       router.get("/healthz", (_request, response) => {
@@ -230,6 +378,40 @@ class FoundationApplication implements Application {
       registerHealthRoutes({ router, healthService, authService });
       registerTelemetryRoutes({ router, telemetryService, detectorService, authService });
       registerForecastRoutes({ router, forecastService, authService });
+      registerWebRoutes({
+        router,
+        renderer: this.#renderer,
+        ...(this.#config.canonicalExternalOrigin === undefined
+          ? {}
+          : { canonicalOrigin: this.#config.canonicalExternalOrigin }),
+        authService,
+        dashboardService,
+        displayService,
+        beverageService,
+        kegService,
+        fillService,
+        tapService,
+        telemetryService,
+        detectorService,
+        healthService,
+        liveUpdates,
+      });
+      registerStaticAssets(router, {
+        root: fileURLToPath(new URL("../public/", import.meta.url)),
+        cacheControl: "public, max-age=300",
+        assets: [
+          { kind: "css", file: "tokens.css", path: "css/tokens.css" },
+          { kind: "css", file: "components.css", path: "css/components.css" },
+          { kind: "css", file: "dashboard.css", path: "css/dashboard.css" },
+          { kind: "css", file: "admin.css", path: "css/admin.css" },
+          { kind: "js", file: "preference-bootstrap.js", path: "js/preference-bootstrap.js" },
+          { kind: "js", file: "display-preferences.js", path: "js/display-preferences.js" },
+          { kind: "js", file: "dirty-targets.js", path: "js/dirty-targets.js" },
+          { kind: "js", file: "sse.js", path: "js/sse.js" },
+          { kind: "js", file: "dashboard.js", path: "js/dashboard.js" },
+          { kind: "js", file: "admin-display.js", path: "js/admin-display.js" },
+        ],
+      });
 
       this.#httpServer = this.#createHttpServer({
         router,
@@ -271,6 +453,12 @@ class FoundationApplication implements Application {
 
   async #stop(): Promise<void> {
     let failure: unknown;
+    try {
+      this.#liveUpdates?.stop();
+      this.#liveUpdates = undefined;
+    } catch {
+      // Ignored
+    }
     try {
       this.#beverageService?.stopPeriodicSync();
       this.#beverageService = undefined;
@@ -329,6 +517,12 @@ class FoundationApplication implements Application {
   }
 
   async #closeResourcesAfterFailure(): Promise<void> {
+    try {
+      this.#liveUpdates?.stop();
+      this.#liveUpdates = undefined;
+    } catch {
+      // Ignored
+    }
     try {
       this.#beverageService?.stopPeriodicSync();
       this.#beverageService = undefined;

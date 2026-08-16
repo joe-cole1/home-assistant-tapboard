@@ -1,8 +1,8 @@
 # Tapboard v2
 
-Tapboard v2 is an ESM modular monolith. Issues #66 and #67 establish the Node 24 Foundation and security/Activity/event/secret/machine-key/bounded-outbox primitives; #85 adds the development-only container workflow; #68–#74 add the domain, telemetry, pour-history, and forecasting boundaries; and #75 adds draft health and Tap line maintenance. Production deployment remains deferred to #81.
+Tapboard v2 is an ESM modular monolith. Issues #66 and #67 establish the Node 24 Foundation and security/Activity/event/secret/machine-key/bounded-outbox primitives; #85 adds the development-only container workflow; #68–#75 add the domain, telemetry, forecasting, and health boundaries; and #76 adds the Eta-rendered Admin/public browser surface, bounded SSE, and display preferences. Production deployment remains deferred to #81.
 
-The current implementation includes Issues #66–#75 and the #85 development container. It has authenticated Admin routes/projections but no browser Admin/public feature page, public health API, production deployment, provider adapter, outbound delivery worker, SSE, or Home Assistant/webhook worker; browser UI/SSE are assigned to #76 and outbound delivery to #79.
+The current implementation includes Issues #66–#76 and the #85 development container. `/` is the authoritative server-rendered public dashboard; `/admin/*` provides the authenticated progressive Admin shell. Home Assistant/webhook delivery, Brew Story/Mystery Tap, Tap Wars domain behavior, complete System administration, and production deployment remain assigned to later issues.
 
 The frozen v1 application remains available at commit `429cf07e451b64ca1713655a34ffa5ebd376efae` and through Git history. Reusable v1 evidence is indexed in [`docs/rebuild/v1-reuse-manifest.json`](docs/rebuild/v1-reuse-manifest.json); it is reference material, not an active dependency or import source for v2.
 
@@ -36,7 +36,7 @@ The defaults are:
 | `TAPBOARD_SESSION_ABSOLUTE_MS`   | `31536000000` (365 days)                                     |
 | `TAPBOARD_SECRET_KEY`            | unset; optional canonical 32-byte base64url key              |
 
-The runtime creates the database parent directory when needed. A ready process returns HTTP 200 from `GET /healthz` with `{"status":"ok","schemaVersion":11}`. This is local application/database readiness only; it does not check external integrations or the draft-health feature. Health feature surfaces are authenticated Admin routes, not a public health API.
+The runtime creates the database parent directory when needed. A ready process returns HTTP 200 from `GET /healthz` with `{"status":"ok","schemaVersion":12}`. This is local application/database readiness only; it does not check external integrations. Public connectivity is a deliberately aggregate dashboard projection; health administration remains authenticated.
 
 The Admin PIN contract is exactly four ASCII decimal digits (`[0-9]{4}`), including every value from `0000` through `9999`; input is never trimmed or Unicode-normalized. Scrypt, durable SQLite throttling, opaque sessions, CSRF, and strict Origin checks protect online/local access, but the 10,000-value space has limited offline resistance if the SQLite verifier is stolen. The PIN never derives or protects `TAPBOARD_SECRET_KEY`.
 
@@ -140,11 +140,20 @@ npm run check
 
 The gate runs Prettier checking, ESLint, `tsc --noEmit`, architecture and reuse-manifest checks, and the `node:test` suite. CI installs with `npm ci`, runs this same gate under Node 24, and checks changed-line whitespace.
 
-Schema version 11 is the current supported schema. It includes the typed security/session, encrypted-secret, machine-key, Activity/deletion-audit, stable-event, bounded-outbox, domain, telemetry, immutable-epoch/pour, Fill-forecast, draft-health, and append-only Tap line-maintenance state. Activity retention never prunes domain history or deletion audit, and Activity writes never recursively create outbox rows. Migration 11 is `draft-health-and-tap-maintenance`; `/healthz` reports `schemaVersion: 11` when the database is ready.
+The browser suite is separate so ordinary Node tests do not require a browser binary:
+
+```sh
+npx playwright install chromium
+npm run test:e2e
+```
+
+CI installs Chromium and runs `npm run test:e2e` in its own Node 24 job.
+
+Schema version 12 is the current supported schema. Migration 12, `ssr-dashboard-display-settings`, adds one typed singleton `display_settings` row with constrained Tapboard name, theme, font, accent, unit system, public-temperature flag, layout mode, and revision. Browser-local overrides and live/SSE state are never persisted in SQLite. `/healthz` reports `schemaVersion: 12` when the database is ready.
 
 The event registry is an explicit allowlist with durable IDs and canonical UTC envelopes. Outbox admission uses hard global/per-destination row and UTF-8 byte bounds, bounded terminal pruning, restricted semantic coalescing, fixed overflow slots, and explicit `not_queued_capacity` degradation semantics. Delivery state is designed for at-least-once processing with leases and compare-and-set results; it does not claim exactly-once network delivery. Providers, workers, webhooks, Home Assistant delivery, and domain producers remain deferred.
 
-Playwright/browser E2E is intentionally not introduced because no browser feature UI or workflow exists; that tier is deferred to issue #76. The canonical local and CI gate above is authoritative.
+The public and Admin pages are Eta SSR with semantic HTML and ordinary forms. Small external ES modules progressively add targeted live refresh, rotation, and per-display preferences; there is no SPA, hydration framework, frontend router, bundler, or client-side application state snapshot.
 
 ## Issue #75 health and Tap maintenance
 
@@ -152,13 +161,23 @@ Health checks use the exact IDs `low_keg`, `scale_availability`, `suspected_leak
 
 Current health state is rebuildable and separate from durable incidents/transitions. Acknowledgement does not resolve or hide an incident, and bounded cooldown suppresses repeated incident side effects rather than health truth. Resolved incidents are retained for 365 days and pruned in batches of at most 100; open incidents, current state, and Tap `first_used_at` are never pruned. Tap line maintenance is append-only, due dates are server-derived, `line_cleaned` establishes the line-cleaning baseline only, and private notes are Admin maintenance detail. Durable incidents and maintenance atomically set Tap `first_used_at`.
 
-Accepted telemetry evaluates health after detector processing; assignment, authority, correction, density, configuration, maintenance, startup, and one coalesced periodic sweep also trigger evaluation. Only meaningful changes create Activity. Admin-only overview/detail/configuration/override/incident/acknowledgement/cooldown/maintenance routes and projections are available, with a safe targeted `HealthTargetedUpdate` DTO seam for #76. There is no public health API, SSE/browser UI (#76), or outbound Home Assistant/webhook delivery worker (#79).
+Accepted telemetry evaluates health after detector processing; assignment, authority, correction, density, configuration, maintenance, startup, and one coalesced periodic sweep also trigger evaluation. Only meaningful changes create Activity. Admin-only detail APIs remain available, while the safe targeted `HealthTargetedUpdate` seam feeds aggregate public card/connectivity refresh without exposing evidence or private notes. There is no public health-detail API or outbound Home Assistant/webhook delivery worker (#79).
 
 ### MANUAL DEV TEST — Issue #75
 
 Persistent, safe read-only checks: after the normal rebuild, verify `GET /healthz` returns `{"status":"ok","schemaVersion":11}` and inspect the authenticated Admin health and Tap-maintenance projections without acknowledging incidents, changing configuration/overrides/cooldowns, or recording maintenance. Do not mutate the persistent development volume in this pass.
 
 Ephemeral, mutating smoke: use a disposable database and disposable Tap to exercise a default-enabled check, an opt-in check, a nullable per-Tap override, incident acknowledgement/cooldown, retired-Tap resolution, and append-only line maintenance with a server-derived due date. Confirm durable incidents and maintenance atomically set `first_used_at`, and that `line_cleaned` establishes the line-cleaning baseline only. Maintenance and incidents permanently mark a Tap used; never use a persistent Tap or the named development volume, and do not delete the volume as cleanup. No tests are claimed as run here; this is an operator test plan.
+
+## Issue #76 SSR dashboard, Admin, SSE, and display preferences
+
+The initial public response contains the header, every enabled Tap card in Tap-number order, the reserved hidden Tap Wars slot, and the authoritative On Deck footer. Public refresh endpoints expose purpose-built projections only. Named SSE events carry dirty-target identifiers, not state snapshots; blocked clients have bounded coalesced queues and reconnect through a page-scoped authoritative reconciliation that patches surviving cards in place.
+
+Shared display defaults flow into sparse, strictly validated browser-local overrides stored at `tapboard.v2.display-preferences.v1` with record version `1`. A synchronous external head script applies allowlisted values before CSS to prevent theme flash. Storage failures and malformed values fall back to shared defaults, while the browser `storage` event synchronizes peer tabs.
+
+### MANUAL DEV TEST — Issue #76
+
+Rebuild and recreate normally without deleting `tapboard-dev_tapboard-data`, then confirm `/healthz` reports schema version 12. Check `/` with zero, one, six, and more than six enabled Taps; a disabled Tap; an unassigned Tap; and On Deck entries. Sign in at `/admin/login`, visit every Admin navigation route, submit one representative form with JavaScript disabled, and exercise shared plus local Display settings. In two tabs, verify local preference persistence, reset-to-inherit, and storage synchronization. Update a Tap while the dashboard is open, confirm the field changes without replacing its SVG graphic node, then interrupt/reconnect the event stream and confirm authoritative reconciliation. Inspect approximately 800 px, 1280×720, 1920×1080, and 3840×2160. Use disposable state for destructive fixture scenarios; never delete the persistent volume.
 
 ## Authoritative rebuild context
 

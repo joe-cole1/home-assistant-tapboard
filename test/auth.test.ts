@@ -168,6 +168,31 @@ void test("sessions enforce inactivity, absolute expiry, revocation, rotation, a
     now = new Date("2026-08-13T12:03:00.000Z");
     const touched = auth.authenticateSession(first.session);
     assert.equal(touched?.lastUsedAt, "2026-08-13T12:03:00.000Z");
+    assert.equal(touched?.expiresAt, "2026-08-13T12:13:00.000Z");
+
+    const sessionBeforeValidation = database
+      .prepare<[string], { readonly last_used_at: string; readonly expires_at: string }>(
+        "SELECT last_used_at, expires_at FROM admin_sessions WHERE id = ?",
+      )
+      .get(first.sessionId!);
+    const activityCountBeforeValidation = database
+      .prepare<[], { readonly count: number }>("SELECT count(*) AS count FROM activity_log")
+      .get()?.count;
+    now = new Date("2026-08-13T12:08:00.000Z");
+    const validated = auth.validateSession(first.session);
+    assert.equal(validated?.lastUsedAt, "2026-08-13T12:03:00.000Z");
+    assert.deepEqual(
+      database
+        .prepare<[string], { readonly last_used_at: string; readonly expires_at: string }>(
+          "SELECT last_used_at, expires_at FROM admin_sessions WHERE id = ?",
+        )
+        .get(first.sessionId!),
+      sessionBeforeValidation,
+    );
+    const activityCountAfterValidation = database
+      .prepare<[], { readonly count: number }>("SELECT count(*) AS count FROM activity_log")
+      .get()?.count;
+    assert.equal(activityCountAfterValidation, activityCountBeforeValidation);
 
     const rotated = await auth.authenticate("1234", first.session);
     assert.equal(auth.authenticateSession(first.session), undefined);

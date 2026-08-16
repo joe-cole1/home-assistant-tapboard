@@ -81,7 +81,7 @@ void test("application starts on an ephemeral port and exposes only local readin
   assert.equal(health.headers.get("cache-control"), "no-store");
   assert.equal(health.headers.get("x-content-type-options"), "nosniff");
   assert.equal(health.headers.get("x-frame-options"), "DENY");
-  assert.deepEqual(await health.json(), { status: "ok", schemaVersion: 11 });
+  assert.deepEqual(await health.json(), { status: "ok", schemaVersion: 12 });
 
   const unknown = await fetch(`http://127.0.0.1:${address.port}/not-a-route`);
   assert.equal(unknown.status, 404);
@@ -265,7 +265,7 @@ void test("central HTTP error mapping redacts secret-like application-error deta
 
   const response = await fetch(`http://127.0.0.1:${address.port}/safe-error`);
   assert.equal(response.status, 400);
-  const payload = await response.json();
+  const payload: unknown = await response.json();
   const serialized = JSON.stringify(payload);
   for (const value of Object.values(sensitiveDetails).slice(0, 9)) {
     assert.doesNotMatch(serialized, new RegExp(value));

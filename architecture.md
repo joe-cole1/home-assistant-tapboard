@@ -1,20 +1,21 @@
 # Tapboard architecture
 
-## Implemented Foundation, #67 primitives, #85 dev container, #68–#74 domains, and #75 Draft Health/Tap Maintenance
+## Implemented Foundation through #76 SSR Admin/public dashboard
 
-Issue #66 establishes a Node 24 ESM modular monolith with explicit startup composition. Issues #67–#72 add the security, inventory, beverage, Fill, Tap, and canonical telemetry ingestion boundaries described below. Issue #73 adds immutable telemetry epochs and provenance snapshots, durable deterministic per-Tap pour detection, minimal immutable pours, and administration for detector defaults, nullable per-Tap overrides, and explicit arbitration groups. Issue #74 retains those detector-owned pours as immutable Fill-scoped history and derives deterministic Fill forecasts. Issue #75 adds draft-health evaluation, durable health incidents/transitions, and append-only Tap line maintenance. Node executes erasable `.ts` files directly, while TypeScript performs static checking with `tsc --noEmit`. There is no transpiler, backend or application bundler, SPA/client framework, HTTP framework, ORM, query builder, dependency-injection framework, or global service locator.
+Issue #66 establishes a Node 24 ESM modular monolith with explicit startup composition. Issues #67–#75 add the security, domain, telemetry, forecasting, and health boundaries described below. Issue #76 adds authoritative Eta SSR, purpose-built browser projections, a bounded in-process SSE delivery adapter, and typed shared-to-local display preferences. Node executes erasable `.ts` files directly, while TypeScript performs static checking with `tsc --noEmit`. There is no transpiler, backend or frontend bundler, SPA/client framework, HTTP framework, ORM, query builder, dependency-injection framework, or global service locator.
 
 The implemented source topology is intentionally concise:
 
 - `src/application.ts` composes configuration, logging, one database connection, the Eta renderer, router, and HTTP server;
 - `src/shared/` owns typed application errors, explicit validation primitives, and structured `debug`/`info`/`warn`/`error` logging with recursive secret-key redaction;
 - `src/infrastructure/database/` is the only connection and migration boundary;
-- `src/infrastructure/http/` owns the small exact-match router, centralized HTTP error mapping, and server lifecycle;
+- `src/infrastructure/http/` owns the small exact-match router, JSON/HTML/form/static boundaries, centralized error mapping, and server lifecycle;
+- `src/infrastructure/sse/` owns correct framing, heartbeat, connection accounting, bounded coalesced client queues, drain recovery, and overflow cleanup;
 - `src/infrastructure/rendering/` owns the file-based Eta rendering boundary;
 - `src/main.ts` is the deliberate process bootstrap and signal-handling entry point;
 - `src/operator/` owns stdin-only reset-PIN and root-key rotation commands;
-- `src/features/auth/`, `activity/`, `events/`, `secrets/`, `machine-keys/`, `outbox/`, `kegs/`, `beverages/`, `fills/`, `taps/`, `telemetry/`, `forecasting/`, and the concrete `src/features/health/` boundary own typed feature primitives and repository SQL;
-- `views/` contains only layout/partial/escaping proof templates, not a product page;
+- `src/features/auth/`, `activity/`, `events/`, `secrets/`, `machine-keys/`, `outbox/`, `kegs/`, `beverages/`, `fills/`, `taps/`, `telemetry/`, `forecasting/`, `health/`, `display/`, `dashboard/`, `live/`, and `web/` own typed feature primitives and feature repositories/routes;
+- `views/` contains Eta public/Admin layouts, page templates, and escaped partials; `public/` contains shared plain CSS and small page-specific browser ES modules;
 - `openapi/` contains the checked-in OpenAPI 3.1 telemetry ingestion contract;
 - `test/` covers the database, runtime, rendering, shared primitives, native TypeScript execution, and architecture boundaries.
 
@@ -24,7 +25,7 @@ Normal imports are side-effect free. The bootstrap in `src/main.ts` deliberately
 
 The application deterministically creates the database directory, opens and validates the database, creates the renderer, creates the HTTP server, and binds the configured address in that order. Startup and bind errors reject startup and close acquired resources. Shutdown stops HTTP acceptance and connections before closing SQLite, is idempotent, and enforces the configured bounded grace period. `SIGINT` and `SIGTERM` use that same shutdown path.
 
-Routes registered include `GET /healthz` (returning HTTP 200 and schema version 11), unauthenticated public projections at `GET /api/on-deck` and `GET /api/public/taps`, authenticated Admin endpoints under `/api/admin/kegs`, `/api/admin/beverages`, `/api/admin/fills`, `/api/admin/taps`, `/api/admin/telemetry`, `/api/admin/forecast`, and the #75 health overview/detail/configuration/override/incident/acknowledgement/cooldown/maintenance surfaces, and authenticated external machine endpoints under `/api/v1/telemetry`. The #75 health surfaces are Admin-only projections; there is no public health API. The router supports exact and parameterized routes with deterministic 404/405 behavior, and centralized error mapping prevents unexpected implementation details from reaching HTTP clients.
+Routes include `GET /healthz` (schema version 12), authoritative public SSR at `/`, narrow public dashboard refresh projections under `/api/public/dashboard`, public live events at `/api/public/events`, browser Admin pages under `/admin/*`, authenticated Admin events at `/api/admin/events`, existing Admin JSON APIs, and machine telemetry under `/api/v1/telemetry`. Existing JSON APIs retain API-style authorization failures; browser Admin pages redirect to the exact four-digit PIN login and ordinary mutations use strict bounded URL-encoded parsing, session-bound CSRF, exact Origin enforcement, and POST→303→GET.
 
 The configured external origin is an exact canonical HTTP(S) origin; trusted proxies are explicit comma-separated addresses and never provide an origin fallback. Session lifetimes default to 30 days inactivity and 365 days absolute, with bounded validation. PIN reset and root-key rotation are local non-TTY stdin commands only; no browser reset flow or default PIN exists.
 
@@ -32,17 +33,19 @@ The PIN is exactly four ASCII decimal digits. Its deliberately small 10,000-valu
 
 ## Container and configuration boundaries (#85 support)
 
-`Dockerfile.dev`, `Dockerfile.dev.dockerignore`, and `compose.dev.yaml` remain the only runnable container surface and form one coherent, development-only set. The image installs the locked dependencies, copies only the v2 `src/` and `views/` runtime inputs, runs as the unprivileged `node` user, and exposes port 3000. Compose binds host loopback `127.0.0.1:3000` to the container's `0.0.0.0:3000`, requires an external canonical 32-byte base64url `TAPBOARD_SECRET_KEY` from ignored local configuration, and checks the actual `/healthz` route. SQLite is `/app/data/tapboard-v2.sqlite3` on the named `tapboard-data` volume, materialized by Compose as `tapboard-dev_tapboard-data`; ordinary lifecycle operations preserve that volume. Stdin-only operator reset and root-key rotation run through the service and never accept secret arguments or defaults. `.env.example` is a v2-safe operator reference, not a secret-bearing runtime file. The exact top-level `compose.production.example.yaml` is a non-runnable illustrative exception with an unpublished placeholder image; it is not a production deployment or acceptance surface. All actual production Dockerfiles/Compose variants and production hardening remain rejected or deferred to issue #81.
+`Dockerfile.dev`, `Dockerfile.dev.dockerignore`, and `compose.dev.yaml` remain the only runnable container surface and form one coherent, development-only set. The image installs the locked dependencies, copies the v2 `src/`, `views/`, and allowlisted `public/` runtime inputs, runs as the unprivileged `node` user, and exposes port 3000. Compose binds host loopback `127.0.0.1:3000` to the container's `0.0.0.0:3000`, requires an external canonical 32-byte base64url `TAPBOARD_SECRET_KEY` from ignored local configuration, and checks the actual `/healthz` route. SQLite is `/app/data/tapboard-v2.sqlite3` on the named `tapboard-data` volume, materialized by Compose as `tapboard-dev_tapboard-data`; ordinary lifecycle operations preserve that volume. All actual production Dockerfiles/Compose variants and production hardening remain deferred to issue #81.
 
 ## Rendering boundary
 
-`src/infrastructure/rendering/renderer.ts` owns a file-based Eta instance with escaping enabled by default and a module-relative `views/` root. The proof templates exercise a layout, a partial, and escaped untrusted values. They establish the server-rendering seam only; no Admin or public dashboard page is implemented.
+`src/infrastructure/rendering/renderer.ts` owns a file-based Eta instance with escaping enabled by default and a module-relative `views/` root. `/` renders the complete current dashboard before JavaScript; authenticated Admin pages share one semantic layout and remain usable without JavaScript. Stored and integration text uses escaped Eta output. Raw template output is restricted to controlled layout/partial composition. Static assets are served only through an explicit descriptor allowlist, fixed MIME types, contained regular-file resolution without symlinks, and a short public cache policy.
+
+Small external browser modules progressively enhance only the pages that need them. The dashboard keeps every SSR Tap card and its SVG graphic node in the DOM, coalesces dirty targets with bounded concurrency, fetches narrow authoritative projections, and performs a page-scoped reconciliation after SSE reconnect. Rotation hides/pages existing cards on a fixed internal cadence, pauses for focus/visibility, and is disabled by reduced-motion preference. No server data is inserted with `innerHTML`.
 
 ## SQLite boundary and schema
 
 `src/infrastructure/database/connection.ts` is the sole `better-sqlite3` import and connection-construction boundary. It enables and verifies `foreign_keys=ON`, initializes and validates the schema, runs integrity checks, exposes a synchronous `BEGIN IMMEDIATE` transaction primitive, and provides idempotent close behavior. Raw application SQL is restricted to database infrastructure/migrations and future feature repository ownership by the architecture gate.
 
-Schema version 9 adds detector defaults and nullable per-Tap overrides, explicit arbitration groups, immutable `telemetry_epochs` provenance snapshots, mutable durable epoch runtime state, bounded detector samples, and immutable minimal `pours`. Schema version 10 adds the singleton `forecast_settings` row and Fill-history indexes; it leaves detector-owned pours unchanged. Schema version 11 (`draft-health-and-tap-maintenance`) adds the typed health defaults/overrides, rebuildable health state, durable incidents/transitions, and append-only Tap line-maintenance records. Each Tap has at most one open epoch and a closed epoch cannot reopen. Activity is separate from runtime logs, has bounded retention, and never recursively admits outbox rows. Deletion audit stores minimal impact counts and remains immutable.
+Schema version 9 adds detector state, version 10 adds forecast settings, and version 11 adds health and Tap maintenance. Schema version 12 (`ssr-dashboard-display-settings`) adds the constrained singleton `display_settings` row with deterministic defaults and revision-aware updates. It contains only shared defaults; browser overrides, SSE clients/queues, and rotation state remain ephemeral.
 
 Foundation schema version 1 contained exactly one infrastructure table:
 
@@ -54,9 +57,9 @@ CREATE TABLE schema_migrations (
 )
 ```
 
-SQLite `user_version` is 11 and the migration machinery uses `schema_migrations` as its ordered history ledger, appending migration 11 as `draft-health-and-tap-maintenance`. Migration definitions are contiguous from version 1 with nonempty unique names. A clean empty version-0 database migrates transactionally through version 11; current databases reopen only when version, ledger, constraints, required singleton state, and exact schema object set match the supported baseline. Future versions, unknown nonempty version-0 databases, missing or inconsistent ledgers, and unexpected schema objects fail closed without adoption or repair. Failed migrations roll back schema changes, ledger changes, and `user_version`.
+SQLite `user_version` is 12 and the migration machinery uses `schema_migrations` as its ordered history ledger. A clean database migrates transactionally through version 12; a canonical v11 database upgrades without changing existing state; and current databases reopen only when version, ledger, exact DDL, constraints, required singleton state, and exact schema object set match. Future versions, unknown schemas, missing or inconsistent ledgers, corrupted canonical DDL, and unexpected objects fail closed. Failed migrations roll back schema, ledger, and `user_version` together.
 
-The exact-object validation is intentionally the supported schema-version-11 baseline, not a claim that future domain tables are forbidden forever. Later migrations must deliberately extend the schema validator alongside their versioned schema changes. Outbox admission serializes inside `BEGIN IMMEDIATE`, counts persisted UTF-8 bytes, bounds global/per-destination rows and bytes, and records fixed-slot degradation when it returns `not_queued_capacity`. Providers and workers remain deferred.
+The exact-object validation is intentionally the supported schema-version-12 baseline, not a claim that future feature-owned tables are forbidden. Later migrations must deliberately extend the validator alongside their versioned schema changes.
 
 ## Telemetry ingestion boundary (#72)
 
@@ -98,7 +101,15 @@ Disabled Taps still evaluate health. Retired Taps are skipped, with incident res
 
 Tap line maintenance is append-only. Resulting due dates are derived by the server, `line_cleaned` establishes the line-cleaning baseline only, and private notes are exposed only in Admin maintenance detail. A durable health incident and a maintenance record each atomically set Tap `first_used_at`, preserving the existing monotonic first-use contract.
 
-Health is evaluated after accepted telemetry completes detector processing and after assignment, authority, correction, density, configuration, maintenance, and startup changes. One coalesced periodic sweep covers due work without changing the canonical telemetry or epoch authority. Only meaningful health and maintenance changes create Activity; routine evaluations and unchanged state do not. Authenticated Admin routes and projections cover overview, detail, configuration, per-Tap overrides, incidents, acknowledgement, cooldown, and line maintenance. A safe targeted `HealthTargetedUpdate` DTO seam is available for #76. #75 adds no public health API, SSE/browser UI, or outbound Home Assistant/webhook delivery worker; those remain assigned to #76 and #79 respectively.
+Health is evaluated after accepted telemetry completes detector processing and after assignment, authority, correction, density, configuration, maintenance, and startup changes. One coalesced periodic sweep covers due work without changing the canonical telemetry or epoch authority. Only meaningful health and maintenance changes create Activity; routine evaluations and unchanged state do not. Authenticated Admin routes and projections cover overview, detail, configuration, per-Tap overrides, incidents, acknowledgement, cooldown, and line maintenance. The safe targeted `HealthTargetedUpdate` seam now drives #76 dirty notifications without exposing evidence. There is no public health-detail API or outbound Home Assistant/webhook delivery worker.
+
+## SSR, live delivery, and display ownership (#76)
+
+`DashboardService` builds public-only header, Tap-card, On Deck, and display-default projections from existing feature services. The public boundary omits source/key identifiers, raw telemetry and integration payloads, health evidence, actor/session IDs, maintenance notes, secrets, and internal database shape. Admin route projections are likewise purpose-built and never reveal stored credentials or session tokens.
+
+`LiveUpdateService` owns separate public and authenticated Admin hubs. Events are named `tap.updated`, `fill.updated`, `telemetry.updated`, `health.updated`, `ondeck.updated`, `integration_status.updated`, and `display.updated`, and contain only a Tap ID or fixed dirty target. Successful outer service returns publish post-commit notifications; transaction-local detector/health extension ports never perform network writes. Periodic Brewfather sync publishes only after completion. Per-hub client counts, queued event counts, and queued bytes are bounded; dirty keys coalesce, `drain` resumes a blocked stream, overflow disconnects the client, and Admin sessions are periodically revalidated. There is no durable replay or Last-Event-ID claim.
+
+Shared display defaults are a typed, revisioned feature-owned row. No-op updates do not create Activity or revision churn. Sparse browser overrides use localStorage key `tapboard.v2.display-preferences.v1`, record version 1, exact known keys, and allowlisted enums. An external synchronous bootstrap runs before CSS and applies only validated `data-*` attributes; normal modules reconcile shared changes field-by-field and use the `storage` event for same-origin peer tabs. Storage exceptions and corrupt data fail to shared defaults.
 
 ## Dependencies
 
@@ -107,7 +118,7 @@ The only production dependencies are:
 - `better-sqlite3`, for the frozen synchronous SQLite connection and transaction model;
 - `eta`, for the frozen file-based server-rendering boundary with safe escaping, layouts, and partials.
 
-Development dependencies are TypeScript, `@types/node`, and `@types/better-sqlite3` for strict no-emit checking; ESLint, `@eslint/js`, and `typescript-eslint` for TypeScript-aware linting; and Prettier for deterministic formatting. No other runtime library or framework is introduced.
+Development dependencies are TypeScript, `@types/node`, and `@types/better-sqlite3` for strict no-emit checking; ESLint, `@eslint/js`, and `typescript-eslint` for TypeScript-aware linting; Prettier for deterministic formatting; and `@playwright/test` for the separate browser E2E tier. No browser runtime framework, frontend build tool, or additional production dependency is introduced.
 
 ## Architecture enforcement
 
@@ -115,9 +126,7 @@ The canonical `npm run check` gate combines format, lint, type, architecture, re
 
 ## Not implemented
 
-The implemented slices intentionally do not implement provider delivery workers, Home Assistant/webhook adapters, Admin/public browser feature pages, SSE, Brew Story, Mystery Tap, Tap Wars, or production Docker hardening/deployment. #75 intentionally has no public health API; its health surfaces are authenticated Admin routes/projections. The `.env.example` reference and provisional production compose illustration do not change the runnable development-only container boundary, and production deployment remains deferred to issue #81.
-
-Playwright/browser E2E is also not present because Foundation has no feature UI or browser workflow. No E2E tests ran or passed; the tier is deferred to issue #76.
+The implemented slices intentionally do not implement provider delivery workers, Home Assistant/webhook adapters, Brew Story, sensory guidance, Mystery Tap, Tap Wars domain/voting, complete System/session/retention/operator administration, or production Docker hardening/deployment. The Tap Wars and System pages are honest navigation seams only. Public health remains an aggregate presentation rather than an evidence/detail API. Production deployment remains deferred to issue #81.
 
 ## Historical v1
 

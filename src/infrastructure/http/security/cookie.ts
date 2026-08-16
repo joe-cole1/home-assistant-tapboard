@@ -1,6 +1,7 @@
 import { ApplicationError } from "../../../shared/errors.ts";
 
 export const ADMIN_SESSION_COOKIE = "tapboard_admin_session";
+export const ADMIN_CSRF_COOKIE = "tapboard_admin_csrf";
 const MAX_COOKIE_BYTES = 8 * 1024;
 const MAX_COOKIE_PAIRS = 50;
 
@@ -52,6 +53,36 @@ export function clearSessionCookie(options: Pick<CookieSerializeOptions, "secure
   return [
     `${ADMIN_SESSION_COOKIE}=`,
     "HttpOnly",
+    "Path=/",
+    "SameSite=Strict",
+    ...(options.secure === true ? ["Secure"] : []),
+    "Max-Age=0",
+  ].join("; ");
+}
+
+export function serializeCsrfCookie(
+  token: string,
+  absoluteExpiresAt: string | Date,
+  options: CookieSerializeOptions = {},
+): string {
+  if (!canonicalToken(token)) throw cookieError();
+  const now = options.now ?? new Date();
+  const expires =
+    absoluteExpiresAt instanceof Date ? absoluteExpiresAt : new Date(absoluteExpiresAt);
+  if (Number.isNaN(now.getTime()) || Number.isNaN(expires.getTime())) throw cookieError();
+  const maxAge = Math.max(0, Math.floor((expires.getTime() - now.getTime()) / 1_000));
+  return [
+    `${ADMIN_CSRF_COOKIE}=${token}`,
+    "Path=/",
+    "SameSite=Strict",
+    ...(options.secure === true ? ["Secure"] : []),
+    `Max-Age=${maxAge}`,
+  ].join("; ");
+}
+
+export function clearCsrfCookie(options: Pick<CookieSerializeOptions, "secure"> = {}): string {
+  return [
+    `${ADMIN_CSRF_COOKIE}=`,
     "Path=/",
     "SameSite=Strict",
     ...(options.secure === true ? ["Secure"] : []),
@@ -113,6 +144,13 @@ export function parseSessionCookie(
   const token = cookies.get(ADMIN_SESSION_COOKIE);
   if (token === undefined) return undefined;
   return canonicalToken(token) ? token : undefined;
+}
+
+export function parseCsrfCookie(
+  header: string | readonly string[] | undefined,
+): string | undefined {
+  const token = parseCookieHeader(header).get(ADMIN_CSRF_COOKIE);
+  return token !== undefined && canonicalToken(token) ? token : undefined;
 }
 
 export const parseCookies = parseCookieHeader;

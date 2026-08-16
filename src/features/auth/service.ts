@@ -68,6 +68,8 @@ export interface AuthenticationResult {
   readonly csrf?: string;
   readonly sessionId?: string;
   readonly cookie?: string;
+  readonly expiresAt?: string;
+  readonly absoluteExpiresAt?: string;
 }
 
 export interface AuthenticatedSession {
@@ -409,6 +411,8 @@ export class AuthService {
       csrf: material.public.csrfToken,
       sessionId: material.public.sessionId,
       cookie: material.public.cookie,
+      expiresAt: material.public.expiresAt,
+      absoluteExpiresAt: material.public.absoluteExpiresAt,
     };
   }
 
@@ -484,7 +488,30 @@ export class AuthService {
   }
 
   validateSession(token: unknown, options?: AuthClockOptions): AuthenticatedSession | undefined {
-    return this.authenticateSession(token, options);
+    const parsed = parseSessionToken(token);
+    if (parsed === undefined) return undefined;
+    const nowDate = dateNow(options?.now ?? this.#options.now);
+    const nowMs = nowDate.getTime();
+    const row = readSessionByDigest(this.#database, digest(token as string));
+    const credential = readCredential(this.#database);
+    const expiresAt = row === undefined ? undefined : canonicalTimestamp(row.expiresAt);
+    const absoluteExpiresAt =
+      row === undefined ? undefined : canonicalTimestamp(row.absoluteExpiresAt);
+    const lastUsedAt = row === undefined ? undefined : canonicalTimestamp(row.lastUsedAt);
+    if (
+      row === undefined ||
+      credential === undefined ||
+      expiresAt === undefined ||
+      absoluteExpiresAt === undefined ||
+      lastUsedAt === undefined ||
+      row.revokedAt !== null ||
+      row.credentialRevision !== credential.revision ||
+      nowMs >= expiresAt ||
+      nowMs >= absoluteExpiresAt
+    ) {
+      return undefined;
+    }
+    return publicSession(row);
   }
 
   revoke(token: unknown, options: AuthClockOptions = {}): boolean {

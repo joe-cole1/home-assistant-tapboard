@@ -9,6 +9,26 @@ export default tseslint.config(
     ...eslint.configs.recommended,
     files: ["**/*.{js,mjs,cjs}"],
   },
+  {
+    files: ["public/**/*.js"],
+    languageOptions: {
+      globals: Object.fromEntries(
+        [
+          "CSS",
+          "CustomEvent",
+          "EventSource",
+          "FormData",
+          "Option",
+          "StorageEvent",
+          "document",
+          "fetch",
+          "localStorage",
+          "matchMedia",
+          "window",
+        ].map((name) => [name, "readonly"]),
+      ),
+    },
+  },
   ...tseslint.configs.recommendedTypeChecked.map((config) => ({
     ...config,
     files: ["**/*.ts"],
