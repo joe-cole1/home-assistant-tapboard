@@ -166,6 +166,88 @@ test("Brew Story follows shared and local display preferences", async ({ browser
   await context.close();
 });
 
+test("Brew Story ignores ordinary telemetry reloads but reconciles Mystery updates", async ({
+  browser,
+}) => {
+  const context = await browser.newContext();
+  const admin = await context.newPage();
+  await login(admin);
+  await admin.goto("/admin/integrations");
+  const csrfToken = await admin.locator('input[name="_csrf"]').first().inputValue();
+  const sourcesResponse = await admin.request.get("/api/admin/telemetry/sources");
+  expect(sourcesResponse.status()).toBe(200);
+  const sourcesPayload = (await sourcesResponse.json()) as {
+    readonly sources: readonly { readonly id: string; readonly name: string }[];
+  };
+  const source = sourcesPayload.sources.find((item) => item.name === "Private fixture source");
+  expect(source).toBeDefined();
+  const rotateResponse = await admin.request.post(
+    `/api/admin/telemetry/sources/${source!.id}/rotate`,
+    {
+      headers: { origin: "http://127.0.0.1:4176", "x-csrf-token": csrfToken },
+      data: { label: "Issue 77 Story live fixture" },
+    },
+  );
+  expect(rotateResponse.status()).toBe(200);
+  const rotatePayload = (await rotateResponse.json()) as { readonly replacementToken: string };
+  expect(rotatePayload.replacementToken).toMatch(/^tbk_[A-Za-z0-9_-]+_[A-Za-z0-9_-]+$/u);
+
+  const storyPage = await context.newPage();
+  await storyPage.goto("/");
+  const normalCard = storyPage.locator('[data-tap-number="1"]');
+  await normalCard.locator('[data-field="story-link"]').click();
+  await expect(storyPage).toHaveURL(/\/taps\/[^/]+\/story$/u);
+  await expect(storyPage.locator("main")).toContainText(LIVE_MYSTERY_SECRET);
+
+  let navigations = 0;
+  storyPage.on("framenavigated", (frame) => {
+    if (frame === storyPage.mainFrame()) navigations += 1;
+  });
+
+  const measuredAt = Date.now();
+  for (let index = 0; index < 3; index += 1) {
+    const response = await storyPage.request.post("/api/v1/telemetry/taps/1", {
+      headers: {
+        authorization: `Bearer ${rotatePayload.replacementToken}`,
+        "content-type": "application/json",
+      },
+      data: {
+        client_sample_id: `story-live-${index}`,
+        measured_at: new Date(measuredAt + index * 1_000).toISOString(),
+        measurement: { kind: "remaining_volume", value: 12_000 - index, unit: "ml" },
+        temperature: { value: 4, unit: "c" },
+      },
+    });
+    expect(response.status()).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      outcome: "accepted",
+      duplicate: false,
+    });
+  }
+  await storyPage.waitForTimeout(500);
+  expect(navigations).toBe(0);
+
+  await admin.goto("/admin/taps");
+  const normalAdminCard = admin.getByRole("heading", { name: /^Tap 1\s/u }).locator("..");
+  await normalAdminCard.getByText("Mystery Tap visibility").click();
+  await normalAdminCard.getByLabel("Enable Mystery Tap").check();
+  await normalAdminCard.getByRole("button", { name: "Save Mystery settings" }).click();
+  await expect(admin).toHaveURL(/\/admin\/taps\?notice=/u);
+
+  await expect(storyPage.getByRole("heading", { name: "Mystery Tap" })).toBeVisible();
+  expect(navigations).toBeGreaterThan(0);
+  const redactedStory = await storyPage.locator("main").textContent();
+  expect(redactedStory).not.toContain(LIVE_MYSTERY_SECRET);
+
+  await admin.goto("/admin/taps");
+  const cleanupCard = admin.getByRole("heading", { name: /^Tap 1\s/u }).locator("..");
+  await cleanupCard.getByText("Mystery Tap visibility").click();
+  await cleanupCard.getByLabel("Enable Mystery Tap").uncheck();
+  await cleanupCard.getByRole("button", { name: "Save Mystery settings" }).click();
+  await expect(admin).toHaveURL(/\/admin\/taps\?notice=/u);
+  await context.close();
+});
+
 test("Custom recipe JSON editor round-trips losslessly without JavaScript", async ({ browser }) => {
   const context = await browser.newContext({ javaScriptEnabled: false });
   const page = await context.newPage();

@@ -1,4 +1,5 @@
 import { connect } from "/assets/js/sse.js";
+import "/assets/js/display-preferences.js";
 
 const root = document.querySelector("[data-story]");
 const tapId = root?.dataset.tapId;
@@ -12,8 +13,7 @@ if (root && tapId) {
         reload();
         return;
       }
-      if (!["tap.updated", "fill.updated", "telemetry.updated", "health.updated"].includes(name))
-        return;
+      if (!["tap.updated", "fill.updated"].includes(name)) return;
       try {
         const data = JSON.parse(event.data);
         if (data && typeof data === "object" && data.tapId === tapId) reload();
