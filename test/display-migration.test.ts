@@ -4,6 +4,7 @@ import test from "node:test";
 import { openDatabase } from "../src/infrastructure/database/connection.ts";
 import {
   CURRENT_SCHEMA_VERSION,
+  BREW_STORY_SENSORY_MYSTERY_MIGRATION_NAME,
   DISPLAY_MIGRATION_NAME,
   initializeSchema,
   MIGRATIONS,
@@ -31,7 +32,7 @@ void test("v11 upgrades preserve data and seed canonical display settings", () =
       1,
     );
     initializeSchema(database, MIGRATIONS);
-    assert.equal(database.pragma<number>("user_version", { simple: true }), 12);
+    assert.equal(database.pragma<number>("user_version", { simple: true }), CURRENT_SCHEMA_VERSION);
   } finally {
     if (database.isOpen) database.close();
   }
@@ -41,7 +42,7 @@ void test("v12 migration identity and defaults are canonical", () => {
   const database = openDatabase(":memory:");
   try {
     assert.equal(database.pragma<number>("user_version", { simple: true }), CURRENT_SCHEMA_VERSION);
-    assert.equal(CURRENT_SCHEMA_VERSION, 12);
+    assert.equal(CURRENT_SCHEMA_VERSION, 13);
     assert.equal(
       database
         .prepare<[], { readonly name: string }>(
@@ -49,6 +50,14 @@ void test("v12 migration identity and defaults are canonical", () => {
         )
         .get()?.name,
       DISPLAY_MIGRATION_NAME,
+    );
+    assert.equal(
+      database
+        .prepare<[], { readonly name: string }>(
+          "SELECT name FROM schema_migrations WHERE version = 13",
+        )
+        .get()?.name,
+      BREW_STORY_SENSORY_MYSTERY_MIGRATION_NAME,
     );
     assert.deepEqual(
       database

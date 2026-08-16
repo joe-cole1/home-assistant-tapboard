@@ -24,7 +24,9 @@ export const HEALTH_MAINTENANCE_SCHEMA_VERSION = 11;
 export const HEALTH_MAINTENANCE_MIGRATION_NAME = "draft-health-and-tap-maintenance";
 export const DISPLAY_SCHEMA_VERSION = 12;
 export const DISPLAY_MIGRATION_NAME = "ssr-dashboard-display-settings";
-export const CURRENT_SCHEMA_VERSION = DISPLAY_SCHEMA_VERSION;
+export const BREW_STORY_SENSORY_MYSTERY_SCHEMA_VERSION = 13;
+export const BREW_STORY_SENSORY_MYSTERY_MIGRATION_NAME = "brew-story-sensory-mystery";
+export const CURRENT_SCHEMA_VERSION = BREW_STORY_SENSORY_MYSTERY_SCHEMA_VERSION;
 
 export interface MigrationDefinition {
   readonly version: number;
@@ -1164,6 +1166,24 @@ const TAPS_SCHEMA_OBJECTS = [
   ["trigger", "trg_tap_assignment_lifecycles_no_open_reason"],
 ] as const;
 
+const BREW_STORY_SENSORY_MYSTERY_SCHEMA_SQL = `
+  CREATE TABLE tap_assignment_mystery (
+    assignment_id TEXT PRIMARY KEY REFERENCES tap_assignment_lifecycles(id) ON DELETE CASCADE,
+    reveal_beverage_type INTEGER NOT NULL DEFAULT 0 CHECK (reveal_beverage_type IN (0,1)),
+    reveal_style INTEGER NOT NULL DEFAULT 0 CHECK (reveal_style IN (0,1)),
+    reveal_abv INTEGER NOT NULL DEFAULT 0 CHECK (reveal_abv IN (0,1)),
+    reveal_ibu INTEGER NOT NULL DEFAULT 0 CHECK (reveal_ibu IN (0,1)),
+    reveal_og INTEGER NOT NULL DEFAULT 0 CHECK (reveal_og IN (0,1)),
+    reveal_fg INTEGER NOT NULL DEFAULT 0 CHECK (reveal_fg IN (0,1)),
+    reveal_srm INTEGER NOT NULL DEFAULT 0 CHECK (reveal_srm IN (0,1)),
+    reveal_description INTEGER NOT NULL DEFAULT 0 CHECK (reveal_description IN (0,1)),
+    reveal_recipe INTEGER NOT NULL DEFAULT 0 CHECK (reveal_recipe IN (0,1)),
+    reveal_sensory INTEGER NOT NULL DEFAULT 0 CHECK (reveal_sensory IN (0,1)),
+    reveal_history INTEGER NOT NULL DEFAULT 0 CHECK (reveal_history IN (0,1)),
+    updated_at TEXT NOT NULL
+  );
+`;
+
 const TELEMETRY_SCHEMA_OBJECTS = [
   ...TAPS_SCHEMA_OBJECTS,
   ["table", "telemetry_sources"],
@@ -1456,6 +1476,11 @@ export const DISPLAY_SCHEMA_SQL = `
 const DISPLAY_SCHEMA_OBJECTS = [
   ...HEALTH_MAINTENANCE_SCHEMA_OBJECTS,
   ["table", "display_settings"],
+] as const;
+
+const BREW_STORY_SENSORY_MYSTERY_SCHEMA_OBJECTS = [
+  ...DISPLAY_SCHEMA_OBJECTS,
+  ["table", "tap_assignment_mystery"],
 ] as const;
 
 function splitSqlStatements(sql: string): string[] {
@@ -2620,6 +2645,33 @@ function validateDisplaySchema(database: DatabaseExecutor): void {
   ]);
 }
 
+function validateBrewStorySensoryMysterySchema(database: DatabaseExecutor): void {
+  validateTelemetrySchemaDefinition(
+    database,
+    BREW_STORY_SENSORY_MYSTERY_SCHEMA_OBJECTS,
+    `${FORENSIC_QC_SCHEMA_SQL}\n${TELEMETRY_EPOCHS_SCHEMA_SQL}\n${FORECASTING_SCHEMA_SQL}\n${HEALTH_MAINTENANCE_SCHEMA_SQL}\n${DISPLAY_SCHEMA_SQL}\n${BREW_STORY_SENSORY_MYSTERY_SCHEMA_SQL}`,
+    BREW_STORY_SENSORY_MYSTERY_SCHEMA_VERSION,
+  );
+  validateHealthMaintenanceColumns(database);
+  expectColumns(database, "tap_assignment_mystery", [
+    { name: "assignment_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+    ...[
+      "reveal_beverage_type",
+      "reveal_style",
+      "reveal_abv",
+      "reveal_ibu",
+      "reveal_og",
+      "reveal_fg",
+      "reveal_srm",
+      "reveal_description",
+      "reveal_recipe",
+      "reveal_sensory",
+      "reveal_history",
+    ].map((name) => ({ name, type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 })),
+    { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+  ]);
+}
+
 function validatePhysicalKegsSchema(database: DatabaseExecutor): void {
   const expected = new Map(
     PHYSICAL_KEGS_SCHEMA_OBJECTS.map(([type, name]) => [`${type}:${name}`, type]),
@@ -2889,6 +2941,15 @@ export const DISPLAY_MIGRATION: MigrationDefinition = {
   },
 };
 
+export const BREW_STORY_SENSORY_MYSTERY_MIGRATION: MigrationDefinition = {
+  version: BREW_STORY_SENSORY_MYSTERY_SCHEMA_VERSION,
+  name: BREW_STORY_SENSORY_MYSTERY_MIGRATION_NAME,
+  apply(database) {
+    database.execute(BREW_STORY_SENSORY_MYSTERY_SCHEMA_SQL);
+    return undefined;
+  },
+};
+
 /** Canonical production migration list. Keep this array identity stable. */
 export const MIGRATIONS: readonly MigrationDefinition[] = [
   FOUNDATION_MIGRATIONS[0]!,
@@ -2903,6 +2964,7 @@ export const MIGRATIONS: readonly MigrationDefinition[] = [
   FORECASTING_MIGRATION,
   HEALTH_MAINTENANCE_MIGRATION,
   DISPLAY_MIGRATION,
+  BREW_STORY_SENSORY_MYSTERY_MIGRATION,
 ];
 
 // Compatibility aliases for callers that prefer an explicit application name.
@@ -3016,6 +3078,8 @@ function validateCanonicalSchemaAtVersion(database: DatabaseExecutor, version: n
     validateHealthMaintenanceSchema(database);
   } else if (version === DISPLAY_SCHEMA_VERSION) {
     validateDisplaySchema(database);
+  } else if (version === BREW_STORY_SENSORY_MYSTERY_SCHEMA_VERSION) {
+    validateBrewStorySensoryMysterySchema(database);
   } else {
     throw incompatibleSchema("schema version is not a canonical Tapboard version");
   }
@@ -3055,7 +3119,13 @@ export function initializeSchema(
   }
   validateMigrationLedger(database, currentVersion, migrations);
 
-  if (isCanonicalMigrationPrefix(migrations) && currentVersion === DISPLAY_SCHEMA_VERSION) {
+  if (
+    isCanonicalMigrationPrefix(migrations) &&
+    currentVersion === BREW_STORY_SENSORY_MYSTERY_SCHEMA_VERSION
+  ) {
+    validateFoundationLedgerStructure(database);
+    validateBrewStorySensoryMysterySchema(database);
+  } else if (isCanonicalMigrationPrefix(migrations) && currentVersion === DISPLAY_SCHEMA_VERSION) {
     validateFoundationLedgerStructure(database);
     validateDisplaySchema(database);
   } else if (

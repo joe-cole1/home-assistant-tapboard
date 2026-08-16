@@ -76,9 +76,9 @@
         { "path": "test/graphicsFoam.test.js", "git_blob_oid": "3d5f1d0567ee4a7cfe495168bf0169de47ab9920" },
         { "path": "test/frontendSecurity.test.js", "git_blob_oid": "dcc0dca7e4368fbf4d7f26d3b617e59b0ea66fcf" }
       ],
-      "proposed_v2_destination_or_purpose": "V2 presentation asset package with reviewed glass/keg SVGs, deterministic style-to-graphic mapping, bounded colors, and accessible markup.",
+      "proposed_v2_destination_or_purpose": "V2 finite Beverage-owned Fill Glass catalog and safe presentation descriptors in `src/features/story/vessels.ts`, consumed by the SSR partial and browser dashboard renderer for deterministic geometry, style mapping, and SRM/fallback color.",
       "rationale": "The geometry and mapping are valuable visual assets; the mapping module is pure and the renderer has tests for style catalog, foam behavior, hostile values, and SVG identity. Preserve the assets rather than redraw them, but keep them out of domain and HTTP code.",
-      "preservation": "Port the reviewed geometry and mapping data with explicit sanitization, stable IDs, responsive scaling, and accessibility checks; remove unrelated legacy card wiring.",
+      "preservation": "Port the reviewed catalog/style/SRM evidence and the actual static v1 vessel contours into the v2-owned finite catalog with explicit sanitization, stable IDs, safe deterministic descriptors, clipped liquid/shadow/foam layers, accessible markup, stable SVG-node updates, and the reviewed 8-second cubic-bezier fill transition; remove only unrelated legacy card wiring, animation randomness, raw SVG input, and arbitrary artwork.",
       "confidence": "high",
       "risks": ["The renderer currently generates animation randomness and HTML strings; v2 must retain safe generated markup boundaries.", "Graphic IDs must remain stable when presentation moves to new templates."]
     },
@@ -240,9 +240,9 @@
       "evidence_tests": [
         { "path": "test/sensoryEngine.test.js", "git_blob_oid": "736380f82a50b3f34a8c4200559c2d3bd3c2ee43" }
       ],
-      "proposed_v2_destination_or_purpose": "V2 pure sensory profile service using measured values, recipe prediction, and style baselines with bounded half-step axes and evidence metadata.",
+      "proposed_v2_destination_or_purpose": "V2 pure sensory guidance in `src/features/story/profile.ts`, with bounded recipe/source normalization in `src/features/story/recipe.ts` and central public use through the Story projection; six axes resolve independently by manual override, recipe prediction, style baseline, or unavailable.",
       "rationale": "Amount-aware formulas for bitterness, gravity/attenuation, roast/body/tartness, style composition, null safety, and evidence/confidence are valuable deterministic behavior. The v1 implementation includes a removed brewer-tasting layer and external detail shapes, so only formulas and reviewed mappings should move.",
-      "preservation": "Port formula behavior and mappings behind v2-owned typed inputs; enforce the frozen precedence and omit unsupported axes rather than inventing values.",
+      "preservation": "Port formula behavior and mappings behind v2-owned typed inputs and bounded recipe projection; enforce the six-axis frozen precedence, preserve evidence/provenance, exclude tasting/malt/hops layers, and omit unsupported axes rather than inventing values.",
       "confidence": "medium",
       "risks": ["Preserving tasting precedence would violate the v2 source policy.", "Recipe field normalization must remain separate from the Brewfather transport adapter."]
     },

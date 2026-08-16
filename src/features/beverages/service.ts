@@ -28,6 +28,7 @@ import {
   readCustomProfile,
   readCustomRecipe,
   readPresentationOverrides,
+  readRecipeSnapshots,
   readSensoryOverrides,
   readSourceProfile,
   saveCustomRecipe,
@@ -46,10 +47,11 @@ import {
   validateLinkBrewfatherCandidateInput,
   validateUpdateBeverageSettingsInput,
   validateUpdateCustomBeverageInput,
+  validateUpdateBeverageSensoryOverridesInput,
   validateUpdatePresentationOverridesInput,
 } from "./beverage-validation.ts";
 import { BrewfatherSyncCoordinator, type SyncOptions, type SyncResult } from "./brewfather/sync.ts";
-import { BEVERAGE_TYPES } from "./types.ts";
+import { BEVERAGE_SENSORY_AXES, BEVERAGE_TYPES } from "./types.ts";
 import type {
   Beverage,
   BeverageActorOptions,
@@ -68,6 +70,7 @@ import type {
   CustomRecipe,
   DensityResolution,
   EffectiveBeveragePresentation,
+  UpdateBeverageSensoryOverridesResult,
   UpdatePresentationOverridesInput,
 } from "./types.ts";
 
@@ -124,6 +127,13 @@ function mergeOverrideField<T>(
     present: true,
     value: fieldInput.value ?? null,
   };
+}
+
+function sameSensoryOverrides(
+  left: BeverageSensoryOverrides,
+  right: BeverageSensoryOverrides,
+): boolean {
+  return BEVERAGE_SENSORY_AXES.every((axis) => left[axis] === right[axis]);
 }
 
 export class BeverageService {
@@ -413,6 +423,63 @@ export class BeverageService {
         ...(customRecipe ? { customRecipe } : {}),
         ...(sensoryOverrides ? { sensoryOverrides } : {}),
       };
+    });
+  }
+
+  updateSensoryOverrides(
+    beverageId: string,
+    input: unknown,
+    actorOptions: BeverageActorOptions = {},
+  ): UpdateBeverageSensoryOverridesResult {
+    const validated = validateUpdateBeverageSensoryOverridesInput(input);
+    const now = (actorOptions.now ?? this.#now)().toISOString();
+
+    return this.#database.withTransaction(() => {
+      const beverage = readBeverage(this.#database, beverageId);
+      if (beverage === undefined) {
+        throw new ApplicationError({
+          category: "not_found",
+          code: "beverage.not_found",
+          clientMessage: "Beverage was not found.",
+        });
+      }
+
+      const current =
+        readSensoryOverrides(this.#database, beverageId) ??
+        ({
+          beverageId,
+          bitterness: null,
+          sweetness: null,
+          body: null,
+          roast: null,
+          tartness: null,
+          alcohol: null,
+          updatedAt: beverage.updatedAt,
+        } satisfies BeverageSensoryOverrides);
+      const desired: BeverageSensoryOverrides = {
+        ...current,
+        ...validated,
+      };
+
+      if (sameSensoryOverrides(current, desired)) {
+        return { sensoryOverrides: current, changed: false };
+      }
+
+      const sensoryOverrides = upsertSensoryOverrides(this.#database, beverageId, validated, now);
+      touchBeverage(this.#database, beverageId, now);
+      appendActivity(this.#database, {
+        category: "domain",
+        action: "entity_changed",
+        actorType: actorOptions.actorType ?? "admin",
+        ...(actorOptions.actorId !== undefined ? { actorId: actorOptions.actorId } : {}),
+        ...(actorOptions.sessionId !== undefined ? { sessionId: actorOptions.sessionId } : {}),
+        entityType: "beverage",
+        entityId: beverageId,
+        details: { change: "sensory_overrides_updated" },
+        occurredAt: now,
+      });
+
+      return { sensoryOverrides, changed: true };
     });
   }
 
@@ -896,6 +963,18 @@ export class BeverageService {
       ...(recipeSnapshot ? { recipeSnapshot } : {}),
       ...(sensoryOverrides ? { sensoryOverrides } : {}),
     };
+  }
+
+  getRecipeSnapshots(beverageId: string): readonly BeverageSourceRecipeSnapshot[] {
+    const beverage = readBeverage(this.#database, beverageId);
+    if (beverage === undefined) {
+      throw new ApplicationError({
+        category: "not_found",
+        code: "beverage.not_found",
+        clientMessage: "Beverage was not found.",
+      });
+    }
+    return readRecipeSnapshots(this.#database, beverage.id);
   }
 
   listBeverages(): readonly BeverageSummaryResult[] {

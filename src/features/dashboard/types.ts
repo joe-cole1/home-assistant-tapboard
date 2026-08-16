@@ -5,6 +5,7 @@ import type {
   DisplayTheme,
   DisplayUnitSystem,
 } from "../display/types.ts";
+import type { VesselGeometryDescriptor } from "../story/types.ts";
 
 export interface PublicDisplayDefaultsView {
   readonly revision: number;
@@ -28,11 +29,17 @@ export interface PublicTapCardView {
   readonly tapNumber: number;
   readonly tapName: string | null;
   readonly graphicId: string;
+  /** Present on projections produced by PublicStoryService. */
+  readonly graphic?: VesselGeometryDescriptor;
   readonly displayColor: string;
   readonly beverageName: string | null;
   readonly style: string | null;
   readonly abv: number | null;
   readonly description: string | null;
+  /** Present on projections produced by PublicStoryService. */
+  readonly title?: string;
+  readonly accessibleLabel?: string;
+  readonly storyPath?: string | null;
   readonly fillId: string | null;
   readonly fillPercent: number | null;
   readonly remainingVolumeMl: number | null;

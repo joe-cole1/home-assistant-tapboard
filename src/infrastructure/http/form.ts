@@ -52,7 +52,11 @@ export async function readFormBody(
   ) {
     throw new RangeError("Form limits are invalid");
   }
-  const bytes = await readRequestBody(request, { maxBytes, required: options.required ?? true });
+  const bytes = await readRequestBody(request, {
+    maxBytes,
+    maxBytesCeiling: maxBytes,
+    required: options.required ?? true,
+  });
   let text: string;
   try {
     text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);

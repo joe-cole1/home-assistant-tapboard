@@ -17,6 +17,7 @@ import {
   MIGRATIONS,
   type MigrationDefinition,
 } from "../src/infrastructure/database/migrations.ts";
+import { resolveSensoryProfile } from "../src/features/story/profile.ts";
 
 interface UserVersionRow {
   readonly user_version: number;
@@ -111,7 +112,7 @@ function readTransactionValues(database: DatabaseConnection): string[] {
     .map((row) => row.value);
 }
 
-void test("a clean file database bootstraps the canonical v12 migration ledger", (context) => {
+void test("a clean file database bootstraps the canonical v13 migration ledger", (context) => {
   const path = makeDatabasePath(context);
   const database = openDatabase(path);
 
@@ -223,6 +224,7 @@ void test("a clean file database bootstraps the canonical v12 migration ledger",
         { type: "table", name: "schema_migrations" },
         { type: "table", name: "secret_rotation_state" },
         { type: "table", name: "tap_assignment_lifecycles" },
+        { type: "table", name: "tap_assignment_mystery" },
         { type: "table", name: "tap_line_maintenance_records" },
         { type: "table", name: "tap_telemetry_authority" },
         { type: "table", name: "taps" },
@@ -265,7 +267,7 @@ void test("a clean file database bootstraps the canonical v12 migration ledger",
         "SELECT version, name, applied_at FROM schema_migrations ORDER BY version",
       )
       .all();
-    assert.equal(ledger.length, 12);
+    assert.equal(ledger.length, 13);
     assert.equal(ledger[0]?.version, FOUNDATION_SCHEMA_VERSION);
     assert.equal(ledger[0]?.name, FOUNDATION_INITIAL_MIGRATION_NAME);
     assert.equal(ledger[1]?.version, 2);
@@ -290,6 +292,8 @@ void test("a clean file database bootstraps the canonical v12 migration ledger",
     assert.equal(ledger[10]?.name, "draft-health-and-tap-maintenance");
     assert.equal(ledger[11]?.version, 12);
     assert.equal(ledger[11]?.name, "ssr-dashboard-display-settings");
+    assert.equal(ledger[12]?.version, 13);
+    assert.equal(ledger[12]?.name, "brew-story-sensory-mystery");
     assert.match(ledger[0]?.applied_at ?? "", /^\d{4}-\d{2}-\d{2}T/);
   } finally {
     database.close();
@@ -307,16 +311,104 @@ void test("an in-memory database bootstraps the same canonical schema", () => {
           "SELECT type, name FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%'",
         )
         .all().length,
-      131,
+      132,
     );
     assert.equal(
       database
         .prepare<[], { readonly count: number }>("SELECT count(*) AS count FROM schema_migrations")
         .get()?.count,
-      12,
+      13,
     );
   } finally {
     database.close();
+  }
+});
+
+void test("v12 upgrades to v13 without altering existing lifecycle rows", (context) => {
+  const path = makeDatabasePath(context);
+  const v12 = openDatabase(path, { migrations: MIGRATIONS.slice(0, 12) });
+  const occurredAt = "2026-01-01T00:00:00.000Z";
+  const tapId = "11111111-1111-4111-8111-111111111111";
+  const kegId = "22222222-2222-4222-8222-222222222222";
+  const beverageId = "33333333-3333-4333-8333-333333333333";
+  const fillId = "44444444-4444-4444-8444-444444444444";
+  const assignmentId = "55555555-5555-4555-8555-555555555555";
+  try {
+    v12
+      .prepare<[string, number, string, string]>(
+        "INSERT INTO taps (id, tap_number, enabled, created_at, updated_at) VALUES (?, ?, 1, ?, ?)",
+      )
+      .run(tapId, 1, occurredAt, occurredAt);
+    v12
+      .prepare<[string, number, number, number, string, string]>(
+        "INSERT INTO kegs (id, keg_number, capacity_ml, current_tare_g, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+      )
+      .run(kegId, 1, 19000, 0, occurredAt, occurredAt);
+    v12
+      .prepare<[string, string, string]>(
+        "INSERT INTO beverages (id, ownership_type, created_at, updated_at) VALUES (?, 'custom', ?, ?)",
+      )
+      .run(beverageId, occurredAt, occurredAt);
+    v12
+      .prepare<[string, number, string]>(
+        `INSERT INTO beverage_sensory_overrides
+         (beverage_id, bitterness, updated_at) VALUES (?, ?, ?)`,
+      )
+      .run(beverageId, 8, occurredAt);
+    v12
+      .prepare<[string, string, string, string, string, string]>(
+        "INSERT INTO fills (id, beverage_id, keg_id, fill_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+      )
+      .run(fillId, beverageId, kegId, "2026-01-01", occurredAt, occurredAt);
+    v12
+      .prepare<[string, string, string, string, string]>(
+        "INSERT INTO tap_assignment_lifecycles (id, tap_id, fill_id, assigned_at, created_at) VALUES (?, ?, ?, ?, ?)",
+      )
+      .run(assignmentId, tapId, fillId, occurredAt, occurredAt);
+  } finally {
+    v12.close();
+  }
+  const upgraded = openDatabase(path);
+  try {
+    assert.equal(upgraded.pragma<number>("user_version", { simple: true }), 13);
+    assert.deepEqual(
+      upgraded
+        .prepare<
+          [string],
+          {
+            readonly id: string;
+            readonly tap_id: string;
+            readonly fill_id: string;
+            readonly assigned_at: string;
+            readonly ended_at: string | null;
+          }
+        >(
+          "SELECT id, tap_id, fill_id, assigned_at, ended_at FROM tap_assignment_lifecycles WHERE id = ?",
+        )
+        .get(assignmentId),
+      { id: assignmentId, tap_id: tapId, fill_id: fillId, assigned_at: occurredAt, ended_at: null },
+    );
+    assert.equal(
+      upgraded
+        .prepare<[], { readonly count: number }>(
+          "SELECT count(*) AS count FROM tap_assignment_mystery",
+        )
+        .get()?.count,
+      0,
+    );
+    const preservedSensory = upgraded
+      .prepare<[string], { readonly bitterness: number | null }>(
+        "SELECT bitterness FROM beverage_sensory_overrides WHERE beverage_id = ?",
+      )
+      .get(beverageId)?.bitterness;
+    assert.equal(preservedSensory, 8);
+    const storySensory = resolveSensoryProfile({
+      manualOverrides: { bitterness: preservedSensory },
+    }).bitterness;
+    assert.equal(storySensory.value, 4);
+    assert.equal(storySensory.source, "manual");
+  } finally {
+    upgraded.close();
   }
 });
 
@@ -440,6 +532,7 @@ void test("an exact v1 database upgrades to v11 with all ledger entries", (conte
         { version: 10, name: "pour-history-forecasting" },
         { version: 11, name: "draft-health-and-tap-maintenance" },
         { version: 12, name: "ssr-dashboard-display-settings" },
+        { version: 13, name: "brew-story-sensory-mystery" },
       ],
     );
   } finally {
@@ -455,7 +548,7 @@ void test("the pre-QC telemetry v7 schema upgrades to v11 without replacing pers
 
   const upgraded = openDatabase(path);
   try {
-    assert.equal(upgraded.pragma<number>("user_version", { simple: true }), 12);
+    assert.equal(upgraded.pragma<number>("user_version", { simple: true }), 13);
     assert.equal(
       upgraded
         .prepare<[], { readonly max_batch_size: number }>(
@@ -476,7 +569,7 @@ void test("the pre-QC telemetry v7 schema upgrades to v11 without replacing pers
       upgraded
         .prepare<[], { readonly count: number }>("SELECT count(*) AS count FROM schema_migrations")
         .get()?.count,
-      12,
+      13,
     );
   } finally {
     upgraded.close();
@@ -491,7 +584,7 @@ void test("a canonical v8 database validates before upgrading once to v11", (con
 
   const upgraded = openDatabase(path);
   try {
-    assert.equal(upgraded.pragma<number>("user_version", { simple: true }), 12);
+    assert.equal(upgraded.pragma<number>("user_version", { simple: true }), 13);
     assert.equal(
       upgraded
         .prepare<[], { readonly max_batch_size: number }>(
@@ -553,7 +646,7 @@ void test("a canonical v9 database validates before upgrading once to v11", (con
 
   const upgraded = openDatabase(path);
   try {
-    assert.equal(upgraded.pragma<number>("user_version", { simple: true }), 12);
+    assert.equal(upgraded.pragma<number>("user_version", { simple: true }), 13);
     assert.deepEqual(
       upgraded
         .prepare<[], { readonly serving_size_ml: number }>(
@@ -590,7 +683,7 @@ void test("v10 to v11 seeds typed health defaults and one state row per Tap", (c
 
   const upgraded = openDatabase(path);
   try {
-    assert.equal(upgraded.pragma<number>("user_version", { simple: true }), 12);
+    assert.equal(upgraded.pragma<number>("user_version", { simple: true }), 13);
     assert.deepEqual(
       upgraded
         .prepare(
@@ -955,7 +1048,7 @@ void test("a current database reopens idempotently", (context) => {
       reopened
         .prepare<[], { readonly count: number }>("SELECT count(*) AS count FROM schema_migrations")
         .get()?.count,
-      12,
+      13,
     );
   } finally {
     reopened.close();
@@ -970,7 +1063,7 @@ void test("a clean version 0 database upgrades through the canonical v11 schema"
 
   withFixture(path, (database) => {
     assert.equal(readUserVersion(database), CURRENT_SCHEMA_VERSION);
-    assert.equal(readSchemaObjects(database).length, 131);
+    assert.equal(readSchemaObjects(database).length, 132);
   });
 });
 
@@ -1006,12 +1099,12 @@ void test("migration definitions must be contiguous with nonempty unique names",
 
 void test("an unsupported future schema is rejected without mutation", (context) => {
   const path = makeDatabasePath(context);
-  withFixture(path, (database) => database.exec("PRAGMA user_version = 13"));
+  withFixture(path, (database) => database.exec("PRAGMA user_version = 14"));
 
   assert.throws(() => openDatabase(path), /schema version is newer/);
 
   withFixture(path, (database) => {
-    assert.equal(readUserVersion(database), 13);
+    assert.equal(readUserVersion(database), 14);
     assert.deepEqual(readSchemaObjects(database), []);
   });
 });

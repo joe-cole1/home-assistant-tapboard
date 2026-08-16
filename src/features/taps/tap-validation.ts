@@ -11,6 +11,7 @@ import type {
   MoveTapInput,
   RetireTapInput,
   UpdateTapInput,
+  UpdateTapAssignmentMysteryInput,
 } from "./types.ts";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -259,4 +260,43 @@ export function validateDeleteTapInput(input: unknown): DeleteTapInput {
   rejectUnknownKeys(object, ["reason"], "body");
   const reason = normalizeOptionalText(object.reason, "reason", MAX_REASON_LENGTH);
   return { reason };
+}
+
+export function validateUpdateTapAssignmentMysteryInput(
+  input: unknown,
+): UpdateTapAssignmentMysteryInput {
+  const object = requirePlainObject(input, "body");
+  const fields = [
+    "enabled",
+    "revealBeverageType",
+    "revealStyle",
+    "revealAbv",
+    "revealIbu",
+    "revealOg",
+    "revealFg",
+    "revealSrm",
+    "revealDescription",
+    "revealRecipe",
+    "revealSensory",
+    "revealHistory",
+  ] as const;
+  rejectUnknownKeys(object, [...fields], "body");
+  const value = (field: (typeof fields)[number]): boolean => {
+    if (typeof object[field] !== "boolean") throw validationError(field, "must be a boolean");
+    return object[field];
+  };
+  return {
+    enabled: value("enabled"),
+    revealBeverageType: value("revealBeverageType"),
+    revealStyle: value("revealStyle"),
+    revealAbv: value("revealAbv"),
+    revealIbu: value("revealIbu"),
+    revealOg: value("revealOg"),
+    revealFg: value("revealFg"),
+    revealSrm: value("revealSrm"),
+    revealDescription: value("revealDescription"),
+    revealRecipe: value("revealRecipe"),
+    revealSensory: value("revealSensory"),
+    revealHistory: value("revealHistory"),
+  };
 }

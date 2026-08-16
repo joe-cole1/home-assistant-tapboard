@@ -38,39 +38,268 @@ function createUnitTextElement(field, className) {
   return element;
 }
 
+const VESSEL_IDS = new Set([
+  "corny_keg",
+  "pint_glass",
+  "tulip_glass",
+  "wheat_glass",
+  "mug",
+  "stout_glass",
+  "snifter",
+  "nonic_pint",
+  "shaker_pint",
+  "pilsner_flute",
+  "stange",
+  "goblet",
+  "teku",
+  "thistle",
+  "ipa_glass",
+  "tasting_glass",
+  "stemmed_lager",
+]);
+const DEFAULT_GRAPHIC = Object.freeze({
+  id: "pint_glass",
+  token: "vessel/pint-glass",
+  bodyPath: "M 45 40 H 115 L 105 225 H 55 Z",
+  clipPath: "M 30 0 H 130 L 114 45 L 104 225 H 56 L 46 45 Z",
+  rimPath: "M 45 40 H 115",
+  viewBox: "0 40 160 190",
+  topY: 45,
+  bottomY: 225,
+  fillX: 30,
+  fillWidth: 100,
+  detailPaths: [],
+});
+
+function safePath(value, fallback) {
+  return typeof value === "string" &&
+    value.length > 0 &&
+    value.length <= 1200 &&
+    !/[<>]/u.test(value)
+    ? value
+    : fallback;
+}
+
+function safeDetail(value) {
+  if (!value || typeof value !== "object") return undefined;
+  const detail = value;
+  const className = ["glass-detail", "glass-stem", "glass-base", "glass-highlight"].includes(
+    detail.className,
+  )
+    ? detail.className
+    : "glass-detail";
+  if (
+    typeof detail.d !== "string" ||
+    detail.d.length === 0 ||
+    detail.d.length > 1200 ||
+    /[<>]/u.test(detail.d)
+  )
+    return undefined;
+  const finite = (candidate, fallback, minimum, maximum) =>
+    typeof candidate === "number" &&
+    Number.isFinite(candidate) &&
+    candidate >= minimum &&
+    candidate <= maximum
+      ? candidate
+      : fallback;
+  const color = (candidate, fallback) =>
+    typeof candidate === "string" && (/^#[0-9A-Fa-f]{6}$/u.test(candidate) || candidate === "none")
+      ? candidate
+      : fallback;
+  return {
+    d: detail.d,
+    className,
+    fill: color(detail.fill, "none"),
+    stroke: color(detail.stroke, "none"),
+    strokeWidth: finite(detail.strokeWidth, 0, 0, 8),
+    opacity: finite(detail.opacity, 1, 0, 1),
+  };
+}
+
+function safeGraphic(tap) {
+  const candidate = tap.graphic && typeof tap.graphic === "object" ? tap.graphic : undefined;
+  const candidateId =
+    candidate && typeof candidate.id === "string" && VESSEL_IDS.has(candidate.id)
+      ? candidate.id
+      : undefined;
+  const expectedToken =
+    candidateId === undefined ? undefined : `vessel/${candidateId.replace(/_/gu, "-")}`;
+  if (candidateId !== undefined && candidate?.token !== expectedToken)
+    return { ...DEFAULT_GRAPHIC };
+  const id = candidateId ?? (VESSEL_IDS.has(tap.graphicId) ? tap.graphicId : DEFAULT_GRAPHIC.id);
+  if (candidateId === undefined || candidate === undefined) return { ...DEFAULT_GRAPHIC };
+  const value = (name, fallback, minimum, maximum) => {
+    const raw = candidate?.[name];
+    return typeof raw === "number" && Number.isFinite(raw) && raw >= minimum && raw <= maximum
+      ? raw
+      : fallback;
+  };
+  const bodyPath = safePath(candidate.bodyPath, DEFAULT_GRAPHIC.bodyPath);
+  const clipPath = safePath(candidate.clipPath, DEFAULT_GRAPHIC.clipPath);
+  const rimPath = safePath(candidate.rimPath, DEFAULT_GRAPHIC.rimPath);
+  const detailPaths = Array.isArray(candidate.detailPaths)
+    ? candidate.detailPaths.map(safeDetail).filter(Boolean).slice(0, 16)
+    : [];
+  return {
+    id,
+    token: expectedToken,
+    bodyPath,
+    clipPath,
+    rimPath,
+    viewBox: safePath(candidate.viewBox, DEFAULT_GRAPHIC.viewBox),
+    topY: value("topY", DEFAULT_GRAPHIC.topY, 0, 240),
+    bottomY: value("bottomY", DEFAULT_GRAPHIC.bottomY, 1, 250),
+    fillX: value("fillX", DEFAULT_GRAPHIC.fillX, 0, 160),
+    fillWidth: value("fillWidth", DEFAULT_GRAPHIC.fillWidth, 1, 160),
+    detailPaths,
+  };
+}
+
+function svgElement(name, attributes = {}) {
+  const element = document.createElementNS(SVG_NS, name);
+  for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, String(value));
+  return element;
+}
+
+function safeColor(value) {
+  return typeof value === "string" && /^#[0-9A-Fa-f]{6}$/u.test(value) ? value : "currentColor";
+}
+
+function renderGraphicStructure(svg, tap, graphic, clipId) {
+  svg.replaceChildren();
+  const title = svgElement("title");
+  svg.append(title);
+  const definitions = svgElement("defs");
+  const clip = svgElement("clipPath", { id: clipId, class: "beer-liquid-clip" });
+  clip.append(svgElement("path", { d: graphic.clipPath }));
+  definitions.append(clip);
+  svg.append(definitions);
+  svg.append(svgElement("path", { class: "glass", d: graphic.bodyPath }));
+  for (const item of graphic.detailPaths) {
+    svg.append(
+      svgElement("path", {
+        class: item.className,
+        d: item.d,
+        fill: item.fill,
+        stroke: item.stroke,
+        "stroke-width": item.strokeWidth,
+        opacity: item.opacity,
+      }),
+    );
+  }
+  const clipped = svgElement("g", { class: "beer-liquid-clip", "clip-path": `url(#${clipId})` });
+  clipped.append(
+    svgElement("rect", {
+      class: "liquid beer-liquid-rect",
+      x: graphic.fillX,
+      width: graphic.fillWidth,
+    }),
+    svgElement("rect", {
+      class: "beer-liquid-shadow",
+      x: graphic.fillX + graphic.fillWidth / 2,
+      width: graphic.fillWidth / 2,
+      fill: "rgba(0, 0, 0, 0.22)",
+    }),
+  );
+  const foam = svgElement("g", { class: "beer-cloud-foam" });
+  const center = graphic.fillX + graphic.fillWidth / 2;
+  const beerColor = safeColor(tap.displayColor);
+  const foamColor =
+    beerColor === "#080100" || beerColor === "#130100" || beerColor === "#200100"
+      ? "#F5EBE6"
+      : "#FFFDF5";
+  foam.append(
+    svgElement("rect", {
+      x: graphic.fillX,
+      y: -8,
+      width: graphic.fillWidth,
+      height: 16,
+      fill: foamColor,
+      opacity: 0.9,
+    }),
+    svgElement("circle", {
+      cx: graphic.fillX + graphic.fillWidth * 0.22,
+      cy: -5,
+      r: Math.max(6, graphic.fillWidth * 0.11),
+      fill: foamColor,
+    }),
+    svgElement("circle", {
+      cx: graphic.fillX + graphic.fillWidth * 0.43,
+      cy: -8,
+      r: Math.max(7, graphic.fillWidth * 0.14),
+      fill: foamColor,
+    }),
+    svgElement("circle", {
+      cx: graphic.fillX + graphic.fillWidth * 0.65,
+      cy: -7,
+      r: Math.max(7, graphic.fillWidth * 0.13),
+      fill: foamColor,
+    }),
+    svgElement("circle", {
+      cx: graphic.fillX + graphic.fillWidth * 0.84,
+      cy: -5,
+      r: Math.max(6, graphic.fillWidth * 0.1),
+      fill: foamColor,
+    }),
+    svgElement("circle", {
+      cx: center,
+      cy: -9,
+      r: Math.max(5, graphic.fillWidth * 0.09),
+      fill: "#FFFFFF",
+      opacity: 0.5,
+    }),
+  );
+  clipped.append(foam);
+  svg.append(clipped, svgElement("path", { class: "rim", d: graphic.rimPath }));
+  svg.setAttribute("viewBox", graphic.viewBox);
+  title.textContent = `${tap.accessibleLabel || tap.title || tap.tapName || tap.beverageName || `Tap ${tap.tapNumber}`} fill level`;
+}
+
+function updateGraphicFill(svg, tap, graphic) {
+  const percentage = Math.max(0, Math.min(100, Number(tap.fillPercent) || 0));
+  const liquidY = graphic.bottomY - ((graphic.bottomY - graphic.topY) * percentage) / 100;
+  const height = graphic.bottomY - liquidY + 4;
+  const color =
+    safeColor(tap.displayColor) === "currentColor" ? "#D97706" : safeColor(tap.displayColor);
+  const liquid = svg.querySelector(".beer-liquid-rect");
+  const shadow = svg.querySelector(".beer-liquid-shadow");
+  const foam = svg.querySelector(".beer-cloud-foam");
+  for (const element of [liquid, shadow]) {
+    if (!element) continue;
+    element.setAttribute("y", String(liquidY));
+    element.setAttribute("height", String(height));
+  }
+  liquid?.setAttribute("fill", color);
+  if (foam) {
+    foam.setAttribute("transform", `translate(0 ${liquidY})`);
+    foam.setAttribute("data-base-y", String(liquidY));
+    foam.style.display = percentage > 0 ? "" : "none";
+  }
+  if (liquid) {
+    liquid.dataset.fillPercent = String(percentage);
+    liquid.dataset.field = "fill-graphic";
+  }
+  svg.dataset.fillTopY = String(graphic.topY);
+  svg.dataset.fillBottomY = String(graphic.bottomY);
+}
+
+function applyGraphic(svg, tap) {
+  const graphic = safeGraphic(tap);
+  const clipId = `fill-clip-${String(tap.id)
+    .replace(/[^a-zA-Z0-9_-]/gu, "-")
+    .slice(0, 80)}`;
+  const needsStructure = svg.dataset.graphicId !== graphic.id || !svg.querySelector(".glass");
+  if (needsStructure) renderGraphicStructure(svg, tap, graphic, clipId);
+  svg.dataset.graphicId = graphic.id;
+  svg.dataset.graphicToken = graphic.token;
+  updateGraphicFill(svg, tap, graphic);
+}
+
 function createGraphic(tap) {
   const svg = document.createElementNS(SVG_NS, "svg");
   svg.classList.add("tap-graphic");
-  svg.setAttribute("viewBox", "0 0 270 250");
   svg.setAttribute("role", "img");
-  svg.dataset.graphicId = String(tap.graphicId || "pint_glass");
-
-  const title = document.createElementNS(SVG_NS, "title");
-  svg.append(title);
-  const definitions = document.createElementNS(SVG_NS, "defs");
-  const clip = document.createElementNS(SVG_NS, "clipPath");
-  const clipId = `fill-clip-${tap.id}`;
-  clip.setAttribute("id", clipId);
-  const clipShape = document.createElementNS(SVG_NS, "path");
-  clipShape.setAttribute("d", "M58 45h154l-18 180H76z");
-  clip.append(clipShape);
-  definitions.append(clip);
-  svg.append(definitions);
-  const glass = document.createElementNS(SVG_NS, "path");
-  glass.classList.add("glass");
-  glass.setAttribute("d", "M58 45h154l-18 180H76z");
-  svg.append(glass);
-  const liquid = document.createElementNS(SVG_NS, "rect");
-  liquid.classList.add("liquid");
-  liquid.dataset.field = "fill-graphic";
-  liquid.setAttribute("x", "58");
-  liquid.setAttribute("width", "154");
-  liquid.setAttribute("clip-path", `url(#${clipId})`);
-  svg.append(liquid);
-  const rim = document.createElementNS(SVG_NS, "path");
-  rim.classList.add("rim");
-  rim.setAttribute("d", "M58 45h154");
-  svg.append(rim);
+  applyGraphic(svg, tap);
   return svg;
 }
 
@@ -90,6 +319,15 @@ function createCard(tap) {
     createTextElement("p", "forecast", "status"),
     createUnitTextElement("temperature", "temperature"),
   );
+  if (typeof tap.storyPath === "string" && tap.storyPath.startsWith("/taps/")) {
+    const storyLink = document.createElement("a");
+    storyLink.className = "story-link";
+    storyLink.href = tap.storyPath;
+    storyLink.dataset.field = "story-link";
+    storyLink.textContent = "Story";
+    storyLink.setAttribute("aria-label", tap.accessibleLabel || `${tap.title || "Tap"} story`);
+    copy.append(storyLink);
+  }
   const visual = document.createElement("div");
   visual.className = "tap-visual";
   visual.append(createGraphic(tap), createUnitTextElement("volume", "volume"));
@@ -147,9 +385,10 @@ function patchTap(tap) {
   text(card.querySelector('[data-field="tap-number"]'), `Tap ${tap.tapNumber}`);
   text(
     card.querySelector('[data-field="tap-name"]'),
-    tap.tapName || tap.beverageName || `Tap ${tap.tapNumber}`,
+    tap.title || tap.tapName || tap.beverageName || `Tap ${tap.tapNumber}`,
   );
-  text(card.querySelector('[data-field="beverage-name"]'), tap.beverageName || "Unassigned");
+  const beverageName = tap.beverageName || (tap.title === "Mystery Tap" ? null : "Unassigned");
+  optionalText(card.querySelector('[data-field="beverage-name"]'), beverageName);
   optionalText(card.querySelector('[data-field="style"]'), tap.style);
   optionalText(
     card.querySelector('[data-field="abv"]'),
@@ -169,18 +408,29 @@ function patchTap(tap) {
   text(card.querySelector('[data-field="forecast"]'), forecast);
   const svg = card.querySelector(".tap-graphic");
   if (svg) {
-    svg.dataset.graphicId = String(tap.graphicId || "pint_glass");
+    applyGraphic(svg, tap);
     text(
       svg.querySelector("title"),
-      `${tap.tapName || tap.beverageName || `Tap ${tap.tapNumber}`} fill level`,
+      `${tap.accessibleLabel || tap.title || tap.tapName || tap.beverageName || `Tap ${tap.tapNumber}`} fill level`,
     );
   }
-  const liquid = card.querySelector(".liquid");
-  if (liquid) {
-    liquid.dataset.fillPercent = String(percentage);
-    liquid.setAttribute("y", String(225 - percentage * 1.8));
-    liquid.setAttribute("height", String(percentage * 1.8));
-    liquid.setAttribute("fill", tap.displayColor || "currentColor");
+  const storyLink = card.querySelector('[data-field="story-link"]');
+  if (storyLink) {
+    if (typeof tap.storyPath === "string" && tap.storyPath.startsWith("/taps/")) {
+      storyLink.hidden = false;
+      storyLink.setAttribute("href", tap.storyPath);
+      storyLink.setAttribute("aria-label", tap.accessibleLabel || `${tap.title || "Tap"} story`);
+    } else {
+      storyLink.remove();
+    }
+  } else if (typeof tap.storyPath === "string" && tap.storyPath.startsWith("/taps/")) {
+    const link = document.createElement("a");
+    link.className = "story-link";
+    link.dataset.field = "story-link";
+    link.href = tap.storyPath;
+    link.textContent = "Story";
+    link.setAttribute("aria-label", tap.accessibleLabel || `${tap.title || "Tap"} story`);
+    card.querySelector(".tap-copy")?.append(link);
   }
   patchUnits(card);
   grid.append(
@@ -347,6 +597,15 @@ const RECONNECT_RETRY_MS = 1500;
 let reconnectReconciling = false;
 let reconnectDirtyOverflow = false;
 let reconnectPromise;
+
+grid?.addEventListener("click", (event) => {
+  const target = event.target;
+  if (target === null || typeof target !== "object" || !("closest" in target)) return;
+  if (target.closest("a,button,input,select,textarea,summary")) return;
+  const card = target.closest("[data-tap-id]");
+  const storyLink = card?.querySelector('[data-field="story-link"]');
+  if (storyLink?.tagName === "A" && storyLink.getAttribute("href")) storyLink.click();
+});
 
 function queueDirty(target) {
   if (!reconnectReconciling) {

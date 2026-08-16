@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { APPLICATION_SCHEMA_VERSION } from "../../infrastructure/database/migrations.ts";
 import { sendJson } from "../../infrastructure/http/error-mapper.ts";
-import { readFormBody } from "../../infrastructure/http/form.ts";
+import { readFormBody, type ReadFormOptions } from "../../infrastructure/http/form.ts";
 import { redirect, sendHtml } from "../../infrastructure/http/html.ts";
 import type { Router } from "../../infrastructure/http/router.ts";
 import {
@@ -23,6 +23,14 @@ import type { FillService } from "../fills/service.ts";
 import type { HealthService } from "../health/service.ts";
 import type { KegService } from "../kegs/service.ts";
 import type { LiveUpdateService } from "../live/service.ts";
+import type { PublicStoryService } from "../story/service.ts";
+import { VESSEL_IDS } from "../story/index.ts";
+import { getVesselDescriptor } from "../story/vessels.ts";
+import {
+  BEVERAGE_SENSORY_CANONICAL_MAX,
+  BEVERAGE_SENSORY_CANONICAL_MIN,
+  type UpdateCustomBeverageInput,
+} from "../beverages/types.ts";
 import type { TapService } from "../taps/service.ts";
 import {
   DETECTOR_CONFIG_FIELDS,
@@ -46,12 +54,21 @@ const ADMIN_NAV = [
   ["System", "/admin/system"],
 ] as const;
 
+function volume(ml: number, unit: string): string {
+  return unit === "metric" ? `${(ml / 1000).toFixed(1)} L` : `${(ml / 3785.411784).toFixed(1)} gal`;
+}
+
+function temperature(c: number, unit: string): string {
+  return unit === "metric" ? `${c.toFixed(1)} °C` : `${((c * 9) / 5 + 32).toFixed(1)} °F`;
+}
+
 export interface WebRouteDependencies {
   readonly router: Router;
   readonly renderer: Renderer;
   readonly canonicalOrigin?: string;
   readonly authService: AuthService;
   readonly dashboardService: DashboardService;
+  readonly storyService: PublicStoryService;
   readonly displayService: DisplaySettingsService;
   readonly beverageService: BeverageService;
   readonly kegService: KegService;
@@ -129,11 +146,21 @@ function optionalNumber(value: string | undefined): number | undefined {
   return value === undefined || value === "" ? undefined : Number(value);
 }
 
+function safeSensoryOverride(value: unknown): number | null {
+  return typeof value === "number" &&
+    Number.isFinite(value) &&
+    value >= BEVERAGE_SENSORY_CANONICAL_MIN &&
+    value <= BEVERAGE_SENSORY_CANONICAL_MAX
+    ? value
+    : null;
+}
+
 function nullableNumber(value: string | undefined): number | null | undefined {
   return value === undefined ? undefined : value === "" ? null : Number(value);
 }
 
-type PresentationField = "name" | "beverageType" | "style" | "abv" | "displayColor" | "description";
+type PresentationField =
+  "name" | "beverageType" | "style" | "abv" | "displayColor" | "description" | "fillGlass";
 type PresentationOverride =
   { readonly inherit: true } | { readonly clear: true } | { readonly value: string | number };
 
@@ -148,6 +175,7 @@ function presentationOverridesFromForm(
     "abv",
     "displayColor",
     "description",
+    "fillGlass",
   ];
   for (const field of fields) {
     const mode = form[`${field}Mode`];
@@ -157,10 +185,91 @@ function presentationOverridesFromForm(
       result[field] = { clear: true };
     } else {
       const value = form[field] ?? "";
-      result[field] = field === "abv" ? { value: Number(value) } : { value };
+      if (field === "fillGlass") {
+        result[field] = { value: vesselFromForm(value) ?? "" };
+      } else {
+        result[field] = field === "abv" ? { value: Number(value) } : { value };
+      }
     }
   }
   return result;
+}
+
+function invalidForm(message: string): never {
+  throw new ApplicationError({
+    category: "validation",
+    code: "request.invalid",
+    clientMessage: message,
+  });
+}
+
+function recipeFromForm(
+  form: Readonly<Record<string, string>>,
+): UpdateCustomBeverageInput["recipe"] {
+  const serialized = form.recipeJson ?? "";
+  // Whitespace-only input is the no-JS delete affordance. Do not trim a
+  // non-empty payload: the service owns validation and the JSON values must
+  // retain every supported character exactly as entered.
+  if (serialized.trim() === "") return null;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(serialized) as unknown;
+  } catch {
+    invalidForm("Recipe must contain valid JSON.");
+  }
+  if (parsed === null) return null;
+  if (typeof parsed !== "object" || Array.isArray(parsed)) {
+    invalidForm("Recipe must be a JSON object.");
+  }
+  return parsed;
+}
+
+function vesselFromForm(value: string | undefined): string | null | undefined {
+  if (value === undefined) return undefined;
+  const trimmed = value.trim();
+  if (trimmed === "") return null;
+  if (!(VESSEL_IDS as readonly string[]).includes(trimmed)) {
+    invalidForm("Fill Glass must be selected from the supported catalog.");
+  }
+  return trimmed;
+}
+
+function safeVesselForDisplay(value: unknown): string | null {
+  return typeof value === "string" && (VESSEL_IDS as readonly string[]).includes(value)
+    ? value
+    : null;
+}
+
+function vesselDisplayName(value: string): string {
+  const names: Readonly<Record<string, string>> = {
+    corny_keg: "Corny keg",
+    pint_glass: "Pint glass",
+    tulip_glass: "Tulip glass",
+    wheat_glass: "Wheat glass",
+    mug: "Mug",
+    stout_glass: "Stout glass",
+    snifter: "Snifter",
+    nonic_pint: "Nonic pint",
+    shaker_pint: "Shaker pint",
+    pilsner_flute: "Pilsner flute",
+    stange: "Stange",
+    goblet: "Goblet",
+    teku: "Teku",
+    thistle: "Thistle",
+    ipa_glass: "IPA glass",
+    tasting_glass: "Tasting glass",
+    stemmed_lager: "Stemmed lager",
+  };
+  return names[value] ?? value;
+}
+
+function fillGlassOptions() {
+  return VESSEL_IDS.map((id) => ({
+    id,
+    label: vesselDisplayName(id),
+    graphic: getVesselDescriptor(id),
+  }));
 }
 
 function detectorOverrideFromForm(form: Readonly<Record<string, string>>): DetectorConfigOverride {
@@ -245,10 +354,11 @@ function registerAdminAction(
     params: Readonly<Record<string, string>>,
   ) => void | Promise<void>,
   successMessage = "Saved.",
+  readFormOptions: ReadFormOptions = {},
 ): void {
   dependencies.router.post(path, async (request, response, params) => {
     try {
-      const form = await readFormBody(request);
+      const form = await readFormBody(request, readFormOptions);
       const context = adminContext(request, dependencies.authService);
       const authorized = dependencies.authService.authorizeCookieMutation({
         cookieHeader: request.headers.cookie,
@@ -288,6 +398,34 @@ function registerPublicRoutes(dependencies: WebRouteDependencies): void {
       }),
     );
   });
+  dependencies.router.get("/taps/:tapId/story", (_request, response, params) => {
+    const story = dependencies.storyService.getStory(params.tapId!);
+    if (story === undefined) {
+      sendHtml(
+        response,
+        404,
+        dependencies.renderer.render("/public/story", {
+          sharedDisplay: dependencies.dashboardService.getDisplayDefaults(),
+          header: dependencies.dashboardService.getHeader(),
+          story: undefined,
+        }),
+      );
+      return;
+    }
+    sendHtml(
+      response,
+      200,
+      dependencies.renderer.render("/public/story", {
+        sharedDisplay: dependencies.dashboardService.getDisplayDefaults(),
+        header: dependencies.dashboardService.getHeader(),
+        ssePath: "/api/public/events",
+        tapId: params.tapId,
+        temperature,
+        volume,
+        story,
+      }),
+    );
+  });
   dependencies.router.get("/api/public/dashboard", (_request, response) => {
     sendJson(response, 200, { ...dependencies.dashboardService.getDashboard() });
   });
@@ -307,6 +445,16 @@ function registerPublicRoutes(dependencies: WebRouteDependencies): void {
       return;
     }
     sendJson(response, 200, { ...tap });
+  });
+  dependencies.router.get("/api/public/taps/:tapId/story", (_request, response, params) => {
+    const story = dependencies.storyService.getStory(params.tapId!);
+    if (story === undefined) {
+      sendJson(response, 404, {
+        error: { code: "tap.story_not_public", message: "Story not found." },
+      });
+      return;
+    }
+    sendJson(response, 200, { ...story });
   });
   dependencies.router.get("/api/public/events", (_request, response) => {
     dependencies.liveUpdates.connectPublic(response);
@@ -495,9 +643,10 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
       {
         beverages: dependencies.beverageService.listBeverages().map((item) => {
           const impact = dependencies.beverageService.getDeletionImpact(item.beverage.id);
-          const detail =
-            item.beverage.ownershipType === "brewfather"
-              ? dependencies.beverageService.getBeverage(item.beverage.id)
+          const detail = dependencies.beverageService.getBeverage(item.beverage.id);
+          const guidance =
+            typeof dependencies.storyService?.getBeverageGuidance === "function"
+              ? dependencies.storyService.getBeverageGuidance(item.beverage.id)
               : undefined;
           const source = detail?.brewfatherSourceProfile;
           const sourceProjection =
@@ -546,10 +695,62 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
                       displayColor: overrides?.displayColor ?? null,
                       overrideDescriptionPresent: overrides?.overrideDescriptionPresent ?? false,
                       description: overrides?.description ?? null,
+                      overrideFillGlassPresent: overrides?.overrideFillGlassPresent ?? false,
+                      fillGlass: safeVesselForDisplay(overrides?.fillGlass),
                     },
                   },
                 }
               : {}),
+            fillGlass: safeVesselForDisplay(item.effectivePresentation.fillGlass),
+            sensoryOverrides: detail?.sensoryOverrides
+              ? {
+                  bitterness: safeSensoryOverride(detail.sensoryOverrides.bitterness),
+                  sweetness: safeSensoryOverride(detail.sensoryOverrides.sweetness),
+                  body: safeSensoryOverride(detail.sensoryOverrides.body),
+                  roast: safeSensoryOverride(detail.sensoryOverrides.roast),
+                  tartness: safeSensoryOverride(detail.sensoryOverrides.tartness),
+                  alcohol: safeSensoryOverride(detail.sensoryOverrides.alcohol),
+                }
+              : null,
+            guidance: guidance ?? null,
+            customRecipe: detail?.customRecipe
+              ? {
+                  notes: detail.customRecipe.notes,
+                  ingredients: detail.customRecipe.ingredients.map((ingredient) => ({
+                    name: ingredient.name,
+                    amount: ingredient.amount,
+                    unit: ingredient.unit,
+                    note: ingredient.note,
+                  })),
+                  steps: detail.customRecipe.steps.map((step) => ({
+                    name: step.name,
+                    temperatureC: step.temperatureC,
+                    timeMinutes: step.timeMinutes,
+                    note: step.note,
+                  })),
+                }
+              : null,
+            customRecipeJson: detail?.customRecipe
+              ? JSON.stringify(
+                  {
+                    notes: detail.customRecipe.notes,
+                    ingredients: detail.customRecipe.ingredients.map((ingredient) => ({
+                      name: ingredient.name,
+                      amount: ingredient.amount,
+                      unit: ingredient.unit,
+                      note: ingredient.note,
+                    })),
+                    steps: detail.customRecipe.steps.map((step) => ({
+                      name: step.name,
+                      temperatureC: step.temperatureC,
+                      timeMinutes: step.timeMinutes,
+                      note: step.note,
+                    })),
+                  },
+                  null,
+                  2,
+                )
+              : "",
           };
         }),
         brewfatherCandidates: dependencies.beverageService.listCandidates().map((candidate) => ({
@@ -568,6 +769,8 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
                 .some((fill) => fill.state !== "ended"),
           )
           .map((keg) => ({ id: keg.id, kegNumber: keg.kegNumber, label: keg.label })),
+        fillGlassIds: VESSEL_IDS,
+        fillGlassOptions: fillGlassOptions(),
       },
     );
   });
@@ -659,6 +862,11 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
           lineDiameterMm: tap.lineDiameterMm,
           notes: tap.notes,
           beverageName: tap.activeAssignment?.beverageName ?? null,
+          mystery:
+            tap.activeAssignment &&
+            typeof dependencies.tapService.getAssignmentMystery === "function"
+              ? dependencies.tapService.getAssignmentMystery(tap.id)
+              : null,
           authority:
             authority === undefined
               ? "None"
@@ -802,7 +1010,7 @@ function registerAdminMutations(dependencies: WebRouteDependencies): void {
           abv: optionalNumber(form.abv),
           displayColor: nullable(form.displayColor),
           description: nullable(form.description),
-          fillGlass: nullable(form.fillGlass),
+          fillGlass: vesselFromForm(form.fillGlass),
         },
         actor(context),
       );
@@ -839,7 +1047,7 @@ function registerAdminMutations(dependencies: WebRouteDependencies): void {
           abv: optionalNumber(form.abv),
           displayColor: nullable(form.displayColor),
           description: nullable(form.description),
-          fillGlass: nullable(form.fillGlass),
+          fillGlass: vesselFromForm(form.fillGlass),
         },
         actor(context),
       );
@@ -859,6 +1067,40 @@ function registerAdminMutations(dependencies: WebRouteDependencies): void {
       );
     },
     "Beverage deleted.",
+  );
+  registerAdminAction(
+    dependencies,
+    "/admin/beverages/:id/sensory",
+    "/admin/beverages",
+    (form, context, params) => {
+      dependencies.beverageService.updateSensoryOverrides(
+        params.id!,
+        {
+          bitterness: nullableNumber(form.bitterness),
+          sweetness: nullableNumber(form.sweetness),
+          body: nullableNumber(form.body),
+          roast: nullableNumber(form.roast),
+          tartness: nullableNumber(form.tartness),
+          alcohol: nullableNumber(form.alcohol),
+        },
+        actor(context),
+      );
+    },
+    "Sensory guidance saved.",
+  );
+  registerAdminAction(
+    dependencies,
+    "/admin/beverages/:id/recipe",
+    "/admin/beverages",
+    (form, context, params) => {
+      dependencies.beverageService.updateCustomBeverage(
+        params.id!,
+        { recipe: recipeFromForm(form) },
+        actor(context),
+      );
+    },
+    "Custom recipe saved.",
+    { maxFields: 2, maxBytes: 3_000_000 },
   );
   registerAdminAction(
     dependencies,
@@ -1074,6 +1316,32 @@ function registerAdminMutations(dependencies: WebRouteDependencies): void {
       dependencies.tapService.assignFill(params.id!, { fillId: form.fillId }, actor(context));
     },
     "Fill assigned.",
+  );
+  registerAdminAction(
+    dependencies,
+    "/admin/taps/:id/mystery",
+    "/admin/taps",
+    (form, context, params) => {
+      dependencies.tapService.updateAssignmentMystery(
+        params.id!,
+        {
+          enabled: form.enabled === "true",
+          revealBeverageType: form.revealBeverageType === "true",
+          revealStyle: form.revealStyle === "true",
+          revealAbv: form.revealAbv === "true",
+          revealIbu: form.revealIbu === "true",
+          revealOg: form.revealOg === "true",
+          revealFg: form.revealFg === "true",
+          revealSrm: form.revealSrm === "true",
+          revealDescription: form.revealDescription === "true",
+          revealRecipe: form.revealRecipe === "true",
+          revealSensory: form.revealSensory === "true",
+          revealHistory: form.revealHistory === "true",
+        },
+        actor(context),
+      );
+    },
+    "Mystery Tap settings saved.",
   );
   registerAdminAction(
     dependencies,
