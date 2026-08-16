@@ -75,6 +75,10 @@ main[data-dashboard] {
 .volume {
   white-space: normal;
 }
+html[data-unit-system="metric"] [data-unit="us"],
+html[data-unit-system="us"] [data-unit="metric"] {
+  display: none;
+}
 [data-show-serving-temperature="false"] .temperature {
   display: none;
 }

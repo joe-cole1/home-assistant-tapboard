@@ -28,6 +28,16 @@ function createTextElement(tag, field, className) {
   return element;
 }
 
+function createUnitTextElement(field, className) {
+  const element = createTextElement("p", field, className);
+  for (const unit of ["metric", "us"]) {
+    const value = document.createElement("span");
+    value.dataset.unit = unit;
+    element.append(value);
+  }
+  return element;
+}
+
 function createGraphic(tap) {
   const svg = document.createElementNS(SVG_NS, "svg");
   svg.classList.add("tap-graphic");
@@ -78,45 +88,41 @@ function createCard(tap) {
     createTextElement("p", "abv", "meta"),
     createTextElement("p", "description", "description"),
     createTextElement("p", "forecast", "status"),
-    createTextElement("p", "temperature", "temperature"),
+    createUnitTextElement("temperature", "temperature"),
   );
   const visual = document.createElement("div");
   visual.className = "tap-visual";
-  visual.append(createGraphic(tap), createTextElement("p", "volume", "volume"));
+  visual.append(createGraphic(tap), createUnitTextElement("volume", "volume"));
   card.append(copy, visual);
   return card;
 }
 
-function unitSystem() {
-  return document.documentElement.dataset.unitSystem === "metric" ? "metric" : "us";
-}
-
-function formatTemperature(celsius) {
-  return unitSystem() === "metric"
-    ? `${celsius.toFixed(1)} °C`
-    : `${((celsius * 9) / 5 + 32).toFixed(1)} °F`;
-}
-
-function formatVolume(millilitres) {
-  return unitSystem() === "metric"
-    ? `${(millilitres / 1000).toFixed(1)} L`
-    : `${(millilitres / 3785.411784).toFixed(1)} gal`;
-}
-
 function patchUnits(card) {
   const temperature = Number(card.dataset.temperatureC);
-  optionalText(
-    card.querySelector('[data-field="temperature"]'),
-    Number.isFinite(temperature) ? formatTemperature(temperature) : null,
-  );
+  const temperatureField = card.querySelector('[data-field="temperature"]');
+  if (temperatureField) temperatureField.hidden = !Number.isFinite(temperature);
+  if (Number.isFinite(temperature)) {
+    text(temperatureField?.querySelector('[data-unit="metric"]'), `${temperature.toFixed(1)} °C`);
+    text(
+      temperatureField?.querySelector('[data-unit="us"]'),
+      `${((temperature * 9) / 5 + 32).toFixed(1)} °F`,
+    );
+  }
   const remaining = Number(card.dataset.remainingVolumeMl);
   const capacity = Number(card.dataset.capacityMl);
-  optionalText(
-    card.querySelector('[data-field="volume"]'),
-    Number.isFinite(remaining) && Number.isFinite(capacity)
-      ? `${formatVolume(remaining)} / ${formatVolume(capacity)}`
-      : null,
-  );
+  const volumeField = card.querySelector('[data-field="volume"]');
+  const hasVolume = Number.isFinite(remaining) && Number.isFinite(capacity);
+  if (volumeField) volumeField.hidden = !hasVolume;
+  if (hasVolume) {
+    text(
+      volumeField?.querySelector('[data-unit="metric"]'),
+      `${(remaining / 1000).toFixed(1)} L / ${(capacity / 1000).toFixed(1)} L`,
+    );
+    text(
+      volumeField?.querySelector('[data-unit="us"]'),
+      `${(remaining / 3785.411784).toFixed(1)} gal / ${(capacity / 3785.411784).toFixed(1)} gal`,
+    );
+  }
 }
 
 function patchTap(tap) {
@@ -276,8 +282,36 @@ async function refresh(target) {
 }
 
 async function reconnectRefresh() {
-  const dashboard = await json("/api/public/dashboard");
-  if (dashboard) reconcile(dashboard);
+  if (reconnectPromise) {
+    // A newer stream can have observed changes outside the current snapshot's interval.
+    reconnectDirtyOverflow = true;
+    return reconnectPromise;
+  }
+  reconnectReconciling = true;
+  reconnectPromise = (async () => {
+    try {
+      for (;;) {
+        reconnectDirtyOverflow = false;
+        try {
+          const dashboard = await json("/api/public/dashboard");
+          if (dashboard) {
+            reconcile(dashboard);
+            if (!reconnectDirtyOverflow) break;
+            continue;
+          }
+        } catch {
+          // The subscribed stream stays open while authoritative reconciliation retries.
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, RECONNECT_RETRY_MS));
+      }
+    } finally {
+      reconnectReconciling = false;
+      for (const target of reconnectDirty) queue(target);
+      reconnectDirty.clear();
+      reconnectPromise = undefined;
+    }
+  })();
+  return reconnectPromise;
 }
 
 function updateRotation() {
@@ -307,18 +341,40 @@ function updateRotation() {
 }
 
 const queue = createDirtyQueue(refresh);
+const reconnectDirty = new Set();
+const RECONNECT_DIRTY_LIMIT = 64;
+const RECONNECT_RETRY_MS = 1500;
+let reconnectReconciling = false;
+let reconnectDirtyOverflow = false;
+let reconnectPromise;
+
+function queueDirty(target) {
+  if (!reconnectReconciling) {
+    queue(target);
+    return;
+  }
+  if (reconnectDirty.has(target)) return;
+  if (reconnectDirty.size >= RECONNECT_DIRTY_LIMIT) {
+    reconnectDirtyOverflow = true;
+    return;
+  }
+  reconnectDirty.add(target);
+}
+
 connect(
   root.dataset.ssePath,
   (name, event) => {
     try {
       const data = JSON.parse(event.data);
       if (["tap.updated", "telemetry.updated", "health.updated"].includes(name)) {
-        queue(data.tapId);
-        queue("header");
-      } else if (name === "fill.updated") queue(data.tapId);
-      else if (name === "ondeck.updated") queue("ondeck");
-      else if (name === "display.updated") queue("display");
-      else queue("header");
+        queueDirty(data.tapId);
+        queueDirty("header");
+      } else if (name === "fill.updated") {
+        queueDirty(data.tapId);
+        queueDirty("header");
+      } else if (name === "ondeck.updated") queueDirty("ondeck");
+      else if (name === "display.updated") queueDirty("display");
+      else queueDirty("header");
     } catch {
       // A malformed ephemeral event is ignored; reconnect remains authoritative.
     }

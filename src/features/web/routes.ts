@@ -129,6 +129,40 @@ function optionalNumber(value: string | undefined): number | undefined {
   return value === undefined || value === "" ? undefined : Number(value);
 }
 
+function nullableNumber(value: string | undefined): number | null | undefined {
+  return value === undefined ? undefined : value === "" ? null : Number(value);
+}
+
+type PresentationField = "name" | "beverageType" | "style" | "abv" | "displayColor" | "description";
+type PresentationOverride =
+  { readonly inherit: true } | { readonly clear: true } | { readonly value: string | number };
+
+function presentationOverridesFromForm(
+  form: Readonly<Record<string, string>>,
+): Record<PresentationField, PresentationOverride> {
+  const result = {} as Record<PresentationField, PresentationOverride>;
+  const fields: readonly PresentationField[] = [
+    "name",
+    "beverageType",
+    "style",
+    "abv",
+    "displayColor",
+    "description",
+  ];
+  for (const field of fields) {
+    const mode = form[`${field}Mode`];
+    if (mode === "inherit") {
+      result[field] = { inherit: true };
+    } else if (mode === "clear" && field !== "name" && field !== "beverageType") {
+      result[field] = { clear: true };
+    } else {
+      const value = form[field] ?? "";
+      result[field] = field === "abv" ? { value: Number(value) } : { value };
+    }
+  }
+  return result;
+}
+
 function detectorOverrideFromForm(form: Readonly<Record<string, string>>): DetectorConfigOverride {
   return Object.fromEntries(
     DETECTOR_CONFIG_FIELDS.flatMap((field) => {
@@ -352,6 +386,9 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
     const taps = dependencies.tapService.listTaps();
     const fills = dependencies.fillService.listFills();
     const health = dependencies.healthService.listAdminOverview();
+    const brewfather = dependencies.beverageService.getBrewfatherStatus();
+    const header = dependencies.dashboardService.getHeader();
+    const telemetryConfigured = dependencies.telemetryService.listSources().length;
     renderAdmin(
       dependencies,
       response,
@@ -384,10 +421,18 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
           beverageName: tap.activeAssignment?.beverageName ?? null,
         })),
         health: health.map((item) => ({
-          tapId: item.tapId,
+          tapNumber: taps.find((tap) => tap.id === item.tapId)?.tapNumber ?? null,
           state: item.aggregate.state,
           severity: item.aggregate.severity,
         })),
+        connectivity: { state: header.connectivity, label: header.connectivityLabel },
+        integrations: {
+          telemetryConfigured,
+          brewfatherConfigured: brewfather.configured,
+          brewfatherEnabled: brewfather.account?.enabled ?? false,
+          brewfatherApiKeyConfigured: brewfather.apiKeyConfigured,
+          brewfatherLinkedBeverages: brewfather.totalLinkedBeverages,
+        },
       },
     );
   });
@@ -450,6 +495,30 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
       {
         beverages: dependencies.beverageService.listBeverages().map((item) => {
           const impact = dependencies.beverageService.getDeletionImpact(item.beverage.id);
+          const detail =
+            item.beverage.ownershipType === "brewfather"
+              ? dependencies.beverageService.getBeverage(item.beverage.id)
+              : undefined;
+          const source = detail?.brewfatherSourceProfile;
+          const sourceProjection =
+            source === undefined
+              ? {
+                  name: item.effectivePresentation.name,
+                  beverageType: item.effectivePresentation.beverageType,
+                  style: item.effectivePresentation.style,
+                  abv: item.effectivePresentation.abv,
+                  displayColor: item.effectivePresentation.displayColor,
+                  description: item.effectivePresentation.description,
+                }
+              : {
+                  name: source.name,
+                  beverageType: source.beverageType,
+                  style: source.style,
+                  abv: source.abv,
+                  displayColor: source.displayColor,
+                  description: source.description,
+                };
+          const overrides = detail?.presentationOverrides;
           return {
             id: item.beverage.id,
             ownershipType: item.beverage.ownershipType,
@@ -459,8 +528,28 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
             abv: item.effectivePresentation.abv,
             displayColor: item.effectivePresentation.displayColor,
             description: item.effectivePresentation.description,
-            fillGlass: item.effectivePresentation.fillGlass,
             deletionImpacts: impact.impacts,
+            ...(item.beverage.ownershipType === "brewfather"
+              ? {
+                  brewfatherPresentation: {
+                    source: sourceProjection,
+                    overrides: {
+                      overrideNamePresent: overrides?.overrideNamePresent ?? false,
+                      name: overrides?.name ?? null,
+                      overrideBeverageTypePresent: overrides?.overrideBeverageTypePresent ?? false,
+                      beverageType: overrides?.beverageType ?? null,
+                      overrideStylePresent: overrides?.overrideStylePresent ?? false,
+                      style: overrides?.style ?? null,
+                      overrideAbvPresent: overrides?.overrideAbvPresent ?? false,
+                      abv: overrides?.abv ?? null,
+                      overrideDisplayColorPresent: overrides?.overrideDisplayColorPresent ?? false,
+                      displayColor: overrides?.displayColor ?? null,
+                      overrideDescriptionPresent: overrides?.overrideDescriptionPresent ?? false,
+                      description: overrides?.description ?? null,
+                    },
+                  },
+                }
+              : {}),
           };
         }),
         brewfatherCandidates: dependencies.beverageService.listCandidates().map((candidate) => ({
@@ -470,6 +559,15 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
           status: candidate.status,
           style: candidate.style,
         })),
+        availableKegs: dependencies.kegService
+          .listKegs({ isActive: true })
+          .filter(
+            (keg) =>
+              !dependencies.fillService
+                .listFills({ kegId: keg.id })
+                .some((fill) => fill.state !== "ended"),
+          )
+          .map((keg) => ({ id: keg.id, kegNumber: keg.kegNumber, label: keg.label })),
       },
     );
   });
@@ -490,6 +588,12 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
           currentFill:
             fills.find((fill) => fill.kegId === keg.id && fill.state !== "ended")?.beverageName ??
             null,
+          fillHistory: dependencies.fillService.listFills({ kegId: keg.id }).map((fill) => ({
+            beverageName: fill.beverageName,
+            fillDate: fill.fillDate,
+            state: fill.state,
+            endedAt: fill.endedAt,
+          })),
           tareHistory: detail.tareHistory.map((item) => ({
             previousTareG: item.previousTareG,
             newTareG: item.newTareG,
@@ -549,6 +653,11 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
           name: tap.name,
           enabled: tap.enabled,
           isRetired: tap.isRetired,
+          gasType: tap.gasType,
+          servingPressureKpa: tap.servingPressureKpa,
+          lineLengthMm: tap.lineLengthMm,
+          lineDiameterMm: tap.lineDiameterMm,
+          notes: tap.notes,
           beverageName: tap.activeAssignment?.beverageName ?? null,
           authority:
             authority === undefined
@@ -666,6 +775,19 @@ function registerAdminMutations(dependencies: WebRouteDependencies): void {
     },
     "Shared display defaults saved.",
   );
+  registerAdminAction(
+    dependencies,
+    "/admin/beverages/:id/presentation",
+    "/admin/beverages",
+    (form, context, params) => {
+      dependencies.beverageService.updatePresentationOverrides(
+        params.id!,
+        presentationOverridesFromForm(form),
+        actor(context),
+      );
+    },
+    "Brewfather presentation overrides saved.",
+  );
 
   registerAdminAction(
     dependencies,
@@ -686,6 +808,22 @@ function registerAdminMutations(dependencies: WebRouteDependencies): void {
       );
     },
     "Beverage created.",
+  );
+  registerAdminAction(
+    dependencies,
+    "/admin/beverages/:id/create-fill",
+    "/admin/beverages",
+    (form, context, params) => {
+      dependencies.fillService.createFill(
+        {
+          beverageId: params.id!,
+          kegId: form.kegId,
+          ...(form.fillDate ? { fillDate: form.fillDate } : {}),
+        },
+        actor(context),
+      );
+    },
+    "Fill created.",
   );
   registerAdminAction(
     dependencies,
@@ -894,6 +1032,11 @@ function registerAdminMutations(dependencies: WebRouteDependencies): void {
           tapNumber: Number(form.tapNumber),
           name: nullable(form.name),
           enabled: form.enabled !== "false",
+          gasType: nullable(form.gasType),
+          servingPressureKpa: nullableNumber(form.servingPressureKpa),
+          lineLengthMm: nullableNumber(form.lineLengthMm),
+          lineDiameterMm: nullableNumber(form.lineDiameterMm),
+          notes: nullable(form.notes),
         },
         actor(context),
       );
@@ -911,6 +1054,11 @@ function registerAdminMutations(dependencies: WebRouteDependencies): void {
           tapNumber: Number(form.tapNumber),
           name: nullable(form.name),
           enabled: form.enabled === "true",
+          gasType: nullable(form.gasType),
+          servingPressureKpa: nullableNumber(form.servingPressureKpa),
+          lineLengthMm: nullableNumber(form.lineLengthMm),
+          lineDiameterMm: nullableNumber(form.lineDiameterMm),
+          notes: nullable(form.notes),
           acknowledgeTelemetryEndpointImpact: form.acknowledgeTelemetryEndpointImpact === "true",
         },
         actor(context),

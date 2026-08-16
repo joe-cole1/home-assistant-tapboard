@@ -202,6 +202,11 @@ test("a missed event is reconciled from the authoritative dashboard on reconnect
   const publicPage = await context.newPage();
   await publicPage.route("**/api/public/events", (route) => route.abort());
   await publicPage.goto("/");
+  await publicPage.locator('[data-tap-number="2"]').evaluate((node) => {
+    (window as unknown as { reconnectCard: Element }).reconnectCard = node;
+    (window as unknown as { reconnectGraphic: Element }).reconnectGraphic =
+      node.querySelector(".tap-graphic")!;
+  });
   const admin = await context.newPage();
   await login(admin);
   await admin.goto("/admin/taps");
@@ -211,11 +216,46 @@ test("a missed event is reconciled from the authoritative dashboard on reconnect
   await card.getByText("Edit", { exact: true }).click();
   await card.getByLabel("Name").fill("Reconciled Tap");
   await card.getByRole("button", { name: "Update Tap" }).click();
+  let interceptedReconnectSnapshot = false;
+  let reconnectSnapshotAttempts = 0;
+  await publicPage.route("**/api/public/dashboard", async (route) => {
+    reconnectSnapshotAttempts += 1;
+    if (reconnectSnapshotAttempts === 1) {
+      await route.abort("failed");
+      return;
+    }
+    if (interceptedReconnectSnapshot) {
+      await route.continue();
+      return;
+    }
+    interceptedReconnectSnapshot = true;
+    const snapshot = await route.fetch();
+    await admin.goto("/admin/taps");
+    const handoffCard = admin
+      .locator(".resource-card")
+      .filter({ has: admin.getByRole("heading", { name: /Tap 2/u }) });
+    await handoffCard.getByText("Edit", { exact: true }).click();
+    await handoffCard.getByLabel("Name").fill("Reconnect Handoff Tap");
+    await handoffCard.getByRole("button", { name: "Update Tap" }).click();
+    await route.fulfill({ response: snapshot });
+  });
   await publicPage.unroute("**/api/public/events");
   await expect(publicPage.locator('[data-tap-number="2"] [data-field="tap-name"]')).toHaveText(
-    "Reconciled Tap",
+    "Reconnect Handoff Tap",
     { timeout: 10_000 },
   );
+  expect(interceptedReconnectSnapshot).toBe(true);
+  expect(reconnectSnapshotAttempts).toBeGreaterThanOrEqual(2);
+  expect(
+    await publicPage.evaluate(
+      () =>
+        (window as unknown as { reconnectCard: Element }).reconnectCard ===
+          document.querySelector('[data-tap-number="2"]') &&
+        (window as unknown as { reconnectGraphic: Element }).reconnectGraphic ===
+          document.querySelector('[data-tap-number="2"] .tap-graphic'),
+    ),
+  ).toBe(true);
+  await publicPage.unroute("**/api/public/dashboard");
   await context.close();
 });
 
@@ -227,11 +267,34 @@ test("local display preferences are prepaint, strict, persistent, resettable, an
     if (location.origin === "http://127.0.0.1:4176") {
       localStorage.setItem(
         "tapboard.v2.display-preferences.v1",
-        JSON.stringify({ version: 1, overrides: { theme: "warm_pub", layoutMode: "scroll" } }),
+        JSON.stringify({
+          version: 1,
+          overrides: { theme: "warm_pub", layoutMode: "scroll", unitSystem: "metric" },
+        }),
       );
       requestAnimationFrame(() => {
-        (window as unknown as { firstFrameTheme: string | undefined }).firstFrameTheme =
-          document.documentElement.dataset.theme;
+        const volume = document.querySelector('[data-tap-number="1"] [data-field="volume"]');
+        const temperature = document.querySelector(
+          '[data-tap-number="1"] [data-field="temperature"]',
+        );
+        (
+          window as unknown as {
+            firstFrameTheme: string | undefined;
+            firstFrameUnits: readonly [string, string, string, string, string, string] | undefined;
+          }
+        ).firstFrameTheme = document.documentElement.dataset.theme;
+        (
+          window as unknown as {
+            firstFrameUnits: readonly [string, string, string, string, string, string] | undefined;
+          }
+        ).firstFrameUnits = [
+          volume!.querySelector('[data-unit="metric"]')!.textContent,
+          temperature!.querySelector('[data-unit="metric"]')!.textContent,
+          getComputedStyle(volume!.querySelector('[data-unit="metric"]')!).display,
+          getComputedStyle(temperature!.querySelector('[data-unit="metric"]')!).display,
+          getComputedStyle(volume!.querySelector('[data-unit="us"]')!).display,
+          getComputedStyle(temperature!.querySelector('[data-unit="us"]')!).display,
+        ];
       });
     }
   });
@@ -246,7 +309,20 @@ test("local display preferences are prepaint, strict, persistent, resettable, an
       first.evaluate(() => (window as unknown as { firstFrameTheme?: string }).firstFrameTheme),
     )
     .toBe("warm_pub");
+  await expect
+    .poll(() =>
+      first.evaluate(
+        () =>
+          (
+            window as unknown as {
+              firstFrameUnits?: readonly [string, string, string, string, string, string];
+            }
+          ).firstFrameUnits,
+      ),
+    )
+    .toEqual(["12.0 L / 19.0 L", "4.0 °C", "inline", "inline", "none", "none"]);
   await expect(first.locator("html")).toHaveAttribute("data-theme", "warm_pub");
+  await expect(first.locator("html")).toHaveAttribute("data-unit-system", "metric");
   await first.reload();
   await expect(first.locator("html")).toHaveAttribute("data-theme", "warm_pub");
 

@@ -8,6 +8,7 @@ import { createKegService } from "../../src/features/kegs/service.ts";
 import { createMachineKeyService } from "../../src/features/machine-keys/service.ts";
 import { createSecretsService } from "../../src/features/secrets/service.ts";
 import { createTapService } from "../../src/features/taps/service.ts";
+import { DetectorService } from "../../src/features/telemetry/detector-service.ts";
 import { TelemetryService } from "../../src/features/telemetry/service.ts";
 import { openDatabase } from "../../src/infrastructure/database/connection.ts";
 import { createLogger } from "../../src/shared/logging.ts";
@@ -22,7 +23,8 @@ const auth = createAuthService(database, { canonicalOrigin: origin });
 await auth.resetPin("1234", { actorType: "system" });
 const secrets = createSecretsService(database, { rootKey: secretKey });
 const beverages = createBeverageService(database, { secretsService: secrets });
-const taps = createTapService(database);
+const detector = new DetectorService(database);
+const taps = createTapService(database, { extensionPort: detector });
 const kegs = createKegService(database);
 const fills = createFillService(database, {
   beverageService: beverages,
@@ -31,8 +33,13 @@ const fills = createFillService(database, {
 const telemetry = new TelemetryService({
   database,
   machineKeyService: createMachineKeyService(database),
+  authorityExtensionPort: detector,
+  acceptedExtensionPort: detector,
 });
-telemetry.createSource({ name: "Private fixture source", label: "Private machine key" });
+const source = telemetry.createSource({
+  name: "Private fixture source",
+  label: "Private machine key",
+}).source;
 beverages.configureBrewfatherAccount({
   userId: "PRIVATE_BREWFATHER_USER",
   apiKey: "PRIVATE_BREWFATHER_API_KEY",
@@ -66,6 +73,35 @@ for (let number = 1; number <= 6; number += 1)
     enabled: true,
     ...(number === 1 ? { notes: "PRIVATE_MAINTENANCE_NOTE" } : {}),
   });
+const measuredBeverage = beverages.createCustomBeverage({
+  name: "Measured fixture beer",
+  beverageType: "beer",
+  style: "Pale Ale",
+  abv: 5,
+});
+const measuredKeg = kegs.createKeg({
+  kegNumber: 2,
+  label: "Measured fixture keg",
+  capacityMl: 19_000,
+  currentTareG: 4_200,
+});
+const measuredFill = fills.createFill({
+  beverageId: measuredBeverage.beverage.id,
+  kegId: measuredKeg.id,
+  fillDate: "2026-08-15",
+});
+const measuredTap = taps.listTaps().find((tap) => tap.tapNumber === 1)!;
+telemetry.setTapAuthority(measuredTap.id, { sourceId: source.id });
+taps.assignFill(measuredTap.id, { fillId: measuredFill.id });
+const measurementStart = Date.now();
+for (let index = 0; index < 5; index += 1) {
+  telemetry.ingestSingle(source, 1, {
+    clientSampleId: `fixture-measurement-${index}`,
+    measuredAt: new Date(measurementStart + index * 250).toISOString(),
+    remainingVolume: { value: 12_000, unit: "ml" },
+    temperature: { value: 4, unit: "c" },
+  });
+}
 const now = "2026-08-15T12:00:00.000Z";
 const insertPrivateTap = database.prepare(`
   INSERT INTO taps (

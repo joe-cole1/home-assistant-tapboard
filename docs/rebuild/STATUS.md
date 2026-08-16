@@ -81,6 +81,8 @@ Tap line maintenance is append-only. The server derives resulting due dates, `li
 
 ## Issue #76 implementation boundary
 
+Issue #76 keeps a stable generic Tap graphic node seam; distinct Beverage-owned Fill Glass geometry/catalog completion remains #77.
+
 `/` is complete authoritative SSR: aggregate header/connectivity, every enabled nonretired Tap in ascending number order, a stable hidden Tap Wars slot, and the existing authoritative On Deck projection. Public JSON and SSE use explicit privacy DTOs and dirty identifiers only. Browser modules patch existing text/attributes/SVG geometry, insert or remove only changed cards, and fetch a dashboard-scoped authoritative projection after reconnect. The in-process public/Admin hubs bound clients, queued events, and queued bytes; coalesce dirty targets; respect write backpressure and drain; disconnect overflow; clean up listeners; and periodically revalidate Admin sessions. They do not provide durable replay.
 
 Authenticated Eta Admin pages cover Overview, Integrations, Beverages, Kegs, Fills, Taps, Tap Wars, Display, and System. Ordinary forms retain CSRF/Origin-protected POST→303 behavior without JavaScript. Tap Wars and complete System administration remain honest future seams; no #77–#80 domain behavior is fabricated.

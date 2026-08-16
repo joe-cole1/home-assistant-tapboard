@@ -116,13 +116,15 @@ export class DashboardService {
 
     try {
       const brewfather = this.#dependencies.beverageService.getBrewfatherStatus();
-      if (brewfather.account?.enabled === true && !brewfather.apiKeyConfigured) degraded = true;
-      for (const beverage of this.#dependencies.beverageService.listBeverages()) {
-        if (beverage.beverage.ownershipType !== "brewfather") continue;
-        const link = this.#dependencies.beverageService.getBeverage(
-          beverage.beverage.id,
-        ).brewfatherLink;
-        if (link?.syncState === "error" || link?.syncState === "stale") degraded = true;
+      if (brewfather.account?.enabled === true) {
+        if (!brewfather.apiKeyConfigured) degraded = true;
+        for (const beverage of this.#dependencies.beverageService.listBeverages()) {
+          if (beverage.beverage.ownershipType !== "brewfather") continue;
+          const link = this.#dependencies.beverageService.getBeverage(
+            beverage.beverage.id,
+          ).brewfatherLink;
+          if (link?.syncState === "error" || link?.syncState === "stale") degraded = true;
+        }
       }
     } catch {
       degraded = true;

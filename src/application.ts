@@ -223,11 +223,20 @@ class FoundationApplication implements Application {
       this.#beverageService = rawBeverageService;
       const beverageService = observeCommittedCalls(rawBeverageService, {
         createCustomBeverage: () => publishAllTaps("fill.updated"),
-        linkBrewfatherCandidate: () => publishAllTaps("fill.updated"),
+        linkBrewfatherCandidate: () => {
+          liveUpdates.publish({ name: "integration_status.updated", target: "header" });
+          publishAllTaps("fill.updated");
+        },
         updateCustomBeverage: () => publishAllTaps("fill.updated"),
         updatePresentationOverrides: () => publishAllTaps("fill.updated"),
-        unlinkBeverage: () => publishAllTaps("fill.updated"),
-        deleteBeverage: () => publishAllTaps("fill.updated"),
+        unlinkBeverage: () => {
+          liveUpdates.publish({ name: "integration_status.updated", target: "header" });
+          publishAllTaps("fill.updated");
+        },
+        deleteBeverage: () => {
+          liveUpdates.publish({ name: "integration_status.updated", target: "header" });
+          publishAllTaps("fill.updated");
+        },
         configureBrewfatherAccount: () => {
           liveUpdates.publish({ name: "integration_status.updated", target: "header" });
         },

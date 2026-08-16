@@ -80,8 +80,7 @@
       "rationale": "The geometry and mapping are valuable visual assets; the mapping module is pure and the renderer has tests for style catalog, foam behavior, hostile values, and SVG identity. Preserve the assets rather than redraw them, but keep them out of domain and HTTP code.",
       "preservation": "Port the reviewed geometry and mapping data with explicit sanitization, stable IDs, responsive scaling, and accessibility checks; remove unrelated legacy card wiring.",
       "confidence": "high",
-      "risks": ["The renderer currently generates animation randomness and HTML strings; v2 must retain safe generated markup boundaries.", "Graphic IDs must remain stable when presentation moves to new templates."],
-      "v2_implementation": ["src/features/dashboard/service.ts", "views/partials/fill-graphic.eta", "public/js/dashboard.js"]
+      "risks": ["The renderer currently generates animation randomness and HTML strings; v2 must retain safe generated markup boundaries.", "Graphic IDs must remain stable when presentation moves to new templates."]
     },
     {
       "id": "theme-tokens",

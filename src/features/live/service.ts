@@ -57,8 +57,7 @@ export class LiveUpdateService {
       ...shared,
       maxClients: options.adminMaxClients ?? 16,
       authRevalidateMs: options.adminRevalidateMs ?? 60_000,
-      authRevalidate: (context) =>
-        authService.authenticateSession(context.sessionToken) !== undefined,
+      authRevalidate: (context) => authService.validateSession(context.sessionToken) !== undefined,
     });
   }
 
@@ -72,7 +71,8 @@ export class LiveUpdateService {
 
   publish(event: PublicLiveEvent): void {
     const payload = "tapId" in event ? { tapId: event.tapId } : { target: event.target };
-    const dirtyKey = "tapId" in event ? `tap:${event.tapId}` : event.target;
+    const dirtyKey =
+      "tapId" in event ? `${event.name}:tap:${event.tapId}` : `${event.name}:${event.target}`;
     this.#publicHub.publish(event.name, payload, { dirtyKey });
     this.#adminHub.publish(event.name, payload, { dirtyKey });
   }

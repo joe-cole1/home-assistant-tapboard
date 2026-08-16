@@ -104,6 +104,14 @@ void test("Admin shell exposes all independently reachable navigation seams", ()
     metrics: [],
     taps: [],
     health: [],
+    connectivity: { state: "healthy", label: "Connected" },
+    integrations: {
+      telemetryConfigured: 0,
+      brewfatherConfigured: false,
+      brewfatherEnabled: false,
+      brewfatherApiKeyConfigured: false,
+      brewfatherLinkedBeverages: 0,
+    },
   });
   for (const route of [
     "overview",
@@ -120,4 +128,6 @@ void test("Admin shell exposes all independently reachable navigation seams", ()
   }
   assert.match(html, /aria-current="page"/u);
   assert.match(html, /Skip to content/u);
+  assert.match(html, /Connectivity and integrations/u);
+  assert.match(html, /Health summary/u);
 });

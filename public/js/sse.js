@@ -12,21 +12,27 @@ export function connect(path, onEvent, onReconnect) {
   let source;
   let reconnectTimer;
   let closed = false;
+  let reconnecting = false;
 
   function open() {
     if (closed) return;
-    source = new EventSource(path);
-    for (const name of EVENT_NAMES) source.addEventListener(name, (event) => onEvent(name, event));
-    source.addEventListener("error", () => {
-      source?.close();
+    const next = new EventSource(path);
+    source = next;
+    for (const name of EVENT_NAMES) next.addEventListener(name, (event) => onEvent(name, event));
+    next.addEventListener("open", () => {
+      if (next !== source || !reconnecting) return;
+      reconnecting = false;
+      void Promise.resolve(onReconnect()).catch(() => {
+        /* The rendered page remains useful. */
+      });
+    });
+    next.addEventListener("error", () => {
+      if (next !== source) return;
+      next.close();
       if (reconnectTimer !== undefined) return;
-      reconnectTimer = window.setTimeout(async () => {
+      reconnectTimer = window.setTimeout(() => {
         reconnectTimer = undefined;
-        try {
-          await onReconnect();
-        } catch {
-          /* The rendered page remains useful. */
-        }
+        reconnecting = true;
         open();
       }, 1500);
     });
