@@ -17,6 +17,7 @@ import {
   MIGRATIONS,
   type MigrationDefinition,
 } from "../src/infrastructure/database/migrations.ts";
+import { resolveSensoryProfile } from "../src/features/story/profile.ts";
 
 interface UserVersionRow {
   readonly user_version: number;
@@ -349,6 +350,12 @@ void test("v12 upgrades to v13 without altering existing lifecycle rows", (conte
       )
       .run(beverageId, occurredAt, occurredAt);
     v12
+      .prepare<[string, number, string]>(
+        `INSERT INTO beverage_sensory_overrides
+         (beverage_id, bitterness, updated_at) VALUES (?, ?, ?)`,
+      )
+      .run(beverageId, 8, occurredAt);
+    v12
       .prepare<[string, string, string, string, string, string]>(
         "INSERT INTO fills (id, beverage_id, keg_id, fill_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
       )
@@ -389,6 +396,17 @@ void test("v12 upgrades to v13 without altering existing lifecycle rows", (conte
         .get()?.count,
       0,
     );
+    const preservedSensory = upgraded
+      .prepare<[string], { readonly bitterness: number | null }>(
+        "SELECT bitterness FROM beverage_sensory_overrides WHERE beverage_id = ?",
+      )
+      .get(beverageId)?.bitterness;
+    assert.equal(preservedSensory, 8);
+    const storySensory = resolveSensoryProfile({
+      manualOverrides: { bitterness: preservedSensory },
+    }).bitterness;
+    assert.equal(storySensory.value, 4);
+    assert.equal(storySensory.source, "manual");
   } finally {
     upgraded.close();
   }

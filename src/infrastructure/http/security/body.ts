@@ -53,6 +53,11 @@ export function discardRequestBody(request: IncomingMessage): void {
 
 export interface ReadBodyOptions {
   readonly maxBytes?: number;
+  /**
+   * Explicit callers may opt into a larger bounded body for a narrowly scoped
+   * form contract. The ordinary JSON/body ceiling remains unchanged.
+   */
+  readonly maxBytesCeiling?: number;
   readonly required?: boolean;
 }
 
@@ -61,7 +66,14 @@ export function readRequestBody(
   options: ReadBodyOptions = {},
 ): Promise<Buffer> {
   const maxBytes = options.maxBytes ?? MAX_JSON_BODY_BYTES;
-  if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > MAX_BATCH_JSON_BODY_BYTES) {
+  const maxBytesCeiling = options.maxBytesCeiling ?? MAX_BATCH_JSON_BODY_BYTES;
+  if (
+    !Number.isSafeInteger(maxBytes) ||
+    maxBytes < 1 ||
+    !Number.isSafeInteger(maxBytesCeiling) ||
+    maxBytesCeiling < 1 ||
+    maxBytes > maxBytesCeiling
+  ) {
     throw new RangeError("Request body limit is invalid");
   }
   const contentLength = declaredLength(request.headers);

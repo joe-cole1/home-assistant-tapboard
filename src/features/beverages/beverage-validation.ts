@@ -3,6 +3,8 @@ import { STATUS_SET } from "./brewfather/sanitizer.ts";
 import {
   BEVERAGE_TYPES,
   BEVERAGE_SENSORY_AXES,
+  BEVERAGE_SENSORY_CANONICAL_MAX,
+  BEVERAGE_SENSORY_CANONICAL_MIN,
   type BeverageSensoryAxis,
   type BeverageType,
   type BrewfatherCompletionPolicy,
@@ -16,6 +18,7 @@ import {
 } from "./types.ts";
 
 const ALLOWED_COMPLETION_POLICIES = new Set(["never", "ask", "completed"]);
+const CANONICAL_SENSORY_RANGE = `between ${BEVERAGE_SENSORY_CANONICAL_MIN} and ${BEVERAGE_SENSORY_CANONICAL_MAX}`;
 
 function invalidRequest(clientMessage: string, details?: SafeErrorDetails): never {
   throw new ApplicationError({
@@ -228,12 +231,42 @@ export function validateCreateCustomBeverageInput(input: unknown): CreateCustomB
       "sensoryOverrides",
     );
     sensoryOverrides = {
-      bitterness: cleanOptionalNumber(input.sensoryOverrides.bitterness, 0, 10, "bitterness"),
-      sweetness: cleanOptionalNumber(input.sensoryOverrides.sweetness, 0, 10, "sweetness"),
-      body: cleanOptionalNumber(input.sensoryOverrides.body, 0, 10, "body"),
-      roast: cleanOptionalNumber(input.sensoryOverrides.roast, 0, 10, "roast"),
-      tartness: cleanOptionalNumber(input.sensoryOverrides.tartness, 0, 10, "tartness"),
-      alcohol: cleanOptionalNumber(input.sensoryOverrides.alcohol, 0, 10, "alcohol"),
+      bitterness: cleanOptionalNumber(
+        input.sensoryOverrides.bitterness,
+        BEVERAGE_SENSORY_CANONICAL_MIN,
+        BEVERAGE_SENSORY_CANONICAL_MAX,
+        "bitterness",
+      ),
+      sweetness: cleanOptionalNumber(
+        input.sensoryOverrides.sweetness,
+        BEVERAGE_SENSORY_CANONICAL_MIN,
+        BEVERAGE_SENSORY_CANONICAL_MAX,
+        "sweetness",
+      ),
+      body: cleanOptionalNumber(
+        input.sensoryOverrides.body,
+        BEVERAGE_SENSORY_CANONICAL_MIN,
+        BEVERAGE_SENSORY_CANONICAL_MAX,
+        "body",
+      ),
+      roast: cleanOptionalNumber(
+        input.sensoryOverrides.roast,
+        BEVERAGE_SENSORY_CANONICAL_MIN,
+        BEVERAGE_SENSORY_CANONICAL_MAX,
+        "roast",
+      ),
+      tartness: cleanOptionalNumber(
+        input.sensoryOverrides.tartness,
+        BEVERAGE_SENSORY_CANONICAL_MIN,
+        BEVERAGE_SENSORY_CANONICAL_MAX,
+        "tartness",
+      ),
+      alcohol: cleanOptionalNumber(
+        input.sensoryOverrides.alcohol,
+        BEVERAGE_SENSORY_CANONICAL_MIN,
+        BEVERAGE_SENSORY_CANONICAL_MAX,
+        "alcohol",
+      ),
     };
   }
 
@@ -408,12 +441,42 @@ export function validateUpdateCustomBeverageInput(input: unknown): UpdateCustomB
         "sensoryOverrides",
       );
       result.sensoryOverrides = {
-        bitterness: cleanOptionalNumber(input.sensoryOverrides.bitterness, 0, 10, "bitterness"),
-        sweetness: cleanOptionalNumber(input.sensoryOverrides.sweetness, 0, 10, "sweetness"),
-        body: cleanOptionalNumber(input.sensoryOverrides.body, 0, 10, "body"),
-        roast: cleanOptionalNumber(input.sensoryOverrides.roast, 0, 10, "roast"),
-        tartness: cleanOptionalNumber(input.sensoryOverrides.tartness, 0, 10, "tartness"),
-        alcohol: cleanOptionalNumber(input.sensoryOverrides.alcohol, 0, 10, "alcohol"),
+        bitterness: cleanOptionalNumber(
+          input.sensoryOverrides.bitterness,
+          BEVERAGE_SENSORY_CANONICAL_MIN,
+          BEVERAGE_SENSORY_CANONICAL_MAX,
+          "bitterness",
+        ),
+        sweetness: cleanOptionalNumber(
+          input.sensoryOverrides.sweetness,
+          BEVERAGE_SENSORY_CANONICAL_MIN,
+          BEVERAGE_SENSORY_CANONICAL_MAX,
+          "sweetness",
+        ),
+        body: cleanOptionalNumber(
+          input.sensoryOverrides.body,
+          BEVERAGE_SENSORY_CANONICAL_MIN,
+          BEVERAGE_SENSORY_CANONICAL_MAX,
+          "body",
+        ),
+        roast: cleanOptionalNumber(
+          input.sensoryOverrides.roast,
+          BEVERAGE_SENSORY_CANONICAL_MIN,
+          BEVERAGE_SENSORY_CANONICAL_MAX,
+          "roast",
+        ),
+        tartness: cleanOptionalNumber(
+          input.sensoryOverrides.tartness,
+          BEVERAGE_SENSORY_CANONICAL_MIN,
+          BEVERAGE_SENSORY_CANONICAL_MAX,
+          "tartness",
+        ),
+        alcohol: cleanOptionalNumber(
+          input.sensoryOverrides.alcohol,
+          BEVERAGE_SENSORY_CANONICAL_MIN,
+          BEVERAGE_SENSORY_CANONICAL_MAX,
+          "alcohol",
+        ),
       };
     }
   }
@@ -441,8 +504,13 @@ export function validateUpdateBeverageSensoryOverridesInput(
       result[axis] = null;
       continue;
     }
-    if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 5) {
-      invalidRequest(`${axis} must be a finite number between 0 and 5 or null.`);
+    if (
+      typeof value !== "number" ||
+      !Number.isFinite(value) ||
+      value < BEVERAGE_SENSORY_CANONICAL_MIN ||
+      value > BEVERAGE_SENSORY_CANONICAL_MAX
+    ) {
+      invalidRequest(`${axis} must be a finite number ${CANONICAL_SENSORY_RANGE} or null.`);
     }
     result[axis] = value;
   }
@@ -620,12 +688,42 @@ export function validateLinkBrewfatherCandidateInput(input: unknown): LinkBrewfa
       "sensoryOverrides",
     );
     sensoryOverrides = {
-      bitterness: cleanOptionalNumber(input.sensoryOverrides.bitterness, 0, 10, "bitterness"),
-      sweetness: cleanOptionalNumber(input.sensoryOverrides.sweetness, 0, 10, "sweetness"),
-      body: cleanOptionalNumber(input.sensoryOverrides.body, 0, 10, "body"),
-      roast: cleanOptionalNumber(input.sensoryOverrides.roast, 0, 10, "roast"),
-      tartness: cleanOptionalNumber(input.sensoryOverrides.tartness, 0, 10, "tartness"),
-      alcohol: cleanOptionalNumber(input.sensoryOverrides.alcohol, 0, 10, "alcohol"),
+      bitterness: cleanOptionalNumber(
+        input.sensoryOverrides.bitterness,
+        BEVERAGE_SENSORY_CANONICAL_MIN,
+        BEVERAGE_SENSORY_CANONICAL_MAX,
+        "bitterness",
+      ),
+      sweetness: cleanOptionalNumber(
+        input.sensoryOverrides.sweetness,
+        BEVERAGE_SENSORY_CANONICAL_MIN,
+        BEVERAGE_SENSORY_CANONICAL_MAX,
+        "sweetness",
+      ),
+      body: cleanOptionalNumber(
+        input.sensoryOverrides.body,
+        BEVERAGE_SENSORY_CANONICAL_MIN,
+        BEVERAGE_SENSORY_CANONICAL_MAX,
+        "body",
+      ),
+      roast: cleanOptionalNumber(
+        input.sensoryOverrides.roast,
+        BEVERAGE_SENSORY_CANONICAL_MIN,
+        BEVERAGE_SENSORY_CANONICAL_MAX,
+        "roast",
+      ),
+      tartness: cleanOptionalNumber(
+        input.sensoryOverrides.tartness,
+        BEVERAGE_SENSORY_CANONICAL_MIN,
+        BEVERAGE_SENSORY_CANONICAL_MAX,
+        "tartness",
+      ),
+      alcohol: cleanOptionalNumber(
+        input.sensoryOverrides.alcohol,
+        BEVERAGE_SENSORY_CANONICAL_MIN,
+        BEVERAGE_SENSORY_CANONICAL_MAX,
+        "alcohol",
+      ),
     };
   }
 

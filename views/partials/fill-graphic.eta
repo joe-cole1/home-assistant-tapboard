@@ -1,25 +1,46 @@
 <%
-  const graphic = it.tap.graphic || { id: "pint_glass", token: "vessel/pint-glass", width: 1, height: 1.3, bowlWidth: 0.92, stemHeight: 0 };
-  const bodyWidth = 150 * graphic.width;
-  const bodyHeight = Math.max(105, Math.min(190, 150 / graphic.height));
-  const vesselOrder = ["corny_keg", "pint_glass", "tulip_glass", "wheat_glass", "mug", "stout_glass", "snifter", "nonic_pint", "shaker_pint", "pilsner_flute", "stange", "goblet", "teku", "thistle", "ipa_glass", "tasting_glass", "stemmed_lager"];
-  const bodyTop = 225 - bodyHeight + Math.max(0, vesselOrder.indexOf(graphic.id)) * 0.8;
-  const topWidth = bodyWidth * graphic.bowlWidth;
-  const left = 135 - bodyWidth / 2;
-  const right = 135 + bodyWidth / 2;
-  const topLeft = 135 - topWidth / 2;
-  const topRight = 135 + topWidth / 2;
-  const stem = Math.max(0, Math.min(55, graphic.stemHeight * 100));
-  const path = `M ${topLeft.toFixed(1)} ${bodyTop.toFixed(1)} C ${topLeft.toFixed(1)} ${(bodyTop - 10).toFixed(1)} ${topRight.toFixed(1)} ${(bodyTop - 10).toFixed(1)} ${topRight.toFixed(1)} ${bodyTop.toFixed(1)} L ${right.toFixed(1)} ${(225 - stem).toFixed(1)} Q 135 232 ${left.toFixed(1)} ${(225 - stem).toFixed(1)} Z`;
-  const clipId = `fill-clip-${String(it.tap.id)}`;
+  const graphic = it.tap.graphic || {
+    id: "pint_glass",
+    token: "vessel/pint-glass",
+    bodyPath: "M 45 40 H 115 L 105 225 H 55 Z",
+    clipPath: "M 30 0 H 130 L 114 45 L 104 225 H 56 L 46 45 Z",
+    rimPath: "M 45 40 H 115",
+    viewBox: "0 40 160 190",
+    topY: 45,
+    bottomY: 225,
+    fillX: 30,
+    fillWidth: 100,
+    detailPaths: []
+  };
+  const clipId = `fill-clip-${String(it.tap.id).replace(/[^a-zA-Z0-9_-]/gu, "-").slice(0, 80)}`;
   const percent = typeof it.tap.fillPercent === "number" ? Math.max(0, Math.min(100, it.tap.fillPercent)) : 0;
+  const liquidY = graphic.bottomY - ((graphic.bottomY - graphic.topY) * percent) / 100;
+  const liquidHeight = graphic.bottomY - liquidY + 4;
   const graphicLabel = it.tap.accessibleLabel || it.tap.title || `Tap ${it.tap.tapNumber}`;
-  const color = typeof it.tap.displayColor === "string" && /^#[0-9A-Fa-f]{6}$/u.test(it.tap.displayColor) ? it.tap.displayColor : "currentColor";
+  const color = typeof it.tap.displayColor === "string" && /^#[0-9A-Fa-f]{6}$/u.test(it.tap.displayColor) ? it.tap.displayColor : "#D97706";
+  const foamColor = color === "#080100" || color === "#130100" || color === "#200100" ? "#F5EBE6" : "#FFFDF5";
+  const foamCenter = graphic.fillX + graphic.fillWidth / 2;
 %>
-<svg class="tap-graphic" data-graphic-id="<%= graphic.id %>" data-graphic-token="<%= graphic.token %>" viewBox="0 0 270 250" role="img" aria-label="<%= graphicLabel %> fill level">
+<svg class="tap-graphic" data-graphic-id="<%= graphic.id %>" data-graphic-token="<%= graphic.token %>" data-fill-top-y="<%= graphic.topY %>" data-fill-bottom-y="<%= graphic.bottomY %>" viewBox="<%= graphic.viewBox %>" role="img" aria-label="<%= graphicLabel %> fill level">
   <title><%= graphicLabel %> fill level</title>
-  <defs><clipPath id="<%= clipId %>"><path d="<%= path %>" /></clipPath></defs>
-  <path class="glass" d="<%= path %>" />
-  <rect class="liquid" x="0" y="<%= 225 - 1.8 * percent %>" width="270" height="<%= 1.8 * percent %>" clip-path="url(#<%= clipId %>)" fill="<%= color %>" data-field="fill-graphic" data-fill-percent="<%= percent %>" />
-  <path class="rim" d="M <%= topLeft.toFixed(1) %> <%= bodyTop.toFixed(1) %> H <%= topRight.toFixed(1) %>" />
+  <defs>
+    <clipPath id="<%= clipId %>" class="beer-liquid-clip"><path d="<%= graphic.clipPath %>" /></clipPath>
+  </defs>
+  <path class="glass" d="<%= graphic.bodyPath %>" />
+  <% for (const item of graphic.detailPaths) { %>
+    <path class="<%= item.className %>" d="<%= item.d %>" fill="<%= item.fill %>" stroke="<%= item.stroke %>" stroke-width="<%= item.strokeWidth %>" opacity="<%= item.opacity %>" />
+  <% } %>
+  <g class="beer-liquid-clip" clip-path="url(#<%= clipId %>)">
+    <rect class="liquid beer-liquid-rect" x="<%= graphic.fillX %>" y="<%= liquidY %>" width="<%= graphic.fillWidth %>" height="<%= liquidHeight %>" fill="<%= color %>" data-field="fill-graphic" data-fill-percent="<%= percent %>" />
+    <rect class="beer-liquid-shadow" x="<%= foamCenter %>" y="<%= liquidY %>" width="<%= graphic.fillWidth / 2 %>" height="<%= liquidHeight %>" fill="rgba(0, 0, 0, 0.22)" />
+    <g class="beer-cloud-foam" data-base-y="<%= liquidY %>" transform="translate(0 <%= liquidY %>)"<% if (percent <= 0) { %> style="display:none"<% } %>>
+      <rect x="<%= graphic.fillX %>" y="-8" width="<%= graphic.fillWidth %>" height="16" fill="<%= foamColor %>" opacity="0.9" />
+      <circle cx="<%= graphic.fillX + graphic.fillWidth * 0.22 %>" cy="-5" r="<%= Math.max(6, graphic.fillWidth * 0.11) %>" fill="<%= foamColor %>" />
+      <circle cx="<%= graphic.fillX + graphic.fillWidth * 0.43 %>" cy="-8" r="<%= Math.max(7, graphic.fillWidth * 0.14) %>" fill="<%= foamColor %>" />
+      <circle cx="<%= graphic.fillX + graphic.fillWidth * 0.65 %>" cy="-7" r="<%= Math.max(7, graphic.fillWidth * 0.13) %>" fill="<%= foamColor %>" />
+      <circle cx="<%= graphic.fillX + graphic.fillWidth * 0.84 %>" cy="-5" r="<%= Math.max(6, graphic.fillWidth * 0.1) %>" fill="<%= foamColor %>" />
+      <circle cx="<%= foamCenter %>" cy="-9" r="<%= Math.max(5, graphic.fillWidth * 0.09) %>" fill="#FFFFFF" opacity="0.5" />
+    </g>
+  </g>
+  <path class="rim" d="<%= graphic.rimPath %>" />
 </svg>

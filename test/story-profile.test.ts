@@ -7,6 +7,7 @@ import {
   predictSweetness,
   predictRoast,
   predictTartness,
+  canonicalSensoryToPublic,
   resolveSensoryProfile,
   styleBaselineFor,
 } from "../src/features/story/profile.ts";
@@ -19,7 +20,7 @@ void test("canonical measured vector uses the locked bitterness and alcohol form
 void test("manual, recipe, and style precedence is independent per axis", () => {
   const result = resolveSensoryProfile({
     style: "West Coast IPA",
-    manualOverrides: { bitterness: 1.25 },
+    manualOverrides: { bitterness: 2.5 },
     recipePrediction: { sweetness: 2.25 },
     ibu: 50,
     og: 1.05,
@@ -30,7 +31,7 @@ void test("manual, recipe, and style precedence is independent per axis", () => 
     value: 1.25,
     source: "manual",
     confidence: "high",
-    evidence: "Manual override",
+    evidence: "Manual override (canonical 0–10 mapped to public 0–5)",
   });
   assert.equal(result.sweetness.source, "recipe_prediction");
   assert.equal(result.sweetness.value, 2.25);
@@ -47,11 +48,34 @@ void test("invalid non-null manual values fail closed for only that axis", () =>
     og: 1.05,
     fg: 1.01,
   });
-  assert.equal(result.bitterness.value, null);
-  assert.equal(result.bitterness.source, "unavailable");
+  assert.equal(result.bitterness.value, 4);
+  assert.equal(result.bitterness.source, "manual");
   assert.equal(result.sweetness.value, null);
   assert.equal(result.sweetness.source, "unavailable");
   assert.equal(result.body.source, "recipe_prediction");
+});
+
+void test("canonical 0..10 manual values map deterministically to public 0..5", () => {
+  assert.equal(canonicalSensoryToPublic(0), 0);
+  assert.equal(canonicalSensoryToPublic(8), 4);
+  assert.equal(canonicalSensoryToPublic(7.777), 3.8885);
+  assert.equal(canonicalSensoryToPublic(10), 5);
+  assert.equal(canonicalSensoryToPublic(-0.1), null);
+  assert.equal(canonicalSensoryToPublic(10.1), null);
+  assert.equal(resolveSensoryProfile({ manualOverrides: { body: 8 } }).body.value, 4);
+  assert.equal(resolveSensoryProfile({ manualOverrides: { body: 8 } }).body.source, "manual");
+  const invalid = resolveSensoryProfile({ manualOverrides: { body: 10.1 } }).body;
+  assert.equal(invalid.value, null);
+  assert.equal(invalid.source, "unavailable");
+});
+
+void test("clearing a manual override exposes the next sensory precedence layer", () => {
+  const result = resolveSensoryProfile({
+    manualOverrides: { bitterness: null },
+    recipePrediction: { bitterness: 2.75 },
+  });
+  assert.equal(result.bitterness.value, 2.75);
+  assert.equal(result.bitterness.source, "recipe_prediction");
 });
 
 void test("very low and west-coast bitterness remain bounded", () => {

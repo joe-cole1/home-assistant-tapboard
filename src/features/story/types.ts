@@ -36,9 +36,13 @@ export type SensoryPredictionMap = Partial<Record<SensoryAxis, number | null>>;
  * defensive about every value it consumes.
  */
 export interface SensoryProfileInput {
+  /** Canonical persisted/manual overrides use 0..10; resolver maps them to public 0..5. */
   readonly manual?: SensoryPredictionMap | null;
+  /** Canonical persisted/manual overrides use 0..10; resolver maps them to public 0..5. */
   readonly manualOverrides?: SensoryPredictionMap | null;
+  /** Canonical persisted/manual overrides use 0..10; resolver maps them to public 0..5. */
   readonly sensoryOverrides?: SensoryPredictionMap | null;
+  /** Canonical persisted/manual overrides use 0..10; resolver maps them to public 0..5. */
   readonly overrides?: SensoryPredictionMap | null;
   readonly recipePrediction?: SensoryPredictionMap | null;
   readonly predictions?: SensoryPredictionMap | null;
@@ -133,14 +137,30 @@ export const VESSEL_IDS = [
 export type VesselId = (typeof VESSEL_IDS)[number];
 export type FillGlassId = VesselId;
 
+export interface VesselDetailPath {
+  readonly d: string;
+  readonly className: "glass-detail" | "glass-stem" | "glass-base" | "glass-highlight";
+  readonly fill: string;
+  readonly stroke: string;
+  readonly strokeWidth: number;
+  readonly opacity: number;
+}
+
 export interface VesselGeometryDescriptor {
   readonly id: VesselId;
-  /** A finite server-owned token. Clients map this token to static artwork. */
+  /** A finite server-owned token. Clients never accept paths outside this catalog. */
   readonly token: string;
-  readonly width: number;
-  readonly height: number;
-  readonly bowlWidth: number;
-  readonly stemHeight: number;
+  /** The v1 static body contour, carried as a bounded safe descriptor. */
+  readonly bodyPath: string;
+  /** The matching body contour used to clip the liquid and deterministic foam. */
+  readonly clipPath: string;
+  readonly rimPath: string;
+  readonly viewBox: string;
+  readonly topY: number;
+  readonly bottomY: number;
+  readonly fillX: number;
+  readonly fillWidth: number;
+  readonly detailPaths: readonly VesselDetailPath[];
 }
 
 export interface VesselResolution {

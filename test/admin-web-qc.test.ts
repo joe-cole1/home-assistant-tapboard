@@ -14,6 +14,7 @@ const SESSION_TOKEN = "s".repeat(43);
 const CSRF_TOKEN = "c".repeat(43);
 const SESSION_ID = "session-qc";
 const LINKED_BEVERAGE_ID = "beverage-qc";
+const CUSTOM_BEVERAGE_ID = "beverage-custom-qc";
 const TAP_ID = "tap-qc";
 const KEG_ID = "keg-qc";
 const FILL_ID = "fill-qc";
@@ -107,7 +108,63 @@ const linkedBeverageDetail = {
     updatedAt: "2026-08-01T00:00:00.000Z",
   },
   recipeSnapshot: { recipeJson: recipeSecret },
-  sensoryOverrides: { bitterness: sensorySecret },
+  sensoryOverrides: { bitterness: sensorySecret, sweetness: 8 },
+};
+
+const customRecipeForQc = {
+  notes: "Mash | hold\n& <safe-note> café",
+  ingredients: [
+    {
+      name: "Pale | malt\n二",
+      amount: 4.5,
+      unit: "kg | bag",
+      note: "& <ingredient-note>",
+    },
+  ],
+  steps: [
+    {
+      name: "Step | one\né",
+      temperatureC: 66,
+      timeMinutes: 60,
+      note: "note & <step-note>",
+    },
+  ],
+};
+
+const customBeverageSummary = {
+  ...linkedBeverageSummary,
+  beverage: {
+    ...linkedBeverageSummary.beverage,
+    id: CUSTOM_BEVERAGE_ID,
+    ownershipType: "custom",
+  },
+  effectivePresentation: {
+    ...linkedBeverageSummary.effectivePresentation,
+    name: "QC Custom Beverage",
+  },
+};
+
+const customBeverageDetail = {
+  ...customBeverageSummary,
+  customRecipe: {
+    id: "recipe-custom-qc",
+    beverageId: CUSTOM_BEVERAGE_ID,
+    ...customRecipeForQc,
+    createdAt: "2026-08-01T00:00:00.000Z",
+    updatedAt: "2026-08-01T00:00:00.000Z",
+    ingredients: customRecipeForQc.ingredients.map((ingredient, index) => ({
+      ...ingredient,
+      id: `ingredient-${index}`,
+      recipeId: "recipe-custom-qc",
+      sortOrder: index,
+    })),
+    steps: customRecipeForQc.steps.map((step, index) => ({
+      ...step,
+      id: `step-${index}`,
+      recipeId: "recipe-custom-qc",
+      sortOrder: index,
+    })),
+  },
 };
 
 const tap = {
@@ -167,6 +224,7 @@ function form(values: Readonly<Record<string, string>>, csrf = CSRF_TOKEN): URLS
 
 void test("admin web pages and mutations keep projections safe and PRG-protected", async (context) => {
   const presentationCalls: Array<{ input: unknown; actor: unknown }> = [];
+  const recipeCalls: Array<{ id: unknown; input: unknown; actor: unknown }> = [];
   const fillCalls: Array<{ input: unknown; actor: unknown }> = [];
   const tapUpdateCalls: Array<{ id: unknown; input: unknown; actor: unknown }> = [];
   const tapCreateCalls: Array<{ input: unknown; actor: unknown }> = [];
@@ -224,8 +282,9 @@ void test("admin web pages and mutations keep projections safe and PRG-protected
     },
     displayService: { getSettings: () => ({}) },
     beverageService: {
-      listBeverages: () => [linkedBeverageSummary],
-      getBeverage: () => linkedBeverageDetail,
+      listBeverages: () => [linkedBeverageSummary, customBeverageSummary],
+      getBeverage: (id: string) =>
+        id === CUSTOM_BEVERAGE_ID ? customBeverageDetail : linkedBeverageDetail,
       getDeletionImpact: () => ({ impacts: [] }),
       listCandidates: () => [],
       getBrewfatherStatus: () => ({
@@ -239,7 +298,10 @@ void test("admin web pages and mutations keep projections safe and PRG-protected
         presentationCalls.push({ input, actor });
       },
       createCustomBeverage: () => linkedBeverageDetail,
-      updateCustomBeverage: () => linkedBeverageDetail,
+      updateCustomBeverage(id: unknown, input: unknown, actor: unknown) {
+        recipeCalls.push({ id, input, actor });
+        return customBeverageDetail;
+      },
       unlinkBeverage: () => linkedBeverageDetail,
       deleteBeverage: () => undefined,
       linkBrewfatherCandidate: () => linkedBeverageDetail,
@@ -338,7 +400,17 @@ void test("admin web pages and mutations keep projections safe and PRG-protected
   for (const secret of [rawSourceSecret, recipeSecret, sensorySecret, "secret-fill-glass"])
     assert.doesNotMatch(beverageHtml, new RegExp(secret));
   assert.match(beverageHtml, /Fill Glass/);
+  assert.match(beverageHtml, /class="fill-glass-picker"/);
+  assert.match(beverageHtml, /Corny keg/);
+  assert.match(beverageHtml, /name="fillGlass"/);
+  assert.match(beverageHtml, /M 46 52 H 114 A 14 14 0 0 1 128 66 V 213/);
   assert.match(beverageHtml, /Sensory guidance/);
+  assert.match(beverageHtml, /name="sweetness"[^>]*max="10"[^>]*value="8"/);
+  assert.match(beverageHtml, /name="recipeJson"/);
+  assert.match(beverageHtml, /&lt;safe-note&gt;/);
+  assert.match(beverageHtml, /&amp; &lt;ingredient-note&gt;/);
+  assert.doesNotMatch(beverageHtml, /<safe-note>/);
+  assert.doesNotMatch(beverageHtml, /<ingredient-note>/);
 
   const kegHtml = await (await fetch(`${base}/admin/kegs`, { headers: getHeaders })).text();
   assert.match(kegHtml, /Fill history/);
@@ -389,6 +461,23 @@ void test("admin web pages and mutations keep projections safe and PRG-protected
     },
     actor: { actorType: "admin", sessionId: SESSION_ID },
   });
+
+  const recipeResponse = await post(`/admin/beverages/${CUSTOM_BEVERAGE_ID}/recipe`, {
+    recipeJson: JSON.stringify(customRecipeForQc),
+  });
+  assert.equal(recipeResponse.status, 303);
+  assert.match(recipeResponse.headers.get("location") ?? "", /^\/admin\/beverages\?notice=/);
+  assert.deepEqual(recipeCalls.at(-1), {
+    id: CUSTOM_BEVERAGE_ID,
+    input: { recipe: customRecipeForQc },
+    actor: { actorType: "admin", sessionId: SESSION_ID },
+  });
+
+  const deleteRecipeResponse = await post(`/admin/beverages/${CUSTOM_BEVERAGE_ID}/recipe`, {
+    recipeJson: "null",
+  });
+  assert.equal(deleteRecipeResponse.status, 303);
+  assert.deepEqual(recipeCalls.at(-1)?.input, { recipe: null });
 
   const fillResponse = await post(`/admin/beverages/${LINKED_BEVERAGE_ID}/create-fill`, {
     kegId: KEG_ID,

@@ -91,15 +91,33 @@ main[data-dashboard] {
 }
 .glass,
 .rim {
-  fill: none;
+  fill: rgba(26, 32, 44, 0.6);
   stroke: var(--muted);
   stroke-width: 5;
+}
+.rim {
+  fill: none;
 }
 .liquid {
   opacity: 0.9;
   transition:
     y 250ms ease,
     height 250ms ease;
+}
+.tap-card .beer-liquid-rect,
+.tap-card .beer-liquid-shadow,
+.tap-card .beer-liquid-clip rect,
+.tap-card .beer-cloud-foam {
+  transition:
+    y 8s cubic-bezier(0.25, 0.1, 0.25, 1),
+    height 8s cubic-bezier(0.25, 0.1, 0.25, 1),
+    transform 8s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+.glass-detail,
+.glass-stem,
+.glass-base,
+.glass-highlight {
+  pointer-events: none;
 }
 .volume {
   white-space: normal;
@@ -160,7 +178,11 @@ html[data-unit-system="us"] [data-unit="metric"] {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .liquid {
+  .liquid,
+  .tap-card .beer-liquid-rect,
+  .tap-card .beer-liquid-shadow,
+  .tap-card .beer-liquid-clip rect,
+  .tap-card .beer-cloud-foam {
     transition: none;
   }
 }

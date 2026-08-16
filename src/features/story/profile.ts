@@ -8,6 +8,10 @@ import {
   type SensoryProfileInput,
   type SensorySource,
 } from "./types.ts";
+import {
+  BEVERAGE_SENSORY_CANONICAL_MAX,
+  BEVERAGE_SENSORY_CANONICAL_MIN,
+} from "../beverages/types.ts";
 
 type AnyRecord = Record<string, unknown>;
 type Curve = readonly (readonly [number, number])[];
@@ -158,6 +162,22 @@ function publicScale(value: number): number {
   return Math.round(clampScale(value) * 100) / 100;
 }
 
+/**
+ * Map a canonical persisted/manual 0..10 value to Story's public 0..5 scale.
+ * The canonical value is intentionally not clamped: out-of-range state is
+ * invalid and must remain unavailable rather than being misrepresented.
+ */
+export function canonicalSensoryToPublic(value: number): number | null {
+  if (
+    !Number.isFinite(value) ||
+    value < BEVERAGE_SENSORY_CANONICAL_MIN ||
+    value > BEVERAGE_SENSORY_CANONICAL_MAX
+  ) {
+    return null;
+  }
+  return value / 2;
+}
+
 function text(value: unknown): string | null {
   return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
 }
@@ -208,7 +228,10 @@ function manualValue(
     // A persisted manual number is deliberately stricter than provider text.
     if (typeof found.value !== "number" || !Number.isFinite(found.value))
       return { present: true, invalid: true, value: null };
-    if (found.value < SCALE_MIN || found.value > SCALE_MAX)
+    if (
+      found.value < BEVERAGE_SENSORY_CANONICAL_MIN ||
+      found.value > BEVERAGE_SENSORY_CANONICAL_MAX
+    )
       return { present: true, invalid: true, value: null };
     return { present: true, invalid: false, value: found.value };
   }
@@ -811,7 +834,12 @@ export function resolveSensoryProfile(
     if (manual.present) {
       result[axis] = manual.invalid
         ? axisResult(null, "unavailable", null, "Invalid manual value")
-        : axisResult(manual.value, "manual", "high", "Manual override");
+        : axisResult(
+            manual.value === null ? null : canonicalSensoryToPublic(manual.value),
+            "manual",
+            "high",
+            "Manual override (canonical 0–10 mapped to public 0–5)",
+          );
       continue;
     }
     const prediction = predictionValue(root, axis);

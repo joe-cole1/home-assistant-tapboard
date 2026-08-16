@@ -78,7 +78,7 @@
       ],
       "proposed_v2_destination_or_purpose": "V2 finite Beverage-owned Fill Glass catalog and safe presentation descriptors in `src/features/story/vessels.ts`, consumed by the SSR partial and browser dashboard renderer for deterministic geometry, style mapping, and SRM/fallback color.",
       "rationale": "The geometry and mapping are valuable visual assets; the mapping module is pure and the renderer has tests for style catalog, foam behavior, hostile values, and SVG identity. Preserve the assets rather than redraw them, but keep them out of domain and HTTP code.",
-      "preservation": "Port the reviewed catalog/style/SRM evidence into the v2-owned finite vessel catalog with explicit sanitization, stable IDs, safe deterministic descriptors, accessible markup, and stable SVG-node updates; remove unrelated legacy card wiring, animation randomness, raw SVG input, and arbitrary artwork.",
+      "preservation": "Port the reviewed catalog/style/SRM evidence and the actual static v1 vessel contours into the v2-owned finite catalog with explicit sanitization, stable IDs, safe deterministic descriptors, clipped liquid/shadow/foam layers, accessible markup, stable SVG-node updates, and the reviewed 8-second cubic-bezier fill transition; remove only unrelated legacy card wiring, animation randomness, raw SVG input, and arbitrary artwork.",
       "confidence": "high",
       "risks": ["The renderer currently generates animation randomness and HTML strings; v2 must retain safe generated markup boundaries.", "Graphic IDs must remain stable when presentation moves to new templates."]
     },

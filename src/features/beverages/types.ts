@@ -29,6 +29,10 @@ export const BEVERAGE_SENSORY_AXES = [
   "alcohol",
 ] as const;
 
+/** Canonical persisted/manual sensory values use the legacy 0..10 scale. */
+export const BEVERAGE_SENSORY_CANONICAL_MIN = 0;
+export const BEVERAGE_SENSORY_CANONICAL_MAX = 10;
+
 export type BeverageSensoryAxis = (typeof BEVERAGE_SENSORY_AXES)[number];
 
 export type BrewfatherCompletionPolicy = "never" | "ask" | "completed";

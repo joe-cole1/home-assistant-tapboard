@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { APPLICATION_SCHEMA_VERSION } from "../../infrastructure/database/migrations.ts";
 import { sendJson } from "../../infrastructure/http/error-mapper.ts";
-import { readFormBody } from "../../infrastructure/http/form.ts";
+import { readFormBody, type ReadFormOptions } from "../../infrastructure/http/form.ts";
 import { redirect, sendHtml } from "../../infrastructure/http/html.ts";
 import type { Router } from "../../infrastructure/http/router.ts";
 import {
@@ -25,7 +25,12 @@ import type { KegService } from "../kegs/service.ts";
 import type { LiveUpdateService } from "../live/service.ts";
 import type { PublicStoryService } from "../story/service.ts";
 import { VESSEL_IDS } from "../story/index.ts";
-import type { UpdateCustomBeverageInput } from "../beverages/types.ts";
+import { getVesselDescriptor } from "../story/vessels.ts";
+import {
+  BEVERAGE_SENSORY_CANONICAL_MAX,
+  BEVERAGE_SENSORY_CANONICAL_MIN,
+  type UpdateCustomBeverageInput,
+} from "../beverages/types.ts";
 import type { TapService } from "../taps/service.ts";
 import {
   DETECTOR_CONFIG_FIELDS,
@@ -48,6 +53,14 @@ const ADMIN_NAV = [
   ["Display", "/admin/display"],
   ["System", "/admin/system"],
 ] as const;
+
+function volume(ml: number, unit: string): string {
+  return unit === "metric" ? `${(ml / 1000).toFixed(1)} L` : `${(ml / 3785.411784).toFixed(1)} gal`;
+}
+
+function temperature(c: number, unit: string): string {
+  return unit === "metric" ? `${c.toFixed(1)} °C` : `${((c * 9) / 5 + 32).toFixed(1)} °F`;
+}
 
 export interface WebRouteDependencies {
   readonly router: Router;
@@ -134,7 +147,10 @@ function optionalNumber(value: string | undefined): number | undefined {
 }
 
 function safeSensoryOverride(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 5
+  return typeof value === "number" &&
+    Number.isFinite(value) &&
+    value >= BEVERAGE_SENSORY_CANONICAL_MIN &&
+    value <= BEVERAGE_SENSORY_CANONICAL_MAX
     ? value
     : null;
 }
@@ -187,83 +203,26 @@ function invalidForm(message: string): never {
   });
 }
 
-function optionalRecipeNumber(
-  value: string,
-  minimum: number,
-  maximum: number,
-  field: string,
-): number | null {
-  const trimmed = value.trim();
-  if (trimmed === "") return null;
-  const parsed = Number(trimmed);
-  if (!Number.isFinite(parsed) || parsed < minimum || parsed > maximum) {
-    invalidForm(`${field} must be a finite number between ${minimum} and ${maximum}.`);
-  }
-  return parsed;
-}
-
-function recipeLineParts(line: string, kind: "ingredient" | "step", index: number): string[] {
-  const parts = line.split("|").map((part) => part.trim());
-  if (parts.length < 1 || parts.length > 4 || parts[0] === "") {
-    invalidForm(`${kind} line ${index + 1} must use the documented pipe-separated format.`);
-  }
-  return parts;
-}
-
 function recipeFromForm(
   form: Readonly<Record<string, string>>,
 ): UpdateCustomBeverageInput["recipe"] {
-  const notes = form.recipeNotes?.trim() ?? "";
-  const ingredientText = form.recipeIngredients?.trim() ?? "";
-  const stepText = form.recipeSteps?.trim() ?? "";
-  if (notes === "" && ingredientText === "" && stepText === "") return null;
+  const serialized = form.recipeJson ?? "";
+  // Whitespace-only input is the no-JS delete affordance. Do not trim a
+  // non-empty payload: the service owns validation and the JSON values must
+  // retain every supported character exactly as entered.
+  if (serialized.trim() === "") return null;
 
-  const ingredients = ingredientText
-    .split(/\r?\n/u)
-    .map((line) => line.trim())
-    .filter((line) => line !== "")
-    .map((line, index) => {
-      const parts = recipeLineParts(line, "ingredient", index);
-      const name = parts[0];
-      if (name === undefined || name === "")
-        invalidForm(`Ingredient line ${index + 1} needs a name.`);
-      const amount = parts[1] ?? "";
-      const unit = parts[2] ?? "";
-      const note = parts[3] ?? "";
-      if (name.length > 160 || unit.length > 32 || note.length > 255) {
-        invalidForm(`Ingredient line ${index + 1} is too long.`);
-      }
-      return {
-        name,
-        amount: optionalRecipeNumber(amount, 0, 1_000_000, `Ingredient ${index + 1} amount`),
-        unit: unit || null,
-        note: note || null,
-      };
-    });
-
-  const steps = stepText
-    .split(/\r?\n/u)
-    .map((line) => line.trim())
-    .filter((line) => line !== "")
-    .map((line, index) => {
-      const parts = recipeLineParts(line, "step", index);
-      const name = parts[0];
-      if (name === undefined || name === "") invalidForm(`Step line ${index + 1} needs a name.`);
-      const temperatureC = parts[1] ?? "";
-      const timeMinutes = parts[2] ?? "";
-      const note = parts[3] ?? "";
-      if (name.length > 160 || note.length > 1000)
-        invalidForm(`Step line ${index + 1} is too long.`);
-      return {
-        name,
-        temperatureC: optionalRecipeNumber(temperatureC, -50, 150, `Step ${index + 1} temperature`),
-        timeMinutes: optionalRecipeNumber(timeMinutes, 0, 100_000, `Step ${index + 1} time`),
-        note: note || null,
-      };
-    });
-
-  if (ingredients.length > 200 || steps.length > 100) invalidForm("Recipe is too large.");
-  return { notes: notes || null, ingredients, steps };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(serialized) as unknown;
+  } catch {
+    invalidForm("Recipe must contain valid JSON.");
+  }
+  if (parsed === null) return null;
+  if (typeof parsed !== "object" || Array.isArray(parsed)) {
+    invalidForm("Recipe must be a JSON object.");
+  }
+  return parsed;
 }
 
 function vesselFromForm(value: string | undefined): string | null | undefined {
@@ -280,6 +239,37 @@ function safeVesselForDisplay(value: unknown): string | null {
   return typeof value === "string" && (VESSEL_IDS as readonly string[]).includes(value)
     ? value
     : null;
+}
+
+function vesselDisplayName(value: string): string {
+  const names: Readonly<Record<string, string>> = {
+    corny_keg: "Corny keg",
+    pint_glass: "Pint glass",
+    tulip_glass: "Tulip glass",
+    wheat_glass: "Wheat glass",
+    mug: "Mug",
+    stout_glass: "Stout glass",
+    snifter: "Snifter",
+    nonic_pint: "Nonic pint",
+    shaker_pint: "Shaker pint",
+    pilsner_flute: "Pilsner flute",
+    stange: "Stange",
+    goblet: "Goblet",
+    teku: "Teku",
+    thistle: "Thistle",
+    ipa_glass: "IPA glass",
+    tasting_glass: "Tasting glass",
+    stemmed_lager: "Stemmed lager",
+  };
+  return names[value] ?? value;
+}
+
+function fillGlassOptions() {
+  return VESSEL_IDS.map((id) => ({
+    id,
+    label: vesselDisplayName(id),
+    graphic: getVesselDescriptor(id),
+  }));
 }
 
 function detectorOverrideFromForm(form: Readonly<Record<string, string>>): DetectorConfigOverride {
@@ -364,10 +354,11 @@ function registerAdminAction(
     params: Readonly<Record<string, string>>,
   ) => void | Promise<void>,
   successMessage = "Saved.",
+  readFormOptions: ReadFormOptions = {},
 ): void {
   dependencies.router.post(path, async (request, response, params) => {
     try {
-      const form = await readFormBody(request);
+      const form = await readFormBody(request, readFormOptions);
       const context = adminContext(request, dependencies.authService);
       const authorized = dependencies.authService.authorizeCookieMutation({
         cookieHeader: request.headers.cookie,
@@ -427,6 +418,10 @@ function registerPublicRoutes(dependencies: WebRouteDependencies): void {
       dependencies.renderer.render("/public/story", {
         sharedDisplay: dependencies.dashboardService.getDisplayDefaults(),
         header: dependencies.dashboardService.getHeader(),
+        ssePath: "/api/public/events",
+        tapId: params.tapId,
+        temperature,
+        volume,
         story,
       }),
     );
@@ -735,6 +730,27 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
                   })),
                 }
               : null,
+            customRecipeJson: detail?.customRecipe
+              ? JSON.stringify(
+                  {
+                    notes: detail.customRecipe.notes,
+                    ingredients: detail.customRecipe.ingredients.map((ingredient) => ({
+                      name: ingredient.name,
+                      amount: ingredient.amount,
+                      unit: ingredient.unit,
+                      note: ingredient.note,
+                    })),
+                    steps: detail.customRecipe.steps.map((step) => ({
+                      name: step.name,
+                      temperatureC: step.temperatureC,
+                      timeMinutes: step.timeMinutes,
+                      note: step.note,
+                    })),
+                  },
+                  null,
+                  2,
+                )
+              : "",
           };
         }),
         brewfatherCandidates: dependencies.beverageService.listCandidates().map((candidate) => ({
@@ -754,6 +770,7 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
           )
           .map((keg) => ({ id: keg.id, kegNumber: keg.kegNumber, label: keg.label })),
         fillGlassIds: VESSEL_IDS,
+        fillGlassOptions: fillGlassOptions(),
       },
     );
   });
@@ -1083,6 +1100,7 @@ function registerAdminMutations(dependencies: WebRouteDependencies): void {
       );
     },
     "Custom recipe saved.",
+    { maxFields: 2, maxBytes: 3_000_000 },
   );
   registerAdminAction(
     dependencies,

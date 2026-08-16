@@ -6,7 +6,12 @@ import { createSecretsService } from "../src/features/secrets/service.ts";
 import { createAuthService } from "../src/features/auth/service.ts";
 import { createBeverageService } from "../src/features/beverages/service.ts";
 import type { BeverageDensityExtensionPort } from "../src/features/beverages/types.ts";
-import { validateUpdateBeverageSensoryOverridesInput } from "../src/features/beverages/beverage-validation.ts";
+import {
+  validateCreateCustomBeverageInput,
+  validateLinkBrewfatherCandidateInput,
+  validateUpdateBeverageSensoryOverridesInput,
+  validateUpdateCustomBeverageInput,
+} from "../src/features/beverages/beverage-validation.ts";
 import { saveRecipeSnapshot } from "../src/features/beverages/repository.ts";
 import { resolveBeverageDensity } from "../src/features/beverages/density.ts";
 import { resolveLinkedPresentation } from "../src/features/beverages/presentation.ts";
@@ -301,17 +306,17 @@ void test("custom beverage lifecycle: create, recipe, sensory, update, delete", 
   assert.throws(() => beverageService.getBeverage(created.beverage.id), /not found/i);
 });
 
-void test("sensory override validation is strict while legacy APIs retain 0..10 compatibility", () => {
+void test("sensory override validation consistently uses the canonical 0..10 scale", () => {
   assert.deepEqual(
     validateUpdateBeverageSensoryOverridesInput({
       bitterness: 0,
       sweetness: null,
-      alcohol: 5,
+      alcohol: 10,
     }),
     {
       bitterness: 0,
       sweetness: null,
-      alcohol: 5,
+      alcohol: 10,
     },
   );
   assert.throws(() => validateUpdateBeverageSensoryOverridesInput(null), /plain object/i);
@@ -331,15 +336,54 @@ void test("sensory override validation is strict while legacy APIs retain 0..10 
   );
   assert.throws(
     () => validateUpdateBeverageSensoryOverridesInput({ body: -0.1 }),
-    /between 0 and 5/i,
+    /between 0 and 10/i,
+  );
+  assert.equal(
+    validateCreateCustomBeverageInput({
+      name: "valid canonical",
+      sensoryOverrides: { bitterness: 8 },
+    }).sensoryOverrides?.bitterness,
+    8,
+  );
+  assert.equal(
+    validateUpdateCustomBeverageInput({ sensoryOverrides: { bitterness: 8 } }).sensoryOverrides
+      ?.bitterness,
+    8,
+  );
+  assert.equal(
+    validateLinkBrewfatherCandidateInput({
+      sourceBatchId: "valid-canonical",
+      sensoryOverrides: { bitterness: 8 },
+    }).sensoryOverrides?.bitterness,
+    8,
   );
   assert.throws(
-    () => validateUpdateBeverageSensoryOverridesInput({ roast: 5.1 }),
-    /between 0 and 5/i,
+    () => validateUpdateBeverageSensoryOverridesInput({ roast: 10.1 }),
+    /between 0 and 10/i,
   );
   assert.throws(
     () => validateUpdateBeverageSensoryOverridesInput({ tartness: undefined }),
     /finite number/i,
+  );
+  assert.throws(
+    () =>
+      validateCreateCustomBeverageInput({
+        name: "bad",
+        sensoryOverrides: { bitterness: 10.1 },
+      }),
+    /between 0 and 10/i,
+  );
+  assert.throws(
+    () => validateUpdateCustomBeverageInput({ sensoryOverrides: { bitterness: 10.1 } }),
+    /between 0 and 10/i,
+  );
+  assert.throws(
+    () =>
+      validateLinkBrewfatherCandidateInput({
+        sourceBatchId: "bad",
+        sensoryOverrides: { bitterness: 10.1 },
+      }),
+    /between 0 and 10/i,
   );
 
   const { database, beverageService } = createTestContext();
@@ -424,7 +468,7 @@ void test("sensory overrides merge across ownership types and suppress exact no-
 
     const firstChange = beverageService.updateSensoryOverrides(
       custom.beverage.id,
-      { bitterness: 2, sweetness: 3 },
+      { bitterness: 8, sweetness: 3 },
       { now: () => t3 },
     );
     assert.equal(firstChange.changed, true);
@@ -434,7 +478,7 @@ void test("sensory overrides merge across ownership types and suppress exact no-
         sweetness: firstChange.sensoryOverrides.sweetness,
         body: firstChange.sensoryOverrides.body,
       },
-      { bitterness: 2, sweetness: 3, body: null },
+      { bitterness: 8, sweetness: 3, body: null },
     );
     const changeActivities = readActivities(database).filter(
       (activity) =>
@@ -455,7 +499,7 @@ void test("sensory overrides merge across ownership types and suppress exact no-
     };
     const noOp = beverageService.updateSensoryOverrides(
       custom.beverage.id,
-      { bitterness: 2 },
+      { bitterness: 8 },
       { now: () => t4 },
     );
     assert.equal(noOp.changed, false);
@@ -485,7 +529,7 @@ void test("sensory overrides merge across ownership types and suppress exact no-
         sweetness: cleared.sensoryOverrides.sweetness,
         body: cleared.sensoryOverrides.body,
       },
-      { bitterness: 2, sweetness: null, body: 4 },
+      { bitterness: 8, sweetness: null, body: 4 },
     );
 
     beverageService.configureBrewfatherAccount({ userId: "sensory-linked-user" });

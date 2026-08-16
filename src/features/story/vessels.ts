@@ -7,142 +7,411 @@ import {
 
 type AnyRecord = Record<string, unknown>;
 
+const DETAIL_STROKE = "#CBD5E0";
+const DETAIL_FILL = "#1A202C";
+const DETAIL_GLASS = "#E2E8F0";
+
+function detail(
+  d: string,
+  className: VesselGeometryDescriptor["detailPaths"][number]["className"] = "glass-detail",
+  fill = "none",
+  stroke = DETAIL_STROKE,
+  strokeWidth = 2,
+  opacity = 0.6,
+) {
+  return Object.freeze({ d, className, fill, stroke, strokeWidth, opacity });
+}
+
+/**
+ * Static v1 Fill Glass contours, ported as data rather than executable SVG
+ * renderers.  Every path below is a source-controlled constant selected only
+ * through the finite VesselId catalog; no integration or user value reaches
+ * this table.
+ */
 const GEOMETRY: Record<VesselId, VesselGeometryDescriptor> = {
   corny_keg: {
     id: "corny_keg",
     token: "vessel/corny-keg",
-    width: 1,
-    height: 1,
-    bowlWidth: 1,
-    stemHeight: 0,
+    bodyPath:
+      "M 46 52 H 114 A 14 14 0 0 1 128 66 V 213 A 14 14 0 0 1 114 227 H 46 A 14 14 0 0 1 32 213 V 66 A 14 14 0 0 1 46 52 Z",
+    clipPath: "M 35 65 H 125 V 220 H 35 Z",
+    rimPath: "M 38 20 C 38 12 122 12 122 20 L 125 50 H 35 Z",
+    viewBox: "0 0 160 250",
+    topY: 65,
+    bottomY: 220,
+    fillX: 30,
+    fillWidth: 100,
+    detailPaths: [
+      detail(
+        "M 38 20 C 38 12 122 12 122 20 L 125 50 C 125 55 35 55 35 50 Z",
+        "glass-detail",
+        DETAIL_FILL,
+        DETAIL_FILL,
+        2,
+        1,
+      ),
+      detail("M 52 24 H 74 V 38 H 52 Z", "glass-detail", "#000000", "none", 0, 0.65),
+      detail("M 86 24 H 108 V 38 H 86 Z", "glass-detail", "#000000", "none", 0, 0.65),
+      detail(
+        "M 76 34 A 4 4 0 1 0 84 34 A 4 4 0 1 0 76 34",
+        "glass-detail",
+        "#A0AEC0",
+        "none",
+        0,
+        1,
+      ),
+      detail("M 35 65 H 125 V 220 H 35 Z", "glass-detail", DETAIL_FILL, DETAIL_STROKE, 2, 0.75),
+      detail("M 40 68 H 46 V 215 H 40 Z", "glass-highlight", "#FFFFFF", "none", 0, 0.15),
+      detail(
+        "M 32 220 H 128 L 125 245 C 125 250 35 250 35 245 Z",
+        "glass-base",
+        DETAIL_FILL,
+        "none",
+        0,
+        1,
+      ),
+      detail(
+        "M 40 242 V 250 H 56 V 242 Z M 104 242 V 250 H 120 V 242 Z",
+        "glass-base",
+        DETAIL_FILL,
+        "none",
+        0,
+        1,
+      ),
+    ],
   },
   pint_glass: {
     id: "pint_glass",
     token: "vessel/pint-glass",
-    width: 1,
-    height: 1.3,
-    bowlWidth: 0.92,
-    stemHeight: 0,
+    bodyPath: "M 45 40 H 115 L 105 225 H 55 Z",
+    clipPath: "M 30 0 H 130 L 114 45 L 104 225 H 56 L 46 45 Z",
+    rimPath: "M 45 40 H 115",
+    viewBox: "0 40 160 190",
+    topY: 45,
+    bottomY: 225,
+    fillX: 30,
+    fillWidth: 100,
+    detailPaths: [
+      detail("M 45 40 H 115 L 105 225 H 55 Z", "glass-detail", DETAIL_FILL, DETAIL_STROKE, 2, 0.6),
+      detail("M 48 45 H 54 L 59 220 H 54 Z", "glass-highlight", "#FFFFFF", "none", 0, 0.25),
+    ],
   },
   tulip_glass: {
     id: "tulip_glass",
     token: "vessel/tulip-glass",
-    width: 1,
-    height: 1.35,
-    bowlWidth: 1,
-    stemHeight: 0.05,
+    bodyPath: "M 52 40 C 40 90 30 150 80 170 C 130 150 120 90 108 40 Z",
+    clipPath: "M 30 0 H 130 L 108 40 C 120 90 130 150 80 170 C 30 150 40 90 52 40 Z",
+    rimPath: "M 52 40 H 108",
+    viewBox: "0 35 160 195",
+    topY: 40,
+    bottomY: 170,
+    fillX: 25,
+    fillWidth: 110,
+    detailPaths: [
+      detail("M 76 170 H 84 V 235 H 76 Z", "glass-stem", DETAIL_GLASS, DETAIL_STROKE, 1.5, 0.4),
+      detail(
+        "M 46 232 A 34 7 0 1 0 114 232 A 34 7 0 1 0 46 232",
+        "glass-base",
+        DETAIL_GLASS,
+        DETAIL_STROKE,
+        1.5,
+        0.4,
+      ),
+      detail("M 56 45 C 46 90 42 135 75 162", "glass-highlight", "none", "#FFFFFF", 2.5, 0.4),
+    ],
   },
   wheat_glass: {
     id: "wheat_glass",
     token: "vessel/wheat-glass",
-    width: 0.92,
-    height: 1.6,
-    bowlWidth: 0.9,
-    stemHeight: 0,
+    bodyPath: "M 50 30 Q 30 110 62 170 L 60 220 Q 80 225 100 220 L 98 170 Q 130 110 110 30 Z",
+    clipPath:
+      "M 30 0 H 130 L 110 30 Q 130 110 98 170 L 100 220 Q 80 225 60 220 L 62 170 Q 30 110 50 30 Z",
+    rimPath: "M 50 30 H 110",
+    viewBox: "0 25 160 200",
+    topY: 30,
+    bottomY: 220,
+    fillX: 25,
+    fillWidth: 110,
+    detailPaths: [
+      detail("M 55 35 Q 40 100 64 165", "glass-highlight", "none", "#FFFFFF", 2.5, 0.4),
+    ],
   },
   mug: {
     id: "mug",
     token: "vessel/mug",
-    width: 1.15,
-    height: 1.05,
-    bowlWidth: 1.05,
-    stemHeight: 0,
+    bodyPath:
+      "M 48 50 H 112 A 8 8 0 0 1 120 58 V 212 A 8 8 0 0 1 112 220 H 48 A 8 8 0 0 1 40 212 V 58 A 8 8 0 0 1 48 50 Z",
+    clipPath: "M 30 0 H 130 L 118 55 V 215 C 118 220 42 220 42 215 V 55 Z",
+    rimPath: "M 40 50 H 120",
+    viewBox: "0 45 160 180",
+    topY: 55,
+    bottomY: 215,
+    fillX: 35,
+    fillWidth: 90,
+    detailPaths: [
+      detail(
+        "M 118 75 C 150 75 150 185 118 185 L 118 165 C 135 165 135 95 118 95 Z",
+        "glass-detail",
+        DETAIL_GLASS,
+        "#A0AEC0",
+        1.5,
+        0.4,
+      ),
+      detail(
+        "M 60 50 V 220 M 80 50 V 220 M 100 50 V 220",
+        "glass-detail",
+        "none",
+        "#718096",
+        1.5,
+        0.4,
+      ),
+      detail("M 44 55 H 50 V 215 H 44 Z", "glass-highlight", "#FFFFFF", "none", 0, 0.2),
+    ],
   },
   stout_glass: {
     id: "stout_glass",
     token: "vessel/stout-glass",
-    width: 1.08,
-    height: 1.08,
-    bowlWidth: 1,
-    stemHeight: 0,
+    bodyPath:
+      "M 52 45 C 44 80 40 120 58 175 L 56 220 Q 80 225 104 220 L 102 175 C 120 120 116 80 108 45 Z",
+    clipPath:
+      "M 30 0 H 130 L 108 45 C 116 80 120 120 102 175 L 104 220 Q 80 225 56 220 L 58 175 C 40 120 44 80 52 45 Z",
+    rimPath: "M 52 45 H 108",
+    viewBox: "0 40 160 185",
+    topY: 45,
+    bottomY: 220,
+    fillX: 25,
+    fillWidth: 110,
+    detailPaths: [
+      detail("M 55 50 C 48 85 46 120 60 170", "glass-highlight", "none", "#FFFFFF", 2.5, 0.35),
+    ],
   },
   snifter: {
     id: "snifter",
     token: "vessel/snifter",
-    width: 1.1,
-    height: 1.25,
-    bowlWidth: 1.05,
-    stemHeight: 0.35,
+    bodyPath: "M 58 55 C 32 105 32 155 80 175 C 128 155 128 105 102 55 Z",
+    clipPath: "M 30 0 H 130 L 102 55 C 128 105 128 155 80 175 C 32 155 32 105 58 55 Z",
+    rimPath: "M 58 55 H 102",
+    viewBox: "0 45 160 180",
+    topY: 55,
+    bottomY: 175,
+    fillX: 20,
+    fillWidth: 120,
+    detailPaths: [
+      detail("M 76 175 H 84 V 235 H 76 Z", "glass-stem", DETAIL_GLASS, DETAIL_STROKE, 1.5, 0.4),
+      detail(
+        "M 45 232 A 35 7 0 1 0 115 232 A 35 7 0 1 0 45 232",
+        "glass-base",
+        DETAIL_GLASS,
+        DETAIL_STROKE,
+        1.5,
+        0.4,
+      ),
+      detail("M 60 60 C 40 105 42 150 72 168", "glass-highlight", "none", "#FFFFFF", 2.5, 0.4),
+    ],
   },
   nonic_pint: {
     id: "nonic_pint",
     token: "vessel/nonic-pint",
-    width: 1,
-    height: 1.28,
-    bowlWidth: 0.96,
-    stemHeight: 0,
+    bodyPath: "M 48 45 H 112 L 116 90 L 108 225 H 52 L 44 90 Z",
+    clipPath: "M 48 45 H 112 L 116 90 L 108 225 H 52 L 44 90 Z",
+    rimPath: "M 48 45 H 112",
+    viewBox: "0 40 160 190",
+    topY: 45,
+    bottomY: 225,
+    fillX: 38,
+    fillWidth: 84,
+    detailPaths: [
+      detail(
+        "M 48 45 H 112 L 116 90 L 108 225 H 52 L 44 90 Z",
+        "glass-detail",
+        DETAIL_FILL,
+        DETAIL_STROKE,
+        2,
+        0.6,
+      ),
+    ],
   },
   shaker_pint: {
     id: "shaker_pint",
     token: "vessel/shaker-pint",
-    width: 0.9,
-    height: 1.35,
-    bowlWidth: 0.86,
-    stemHeight: 0,
+    bodyPath: "M 44 45 H 116 L 108 225 H 52 Z",
+    clipPath: "M 44 45 H 116 L 108 225 H 52 Z",
+    rimPath: "M 44 45 H 116",
+    viewBox: "0 40 160 190",
+    topY: 45,
+    bottomY: 225,
+    fillX: 36,
+    fillWidth: 88,
+    detailPaths: [
+      detail("M 44 45 H 116 L 108 225 H 52 Z", "glass-detail", DETAIL_FILL, DETAIL_STROKE, 2, 0.6),
+    ],
   },
   pilsner_flute: {
     id: "pilsner_flute",
     token: "vessel/pilsner-flute",
-    width: 0.75,
-    height: 1.8,
-    bowlWidth: 0.72,
-    stemHeight: 0.2,
+    bodyPath: "M 58 30 H 102 L 112 220 H 48 Z",
+    clipPath: "M 58 30 H 102 L 112 220 H 48 Z",
+    rimPath: "M 58 30 H 102",
+    viewBox: "0 25 160 205",
+    topY: 30,
+    bottomY: 220,
+    fillX: 46,
+    fillWidth: 68,
+    detailPaths: [
+      detail("M 58 30 H 102 L 112 220 H 48 Z", "glass-detail", DETAIL_FILL, DETAIL_STROKE, 2, 0.6),
+    ],
   },
   stange: {
     id: "stange",
     token: "vessel/stange",
-    width: 0.58,
-    height: 1.75,
-    bowlWidth: 0.56,
-    stemHeight: 0,
+    bodyPath: "M 55 40 H 105 V 220 H 55 Z",
+    clipPath: "M 55 40 H 105 V 220 H 55 Z",
+    rimPath: "M 55 40 H 105",
+    viewBox: "0 35 160 200",
+    topY: 40,
+    bottomY: 220,
+    fillX: 53,
+    fillWidth: 54,
+    detailPaths: [
+      detail("M 55 40 H 105 V 220 H 55 Z", "glass-detail", DETAIL_FILL, DETAIL_STROKE, 2, 0.6),
+    ],
   },
   goblet: {
     id: "goblet",
     token: "vessel/goblet",
-    width: 1.05,
-    height: 1.35,
-    bowlWidth: 1,
-    stemHeight: 0.42,
+    bodyPath: "M 48 45 C 42 95 48 145 80 170 C 112 145 118 95 112 45 Z",
+    clipPath: "M 48 45 C 42 95 48 145 80 170 C 112 145 118 95 112 45 Z",
+    rimPath: "M 48 45 H 112",
+    viewBox: "0 40 160 200",
+    topY: 45,
+    bottomY: 170,
+    fillX: 40,
+    fillWidth: 80,
+    detailPaths: [
+      detail("M 76 170 H 84 V 235 H 76 Z", "glass-stem", DETAIL_GLASS, DETAIL_STROKE, 1.5, 0.4),
+      detail(
+        "M 46 232 A 34 7 0 1 0 114 232 A 34 7 0 1 0 46 232",
+        "glass-base",
+        DETAIL_GLASS,
+        DETAIL_STROKE,
+        1.5,
+        0.4,
+      ),
+    ],
   },
   teku: {
     id: "teku",
     token: "vessel/teku",
-    width: 1.02,
-    height: 1.4,
-    bowlWidth: 0.96,
-    stemHeight: 0.38,
+    bodyPath: "M 55 45 H 105 L 115 120 L 80 170 L 45 120 Z",
+    clipPath: "M 55 45 H 105 L 115 120 L 80 170 L 45 120 Z",
+    rimPath: "M 55 45 H 105",
+    viewBox: "0 40 160 200",
+    topY: 45,
+    bottomY: 170,
+    fillX: 40,
+    fillWidth: 80,
+    detailPaths: [
+      detail("M 76 170 H 84 V 235 H 76 Z", "glass-stem", DETAIL_GLASS, DETAIL_STROKE, 1.5, 0.4),
+      detail(
+        "M 46 232 A 34 7 0 1 0 114 232 A 34 7 0 1 0 46 232",
+        "glass-base",
+        DETAIL_GLASS,
+        DETAIL_STROKE,
+        1.5,
+        0.4,
+      ),
+    ],
   },
   thistle: {
     id: "thistle",
     token: "vessel/thistle",
-    width: 0.95,
-    height: 1.5,
-    bowlWidth: 0.9,
-    stemHeight: 0.35,
+    bodyPath: "M 58 45 C 45 95 48 145 80 170 C 112 145 115 95 102 45 Z",
+    clipPath: "M 58 45 C 45 95 48 145 80 170 C 112 145 115 95 102 45 Z",
+    rimPath: "M 58 45 H 102",
+    viewBox: "0 40 160 200",
+    topY: 45,
+    bottomY: 170,
+    fillX: 42,
+    fillWidth: 76,
+    detailPaths: [
+      detail("M 76 170 H 84 V 235 H 76 Z", "glass-stem", DETAIL_GLASS, DETAIL_STROKE, 1.5, 0.4),
+      detail(
+        "M 46 232 A 34 7 0 1 0 114 232 A 34 7 0 1 0 46 232",
+        "glass-base",
+        DETAIL_GLASS,
+        DETAIL_STROKE,
+        1.5,
+        0.4,
+      ),
+    ],
   },
   ipa_glass: {
     id: "ipa_glass",
     token: "vessel/ipa-glass",
-    width: 0.92,
-    height: 1.5,
-    bowlWidth: 0.86,
-    stemHeight: 0.2,
+    bodyPath: "M 50 35 H 110 L 105 105 L 115 220 H 45 L 55 105 Z",
+    clipPath: "M 50 35 H 110 L 105 105 L 115 220 H 45 L 55 105 Z",
+    rimPath: "M 50 35 H 110",
+    viewBox: "0 30 160 205",
+    topY: 35,
+    bottomY: 220,
+    fillX: 40,
+    fillWidth: 80,
+    detailPaths: [
+      detail(
+        "M 50 35 H 110 L 105 105 L 115 220 H 45 L 55 105 Z",
+        "glass-detail",
+        DETAIL_FILL,
+        DETAIL_STROKE,
+        2,
+        0.6,
+      ),
+    ],
   },
   tasting_glass: {
     id: "tasting_glass",
     token: "vessel/tasting-glass",
-    width: 0.62,
-    height: 1,
-    bowlWidth: 0.58,
-    stemHeight: 0.12,
+    bodyPath: "M 58 55 L 102 55 C 118 110 110 150 80 165 C 50 150 42 110 58 55 Z",
+    clipPath: "M 58 55 L 102 55 C 118 110 110 150 80 165 C 50 150 42 110 58 55 Z",
+    rimPath: "M 58 55 H 102",
+    viewBox: "0 45 160 195",
+    topY: 55,
+    bottomY: 165,
+    fillX: 40,
+    fillWidth: 80,
+    detailPaths: [
+      detail("M 76 165 H 84 V 235 H 76 Z", "glass-stem", DETAIL_GLASS, DETAIL_STROKE, 1.5, 0.4),
+      detail(
+        "M 46 232 A 34 7 0 1 0 114 232 A 34 7 0 1 0 46 232",
+        "glass-base",
+        DETAIL_GLASS,
+        DETAIL_STROKE,
+        1.5,
+        0.4,
+      ),
+    ],
   },
   stemmed_lager: {
     id: "stemmed_lager",
     token: "vessel/stemmed-lager",
-    width: 0.8,
-    height: 1.55,
-    bowlWidth: 0.76,
-    stemHeight: 0.34,
+    bodyPath: "M 52 40 H 108 L 105 125 C 102 155 92 170 80 175 C 68 170 58 155 55 125 Z",
+    clipPath: "M 52 40 H 108 L 105 125 C 102 155 92 170 80 175 C 68 170 58 155 55 125 Z",
+    rimPath: "M 52 40 H 108",
+    viewBox: "0 35 160 205",
+    topY: 40,
+    bottomY: 175,
+    fillX: 42,
+    fillWidth: 76,
+    detailPaths: [
+      detail("M 76 175 H 84 V 235 H 76 Z", "glass-stem", DETAIL_GLASS, DETAIL_STROKE, 1.5, 0.4),
+      detail(
+        "M 46 232 A 34 7 0 1 0 114 232 A 34 7 0 1 0 46 232",
+        "glass-base",
+        DETAIL_GLASS,
+        DETAIL_STROKE,
+        1.5,
+        0.4,
+      ),
+    ],
   },
 };
 
@@ -204,19 +473,20 @@ function styleValue(input: unknown): string | null {
 
 function styleVessel(style: string | null): VesselId {
   if (style === null) return DEFAULT_VESSEL_ID;
-  if (/wild|lambic|gueuze/.test(style)) return "teku";
-  if (/sour|berliner|gose|flanders|kettle/.test(style)) return "tulip_glass";
-  if (/hazy|ne\s*ipa|new\s+england|west\s+coast|\bipa\b|india\s+pale/.test(style))
-    return "ipa_glass";
+  // Keep the reviewed v1 ordering: specific style families win before the
+  // broad ale/lager rules at the end of the list.
+  if (/wheat|wit|weiss|weizen/.test(style)) return "wheat_glass";
+  if (/pilsner/.test(style)) return "pilsner_flute";
+  if (/kolsch|kölsch|altbier/.test(style)) return "stange";
+  if (/belgian|abbey|saison|tripel|triple/.test(style)) return "goblet";
+  if (/ipa|pale ale/.test(style)) return "ipa_glass";
+  if (/sour|lambic|wild/.test(style)) return "teku";
   if (/stout|porter/.test(style)) return "stout_glass";
-  if (/wheat|weiss|weizen|witbier/.test(style)) return "wheat_glass";
-  if (/kolsch|kölsch|stange/.test(style)) return "stange";
-  if (/pils|pilsner/.test(style)) return "pilsner_flute";
-  if (/lager|helles|kellerbier/.test(style)) return "stemmed_lager";
-  if (/strong|barleywine|old\s+ale|quadrupel|quad|snifter/.test(style)) return "snifter";
-  if (/tripel|triple|goblet/.test(style)) return "goblet";
-  if (/saison|farmhouse|thistle/.test(style)) return "thistle";
-  if (/mead|cider|fruit/.test(style)) return "tulip_glass";
+  if (/wee heavy|scotch/.test(style)) return "thistle";
+  if (/barleywine|strong ale/.test(style)) return "snifter";
+  if (/english bitter|\bmild\b|brown|esb/.test(style)) return "nonic_pint";
+  if (/american amber|\bale\b/.test(style)) return "shaker_pint";
+  if (/lager|helles|marzen|märzen|bock/.test(style)) return "stemmed_lager";
   return DEFAULT_VESSEL_ID;
 }
 

@@ -442,6 +442,7 @@ class FoundationApplication implements Application {
           { kind: "js", file: "dirty-targets.js", path: "js/dirty-targets.js" },
           { kind: "js", file: "sse.js", path: "js/sse.js" },
           { kind: "js", file: "dashboard.js", path: "js/dashboard.js" },
+          { kind: "js", file: "story.js", path: "js/story.js" },
           { kind: "js", file: "admin-display.js", path: "js/admin-display.js" },
         ],
       });

@@ -16,6 +16,7 @@ import { createLogger } from "../../src/shared/logging.ts";
 const databasePath = "/tmp/tapboard-issue-76-e2e.sqlite3";
 const origin = "http://127.0.0.1:4176";
 const secretKey = Buffer.alloc(32, 7).toString("base64url");
+const LIVE_MYSTERY_SECRET = "LIVE_MYSTERY_SECRET_77";
 rmSync(databasePath, { force: true });
 
 const database = openDatabase(databasePath);
@@ -74,14 +75,29 @@ for (let number = 1; number <= 6; number += 1)
     ...(number === 1 ? { notes: "PRIVATE_MAINTENANCE_NOTE" } : {}),
   });
 const measuredBeverage = beverages.createCustomBeverage({
-  name: "Measured fixture beer",
+  name: `Measured fixture beer (${LIVE_MYSTERY_SECRET})`,
   beverageType: "beer",
-  style: "Pale Ale",
+  style: `Pale Ale (${LIVE_MYSTERY_SECRET})`,
   abv: 5,
+  description: `Measured fixture description ${LIVE_MYSTERY_SECRET}`,
   recipe: {
-    notes: "Bounded fixture recipe <safe-note>",
-    ingredients: [{ name: "Pale <malt>", amount: 4.5, unit: "kg", note: "safe & measured" }],
-    steps: [{ name: "Mash & hold", temperatureC: 66, timeMinutes: 60, note: "step <note>" }],
+    notes: `Bounded fixture recipe <safe-note> ${LIVE_MYSTERY_SECRET}\nMash | hold & café`,
+    ingredients: [
+      {
+        name: `Pale <malt> | 二 ${LIVE_MYSTERY_SECRET}`,
+        amount: 4.5,
+        unit: "kg | bag",
+        note: "safe & measured\n& <ingredient-note>",
+      },
+    ],
+    steps: [
+      {
+        name: "Mash & hold | rest",
+        temperatureC: 66,
+        timeMinutes: 60,
+        note: `step <note> & café\n${LIVE_MYSTERY_SECRET}`,
+      },
+    ],
   },
 });
 beverages.updateSensoryOverrides(measuredBeverage.beverage.id, {
@@ -169,6 +185,35 @@ for (let index = 0; index < 5; index += 1) {
     temperature: { value: 4, unit: "c" },
   });
 }
+const measuredAssignment = taps.getTap(measuredTap.id).activeAssignment;
+const measuredEpoch = database
+  .prepare<[string], { id: string }>(
+    "SELECT id FROM telemetry_epochs WHERE fill_id = ? AND ended_at IS NULL ORDER BY started_at_epoch_ms DESC LIMIT 1",
+  )
+  .get(measuredFill.id);
+if (measuredAssignment === null || measuredEpoch === undefined) {
+  throw new Error("Expected the measured fixture assignment and telemetry epoch.");
+}
+database
+  .prepare<unknown[]>(
+    `INSERT INTO pours (
+      id, effect_key, fill_id, tap_id, assignment_id, epoch_id, detector_session_id,
+      canonical_volume_ml, started_at, completed_at, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  )
+  .run(
+    "00000000-0000-4000-8000-000000000077",
+    "issue-77-e2e-history-pour",
+    measuredFill.id,
+    measuredTap.id,
+    measuredAssignment.id,
+    measuredEpoch.id,
+    "issue-77-e2e-history-session",
+    500,
+    "2026-08-15T11:59:00.000Z",
+    "2026-08-15T11:59:30.000Z",
+    "2026-08-15T11:59:30.000Z",
+  );
 const now = "2026-08-15T12:00:00.000Z";
 const insertPrivateTap = database.prepare(`
   INSERT INTO taps (
