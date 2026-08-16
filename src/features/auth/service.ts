@@ -68,6 +68,8 @@ export interface AuthenticationResult {
   readonly csrf?: string;
   readonly sessionId?: string;
   readonly cookie?: string;
+  readonly expiresAt?: string;
+  readonly absoluteExpiresAt?: string;
 }
 
 export interface AuthenticatedSession {
@@ -409,6 +411,8 @@ export class AuthService {
       csrf: material.public.csrfToken,
       sessionId: material.public.sessionId,
       cookie: material.public.cookie,
+      expiresAt: material.public.expiresAt,
+      absoluteExpiresAt: material.public.absoluteExpiresAt,
     };
   }
 

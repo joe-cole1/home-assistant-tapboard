@@ -1,0 +1,18 @@
+<% layout("/layouts/admin", { page: it.page }) %>
+<%~ include("/partials/admin-nav", { page: it.page, items: it.navItems || [] }) %>
+<main id="main-content">
+  <h1>Overview</h1>
+  <%~ include("/partials/admin-messages", { page: it.page }) %>
+  <section aria-labelledby="summary-heading">
+    <h2 id="summary-heading">Operational summary</h2>
+    <dl class="metrics"><% for (const item of it.metrics) { %><div><dt><%= item.label %></dt><dd><%= item.value %></dd></div><% } %></dl>
+  </section>
+  <section aria-labelledby="tap-summary-heading">
+    <h2 id="tap-summary-heading">Taps and current assignments</h2>
+    <% if (it.taps.length === 0) { %><p>No Taps are configured.</p><% } else { %>
+      <table><thead><tr><th scope="col">Tap</th><th scope="col">Name</th><th scope="col">Assignment</th><th scope="col">Public</th></tr></thead><tbody>
+      <% for (const tap of it.taps) { %><tr><th scope="row">#<%= tap.tapNumber %></th><td><%= tap.name || "—" %></td><td><%= tap.beverageName || "Unassigned" %></td><td><%= tap.enabled ? "Enabled" : "Disabled" %></td></tr><% } %>
+      </tbody></table>
+    <% } %>
+  </section>
+</main>

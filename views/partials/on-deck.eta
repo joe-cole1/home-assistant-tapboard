@@ -1,0 +1,1 @@
+<footer class="on-deck" data-on-deck><h2>On deck</h2><ul><% for (const item of it.onDeck.items) { %><li data-fill-id="<%= item.fillId %>"><strong><%= item.name %></strong><% if (item.style) { %> — <span><%= item.style %></span><% } %></li><% } %></ul></footer>

@@ -498,6 +498,27 @@ void test("Brewfather candidate linking, snapshot versioning, and atomic unlink"
   assert.ok(activities.some((a) => a.action === "transition" && a.entityId === linked.beverage.id));
 });
 
+void test("Brewfather API keys can be removed without revealing stored values", () => {
+  const { database, beverageService } = createTestContext();
+  try {
+    beverageService.configureBrewfatherAccount({
+      userId: "replace-remove-user",
+      apiKey: "never-return-this-secret",
+      enabled: false,
+    });
+    assert.equal(beverageService.getBrewfatherStatus().apiKeyConfigured, true);
+    assert.equal(beverageService.removeBrewfatherApiKey(), true);
+    assert.equal(beverageService.getBrewfatherStatus().apiKeyConfigured, false);
+    assert.equal(beverageService.removeBrewfatherApiKey(), false);
+    assert.equal(
+      JSON.stringify(beverageService.getBrewfatherStatus()).includes("never-return"),
+      false,
+    );
+  } finally {
+    database.close();
+  }
+});
+
 void test("Brewfather adapter handles pagination with start_after, budget limits, retry-after backoff, transient retry, and auth rejection", async () => {
   const requestedUrls: string[] = [];
   let transientAttempts = 0;

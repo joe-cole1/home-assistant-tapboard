@@ -13,6 +13,7 @@ RUN npm ci
 
 COPY src/ ./src/
 COPY views/ ./views/
+COPY public/ ./public/
 
 RUN mkdir -p /app/data \
     && chown node:node /app/data

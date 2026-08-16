@@ -1,0 +1,1 @@
+<% layout("/layouts/admin", { page: it.page }) %><%~ include("/partials/admin-nav", { page: it.page, items: it.navItems || [] }) %><main id="main-content"><h1><%= it.page.title %></h1><%~ include("/partials/admin-messages", { page: it.page }) %><section><h2>Tap Wars</h2><p>Tap Wars is not yet available in this rebuild.</p></section></main>

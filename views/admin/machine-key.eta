@@ -1,0 +1,12 @@
+<% layout("/layouts/admin", { page: it.page }) %>
+<%~ include("/partials/admin-nav", { page: it.page, items: it.navItems || [] }) %>
+<main id="main-content">
+  <h1>Telemetry key created</h1>
+  <section class="notice" aria-labelledby="key-heading">
+    <h2 id="key-heading"><%= it.source.name %></h2>
+    <p>Copy this key now. Tapboard will not show it again.</p>
+    <label for="machine-key">Machine key</label>
+    <input id="machine-key" value="<%= it.machineKey %>" readonly />
+    <p><a href="/admin/integrations">Return to Integrations</a></p>
+  </section>
+</main>

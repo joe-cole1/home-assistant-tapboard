@@ -35,7 +35,8 @@
       "rationale": "The hub is cohesive and its write/heartbeat logic has strong tests for retry guidance, disconnect cleanup, byte ceilings, drain recovery, and stalled consumers. The old module still assumes the v1 event stream and therefore the mechanics are safer to re-express behind the v2 event contract than to import wholesale.",
       "preservation": "Port the cohesive framing, cleanup, heartbeat, and bounded-buffer core; adapt event names, snapshot authority, and reconnect semantics at the v2 delivery boundary.",
       "confidence": "high",
-      "risks": ["The core is suitable for direct reuse only after its legacy event/payload adapter is removed.", "Slow-client policy must remain bounded without dropping authoritative resync events."]
+      "risks": ["The core is suitable for direct reuse only after its legacy event/payload adapter is removed.", "Slow-client policy must remain bounded without dropping authoritative resync events."],
+      "v2_implementation": ["src/infrastructure/sse/hub.ts", "test/sse-hub.test.ts"]
     },
     {
       "id": "http-security-mechanics",
@@ -79,7 +80,8 @@
       "rationale": "The geometry and mapping are valuable visual assets; the mapping module is pure and the renderer has tests for style catalog, foam behavior, hostile values, and SVG identity. Preserve the assets rather than redraw them, but keep them out of domain and HTTP code.",
       "preservation": "Port the reviewed geometry and mapping data with explicit sanitization, stable IDs, responsive scaling, and accessibility checks; remove unrelated legacy card wiring.",
       "confidence": "high",
-      "risks": ["The renderer currently generates animation randomness and HTML strings; v2 must retain safe generated markup boundaries.", "Graphic IDs must remain stable when presentation moves to new templates."]
+      "risks": ["The renderer currently generates animation randomness and HTML strings; v2 must retain safe generated markup boundaries.", "Graphic IDs must remain stable when presentation moves to new templates."],
+      "v2_implementation": ["src/features/dashboard/service.ts", "views/partials/fill-graphic.eta", "public/js/dashboard.js"]
     },
     {
       "id": "theme-tokens",
@@ -106,7 +108,8 @@
       "rationale": "The existing visual language is explicitly valuable, but the stylesheet contains page-era selectors, duplicates, and modal-specific structure. Preserve visual intent and reusable token values as design reference, not the old cascade or page organization.",
       "preservation": "Inventory palette/font/accent values and responsive lessons; re-author tokens and components in the v2 template system.",
       "confidence": "medium",
-      "risks": ["Copying the full stylesheet would import dead selectors and conflicting media queries.", "Token names must not become a second settings ownership layer."]
+      "risks": ["Copying the full stylesheet would import dead selectors and conflicting media queries.", "Token names must not become a second settings ownership layer."],
+      "v2_implementation": ["public/css/tokens.css", "public/css/components.css", "public/css/dashboard.css", "public/css/admin.css"]
     },
     {
       "id": "pour-detector",
@@ -262,7 +265,8 @@
       "rationale": "The module has a narrow browser-only responsibility and tests cover versioning, migration, allowlists, precedence, unavailable storage, failed writes, reset, and cross-tab events. This behavior matches the frozen per-browser preference contract.",
       "preservation": "Port the record schema and validation with a v2 key/version if needed; keep local values non-sensitive and subordinate to authenticated shared defaults.",
       "confidence": "high",
-      "risks": ["Storage data is untrusted and must not become a server setting or HTML injection path.", "Changing the key without a migration plan would unexpectedly reset existing displays."]
+      "risks": ["Storage data is untrusted and must not become a server setting or HTML injection path.", "Changing the key without a migration plan would unexpectedly reset existing displays."],
+      "v2_implementation": ["public/js/preference-bootstrap.js", "public/js/display-preferences.js", "public/js/admin-display.js", "test/e2e/issue-76.spec.ts"]
     },
     {
       "id": "targeted-dirty-updates",
@@ -289,7 +293,8 @@
       "rationale": "The coalescer's 250 ms window, four-batch-per-second ceiling, coherent tuple merging, deterministic ordering, and dirty-card identity preservation directly support the target browser delivery contract. The current app-state shape and monolithic controller do not.",
       "preservation": "Carry coalescing and node-identity invariants; define v2 event reducer/state slices and page-level resync behavior.",
       "confidence": "high",
-      "risks": ["Over-coalescing detector or operational events would lose causal ordering.", "Re-rendering whole cards would break animation and accessibility state."]
+      "risks": ["Over-coalescing detector or operational events would lose causal ordering.", "Re-rendering whole cards would break animation and accessibility state."],
+      "v2_implementation": ["public/js/dirty-targets.js", "public/js/dashboard.js", "test/e2e/issue-76.spec.ts"]
     },
     {
       "id": "safe-dom-building",
@@ -309,7 +314,8 @@
       "rationale": "The builders establish a useful XSS boundary and their tests exercise hostile card, recipe, catalog, option, toast, style, color, and instance inputs. The specific card hierarchy belongs to the rebuilt UI, so preserve the construction discipline rather than the whole module.",
       "preservation": "Reimplement builders around v2 templates/components; never interpolate user or integration strings into HTML.",
       "confidence": "high",
-      "risks": ["Treating generated SVG strings as generally trusted would reopen the tested injection boundary.", "A template layer must retain text escaping and attribute allowlists."]
+      "risks": ["Treating generated SVG strings as generally trusted would reopen the tested injection boundary.", "A template layer must retain text escaping and attribute allowlists."],
+      "v2_implementation": ["views/partials/tap-card.eta", "public/js/dashboard.js", "test/dashboard-rendering.test.ts"]
     },
     {
       "id": "autosave-coalescing",

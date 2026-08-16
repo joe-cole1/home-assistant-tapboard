@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title><%= it.page.title %> · Tapboard</title>
+    <link rel="stylesheet" href="/assets/css/tokens.css" />
+    <link rel="stylesheet" href="/assets/css/components.css" />
+    <link rel="stylesheet" href="/assets/css/admin.css" />
+  </head>
+  <body class="admin-shell">
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <%~ it.body %>
+  </body>
+</html>

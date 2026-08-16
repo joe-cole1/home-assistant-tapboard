@@ -22,7 +22,9 @@ export const FORECASTING_SCHEMA_VERSION = 10;
 export const FORECASTING_MIGRATION_NAME = "pour-history-forecasting";
 export const HEALTH_MAINTENANCE_SCHEMA_VERSION = 11;
 export const HEALTH_MAINTENANCE_MIGRATION_NAME = "draft-health-and-tap-maintenance";
-export const CURRENT_SCHEMA_VERSION = HEALTH_MAINTENANCE_SCHEMA_VERSION;
+export const DISPLAY_SCHEMA_VERSION = 12;
+export const DISPLAY_MIGRATION_NAME = "ssr-dashboard-display-settings";
+export const CURRENT_SCHEMA_VERSION = DISPLAY_SCHEMA_VERSION;
 
 export interface MigrationDefinition {
   readonly version: number;
@@ -1436,6 +1438,26 @@ const HEALTH_MAINTENANCE_SCHEMA_OBJECTS = [
   ["trigger", "trg_tap_line_maintenance_records_no_update"],
 ] as const;
 
+export const DISPLAY_SCHEMA_SQL = `
+  CREATE TABLE display_settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    revision INTEGER NOT NULL CHECK (revision > 0),
+    tapboard_name TEXT NOT NULL CHECK (length(trim(tapboard_name)) BETWEEN 1 AND 80),
+    theme TEXT NOT NULL CHECK (theme IN ('modern_dark', 'warm_pub', 'cyberpunk', 'light_minimal')),
+    font TEXT NOT NULL CHECK (font IN ('system', 'outfit', 'inter', 'roboto', 'fredoka', 'montserrat')),
+    accent TEXT NOT NULL CHECK (accent IN ('amber', 'sky', 'rose', 'cyan', 'tan', 'orange', 'blue')),
+    unit_system TEXT NOT NULL CHECK (unit_system IN ('us', 'metric')),
+    show_serving_temperature INTEGER NOT NULL CHECK (show_serving_temperature IN (0, 1)),
+    layout_mode TEXT NOT NULL CHECK (layout_mode IN ('scroll', 'rotation')),
+    updated_at TEXT NOT NULL
+  );
+`;
+
+const DISPLAY_SCHEMA_OBJECTS = [
+  ...HEALTH_MAINTENANCE_SCHEMA_OBJECTS,
+  ["table", "display_settings"],
+] as const;
+
 function splitSqlStatements(sql: string): string[] {
   const statements: string[] = [];
   let start = 0;
@@ -2576,6 +2598,28 @@ function validateHealthMaintenanceSchema(database: DatabaseExecutor): void {
   validateHealthMaintenanceColumns(database);
 }
 
+function validateDisplaySchema(database: DatabaseExecutor): void {
+  validateTelemetrySchemaDefinition(
+    database,
+    DISPLAY_SCHEMA_OBJECTS,
+    `${FORENSIC_QC_SCHEMA_SQL}\n${TELEMETRY_EPOCHS_SCHEMA_SQL}\n${FORECASTING_SCHEMA_SQL}\n${HEALTH_MAINTENANCE_SCHEMA_SQL}\n${DISPLAY_SCHEMA_SQL}`,
+    DISPLAY_SCHEMA_VERSION,
+  );
+  validateHealthMaintenanceColumns(database);
+  expectColumns(database, "display_settings", [
+    { name: "id", type: "INTEGER", notnull: 0, dflt_value: null, pk: 1 },
+    { name: "revision", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+    { name: "tapboard_name", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    { name: "theme", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    { name: "font", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    { name: "accent", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    { name: "unit_system", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    { name: "show_serving_temperature", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+    { name: "layout_mode", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+  ]);
+}
+
 function validatePhysicalKegsSchema(database: DatabaseExecutor): void {
   const expected = new Map(
     PHYSICAL_KEGS_SCHEMA_OBJECTS.map(([type, name]) => [`${type}:${name}`, type]),
@@ -2825,6 +2869,26 @@ export const HEALTH_MAINTENANCE_MIGRATION: MigrationDefinition = {
   },
 };
 
+function seedDisplaySettings(database: DatabaseExecutor): void {
+  database.execute(`
+    INSERT INTO display_settings (
+      id, revision, tapboard_name, theme, font, accent, unit_system,
+      show_serving_temperature, layout_mode, updated_at
+    ) VALUES (1, 1, 'Tapboard', 'modern_dark', 'system', 'amber', 'us', 0, 'scroll',
+      '1970-01-01T00:00:00.000Z');
+  `);
+}
+
+export const DISPLAY_MIGRATION: MigrationDefinition = {
+  version: DISPLAY_SCHEMA_VERSION,
+  name: DISPLAY_MIGRATION_NAME,
+  apply(database) {
+    database.execute(DISPLAY_SCHEMA_SQL);
+    seedDisplaySettings(database);
+    return undefined;
+  },
+};
+
 /** Canonical production migration list. Keep this array identity stable. */
 export const MIGRATIONS: readonly MigrationDefinition[] = [
   FOUNDATION_MIGRATIONS[0]!,
@@ -2838,6 +2902,7 @@ export const MIGRATIONS: readonly MigrationDefinition[] = [
   TELEMETRY_EPOCHS_MIGRATION,
   FORECASTING_MIGRATION,
   HEALTH_MAINTENANCE_MIGRATION,
+  DISPLAY_MIGRATION,
 ];
 
 // Compatibility aliases for callers that prefer an explicit application name.
@@ -2917,6 +2982,9 @@ function validateRequiredCanonicalState(database: DatabaseExecutor, version: num
   if (version >= HEALTH_MAINTENANCE_SCHEMA_VERSION) {
     expectRequiredRows(database, "health_global_config", "id = 1", 1);
   }
+  if (version >= DISPLAY_SCHEMA_VERSION) {
+    expectRequiredRows(database, "display_settings", "id = 1", 1);
+  }
 }
 
 function validateCanonicalSchemaAtVersion(database: DatabaseExecutor, version: number): void {
@@ -2946,6 +3014,8 @@ function validateCanonicalSchemaAtVersion(database: DatabaseExecutor, version: n
     validateForecastingSchema(database);
   } else if (version === HEALTH_MAINTENANCE_SCHEMA_VERSION) {
     validateHealthMaintenanceSchema(database);
+  } else if (version === DISPLAY_SCHEMA_VERSION) {
+    validateDisplaySchema(database);
   } else {
     throw incompatibleSchema("schema version is not a canonical Tapboard version");
   }
@@ -2985,7 +3055,10 @@ export function initializeSchema(
   }
   validateMigrationLedger(database, currentVersion, migrations);
 
-  if (
+  if (isCanonicalMigrationPrefix(migrations) && currentVersion === DISPLAY_SCHEMA_VERSION) {
+    validateFoundationLedgerStructure(database);
+    validateDisplaySchema(database);
+  } else if (
     isCanonicalMigrationPrefix(migrations) &&
     currentVersion === HEALTH_MAINTENANCE_SCHEMA_VERSION
   ) {

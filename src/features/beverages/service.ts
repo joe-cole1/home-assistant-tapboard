@@ -96,6 +96,8 @@ export interface BeverageServiceOptions {
   readonly secretsService?: SecretsService;
   readonly syncCoordinator?: BrewfatherSyncCoordinator;
   readonly densityExtensionPort?: BeverageDensityExtensionPort;
+  /** Runs after a Brewfather synchronization has completed all database work. */
+  readonly onSyncCompleted?: (results: readonly SyncResult[]) => void;
 }
 
 function mergeOverrideField<T>(
@@ -131,6 +133,7 @@ export class BeverageService {
   readonly #densityExtensionPort: BeverageDensityExtensionPort;
   readonly #now: () => Date;
   readonly #idFactory: () => string;
+  readonly #onSyncCompleted?: ((results: readonly SyncResult[]) => void) | undefined;
   #startupTimer?: NodeJS.Timeout | undefined;
   #periodicTimer?: NodeJS.Timeout | undefined;
 
@@ -143,6 +146,7 @@ export class BeverageService {
     };
     this.#now = options.now ?? (() => new Date());
     this.#idFactory = options.idFactory ?? randomUUID;
+    this.#onSyncCompleted = options.onSyncCompleted;
   }
 
   startPeriodicSync(
@@ -1010,6 +1014,22 @@ export class BeverageService {
     });
   }
 
+  removeBrewfatherApiKey(
+    accountId: string = "default",
+    actorOptions: BeverageActorOptions = {},
+  ): boolean {
+    if (!this.#secretsService) {
+      throw new ApplicationError({
+        category: "unavailable",
+        code: "secrets.unavailable",
+        clientMessage: "Secret storage is unavailable.",
+      });
+    }
+    return this.#secretsService.remove("brewfather", accountId, "api_key", {
+      ...(actorOptions.now ? { now: actorOptions.now } : {}),
+    });
+  }
+
   getBrewfatherStatus(accountId: string = "default"): {
     readonly configured: boolean;
     readonly account?: BrewfatherAccount;
@@ -1060,11 +1080,13 @@ export class BeverageService {
       });
     }
 
-    return this.#syncCoordinator.sync(this.#database, this.#secretsService, {
+    const results = await this.#syncCoordinator.sync(this.#database, this.#secretsService, {
       now: this.#now,
       ...options,
       densityExtensionPort: this.#densityExtensionPort,
     });
+    this.#onSyncCompleted?.(results);
+    return results;
   }
 
   async completeBrewfatherBatch(

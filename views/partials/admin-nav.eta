@@ -1,0 +1,12 @@
+<header class="admin-header">
+  <a class="admin-brand" href="/admin/overview">Tapboard admin</a>
+  <nav aria-label="Admin">
+    <% for (const item of it.items) { %>
+      <a href="<%= item.href %>"<% if (it.page.path === item.href) { %> aria-current="page"<% } %>><%= item.label %></a>
+    <% } %>
+  </nav>
+  <form class="logout-form" action="/admin/logout" method="post">
+    <input type="hidden" name="_csrf" value="<%= it.page.csrfToken %>" />
+    <button type="submit">Log out</button>
+  </form>
+</header>

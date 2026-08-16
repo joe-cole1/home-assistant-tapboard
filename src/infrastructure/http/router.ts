@@ -51,7 +51,16 @@ function matchRoute(
     const requestSegment = pathSegments[index]!;
     if (patternSegment.startsWith(":")) {
       const paramName = patternSegment.slice(1);
-      params[paramName] = decodeURIComponent(requestSegment);
+      try {
+        params[paramName] = decodeURIComponent(requestSegment);
+      } catch (cause) {
+        throw new ApplicationError({
+          category: "validation",
+          code: "http.invalid_request_target",
+          clientMessage: "Invalid request target.",
+          cause,
+        });
+      }
     } else if (patternSegment !== requestSegment) {
       return undefined;
     }
