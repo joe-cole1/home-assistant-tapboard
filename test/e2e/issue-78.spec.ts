@@ -231,7 +231,13 @@ test("Tap Wars votes live-update stable cards, pause safely, and publish a froze
   await expect.poll(async () => (await publicWar(page)).status).toBe("paused");
   await admin.goto("/admin/tap-wars");
   await expect(admin.getByRole("button", { name: "Resume Tap War" })).toBeVisible();
-  await admin.getByRole("button", { name: "Resume Tap War" }).click();
+  await Promise.all([
+    admin.waitForURL(
+      (url) =>
+        url.pathname === "/admin/tap-wars" && url.searchParams.get("notice") === "Tap War resumed.",
+    ),
+    admin.getByRole("button", { name: "Resume Tap War" }).click(),
+  ]);
   await expect.poll(async () => (await publicWar(page)).status).toBe("active");
 
   // Race one legitimate vote against Stop. Either serial ordering is valid:
@@ -262,7 +268,7 @@ test("Tap Wars votes live-update stable cards, pause safely, and publish a froze
     6,
     raceVote.ok() ? 2 : 1,
   ]);
-  await admin.goto("/admin/tap-wars");
+  await admin.reload();
   await admin.getByRole("button", { name: "Dismiss public result" }).click();
   await expect(page.locator("[data-tap-wars]")).toBeHidden();
   await context.close();

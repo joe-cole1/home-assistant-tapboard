@@ -5,6 +5,13 @@ const root = document.querySelector("[data-admin-tap-wars]");
 if (root) {
   const status = root.querySelector("[data-tap-wars-live-status]");
   const startForm = root.querySelector("[data-tap-wars-start]");
+  let mutationNavigationPending = false;
+
+  root.querySelectorAll('form[action^="/admin/tap-wars"]').forEach((form) => {
+    form.addEventListener("submit", () => {
+      mutationNavigationPending = true;
+    });
+  });
 
   if (startForm instanceof HTMLFormElement) {
     const selectors = [...startForm.querySelectorAll("[data-tap-wars-selector]")];
@@ -83,6 +90,7 @@ if (root) {
     return true;
   };
   const refresh = async (announced = false) => {
+    if (mutationNavigationPending) return;
     try {
       const response = await fetch("/api/admin/tap-wars", {
         headers: { accept: "application/json" },
