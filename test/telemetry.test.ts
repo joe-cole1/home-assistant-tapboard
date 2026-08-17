@@ -94,6 +94,9 @@ type TelemetryCountTable =
   | "telemetry_measurements"
   | "telemetry_ingest_receipts"
   | "telemetry_source_tap_status"
+  | "telemetry_epochs"
+  | "telemetry_epoch_samples"
+  | "pours"
   | "activity_log"
   | "outbound_events";
 
@@ -104,11 +107,18 @@ function countRows(database: DatabaseExecutor, table: TelemetryCountTable): numb
   return row?.count ?? 0;
 }
 
+function activitiesSince(database: DatabaseExecutor, before: ReadonlySet<string>) {
+  return listActivity(database).filter((activity) => !before.has(activity.id));
+}
+
 function telemetryCounts(database: DatabaseExecutor): Record<TelemetryCountTable, number> {
   return {
     telemetry_measurements: countRows(database, "telemetry_measurements"),
     telemetry_ingest_receipts: countRows(database, "telemetry_ingest_receipts"),
     telemetry_source_tap_status: countRows(database, "telemetry_source_tap_status"),
+    telemetry_epochs: countRows(database, "telemetry_epochs"),
+    telemetry_epoch_samples: countRows(database, "telemetry_epoch_samples"),
+    pours: countRows(database, "pours"),
     activity_log: countRows(database, "activity_log"),
     outbound_events: countRows(database, "outbound_events"),
   };
@@ -355,6 +365,9 @@ void test("telemetry sources can be created, renamed, listed, and key-rotated", 
   const harness = createTestHarness();
   try {
     // 1. Create source
+    const activitiesBeforeCreate = new Set(
+      listActivity(harness.database).map((activity) => activity.id),
+    );
     const created = harness.telemetryService.createSource({
       name: "Kegbot Bar 1",
       label: "Initial key for Kegbot Bar 1",
@@ -362,12 +375,33 @@ void test("telemetry sources can be created, renamed, listed, and key-rotated", 
 
     assert.equal(created.source.name, "Kegbot Bar 1");
     assert.match(created.initialToken, /^tbk_[A-Za-z0-9_-]{16}_[A-Za-z0-9_-]{43}$/);
+    const createActivities = activitiesSince(harness.database, activitiesBeforeCreate);
+    assert.equal(createActivities.length, 1);
+    assert.deepEqual(
+      {
+        action: createActivities[0]?.action,
+        actorType: createActivities[0]?.actorType,
+        entityType: createActivities[0]?.entityType,
+        entityId: createActivities[0]?.entityId,
+      },
+      {
+        action: "api_key_created",
+        actorType: "operator",
+        entityType: "telemetry_source",
+        entityId: created.source.id,
+      },
+    );
+    assert.equal(JSON.stringify(createActivities).includes(created.initialToken), false);
 
-    // Duplicate name conflict
+    // Duplicate name conflict must not create a second key or Activity.
+    const activitiesBeforeDuplicate = new Set(
+      listActivity(harness.database).map((activity) => activity.id),
+    );
     assert.throws(
       () => harness.telemetryService.createSource({ name: "Kegbot Bar 1" }),
       /already exists/,
     );
+    assert.equal(activitiesSince(harness.database, activitiesBeforeDuplicate).length, 0);
 
     // 2. List sources
     const list = harness.telemetryService.listSources();
@@ -382,12 +416,32 @@ void test("telemetry sources can be created, renamed, listed, and key-rotated", 
     assert.equal(renamed.name, "Kegbot Cellar Taproom");
 
     // 4. Rotate key
+    const activitiesBeforeRotate = new Set(
+      listActivity(harness.database).map((activity) => activity.id),
+    );
     const rotated = harness.telemetryService.rotateSourceKey(created.source.id, {
       label: "Rotated key for Cellar Taproom",
     });
     assert.match(rotated.replacementToken, /^tbk_/);
     assert.notEqual(rotated.replacementToken, created.initialToken);
     assert.notEqual(rotated.source.currentMachineKeyId, created.source.currentMachineKeyId);
+    const rotateActivities = activitiesSince(harness.database, activitiesBeforeRotate);
+    assert.equal(rotateActivities.length, 1);
+    assert.deepEqual(
+      {
+        action: rotateActivities[0]?.action,
+        actorType: rotateActivities[0]?.actorType,
+        entityType: rotateActivities[0]?.entityType,
+        entityId: rotateActivities[0]?.entityId,
+      },
+      {
+        action: "api_key_rotated",
+        actorType: "operator",
+        entityType: "telemetry_source",
+        entityId: created.source.id,
+      },
+    );
+    assert.equal(JSON.stringify(rotateActivities).includes(rotated.replacementToken), false);
 
     // 5. Verify old token is rejected and replacement token is accepted
     const authOld = harness.telemetryService.authenticateSourceToken(created.initialToken);
@@ -395,6 +449,167 @@ void test("telemetry sources can be created, renamed, listed, and key-rotated", 
 
     const authNew = harness.telemetryService.authenticateSourceToken(rotated.replacementToken);
     assert.equal(authNew?.id, created.source.id);
+  } finally {
+    harness.database.close();
+  }
+});
+
+void test("telemetry source disable revokes only the owned key and preserves safe projections", () => {
+  const historyTime = new Date("2026-08-14T12:00:00.000Z");
+  const harness = createTestHarness({ clock: () => historyTime });
+  try {
+    const created = harness.telemetryService.createSource({ name: "Disable me" });
+    const rotated = harness.telemetryService.rotateSourceKey(created.source.id, {
+      label: "Disable me rotated",
+    });
+    const activeSource = harness.telemetryService.createSource({ name: "Stay active" });
+    const historyTap = harness.tapService.createTap({ tapNumber: 1, name: "History tap" });
+    harness.telemetryService.setTapAuthority(historyTap.id, { sourceId: created.source.id });
+    const historySample = harness.telemetryService.ingestSingle(rotated.source, 1, {
+      clientSampleId: "disable-history",
+      measuredAt: historyTime.toISOString(),
+      totalWeight: { value: 1_000, unit: "g" },
+    });
+    assert.equal(historySample.outcome, "accepted");
+    harness.telemetryService.setTapAuthority(historyTap.id, { sourceId: null });
+    const measurementsBefore = countRows(harness.database, "telemetry_measurements");
+    const receiptsBefore = countRows(harness.database, "telemetry_ingest_receipts");
+    const statusBefore = countRows(harness.database, "telemetry_source_tap_status");
+    const epochsBefore = countRows(harness.database, "telemetry_epochs");
+    const epochSamplesBefore = countRows(harness.database, "telemetry_epoch_samples");
+    const poursBefore = countRows(harness.database, "pours");
+    const activitiesBefore = new Set(listActivity(harness.database).map((activity) => activity.id));
+    const disabled = harness.telemetryService.disableSource(created.source.id, {
+      actorType: "admin",
+      actorId: "admin-1",
+      sessionId: "session-1",
+    });
+
+    assert.equal(disabled.id, created.source.id);
+    assert.equal(disabled.name, created.source.name);
+    assert.equal(disabled.createdAt, created.source.createdAt);
+    assert.equal(disabled.currentMachineKeyId, rotated.source.currentMachineKeyId);
+    assert.equal(disabled.disabledAt, disabled.updatedAt);
+    assert.equal(harness.telemetryService.authenticateSourceToken(created.initialToken), undefined);
+    assert.equal(
+      harness.telemetryService.authenticateSourceToken(rotated.replacementToken),
+      undefined,
+    );
+    assert.equal(harness.telemetryService.listSources().length, 2);
+    assert.equal(
+      harness.telemetryService.listSources().find((source) => source.id === created.source.id)
+        ?.disabledAt,
+      disabled.disabledAt,
+    );
+    assert.deepEqual(
+      harness.telemetryService.listActiveSources().map((source) => source.id),
+      [activeSource.source.id],
+    );
+    assert.equal(
+      harness.machineKeyService.get(rotated.source.currentMachineKeyId)?.revokedAt,
+      disabled.disabledAt,
+    );
+    assert.notEqual(
+      harness.machineKeyService.get(created.source.currentMachineKeyId)?.revokedAt,
+      null,
+    );
+    assert.equal(
+      harness.machineKeyService.get(rotated.source.currentMachineKeyId)?.replacementForId,
+      created.source.currentMachineKeyId,
+    );
+    assert.equal(
+      harness.machineKeyService.get(activeSource.source.currentMachineKeyId)?.revokedAt,
+      null,
+    );
+    assert.equal(countRows(harness.database, "telemetry_measurements"), measurementsBefore);
+    assert.equal(countRows(harness.database, "telemetry_ingest_receipts"), receiptsBefore);
+    assert.equal(countRows(harness.database, "telemetry_source_tap_status"), statusBefore);
+    assert.equal(countRows(harness.database, "telemetry_epochs"), epochsBefore);
+    assert.equal(countRows(harness.database, "telemetry_epoch_samples"), epochSamplesBefore);
+    assert.equal(countRows(harness.database, "pours"), poursBefore);
+
+    const disableActivities = activitiesSince(harness.database, activitiesBefore);
+    assert.equal(disableActivities.length, 1);
+    assert.equal(disableActivities[0]?.category, "integration");
+    assert.equal(disableActivities[0]?.action, "api_key_revoked");
+    assert.equal(disableActivities[0]?.entityType, "telemetry_source");
+    assert.equal(disableActivities[0]?.entityId, created.source.id);
+    assert.equal(disableActivities[0]?.actorType, "admin");
+    assert.equal(disableActivities[0]?.actorId, "admin-1");
+    assert.equal(disableActivities[0]?.sessionId, "session-1");
+    assert.equal(JSON.stringify(disableActivities[0]).includes(created.initialToken), false);
+    assert.throws(() => harness.telemetryService.renameSource(created.source.id, { name: "new" }));
+    assert.throws(() => harness.telemetryService.rotateSourceKey(created.source.id, {}));
+    const activitiesBeforeAuthorityAttempt = new Set(
+      listActivity(harness.database).map((activity) => activity.id),
+    );
+    const disabledTap = harness.tapService.createTap({ tapNumber: 2, name: "Disabled source tap" });
+    assert.throws(() =>
+      harness.database
+        .prepare<[string, string, string]>(
+          "INSERT INTO tap_telemetry_authority (tap_id, source_id, changed_at) VALUES (?, ?, ?)",
+        )
+        .run(disabledTap.id, created.source.id, disabled.updatedAt),
+    );
+    assert.throws(
+      () => harness.telemetryService.disableSource(created.source.id),
+      /already disabled/,
+    );
+    const authorityAttemptActivities = activitiesSince(
+      harness.database,
+      activitiesBeforeAuthorityAttempt,
+    );
+    assert.equal(authorityAttemptActivities.length, 1);
+    assert.equal(authorityAttemptActivities[0]?.entityType, "tap");
+  } finally {
+    harness.database.close();
+  }
+});
+
+void test("telemetry source disable is blocked before writes when a Tap authority exists", () => {
+  const harness = createTestHarness();
+  try {
+    const tap = harness.tapService.createTap({ tapNumber: 1, name: "Tap 1" });
+    const created = harness.telemetryService.createSource({ name: "In use" });
+    harness.telemetryService.setTapAuthority(tap.id, { sourceId: created.source.id });
+    const sourceBefore = harness.telemetryService.getSourceById(created.source.id);
+    const before = new Set(listActivity(harness.database).map((activity) => activity.id));
+    assert.throws(() => harness.telemetryService.disableSource(created.source.id), /assigned/);
+    assert.equal(activitiesSince(harness.database, before).length, 0);
+    assert.equal(harness.telemetryService.getSourceById(created.source.id)?.disabledAt, null);
+    assert.equal(
+      harness.telemetryService.getSourceById(created.source.id)?.updatedAt,
+      sourceBefore?.updatedAt,
+    );
+    assert.equal(
+      harness.machineKeyService.get(created.source.currentMachineKeyId)?.revokedAt,
+      null,
+    );
+  } finally {
+    harness.database.close();
+  }
+});
+
+void test("telemetry source disable completes when its current key was already revoked", () => {
+  const harness = createTestHarness();
+  try {
+    const created = harness.telemetryService.createSource({ name: "Already revoked" });
+    assert.equal(harness.machineKeyService.revoke(created.source.currentMachineKeyId), true);
+    const before = new Set(listActivity(harness.database).map((activity) => activity.id));
+    const disabled = harness.telemetryService.disableSource(created.source.id, {
+      actorType: "admin",
+      actorId: "admin-2",
+    });
+    assert.equal(disabled.disabledAt !== null, true);
+    assert.equal(
+      harness.machineKeyService.get(created.source.currentMachineKeyId)?.revokedAt !== null,
+      true,
+    );
+    const activities = activitiesSince(harness.database, before);
+    assert.equal(activities.length, 1);
+    assert.equal(activities[0]?.action, "api_key_revoked");
+    assert.equal(activities[0]?.entityType, "telemetry_source");
+    assert.equal(activities[0]?.entityId, created.source.id);
   } finally {
     harness.database.close();
   }
@@ -638,7 +853,10 @@ void test("permanent Fill deletion removes attributed raw telemetry while preser
     });
     assert.equal(harness.acceptedEvents.at(-1)?.capturedAssignmentId, assignment.assignment.id);
 
-    harness.fillService.deleteFill(fill.id, { reason: "forensic regression" });
+    harness.fillService.deleteFill(fill.id, {
+      reason: "forensic regression",
+      confirmation: "Deletion Lager — Keg 1",
+    });
 
     assert.equal(countRows(harness.database, "telemetry_measurements"), 0);
     const receipt = harness.database

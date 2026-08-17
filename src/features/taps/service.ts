@@ -14,6 +14,7 @@ import {
 } from "../fills/repository.ts";
 import {
   closeAssignmentLifecycle,
+  countAdminTapPage,
   countActiveAssignmentsByTapId,
   countHistoricalAssignmentsByTapId,
   deleteTapById,
@@ -27,13 +28,18 @@ import {
   insertAssignmentLifecycle,
   insertTap,
   listAdminTapViews,
+  listAdminTapPage,
   listPublicTapViews,
   registerTapFirstUse,
   updateTap,
+  touchTapIfUpdatedAt,
+  updateTapName,
   upsertAssignmentMysteryConfig,
 } from "./repository.ts";
 import {
   validateAssignTapInput,
+  adminTapPageSize,
+  validateAdminTapPageQuery,
   validateCreateTapInput,
   validateDeleteTapInput,
   validateFillId,
@@ -45,6 +51,7 @@ import {
 } from "./tap-validation.ts";
 import type {
   AdminTapView,
+  AdminTapPage,
   AssignmentClosedContext,
   AssignmentOpenedContext,
   AssignmentOperationResult,
@@ -102,6 +109,11 @@ function sameMysteryConfig(
     left.revealSensory === right.revealSensory &&
     left.revealHistory === right.revealHistory
   );
+}
+
+/** Canonical visible label used by the destructive Admin web confirmation. */
+export function tapDeletionConfirmationLabel(tap: Pick<Tap, "tapNumber" | "name">): string {
+  return `Tap ${tap.tapNumber} — ${tap.name === null || tap.name.length === 0 ? "(unnamed)" : tap.name}`;
 }
 
 export class TapService {
@@ -300,6 +312,80 @@ export class TapService {
     });
   }
 
+  /** Autosave the public-facing Tap name without touching endpoint/lifecycle fields. */
+  autosaveName(
+    tapId: unknown,
+    expectedUpdatedAt: string,
+    input: unknown,
+    options: TapActorOptions = {},
+  ): AdminTapView {
+    const validatedTapId = validateTapId(tapId);
+    const validated = validateUpdateTapInput(input);
+    if (
+      validated.tapNumber !== undefined ||
+      validated.enabled !== undefined ||
+      validated.gasType !== undefined ||
+      validated.servingPressureKpa !== undefined ||
+      validated.lineLengthMm !== undefined ||
+      validated.lineDiameterMm !== undefined ||
+      validated.notes !== undefined ||
+      validated.acknowledgeTelemetryEndpointImpact !== undefined
+    ) {
+      throw new ApplicationError({
+        category: "validation",
+        code: "tap.autosave_unsafe_field",
+        clientMessage: "Only the visible Tap name can be autosaved.",
+      });
+    }
+    const nowIso = timestamp(options.now ?? this.#now);
+    const actorType = options.actorType ?? "admin";
+    return this.#database.withTransaction(() => {
+      const existing = findTapById(this.#database, validatedTapId);
+      if (!existing) {
+        throw new ApplicationError({
+          category: "not_found",
+          code: "tap.not_found",
+          clientMessage: "Tap was not found.",
+        });
+      }
+      if (existing.updatedAt !== expectedUpdatedAt) {
+        throw new ApplicationError({
+          category: "conflict",
+          code: "tap.changed",
+          clientMessage: "This Tap changed elsewhere. Reload before saving again.",
+        });
+      }
+      const name = validated.name !== undefined ? validated.name : existing.name;
+      if (name === existing.name) {
+        const current = findAdminTapViewById(this.#database, validatedTapId);
+        if (!current) throw new Error("Tap disappeared while autosaving");
+        return current;
+      }
+      if (!touchTapIfUpdatedAt(this.#database, validatedTapId, expectedUpdatedAt, nowIso)) {
+        throw new ApplicationError({
+          category: "conflict",
+          code: "tap.changed",
+          clientMessage: "This Tap changed elsewhere. Reload before saving again.",
+        });
+      }
+      updateTapName(this.#database, validatedTapId, name);
+      appendActivity(this.#database, {
+        category: "domain",
+        action: "entity_changed",
+        actorType,
+        ...(options.actorId === undefined ? {} : { actorId: options.actorId }),
+        ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
+        entityType: "tap",
+        entityId: validatedTapId,
+        details: { change: "name_autosaved", tap_number: existing.tapNumber },
+        occurredAt: nowIso,
+      });
+      const current = findAdminTapViewById(this.#database, validatedTapId);
+      if (!current) throw new Error("Tap disappeared while autosaving");
+      return current;
+    });
+  }
+
   getTap(tapId: unknown): AdminTapView {
     const validatedTapId = validateTapId(tapId);
     const view = findAdminTapViewById(this.#database, validatedTapId);
@@ -316,6 +402,25 @@ export class TapService {
 
   listTaps(): readonly AdminTapView[] {
     return listAdminTapViews(this.#database);
+  }
+
+  /** Return the bounded SQL-backed Admin Tap list projection. */
+  listAdminPage(query: unknown = {}): AdminTapPage {
+    const validated = validateAdminTapPageQuery(query);
+    const total = countAdminTapPage(this.#database, validated);
+    const pageSize = adminTapPageSize();
+    const pageCount = Math.max(1, Math.ceil(total / pageSize));
+    const page = Math.min(validated.page, pageCount);
+    const items = listAdminTapPage(this.#database, { ...validated, page });
+    return {
+      items,
+      total,
+      page,
+      pageSize,
+      pageCount,
+      query: validated.q,
+      state: validated.state,
+    };
   }
 
   listPublicTaps(): readonly PublicTapView[] {
@@ -905,6 +1010,35 @@ export class TapService {
     const sessionId = options.sessionId;
 
     this.#database.withTransaction(() => {
+      const tap = findTapById(this.#database, validatedTapId);
+      if (!tap) {
+        throw new ApplicationError({
+          category: "not_found",
+          code: "tap.not_found",
+          clientMessage: "Tap was not found.",
+          details: { id: validatedTapId },
+        });
+      }
+      const expected = tapDeletionConfirmationLabel(tap);
+      if (
+        validated.confirmation === undefined ||
+        validated.confirmation === null ||
+        validated.confirmation.length === 0
+      ) {
+        throw new ApplicationError({
+          category: "validation",
+          code: "tap.confirmation_required",
+          clientMessage: "The exact visible Tap label is required to delete this Tap.",
+        });
+      }
+      if (validated.confirmation !== expected) {
+        throw new ApplicationError({
+          category: "validation",
+          code: "tap.confirmation_mismatch",
+          clientMessage: "The confirmation text does not match the visible Tap label.",
+          details: { tapId: validatedTapId },
+        });
+      }
       const impact = this.getTapDeletionImpact(validatedTapId);
       if (!impact.canDelete) {
         throw new ApplicationError({
@@ -944,6 +1078,23 @@ export class TapService {
         occurredAt: nowIso,
       });
     });
+  }
+
+  /** Additive explicit web-facing deletion path; the JSON API keeps its old shape. */
+  deleteTapConfirmed(
+    tapId: unknown,
+    confirmation: unknown,
+    input: { readonly reason?: string | null } = {},
+    options: TapActorOptions = {},
+  ): void {
+    if (typeof confirmation !== "string" || confirmation.length === 0) {
+      throw new ApplicationError({
+        category: "validation",
+        code: "tap.confirmation_required",
+        clientMessage: "The exact visible Tap label is required to delete this Tap.",
+      });
+    }
+    this.deleteTap(tapId, { ...input, confirmation }, options);
   }
 
   asFillAssignmentPort(): FillAssignmentLifecyclePort {

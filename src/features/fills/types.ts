@@ -31,9 +31,14 @@ export interface AdminFillView {
   readonly beverageType: string;
   readonly beverageStyle: string | null;
   readonly beverageAbv: number | null;
+  /** Safe admin-only presentation fields for the Keg Room card projection. */
+  readonly fillGlass?: string | null;
+  readonly displayColor?: string | null;
   readonly kegId: string;
   readonly kegNumber: number;
   readonly kegLabel: string | null;
+  readonly tapId?: string | null;
+  readonly tapNumber?: number | null;
   readonly fillDate: string;
   readonly state: FillState;
   readonly onDeckOrder: number | null;
@@ -95,6 +100,29 @@ export interface UpdateFillSettingsInput {
 
 export interface DeleteFillInput {
   readonly reason?: string | null;
+  /** Exact visible Filled Keg label, required by the canonical admin UI. */
+  readonly confirmation?: string | null;
+}
+
+export type AdminFillPageState = "active" | "available" | "on_deck" | "on_tap" | "ended" | "all";
+export type AdminFillPageSort = "state" | "name" | "fill_date" | "updated" | "keg";
+
+export interface AdminFillPageQuery {
+  readonly q?: unknown;
+  readonly state?: unknown;
+  readonly sort?: unknown;
+  readonly page?: unknown;
+}
+
+export interface AdminFillPage {
+  readonly items: readonly AdminFillView[];
+  readonly total: number;
+  readonly page: number;
+  readonly pageSize: number;
+  readonly pageCount: number;
+  readonly query: string;
+  readonly state: AdminFillPageState;
+  readonly sort: AdminFillPageSort;
 }
 
 export interface FillActorOptions {

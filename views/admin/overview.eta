@@ -1,28 +1,61 @@
 <% layout("/layouts/admin", { page: it.page }) %>
 <%~ include("/partials/admin-nav", { page: it.page, items: it.navItems || [] }) %>
-<main id="main-content">
-  <h1>Overview</h1>
+<main id="main-content" class="admin-page">
+  <header class="page-header">
+    <p class="eyebrow">Admin / Overview</p>
+    <h1>Overview</h1>
+    <p>Current service health and the next useful actions.</p>
+  </header>
   <%~ include("/partials/admin-messages", { page: it.page }) %>
-  <section aria-labelledby="summary-heading">
-    <h2 id="summary-heading">Operational summary</h2>
-    <dl class="metrics"><% for (const item of it.metrics) { %><div><dt><%= item.label %></dt><dd><%= item.value %></dd></div><% } %></dl>
-  </section>
-  <section aria-labelledby="connectivity-heading">
-    <h2 id="connectivity-heading">Connectivity and integrations</h2>
-    <p><strong><%= it.connectivity.state === "healthy" ? "Healthy" : "Needs attention" %></strong> — <%= it.connectivity.label %></p>
-    <dl class="metrics"><div><dt>Telemetry</dt><dd><%= it.integrations.telemetryConfigured %> configured</dd></div><div><dt>Brewfather</dt><dd><%= it.integrations.brewfatherConfigured ? (it.integrations.brewfatherEnabled ? (it.integrations.brewfatherApiKeyConfigured ? "Enabled" : "API key required") : "Disabled") : "Not configured" %></dd></div><div><dt>Linked Beverages</dt><dd><%= it.integrations.brewfatherLinkedBeverages %></dd></div></dl>
-  </section>
-  <section aria-labelledby="health-summary-heading">
-    <h2 id="health-summary-heading">Health summary</h2>
+
+  <section class="attention-panel" aria-labelledby="attention-heading">
+    <div class="section-heading"><div><p class="eyebrow">Needs attention</p><h2 id="attention-heading">Health summary</h2></div></div>
     <% const attention = it.health.filter((item) => item.state === "degraded" || item.severity === "warning" || item.severity === "critical"); %>
-    <% if (attention.length === 0) { %><p>No Tap health warnings are currently reported.</p><% } else { %><ul><% for (const item of attention) { %><li>Tap <%= item.tapNumber ?? "unknown" %>: <%= item.severity %> (<%= item.state %>)</li><% } %></ul><% } %>
-  </section>
-  <section aria-labelledby="tap-summary-heading">
-    <h2 id="tap-summary-heading">Taps and current assignments</h2>
-    <% if (it.taps.length === 0) { %><p>No Taps are configured.</p><% } else { %>
-      <table><thead><tr><th scope="col">Tap</th><th scope="col">Name</th><th scope="col">Assignment</th><th scope="col">Public</th></tr></thead><tbody>
-      <% for (const tap of it.taps) { %><tr><th scope="row">#<%= tap.tapNumber %></th><td><%= tap.name || "—" %></td><td><%= tap.beverageName || "Unassigned" %></td><td><%= tap.enabled ? "Enabled" : "Disabled" %></td></tr><% } %>
-      </tbody></table>
+    <% if (attention.length === 0) { %>
+      <p class="empty-state">No Tap health warnings are currently reported.</p>
+    <% } else { %>
+      <ul class="attention-list">
+        <% for (const item of attention) { %>
+          <li><span class="status-badge status-badge--<%= item.severity === "critical" ? "critical" : item.state === "degraded" ? "degraded" : "warning" %>"><%= item.severity === "none" ? item.state : item.severity %></span><a href="<%= item.href %>"><strong>Tap <%= item.tapNumber ?? "unknown" %></strong><% if (item.tapName) { %> — <%= item.tapName %><% } %></a><% if (item.checks.length > 0) { %><span class="muted"> · <%= item.checks.map((check) => check.id.replaceAll("_", " ")).join(", ") %></span><% } %></li>
+        <% } %>
+      </ul>
     <% } %>
+  </section>
+
+  <section aria-labelledby="tap-summary-heading">
+    <div class="section-heading"><div><p class="eyebrow">Live assignments</p><h2 id="tap-summary-heading">Taps and current assignments</h2></div><a class="button secondary button--small" href="/admin/taps">Manage Taps</a></div>
+    <% if (it.taps.length === 0) { %>
+      <p class="empty-state">No Taps are configured yet. <a href="/admin/taps">Add a Tap</a>.</p>
+    <% } else { %>
+      <div class="table-scroll"><table class="admin-table"><thead><tr><th scope="col">Tap</th><th scope="col">Assignment</th><th scope="col">Status</th><th scope="col">Public</th></tr></thead><tbody>
+      <% for (const tap of it.taps) { const lifecycleLabel = tap.isRetired ? "Retired" : tap.enabled ? "Enabled" : "Disabled"; const isPublic = tap.enabled && !tap.isRetired; %><tr><th scope="row"><a href="<%= tap.href %>">#<%= tap.tapNumber %><% if (tap.name) { %> — <%= tap.name %><% } %></a></th><td><%= tap.beverageName || "Unassigned" %></td><td><span class="status-badge status-badge--<%= isPublic ? "healthy" : "muted" %>"><%= lifecycleLabel %></span></td><td><%= isPublic ? "Enabled" : "Hidden" %></td></tr><% } %>
+      </tbody></table></div>
+    <% } %>
+  </section>
+
+  <% const kegRoom = it.kegRoom || { activeKegs: 0, onTap: 0, onDeck: 0, available: 0, href: "/admin/keg-room" }; %>
+  <section aria-labelledby="keg-room-heading">
+    <div class="section-heading"><div><p class="eyebrow">Inventory snapshot</p><h2 id="keg-room-heading">Keg Room</h2></div><a class="button secondary button--small" href="/admin/keg-room">Open Keg Room</a></div>
+    <div class="summary-grid summary-link-grid">
+      <a class="summary-card summary-card--link" href="/admin/keg-room/kegs?status=active"><span class="summary-card__label">Active kegs</span><strong class="summary-card__value"><%= kegRoom.activeKegs %></strong></a><a class="summary-card summary-card--link" href="/admin/keg-room?state=on_tap"><span class="summary-card__label">On tap</span><strong class="summary-card__value"><%= kegRoom.onTap %></strong></a><a class="summary-card summary-card--link" href="/admin/keg-room?state=on_deck"><span class="summary-card__label">On deck</span><strong class="summary-card__value"><%= kegRoom.onDeck %></strong></a><a class="summary-card summary-card--link" href="/admin/keg-room?state=available"><span class="summary-card__label">Available fills</span><strong class="summary-card__value"><%= kegRoom.available %></strong></a>
+    </div>
+  </section>
+
+  <section aria-labelledby="connectivity-heading">
+    <div class="section-heading"><div><p class="eyebrow">System status</p><h2 id="connectivity-heading">Connectivity and integrations</h2></div><a class="button secondary button--small" href="/admin/integrations">Configure Integrations</a></div>
+    <p class="status-line"><span class="status-badge status-badge--<%= it.connectivity.state === "healthy" ? "healthy" : "degraded" %>"><%= it.connectivity.state === "healthy" ? "Connected" : "Degraded" %></span> <%= it.connectivity.label %></p>
+    <dl class="summary-grid"><div><dt>Telemetry sources</dt><dd><%= it.integrations.telemetryConfigured %></dd></div><div><dt>Brewfather</dt><dd><%= it.integrations.brewfatherConfigured ? (it.integrations.brewfatherEnabled ? (it.integrations.brewfatherApiKeyConfigured ? "Enabled" : "API key required") : "Disabled") : "Not configured" %></dd></div><div><dt>Linked beverages</dt><dd><%= it.integrations.brewfatherLinkedBeverages %></dd></div></dl>
+  </section>
+
+  <section aria-labelledby="counts-heading">
+    <div class="section-heading"><div><p class="eyebrow">Operational summary</p><h2 id="counts-heading">Operational counts</h2></div></div>
+    <% const metricHrefs = { "Enabled taps": "/admin/taps", "Active fills": "/admin/keg-room?state=active", "On deck": "/admin/keg-room?state=on_deck", "Health warnings": "#attention-heading" }; %>
+    <div class="metrics summary-link-grid"><% for (const item of it.metrics) { %><a class="summary-card summary-card--link" href="<%= metricHrefs[item.label] || "/admin/overview" %>"><span class="summary-card__label"><%= item.label %></span><strong class="summary-card__value"><%= item.value %></strong></a><% } %></div>
+  </section>
+
+  <% const quickLinks = it.quickLinks || []; %>
+  <section aria-labelledby="quick-actions-heading" class="quick-actions">
+    <div class="section-heading"><div><p class="eyebrow">Shortcuts</p><h2 id="quick-actions-heading">Quick actions</h2></div></div>
+    <ul><% for (const item of quickLinks) { %><li><a class="quick-action" href="<%= item.href %>"><%= item.label %><span aria-hidden="true">→</span></a></li><% } %></ul>
   </section>
 </main>

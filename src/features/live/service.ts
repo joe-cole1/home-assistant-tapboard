@@ -22,7 +22,7 @@ export type PublicLiveEvent =
     }
   | { readonly name: "ondeck.updated"; readonly target: "ondeck" }
   | { readonly name: "integration_status.updated"; readonly target: "header" }
-  | { readonly name: "display.updated"; readonly target: "display" };
+  | { readonly name: "display.updated"; readonly target: "display" | "cards" };
 
 interface AdminSseContext extends SseClientContext {
   readonly isAdmin: true;

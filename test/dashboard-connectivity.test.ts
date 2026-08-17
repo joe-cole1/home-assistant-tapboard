@@ -19,6 +19,7 @@ void test("Brewfather link connectivity follows enabled account state and clears
         showServingTemperature: true,
         layoutMode: "scroll",
       }),
+      getTapCardSettings: () => ({ remainingMode: "percent" }),
     },
     tapService: {
       listTaps: () => [{ id: "tap-1", enabled: true, isRetired: false }],

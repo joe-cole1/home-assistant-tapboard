@@ -2,6 +2,9 @@ import type { DatabaseExecutor } from "../../infrastructure/database/connection.
 import { resolveEffectivePresentationFromDb } from "../beverages/presentation.ts";
 import type {
   ActiveAssignmentDetails,
+  AdminTapPageAssignment,
+  AdminTapPageItem,
+  AdminTapPageState,
   AdminTapView,
   PublicTapView,
   Tap,
@@ -54,6 +57,24 @@ interface PublicTapJoinedRow {
 
 interface CountRow {
   readonly count: number;
+}
+
+interface AdminTapPageRow {
+  readonly id: string;
+  readonly tap_number: number;
+  readonly name: string | null;
+  readonly enabled: number;
+  readonly first_used_at: string | null;
+  readonly retired_at: string | null;
+  readonly assignment_id: string | null;
+  readonly assignment_fill_id: string | null;
+  readonly assignment_assigned_at: string | null;
+  readonly beverage_id: string | null;
+  readonly beverage_name: string | null;
+  readonly keg_id: string | null;
+  readonly keg_number: number | null;
+  readonly keg_label: string | null;
+  readonly updated_at: string;
 }
 
 interface MysteryRow {
@@ -344,6 +365,34 @@ export function updateTap(database: DatabaseExecutor, tap: Tap): boolean {
     );
 
   return result.changes > 0;
+}
+
+export function touchTapIfUpdatedAt(
+  database: DatabaseExecutor,
+  tapId: string,
+  expectedUpdatedAt: string,
+  updatedAt: string,
+): boolean {
+  return (
+    database
+      .prepare<[string, string, string]>(
+        `UPDATE taps SET updated_at = ?
+         WHERE id = ? AND updated_at = ?`,
+      )
+      .run(updatedAt, tapId, expectedUpdatedAt).changes === 1
+  );
+}
+
+export function updateTapName(
+  database: DatabaseExecutor,
+  tapId: string,
+  name: string | null,
+): boolean {
+  return (
+    database
+      .prepare<[string | null, string]>("UPDATE taps SET name = ? WHERE id = ?")
+      .run(name, tapId).changes > 0
+  );
 }
 
 export function findTapById(database: DatabaseExecutor, id: string): Tap | undefined {
@@ -651,6 +700,176 @@ export function listAdminTapViews(database: DatabaseExecutor): AdminTapView[] {
     .all();
 
   return rows.map((row) => mapAdminTapJoinedRow(database, row));
+}
+
+/**
+ * The Admin list deliberately has a smaller SQL projection than the legacy
+ * unpaged AdminTapView/API projection.  It contains only identity, lifecycle,
+ * active assignment, beverage, and physical keg summary fields.  Public card
+ * and health data are enriched by the web route through their authoritative
+ * services after this bounded query returns.
+ */
+const ADMIN_TAP_PAGE_FROM = `
+  WITH beverage_projection AS (
+    SELECT
+      b.id AS beverage_id,
+      CASE
+        WHEN b.ownership_type = 'custom' THEN cp.name
+        WHEN po.override_name_present = 1 AND po.name IS NOT NULL THEN po.name
+        ELSE sp.name
+      END AS beverage_name
+    FROM beverages b
+    LEFT JOIN custom_beverage_profiles cp ON cp.beverage_id = b.id
+    LEFT JOIN brewfather_source_profiles sp ON sp.beverage_id = b.id
+    LEFT JOIN brewfather_presentation_overrides po ON po.beverage_id = b.id
+  )
+  SELECT
+    t.id,
+    t.tap_number,
+    t.name,
+    t.enabled,
+    t.first_used_at,
+    t.retired_at,
+    a.id AS assignment_id,
+    a.fill_id AS assignment_fill_id,
+    a.assigned_at AS assignment_assigned_at,
+    f.beverage_id,
+    bp.beverage_name,
+    k.id AS keg_id,
+    k.keg_number,
+    k.label AS keg_label,
+    t.updated_at
+  FROM taps t
+  LEFT JOIN tap_assignment_lifecycles a ON a.tap_id = t.id AND a.ended_at IS NULL
+  LEFT JOIN fills f ON f.id = a.fill_id
+  LEFT JOIN beverage_projection bp ON bp.beverage_id = f.beverage_id
+  LEFT JOIN kegs k ON k.id = f.keg_id
+`;
+
+function adminTapPageWhere(query: { readonly q: string; readonly state: AdminTapPageState }): {
+  readonly sql: string;
+  readonly params: unknown[];
+} {
+  const clauses: string[] = [];
+  const params: unknown[] = [];
+
+  switch (query.state) {
+    case "assigned":
+      clauses.push("a.id IS NOT NULL");
+      break;
+    case "unassigned":
+      clauses.push("a.id IS NULL");
+      break;
+    case "disabled":
+      clauses.push("t.enabled = 0");
+      break;
+    case "retired":
+      clauses.push("t.retired_at IS NOT NULL");
+      break;
+    case "all":
+      break;
+  }
+
+  if (query.q.length > 0) {
+    const escaped = query.q.replace(/[\\%_]/gu, (value) => `\\${value}`);
+    const pattern = `%${escaped}%`;
+    clauses.push(`(
+      LOWER(COALESCE(t.name, '')) LIKE LOWER(?) ESCAPE '\\'
+      OR CAST(t.tap_number AS TEXT) LIKE ? ESCAPE '\\'
+      OR LOWER(COALESCE(bp.beverage_name, '')) LIKE LOWER(?) ESCAPE '\\'
+      OR CAST(COALESCE(k.keg_number, '') AS TEXT) LIKE ? ESCAPE '\\'
+      OR LOWER(COALESCE(k.label, '')) LIKE LOWER(?) ESCAPE '\\'
+      OR LOWER(CASE WHEN a.id IS NOT NULL THEN 'assigned' ELSE 'unassigned' END) LIKE LOWER(?) ESCAPE '\\'
+      OR LOWER(CASE WHEN t.retired_at IS NOT NULL THEN 'retired' WHEN t.enabled = 0 THEN 'disabled' ELSE 'enabled' END) LIKE LOWER(?) ESCAPE '\\'
+    )`);
+    params.push(pattern, pattern, pattern, pattern, pattern, pattern, pattern);
+  }
+
+  return {
+    sql: clauses.length === 0 ? "" : `WHERE ${clauses.join(" AND ")}`,
+    params,
+  };
+}
+
+function mapAdminTapPageRow(row: AdminTapPageRow): AdminTapPageItem {
+  let assignment: AdminTapPageAssignment | null = null;
+  if (
+    row.assignment_id !== null &&
+    row.assignment_fill_id !== null &&
+    row.assignment_assigned_at !== null
+  ) {
+    assignment = {
+      id: row.assignment_id,
+      fillId: row.assignment_fill_id,
+      beverageId: row.beverage_id,
+      beverageName: row.beverage_name,
+      kegId: row.keg_id,
+      kegNumber: row.keg_number,
+      kegLabel: row.keg_label,
+      assignedAt: row.assignment_assigned_at,
+    };
+  }
+  return {
+    id: row.id,
+    tapNumber: row.tap_number,
+    name: row.name,
+    enabled: row.enabled === 1,
+    isRetired: row.retired_at !== null,
+    firstUsedAt: row.first_used_at,
+    retiredAt: row.retired_at,
+    assignment,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function countAdminTapPage(
+  database: DatabaseExecutor,
+  query: { readonly q: string; readonly state: AdminTapPageState },
+): number {
+  const where = adminTapPageWhere(query);
+  const row = database
+    .prepare<unknown[], CountRow>(
+      `WITH beverage_projection AS (
+         SELECT
+           b.id AS beverage_id,
+           CASE
+             WHEN b.ownership_type = 'custom' THEN cp.name
+             WHEN po.override_name_present = 1 AND po.name IS NOT NULL THEN po.name
+             ELSE sp.name
+           END AS beverage_name
+         FROM beverages b
+         LEFT JOIN custom_beverage_profiles cp ON cp.beverage_id = b.id
+         LEFT JOIN brewfather_source_profiles sp ON sp.beverage_id = b.id
+         LEFT JOIN brewfather_presentation_overrides po ON po.beverage_id = b.id
+       )
+       SELECT COUNT(*) AS count
+       FROM taps t
+       LEFT JOIN tap_assignment_lifecycles a ON a.tap_id = t.id AND a.ended_at IS NULL
+       LEFT JOIN fills f ON f.id = a.fill_id
+       LEFT JOIN beverage_projection bp ON bp.beverage_id = f.beverage_id
+       LEFT JOIN kegs k ON k.id = f.keg_id
+       ${where.sql}`,
+    )
+    .get(...where.params);
+  return row?.count ?? 0;
+}
+
+/** Return one deterministic 25-row Tap page directly from SQLite. */
+export function listAdminTapPage(
+  database: DatabaseExecutor,
+  query: { readonly q: string; readonly state: AdminTapPageState; readonly page: number },
+): AdminTapPageItem[] {
+  const where = adminTapPageWhere(query);
+  const offset = (query.page - 1) * 25;
+  const rows = database
+    .prepare<unknown[], AdminTapPageRow>(
+      `${ADMIN_TAP_PAGE_FROM}
+       ${where.sql}
+       ORDER BY t.tap_number ASC, t.id ASC
+       LIMIT ? OFFSET ?`,
+    )
+    .all(...where.params, 25, offset);
+  return rows.map(mapAdminTapPageRow);
 }
 
 export function listPublicTapViews(database: DatabaseExecutor): PublicTapView[] {

@@ -47,6 +47,11 @@ import {
 } from "./features/health/index.ts";
 import { createForecastService, registerForecastRoutes } from "./features/forecasting/index.ts";
 import { createDisplaySettingsService } from "./features/display/index.ts";
+import {
+  DISPLAY_STYLESHEET_VERSION,
+  generateDisplayStylesheet,
+  validateStylesheetParams,
+} from "./features/display/palette.ts";
 import { createDashboardService } from "./features/dashboard/index.ts";
 import { createPublicStoryService } from "./features/story/index.ts";
 import { LiveUpdateService, observeCommittedCalls } from "./features/live/index.ts";
@@ -198,6 +203,13 @@ class FoundationApplication implements Application {
         },
       };
       const rawTapService = createTapService(this.#database, { extensionPort: tapExtensionPort });
+      const publishFillUpdatesForBeverage = (beverageId: unknown): void => {
+        if (typeof beverageId !== "string") return;
+        for (const tap of rawTapService.listTaps()) {
+          if (tap.activeAssignment?.beverageId !== beverageId) continue;
+          liveUpdates.publish({ name: "fill.updated", tapId: tap.id });
+        }
+      };
       const rawKegService = createKegService(this.#database, {
         onKegCorrection: (database, event) => {
           rawDetectorService.onKegCorrection(database, event);
@@ -230,6 +242,24 @@ class FoundationApplication implements Application {
           publishAllTaps("fill.updated");
         },
         updateCustomBeverage: () => publishAllTaps("fill.updated"),
+        autosaveCustomPresentation: (result, args) => {
+          if (typeof args[1] !== "string") return;
+          const beverage =
+            typeof result === "object" &&
+            result !== null &&
+            "beverage" in result &&
+            typeof result.beverage === "object" &&
+            result.beverage !== null
+              ? result.beverage
+              : undefined;
+          if (
+            beverage === undefined ||
+            !("updatedAt" in beverage) ||
+            beverage.updatedAt === args[1]
+          )
+            return;
+          publishFillUpdatesForBeverage(args[0]);
+        },
         updateSensoryOverrides: (result, args) => {
           const changed =
             typeof result === "object" &&
@@ -237,10 +267,7 @@ class FoundationApplication implements Application {
             "changed" in result &&
             result.changed === true;
           if (!changed || typeof args[0] !== "string") return;
-          for (const tap of rawTapService.listTaps()) {
-            if (tap.activeAssignment?.beverageId !== args[0]) continue;
-            liveUpdates.publish({ name: "fill.updated", tapId: tap.id });
-          }
+          publishFillUpdatesForBeverage(args[0]);
         },
         updatePresentationOverrides: () => publishAllTaps("fill.updated"),
         unlinkBeverage: () => {
@@ -270,6 +297,18 @@ class FoundationApplication implements Application {
           if (changed && typeof args[0] === "string") {
             liveUpdates.publish({ name: "tap.updated", tapId: args[0] });
           }
+        },
+        autosaveName: (result, args) => {
+          if (
+            typeof args[0] !== "string" ||
+            typeof args[1] !== "string" ||
+            typeof result !== "object" ||
+            result === null ||
+            !("updatedAt" in result) ||
+            result.updatedAt === args[1]
+          )
+            return;
+          liveUpdates.publish({ name: "tap.updated", tapId: args[0] });
         },
         assignFill: () => {
           publishAllTaps("tap.updated");
@@ -351,6 +390,10 @@ class FoundationApplication implements Application {
           liveUpdates.publish({ name: "integration_status.updated", target: "header" }),
         rotateSourceKey: () =>
           liveUpdates.publish({ name: "integration_status.updated", target: "header" }),
+        disableSource: () =>
+          liveUpdates.publish({ name: "integration_status.updated", target: "header" }),
+        revokeSource: () =>
+          liveUpdates.publish({ name: "integration_status.updated", target: "header" }),
       });
       const detectorService = observeCommittedCalls(rawDetectorService, {
         manualRebaseline: (_result, args) => {
@@ -370,6 +413,16 @@ class FoundationApplication implements Application {
       const rawDisplayService = createDisplaySettingsService(this.#database);
       const displayService = observeCommittedCalls(rawDisplayService, {
         updateSettings: () => liveUpdates.publish({ name: "display.updated", target: "display" }),
+        updateTapCardSettings: () =>
+          liveUpdates.publish({ name: "display.updated", target: "cards" }),
+        setTapCardOverride: (_result, args) => {
+          if (typeof args[0] === "string")
+            liveUpdates.publish({ name: "tap.updated", tapId: args[0] });
+        },
+        clearTapCardOverride: (result, args) => {
+          if (result === true && typeof args[0] === "string")
+            liveUpdates.publish({ name: "tap.updated", tapId: args[0] });
+        },
       });
       const storyService = createPublicStoryService({
         tapService,
@@ -378,6 +431,7 @@ class FoundationApplication implements Application {
         detectorService,
         forecastService,
         healthService,
+        displayService,
       });
       const dashboardService = createDashboardService({
         displayService,
@@ -429,6 +483,49 @@ class FoundationApplication implements Application {
         healthService,
         liveUpdates,
       });
+      // This route intentionally precedes the generic static-asset route. It
+      // emits only validated, same-origin CSS so custom accents and selected
+      // fonts never require inline style or a CDN request.
+      router.get("/assets/css/display.css", (request, response) => {
+        const url = new URL(request.url ?? "/assets/css/display.css", "http://tapboard.local");
+        const queryNames = [...url.searchParams.keys()];
+        if (
+          queryNames.length !== 4 ||
+          new Set(queryNames).size !== 4 ||
+          !queryNames.every(
+            (name) => name === "v" || name === "theme" || name === "accent" || name === "font",
+          ) ||
+          url.searchParams.get("v") !== DISPLAY_STYLESHEET_VERSION
+        ) {
+          response.writeHead(400, { "cache-control": "no-store" });
+          response.end();
+          return;
+        }
+        const params = validateStylesheetParams(
+          url.searchParams.get("theme"),
+          url.searchParams.get("accent"),
+          url.searchParams.get("font"),
+        );
+        if (params === undefined) {
+          response.writeHead(400, { "cache-control": "no-store" });
+          response.end();
+          return;
+        }
+        const generated = generateDisplayStylesheet(params.theme, params.accent, params.font);
+        const headers = {
+          "content-type": "text/css; charset=utf-8",
+          "cache-control": "public, max-age=300, must-revalidate",
+          "x-content-type-options": "nosniff",
+          etag: generated.etag,
+        };
+        if (request.headers["if-none-match"] === generated.etag) {
+          response.writeHead(304, headers);
+          response.end();
+          return;
+        }
+        response.writeHead(200, headers);
+        response.end(generated.css);
+      });
       registerStaticAssets(router, {
         root: fileURLToPath(new URL("../public/", import.meta.url)),
         cacheControl: "public, max-age=300",
@@ -444,6 +541,34 @@ class FoundationApplication implements Application {
           { kind: "js", file: "dashboard.js", path: "js/dashboard.js" },
           { kind: "js", file: "story.js", path: "js/story.js" },
           { kind: "js", file: "admin-display.js", path: "js/admin-display.js" },
+          { kind: "js", file: "admin-shell.js", path: "js/admin-shell.js" },
+          { kind: "js", file: "admin-autosave.js", path: "js/admin-autosave.js" },
+          { kind: "font", file: "outfit-6c18d579.woff2", path: "fonts/outfit-6c18d579.woff2" },
+          { kind: "font", file: "inter-3100e775.woff2", path: "fonts/inter-3100e775.woff2" },
+          { kind: "font", file: "roboto-1404ca34.woff2", path: "fonts/roboto-1404ca34.woff2" },
+          { kind: "font", file: "fredoka-99d6c78e.woff2", path: "fonts/fredoka-99d6c78e.woff2" },
+          {
+            kind: "font",
+            file: "montserrat-06b16db7.woff2",
+            path: "fonts/montserrat-06b16db7.woff2",
+          },
+          {
+            kind: "font",
+            file: "barlow_condensed-7fff1bb2.woff2",
+            path: "fonts/barlow_condensed-7fff1bb2.woff2",
+          },
+          {
+            kind: "font",
+            file: "bree_serif-ca092b41.woff2",
+            path: "fonts/bree_serif-ca092b41.woff2",
+          },
+          { kind: "font", file: "bungee-126eec70.woff2", path: "fonts/bungee-126eec70.woff2" },
+          { kind: "font", file: "rye-00de26ff.woff2", path: "fonts/rye-00de26ff.woff2" },
+          {
+            kind: "font",
+            file: "special_elite-770493d8.woff2",
+            path: "fonts/special_elite-770493d8.woff2",
+          },
         ],
       });
 

@@ -8,13 +8,16 @@ import { ApplicationError } from "../../shared/errors.ts";
 import { appendActivity } from "../activity/operations.ts";
 import { appendDeletionAudit } from "../activity/deletion-audit.ts";
 import {
+  adminKegPageSize,
   validateCreateKegInput,
   validateDeleteKegInput,
   validateKegId,
   validateRecordMaintenanceInput,
+  validateAdminKegPageQuery,
   validateUpdateKegInput,
 } from "./keg-validation.ts";
 import {
+  countAdminKegPage,
   deleteKegById,
   findKegById,
   findKegByNumber,
@@ -23,12 +26,15 @@ import {
   insertMaintenanceRecord,
   insertTareHistory,
   listKegs as listKegRows,
+  listAdminKegPage,
   listMaintenanceRecordsByKegId,
   listTareHistoryByKegId,
   updateKeg as updateKegRow,
+  updateKegLabelIfUpdatedAt,
   type ListKegsOptions,
 } from "./repository.ts";
 import type {
+  AdminKegPage,
   KegActorOptions,
   KegCorrectionHook,
   KegDeletionImpact,
@@ -43,6 +49,13 @@ function timestamp(nowFactory: (() => Date) | undefined): string {
     throw new TypeError("Invalid clock in keg service");
   }
   return value.toISOString();
+}
+
+/** Canonical visible label used by every permanent Keg deletion confirmation. */
+export function kegDeletionConfirmationLabel(
+  keg: Pick<PhysicalKeg, "kegNumber" | "label">,
+): string {
+  return `Keg ${keg.kegNumber}${keg.label ? ` — ${keg.label}` : ""}`;
 }
 
 export interface KegServiceOptions {
@@ -252,6 +265,71 @@ export class KegService {
     });
   }
 
+  /** Autosave only the human-facing Keg label; hardware and lifecycle remain explicit. */
+  autosaveLabel(
+    id: unknown,
+    expectedUpdatedAt: string,
+    input: unknown,
+    options: KegActorOptions = {},
+  ): PhysicalKeg {
+    const kegId = validateKegId(id);
+    const validated = validateUpdateKegInput(input);
+    if (
+      validated.kegNumber !== undefined ||
+      validated.capacityMl !== undefined ||
+      validated.currentTareG !== undefined ||
+      validated.tareWeightG !== undefined ||
+      validated.isActive !== undefined ||
+      validated.reason !== undefined
+    ) {
+      throw new ApplicationError({
+        category: "validation",
+        code: "keg.autosave_unsafe_field",
+        clientMessage: "Only the visible Keg label can be autosaved.",
+      });
+    }
+    const now = timestamp(options.now ?? this.#nowFactory);
+    const actorType = options.actorType ?? "admin";
+    return this.#database.withTransaction(() => {
+      const existing = findKegById(this.#database, kegId);
+      if (existing === undefined) {
+        throw new ApplicationError({
+          category: "not_found",
+          code: "keg.not_found",
+          clientMessage: "Physical keg not found.",
+        });
+      }
+      if (existing.updatedAt !== expectedUpdatedAt) {
+        throw new ApplicationError({
+          category: "conflict",
+          code: "keg.changed",
+          clientMessage: "This Keg changed elsewhere. Reload before saving again.",
+        });
+      }
+      const label = validated.label !== undefined ? validated.label : existing.label;
+      if (label === existing.label) return existing;
+      if (!updateKegLabelIfUpdatedAt(this.#database, kegId, label, expectedUpdatedAt, now)) {
+        throw new ApplicationError({
+          category: "conflict",
+          code: "keg.changed",
+          clientMessage: "This Keg changed elsewhere. Reload before saving again.",
+        });
+      }
+      appendActivity(this.#database, {
+        category: "domain",
+        action: "entity_changed",
+        actorType,
+        ...(options.actorId === undefined ? {} : { actorId: options.actorId }),
+        ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
+        entityType: "keg",
+        entityId: kegId,
+        details: { change: "label_autosaved", keg_number: existing.kegNumber },
+        occurredAt: now,
+      });
+      return { ...existing, label, updatedAt: now };
+    });
+  }
+
   recordMaintenance(
     kegId: unknown,
     input: unknown,
@@ -342,6 +420,29 @@ export class KegService {
         });
       }
 
+      const expected = kegDeletionConfirmationLabel(existing);
+      if (
+        validated.confirmation === undefined ||
+        validated.confirmation === null ||
+        validated.confirmation.length === 0
+      ) {
+        throw new ApplicationError({
+          category: "validation",
+          code: "keg.confirmation_required",
+          clientMessage:
+            "Type the exact visible Keg number and label to confirm permanent deletion.",
+        });
+      }
+      if (validated.confirmation !== expected) {
+        throw new ApplicationError({
+          category: "validation",
+          code: "keg.confirmation_mismatch",
+          clientMessage:
+            "Type the exact visible Keg number and label to confirm permanent deletion.",
+          details: { expected },
+        });
+      }
+
       appendDeletionAudit(this.#database, {
         entityType: "keg",
         entityId: kegId,
@@ -402,6 +503,25 @@ export class KegService {
 
   listKegs(options: ListKegsOptions = {}): PhysicalKeg[] {
     return listKegRows(this.#database, options);
+  }
+
+  /** Return the bounded, SQL-backed physical Keg inventory projection. */
+  listAdminPage(query: unknown = {}): AdminKegPage {
+    const validated = validateAdminKegPageQuery(query);
+    const total = countAdminKegPage(this.#database, validated);
+    const pageCount = Math.max(1, Math.ceil(total / adminKegPageSize()));
+    const page = Math.min(validated.page, pageCount);
+    const items = listAdminKegPage(this.#database, { ...validated, page });
+    return {
+      items,
+      total,
+      page,
+      pageSize: adminKegPageSize(),
+      pageCount,
+      query: validated.q,
+      status: validated.status,
+      sort: validated.sort,
+    };
   }
 }
 

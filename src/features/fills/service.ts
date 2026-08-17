@@ -4,7 +4,7 @@ import { ApplicationError } from "../../shared/errors.ts";
 import { appendActivity } from "../activity/operations.ts";
 import { appendDeletionAudit } from "../activity/deletion-audit.ts";
 import {
-  deleteBeverageWithAudit,
+  deleteBeverageForLastFillCascade,
   readBeverage,
   readBeverageLink,
   readBeverageSettings,
@@ -18,6 +18,7 @@ import { findKegById } from "../kegs/repository.ts";
 import {
   countActiveFillsByBeverageId,
   countFillsByBeverageId,
+  countAdminFillPage,
   deleteFillById,
   endFill,
   findActiveFillByKegId,
@@ -26,14 +27,17 @@ import {
   getMaxOnDeckOrder,
   insertFill,
   listFills as listFillRows,
+  listAdminFillPage,
   listOnDeckFills,
   reorderOnDeck as reorderOnDeckRows,
   updateFillSettings,
   updateOnDeckOrder,
+  type AdminFillProjectionRow,
 } from "./repository.ts";
 import { deriveFillState } from "./state.ts";
 import type {
   AdminFillView,
+  AdminFillPage,
   BrewfatherCompletionOutcome,
   CreateFillInput,
   Fill,
@@ -46,12 +50,14 @@ import type {
 } from "./types.ts";
 import {
   validateCreateFillInput,
+  adminFillPageSize,
   validateDeleteFillInput,
   validateFillSettingsInput,
   validateKickFillInput,
   validateListFillsQuery,
   validateReorderOnDeckInput,
   validateUuid,
+  validateAdminFillPageQuery,
 } from "./fill-validation.ts";
 
 export class NullFillAssignmentLifecyclePort implements FillAssignmentLifecyclePort {
@@ -88,6 +94,13 @@ function formatDate(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+/** Canonical visible label used by every permanent Filled Keg deletion confirmation. */
+export function fillDeletionConfirmationLabel(
+  fill: Pick<AdminFillView, "beverageName" | "kegNumber" | "kegLabel">,
+): string {
+  return `${fill.beverageName} — Keg ${fill.kegNumber}${fill.kegLabel ? ` — ${fill.kegLabel}` : ""}`;
+}
+
 export class FillService {
   readonly #database: DatabaseExecutor;
   readonly #beverageService?: BeverageService | undefined;
@@ -112,6 +125,8 @@ export class FillService {
     readonly type: string;
     readonly style: string | null;
     readonly abv: number | null;
+    readonly fillGlass: string | null;
+    readonly displayColor: string | null;
   } {
     const beverage = readBeverage(this.#database, beverageId);
     if (!beverage) {
@@ -120,6 +135,8 @@ export class FillService {
         type: "other",
         style: null,
         abv: null,
+        fillGlass: null,
+        displayColor: null,
       };
     }
 
@@ -132,6 +149,8 @@ export class FillService {
           type: pres.beverageType,
           style: pres.style,
           abv: pres.abv,
+          fillGlass: pres.fillGlass,
+          displayColor: pres.displayColor,
         };
       }
     } else {
@@ -144,6 +163,8 @@ export class FillService {
           type: pres.beverageType,
           style: pres.style,
           abv: pres.abv,
+          fillGlass: pres.fillGlass,
+          displayColor: pres.displayColor,
         };
       }
     }
@@ -153,6 +174,8 @@ export class FillService {
       type: "other",
       style: null,
       abv: null,
+      fillGlass: null,
+      displayColor: null,
     };
   }
 
@@ -173,6 +196,8 @@ export class FillService {
       beverageType: beveragePres.type,
       beverageStyle: beveragePres.style,
       beverageAbv: beveragePres.abv,
+      fillGlass: beveragePres.fillGlass,
+      displayColor: beveragePres.displayColor,
       kegId: fill.kegId,
       kegNumber: keg ? keg.kegNumber : 0,
       kegLabel: keg ? keg.label : null,
@@ -183,6 +208,31 @@ export class FillService {
       endReason: fill.endReason,
       createdAt: fill.createdAt,
       updatedAt: fill.updatedAt,
+    };
+  }
+
+  #mapAdminFillProjectionRow(row: AdminFillProjectionRow): AdminFillView {
+    return {
+      id: row.id,
+      beverageId: row.beverage_id,
+      beverageName: row.beverage_name ?? "Unknown Beverage",
+      beverageType: row.beverage_type ?? "other",
+      beverageStyle: row.beverage_style,
+      beverageAbv: row.beverage_abv,
+      fillGlass: row.fill_glass,
+      displayColor: row.display_color,
+      kegId: row.keg_id,
+      kegNumber: row.keg_number,
+      kegLabel: row.keg_label,
+      tapId: row.tap_id,
+      tapNumber: row.tap_number,
+      fillDate: row.fill_date,
+      state: row.state as AdminFillView["state"],
+      onDeckOrder: row.on_deck_order,
+      endedAt: row.ended_at,
+      endReason: row.end_reason,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
     };
   }
 
@@ -304,6 +354,29 @@ export class FillService {
     }
 
     return views;
+  }
+
+  /**
+   * Return the bounded Keg Room projection. Search, filtering, sorting, and
+   * page windows are normalized before the repository executes SQL; no
+   * load-all filtering is used for the authenticated admin list.
+   */
+  listAdminPage(query: unknown = {}): AdminFillPage {
+    const validated = validateAdminFillPageQuery(query);
+    const total = countAdminFillPage(this.#database, validated);
+    const pageCount = Math.max(1, Math.ceil(total / adminFillPageSize()));
+    const page = Math.min(validated.page, pageCount);
+    const records = listAdminFillPage(this.#database, { ...validated, page });
+    return {
+      items: records.map((record) => this.#mapAdminFillProjectionRow(record)),
+      total,
+      page,
+      pageSize: adminFillPageSize(),
+      pageCount,
+      query: validated.q,
+      state: validated.state,
+      sort: validated.sort,
+    };
   }
 
   markOnDeck(id: unknown, options: FillActorOptions = {}): AdminFillView {
@@ -705,6 +778,27 @@ export class FillService {
         });
       }
 
+      const expected = fillDeletionConfirmationLabel(this.#mapToAdminFillView(fill));
+      if (
+        validated.confirmation === undefined ||
+        validated.confirmation === null ||
+        validated.confirmation.length === 0
+      ) {
+        throw new ApplicationError({
+          category: "validation",
+          code: "fill.confirmation_required",
+          clientMessage: "Type the exact visible Filled Keg label to confirm permanent deletion.",
+        });
+      }
+      if (validated.confirmation !== expected) {
+        throw new ApplicationError({
+          category: "validation",
+          code: "fill.confirmation_mismatch",
+          clientMessage: "Type the exact visible Filled Keg label to confirm permanent deletion.",
+          details: { expected },
+        });
+      }
+
       const impact = this.getDeletionImpact(fillId);
 
       appendDeletionAudit(this.#database, {
@@ -736,17 +830,12 @@ export class FillService {
       });
 
       if (impact.beverageAutoDeleted) {
-        deleteBeverageWithAudit(
-          this.#database,
-          fill.beverageId,
-          { reason: "Auto-deleted on permanent last fill deletion" },
-          {
-            actorType,
-            ...(actorId !== undefined ? { actorId } : {}),
-            ...(sessionId !== undefined ? { sessionId } : {}),
-            now: () => new Date(nowIso),
-          },
-        );
+        deleteBeverageForLastFillCascade(this.#database, fill.beverageId, {
+          actorType,
+          ...(actorId !== undefined ? { actorId } : {}),
+          ...(sessionId !== undefined ? { sessionId } : {}),
+          now: () => new Date(nowIso),
+        });
       }
 
       return impact;

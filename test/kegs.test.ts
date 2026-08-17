@@ -16,6 +16,10 @@ import type { KegCorrectionEvent } from "../src/features/kegs/types.ts";
 const quietLogger = createLogger({ sink: () => undefined });
 const CANONICAL_ORIGIN = "http://127.0.0.1:3000";
 
+function fixedUuid(value: number): string {
+  return `00000000-0000-4000-8000-${String(value).padStart(12, "0")}`;
+}
+
 function setupInMemoryKegs() {
   const database = openDatabase(":memory:");
   const correctionEvents: KegCorrectionEvent[] = [];
@@ -145,7 +149,10 @@ void test("keg number is reusable only after permanent deletion", () => {
     );
 
     // Delete keg 5
-    const impact = kegService.deleteKeg(keg1.id, { reason: "Damaged vessel" });
+    const impact = kegService.deleteKeg(keg1.id, {
+      reason: "Damaged vessel",
+      confirmation: "Keg 5 — Vessel 5",
+    });
     assert.equal(impact.kegs, 1);
     assert.equal(impact.tareHistoryRecords, 1);
 
@@ -325,7 +332,30 @@ void test("destructive keg deletion records deletion audit and activity log, cas
     assert.equal(impact.tareHistoryRecords, 2);
     assert.equal(impact.maintenanceRecords, 1);
 
-    kegService.deleteKeg(keg.id, { reason: "Vessel decommissioned" });
+    assert.throws(
+      () => kegService.deleteKeg(keg.id),
+      (error: unknown) =>
+        error instanceof ApplicationError && error.code === "keg.confirmation_required",
+    );
+    assert.throws(
+      () => kegService.deleteKeg(keg.id, { confirmation: "" }),
+      (error: unknown) =>
+        error instanceof ApplicationError && error.code === "keg.confirmation_required",
+    );
+
+    assert.throws(
+      () => kegService.deleteKeg(keg.id, { confirmation: "Wrong visible label" }),
+      (error: unknown) => {
+        assert.ok(error instanceof ApplicationError);
+        assert.equal(error.code, "keg.confirmation_mismatch");
+        return true;
+      },
+    );
+
+    kegService.deleteKeg(keg.id, {
+      reason: "Vessel decommissioned",
+      confirmation: "Keg 7",
+    });
 
     // Keg is gone
     assert.throws(
@@ -354,6 +384,48 @@ void test("destructive keg deletion records deletion audit and activity log, cas
     const deletionActivity = activities.find((a) => a.action === "deletion");
     assert.ok(deletionActivity);
     assert.equal(deletionActivity.entityId, keg.id);
+  } finally {
+    database.close();
+  }
+});
+
+void test("admin Keg pages use bounded SQL search, status filters, and deterministic 25-row windows", () => {
+  const { database, kegService } = setupInMemoryKegs();
+  try {
+    for (let index = 1; index <= 27; index += 1) {
+      kegService.createKeg({
+        id: fixedUuid(300 + index),
+        kegNumber: index,
+        label: index === 1 ? "Percent%_ Keg" : `Keg ${index}`,
+        capacityMl: 19_000,
+      });
+    }
+
+    const firstPage = kegService.listAdminPage({ status: "active", sort: "number", page: 1 });
+    assert.equal(firstPage.total, 27);
+    assert.equal(firstPage.pageSize, 25);
+    assert.equal(firstPage.pageCount, 2);
+    assert.equal(firstPage.page, 1);
+    assert.equal(firstPage.items.length, 25);
+    assert.equal(firstPage.items[0]?.kegNumber, 1);
+    assert.equal(firstPage.items[24]?.kegNumber, 25);
+
+    const secondPage = kegService.listAdminPage({ status: "active", sort: "number", page: 2 });
+    assert.equal(secondPage.items.length, 2);
+    assert.deepEqual(
+      secondPage.items.map((item) => item.kegNumber),
+      [26, 27],
+    );
+
+    // Wildcards are literal operator search text, not unbounded LIKE syntax.
+    const escapedSearch = kegService.listAdminPage({ q: "%_", status: "active", sort: "number" });
+    assert.equal(escapedSearch.total, 1);
+    assert.equal(escapedSearch.items[0]?.label, "Percent%_ Keg");
+
+    kegService.updateKeg(fixedUuid(301), { isActive: false });
+    const inactive = kegService.listAdminPage({ status: "inactive", sort: "number" });
+    assert.equal(inactive.total, 1);
+    assert.equal(inactive.items[0]?.kegNumber, 1);
   } finally {
     database.close();
   }
@@ -511,7 +583,7 @@ void test("HTTP Admin API: full lifecycle smoke test with auth, CSRF, error hand
   assert.equal(impactBody.impact.kegId, kegId);
 
   // 10. DELETE /api/admin/kegs/:id -> 200
-  const deleteRes = await fetch(`${baseUrl}/api/admin/kegs/${kegId}`, {
+  const missingConfirmationDelete = await fetch(`${baseUrl}/api/admin/kegs/${kegId}`, {
     method: "DELETE",
     headers: {
       cookie: cookieHeader,
@@ -520,6 +592,42 @@ void test("HTTP Admin API: full lifecycle smoke test with auth, CSRF, error hand
       "content-type": "application/json",
     },
     body: JSON.stringify({ reason: "Retired" }),
+  });
+  assert.equal(missingConfirmationDelete.status, 400);
+
+  const emptyConfirmationDelete = await fetch(`${baseUrl}/api/admin/kegs/${kegId}`, {
+    method: "DELETE",
+    headers: {
+      cookie: cookieHeader,
+      origin: CANONICAL_ORIGIN,
+      "x-csrf-token": csrfToken,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ confirmation: "" }),
+  });
+  assert.equal(emptyConfirmationDelete.status, 400);
+
+  const wrongConfirmationDelete = await fetch(`${baseUrl}/api/admin/kegs/${kegId}`, {
+    method: "DELETE",
+    headers: {
+      cookie: cookieHeader,
+      origin: CANONICAL_ORIGIN,
+      "x-csrf-token": csrfToken,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ confirmation: "Keg 1 — Draft Keg" }),
+  });
+  assert.equal(wrongConfirmationDelete.status, 400);
+
+  const deleteRes = await fetch(`${baseUrl}/api/admin/kegs/${kegId}`, {
+    method: "DELETE",
+    headers: {
+      cookie: cookieHeader,
+      origin: CANONICAL_ORIGIN,
+      "x-csrf-token": csrfToken,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ reason: "Retired", confirmation: "Keg 1 — Draft Keg #1" }),
   });
   assert.equal(deleteRes.status, 200);
 

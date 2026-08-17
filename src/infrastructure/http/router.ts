@@ -10,6 +10,18 @@ export type RouteHandler = (
   params: Readonly<Record<string, string>>,
 ) => void | Promise<void>;
 
+/**
+ * Optional presentation hook for an otherwise unmatched pathname.  The
+ * router deliberately keeps this hook out of route matching so that a
+ * caller can provide an HTML 404 for one namespace without changing the
+ * JSON/error semantics of every other namespace.
+ */
+export type NotFoundHandler = (
+  request: IncomingMessage,
+  response: ServerResponse,
+  pathname: string,
+) => void | Promise<void>;
+
 interface Route {
   readonly method: string;
   readonly path: string;
@@ -71,9 +83,14 @@ function matchRoute(
 export class Router {
   readonly #routes: Route[] = [];
   readonly #logger: Logger;
+  #notFoundHandler: NotFoundHandler | undefined;
 
   constructor(logger: Logger) {
     this.#logger = logger;
+  }
+
+  setNotFoundHandler(handler: NotFoundHandler | undefined): void {
+    this.#notFoundHandler = handler;
   }
 
   register(method: string, path: string, handler: RouteHandler): void {
@@ -154,6 +171,11 @@ export class Router {
           { error: { code: "http.method_not_allowed", message: "Method not allowed." } },
           { allow: allowed.join(", ") },
         );
+        return;
+      }
+
+      if (this.#notFoundHandler !== undefined) {
+        await this.#notFoundHandler(request, response, path);
         return;
       }
 

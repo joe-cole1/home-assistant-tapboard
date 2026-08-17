@@ -72,6 +72,8 @@ export interface RecordMaintenanceInput {
 
 export interface DeleteKegInput {
   readonly reason?: string | null;
+  /** Exact visible Keg number/label, required by the canonical admin UI. */
+  readonly confirmation?: string | null;
 }
 
 export interface KegActorOptions {
@@ -132,4 +134,18 @@ export interface AdminDeletionImpactView {
   readonly kegId: string;
   readonly kegNumber: number;
   readonly impacts: readonly { readonly code: string; readonly count: number }[];
+}
+
+export type AdminKegPageStatus = "active" | "inactive" | "all";
+export type AdminKegPageSort = "number" | "label" | "updated";
+
+export interface AdminKegPage {
+  readonly items: readonly AdminKegSummaryView[];
+  readonly total: number;
+  readonly page: number;
+  readonly pageSize: number;
+  readonly pageCount: number;
+  readonly query: string;
+  readonly status: AdminKegPageStatus;
+  readonly sort: AdminKegPageSort;
 }

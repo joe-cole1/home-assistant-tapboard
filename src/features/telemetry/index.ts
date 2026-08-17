@@ -13,10 +13,13 @@ export { TELEMETRY_NORMALIZATION_VERSION } from "./types.ts";
 export { InMemoryTelemetryRateLimiter } from "./rate-limiter.ts";
 export {
   deleteTapTelemetryAuthority,
+  countTapTelemetryAuthoritiesForSource,
+  disableTelemetrySource,
   insertTelemetryMeasurement,
   insertTelemetryReceipt,
   insertTelemetrySource,
   listAllSourceTapStatuses,
+  listActiveTelemetrySources,
   listSourceTapStatusesForTap,
   listTapTelemetryAuthorities,
   listTelemetrySources,

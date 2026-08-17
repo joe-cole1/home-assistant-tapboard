@@ -27,6 +27,19 @@ export interface ForecastConfidence {
   readonly reason: ForecastReason;
 }
 
+export interface BeveragePourSetting {
+  readonly beverageId: string;
+  readonly pourSizeMl: number;
+  readonly updatedAt: string;
+}
+
+export interface EffectiveServingSize {
+  readonly fillId: string;
+  readonly beverageId: string;
+  readonly servingSizeMl: number;
+  readonly source: "beverage" | "global";
+}
+
 export interface ForecastMethod {
   readonly id: ForecastMethodId;
   readonly bootstrapSamples: number;

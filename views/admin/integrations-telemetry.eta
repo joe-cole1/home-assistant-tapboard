@@ -1,0 +1,63 @@
+<% layout("/layouts/admin", { page: it.page }) %>
+<%~ include("/partials/admin-nav", { page: it.page, items: it.navItems || [] }) %>
+<main id="main-content">
+  <header class="page-header">
+    <p class="eyebrow"><a href="/admin/integrations">Integrations</a> / Measurement sources</p>
+    <h1>Telemetry</h1>
+    <p>Manage the machine keys used by devices that report Tap measurements. A source must be assigned to a Tap before it can report.</p>
+  </header>
+  <%~ include("/partials/admin-messages", { page: it.page }) %>
+  <section class="admin-card" aria-labelledby="telemetry-usage-heading">
+    <h2 id="telemetry-usage-heading">Connect a telemetry device</h2>
+    <ol>
+      <li>Create a source and copy the machine key shown once.</li>
+      <li>Assign the source to a Tap’s telemetry authority before sending measurements.</li>
+      <li>Send measurements with the full key in the Bearer header.</li>
+    </ol>
+    <p>Endpoint: <code>POST /api/v1/telemetry/taps/{tapNumber}</code></p>
+  </section>
+  <form class="admin-form admin-form--inline" method="get" action="/admin/integrations/telemetry" role="search"><label>Search sources <input type="search" name="q" value="<%= it.query || "" %>" maxlength="80" /></label><button class="secondary button--small" type="submit">Search</button><% if (it.query) { %><a class="button secondary button--small" href="/admin/integrations/telemetry">Clear</a><% } %></form>
+  <section aria-labelledby="active-telemetry-heading">
+    <div class="section-heading"><div><h2 id="active-telemetry-heading">Active sources</h2><p class="muted">Sources that can currently authenticate and report measurements.</p></div><a class="button primary button--small" href="#create-telemetry-source">Add source</a></div>
+    <% if (it.activeSources.length === 0) { %><div class="empty-state"><h3>No active telemetry sources</h3><p>Create a source to issue the first machine key.</p></div><% } else { %>
+      <div class="integration-source-grid">
+        <% for (const source of it.activeSources) { %>
+          <article class="admin-card integration-source-card">
+            <div class="integration-resource-card__header"><h3><a href="/admin/integrations/telemetry-sources/<%= source.id %>"><%= source.name %></a></h3><span class="status-badge status-badge--healthy">Active</span></div>
+            <dl><div><dt>Key identifier</dt><dd><code><%= source.keyPublicId %></code></dd></div><div><dt>Key label</dt><dd><%= source.keyLabel %></dd></div><div><dt>Created</dt><dd><time datetime="<%= source.keyCreatedAt %>"><%= source.keyCreatedAtLabel %></time></dd></div></dl>
+            <a class="button secondary button--small" href="/admin/integrations/telemetry-sources/<%= source.id %>">Open source</a>
+          </article>
+        <% } %>
+      </div>
+    <% } %>
+    <% if (it.pagination.active.pageCount > 1) { %><nav class="pagination" aria-label="Active telemetry source pages"><% if (it.pagination.active.page > 1) { %><a class="button secondary button--small" href="/admin/integrations/telemetry?q=<%= encodeURIComponent(it.query || "") %>&activePage=<%= it.pagination.active.page - 1 %>&historyPage=<%= it.pagination.history.page %>">Previous</a><% } %><span>Page <%= it.pagination.active.page %> of <%= it.pagination.active.pageCount %></span><% if (it.pagination.active.page < it.pagination.active.pageCount) { %><a class="button secondary button--small" href="/admin/integrations/telemetry?q=<%= encodeURIComponent(it.query || "") %>&activePage=<%= it.pagination.active.page + 1 %>&historyPage=<%= it.pagination.history.page %>">Next</a><% } %></nav><% } %>
+  </section>
+  <section class="admin-card" id="create-telemetry-source" aria-labelledby="create-telemetry-heading">
+    <details class="admin-disclosure">
+      <summary><span><strong id="create-telemetry-heading">Create a telemetry source</strong><small>Issue a new machine key. The secret is shown exactly once.</small></span></summary>
+      <form action="/admin/integrations/telemetry-sources/create" method="post">
+        <input type="hidden" name="_csrf" value="<%= it.page.csrfToken %>" />
+        <label>Source name <input name="name" maxlength="120" required /></label>
+        <label>Key label <input name="label" maxlength="120" /></label>
+        <button type="submit">Create source and show key</button>
+      </form>
+    </details>
+  </section>
+  <section aria-labelledby="disabled-telemetry-heading">
+    <details class="admin-disclosure">
+      <summary><span><strong id="disabled-telemetry-heading">Disabled source history</strong><small>Immutable record of revoked sources and their key lineage.</small></span></summary>
+      <% if (it.disabledSources.length === 0) { %><div class="empty-state"><p>No disabled sources.</p></div><% } else { %>
+        <div class="integration-source-grid">
+          <% for (const source of it.disabledSources) { %>
+            <article class="admin-card integration-source-card integration-source-card--disabled">
+              <div class="integration-resource-card__header"><h3><a href="/admin/integrations/telemetry-sources/<%= source.id %>"><%= source.name %></a></h3><span class="status-badge status-badge--muted">Disabled</span></div>
+              <dl><div><dt>Key identifier</dt><dd><code><%= source.keyPublicId %></code></dd></div><div><dt>Key label</dt><dd><%= source.keyLabel %></dd></div><div><dt>Disabled</dt><dd><time datetime="<%= source.disabledAt %>"><%= source.disabledAtLabel %></time></dd></div></dl>
+              <a class="button secondary button--small" href="/admin/integrations/telemetry-sources/<%= source.id %>">View history</a>
+            </article>
+          <% } %>
+        </div>
+      <% } %>
+      <% if (it.pagination.history.pageCount > 1) { %><nav class="pagination" aria-label="Disabled telemetry source pages"><% if (it.pagination.history.page > 1) { %><a class="button secondary button--small" href="/admin/integrations/telemetry?q=<%= encodeURIComponent(it.query || "") %>&historyPage=<%= it.pagination.history.page - 1 %>&activePage=<%= it.pagination.active.page %>">Previous</a><% } %><span>Page <%= it.pagination.history.page %> of <%= it.pagination.history.pageCount %></span><% if (it.pagination.history.page < it.pagination.history.pageCount) { %><a class="button secondary button--small" href="/admin/integrations/telemetry?q=<%= encodeURIComponent(it.query || "") %>&historyPage=<%= it.pagination.history.page + 1 %>&activePage=<%= it.pagination.active.page %>">Next</a><% } %></nav><% } %>
+    </details>
+  </section>
+</main>

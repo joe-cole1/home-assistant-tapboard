@@ -287,6 +287,7 @@ void test("custom beverage lifecycle: create, recipe, sensory, update, delete", 
   assert.ok(impact.impacts.some((i) => i.code === "custom_recipes"));
 
   const deletion = beverageService.deleteBeverage(created.beverage.id, {
+    confirmationName: "House Pale Ale (Special Edition)",
     reason: "Batch finished",
   });
   assert.equal(deletion.beverageId, created.beverage.id);
@@ -304,6 +305,55 @@ void test("custom beverage lifecycle: create, recipe, sensory, update, delete", 
 
   // Verify not found after delete
   assert.throws(() => beverageService.getBeverage(created.beverage.id), /not found/i);
+});
+
+void test("beverage index uses bounded server search, deterministic ordering, and page size", () => {
+  const { database, beverageService } = createTestContext();
+  try {
+    for (let index = 0; index < 27; index += 1) {
+      beverageService.createCustomBeverage({
+        name: `Index Beverage ${String(index).padStart(2, "0")}`,
+        style: index % 2 === 0 ? "Indexed Lager" : "Other",
+      });
+    }
+
+    const firstPage = beverageService.listBeveragePage({ q: "indexed", page: 1 });
+    assert.equal(firstPage.total, 14);
+    assert.equal(firstPage.pageSize, 25);
+    assert.equal(firstPage.pageCount, 1);
+    assert.equal(firstPage.items.length, 14);
+    assert.deepEqual(
+      firstPage.items.map((item) => item.effectivePresentation.name),
+      [...firstPage.items]
+        .sort(
+          (left, right) =>
+            left.effectivePresentation.name.localeCompare(right.effectivePresentation.name) ||
+            left.beverage.id.localeCompare(right.beverage.id),
+        )
+        .map((item) => item.effectivePresentation.name),
+    );
+  } finally {
+    database.close();
+  }
+});
+
+void test("beverage deletion requires exact current effective name", () => {
+  const { database, beverageService } = createTestContext();
+  try {
+    const created = beverageService.createCustomBeverage({ name: "Delete Confirmation" });
+    assert.throws(
+      () => beverageService.deleteBeverage(created.beverage.id, { confirmationName: "wrong" }),
+      /exact current beverage name/i,
+    );
+    assert.equal(
+      beverageService.deleteBeverage(created.beverage.id, {
+        confirmationName: "Delete Confirmation",
+      }).name,
+      "Delete Confirmation",
+    );
+  } finally {
+    database.close();
+  }
 });
 
 void test("sensory override validation consistently uses the canonical 0..10 scale", () => {
@@ -2185,7 +2235,7 @@ void test("HTTP Admin API: full lifecycle smoke test with cookie auth, CSRF, ove
   });
   assert.equal(stillAlive.status, 200);
 
-  // 11. DELETE with valid reason body -> 200 deleted
+  // 11. DELETE with exact current name and reason body -> 200 deleted
   const deleteRes = await fetch(`${baseUrl}/api/admin/beverages/${beverageId}`, {
     method: "DELETE",
     headers: {
@@ -2194,7 +2244,10 @@ void test("HTTP Admin API: full lifecycle smoke test with cookie auth, CSRF, ove
       "x-csrf-token": csrfToken,
       "content-type": "application/json",
     },
-    body: JSON.stringify({ reason: "API Deletion Test" }),
+    body: JSON.stringify({
+      confirmationName: "API Test Stout (Updated)",
+      reason: "API Deletion Test",
+    }),
   });
   assert.equal(deleteRes.status, 200);
 
@@ -2204,7 +2257,7 @@ void test("HTTP Admin API: full lifecycle smoke test with cookie auth, CSRF, ove
   });
   assert.equal(getAfterDelete.status, 404);
 
-  // 13. Create second beverage and delete with EMPTY body -> 200 deleted
+  // 13. Create second beverage and reject DELETE with EMPTY body
   const createSecond = await fetch(`${baseUrl}/api/admin/beverages`, {
     method: "POST",
     headers: {
@@ -2230,5 +2283,5 @@ void test("HTTP Admin API: full lifecycle smoke test with cookie auth, CSRF, ove
       "x-csrf-token": csrfToken,
     },
   });
-  assert.equal(emptyDelete.status, 200);
+  assert.equal(emptyDelete.status, 400);
 });

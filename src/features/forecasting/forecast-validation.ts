@@ -40,6 +40,32 @@ export function validateUpdateForecastSettingsInput(input: unknown): UpdateForec
   return { servingSizeMl };
 }
 
+export interface UpdateBeveragePourSettingInput {
+  readonly pourSizeMl: number;
+}
+
+export function validateBeverageId(value: unknown, field = "beverageId"): string {
+  if (typeof value !== "string" || !UUID.test(value.trim())) {
+    throw invalid(field, "must be a valid UUID");
+  }
+  return value.trim().toLowerCase();
+}
+
+export function validateUpdateBeveragePourSettingInput(
+  input: unknown,
+): UpdateBeveragePourSettingInput {
+  const object = requirePlainObject(input, "body");
+  rejectUnknownKeys(object, ["pourSizeMl"], "body");
+  if (Object.keys(object).length !== 1 || !Object.hasOwn(object, "pourSizeMl")) {
+    throw invalid("body", "pourSizeMl is required");
+  }
+  const pourSizeMl = object.pourSizeMl;
+  if (typeof pourSizeMl !== "number" || !Number.isFinite(pourSizeMl) || pourSizeMl <= 0) {
+    throw invalid("pourSizeMl", "must be a finite number greater than zero");
+  }
+  return { pourSizeMl };
+}
+
 export function validateForecastHistoryLimit(value: unknown): number {
   if (value === undefined) return DEFAULT_FORECAST_HISTORY_LIMIT;
   if (

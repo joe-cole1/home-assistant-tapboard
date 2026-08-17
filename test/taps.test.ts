@@ -243,6 +243,43 @@ void test("tap update enforces telemetry acknowledgement for renumbering, handle
   assert.equal(tapService.listPublicTaps().length, 1);
 });
 
+void test("bounded Admin Tap page filters, escapes LIKE wildcards, and caps deterministic pages", () => {
+  const { tapService, kegService, beverageService, fillService } = setupTestEnvironment();
+
+  for (let tapNumber = 1; tapNumber <= 27; tapNumber += 1) {
+    tapService.createTap({ tapNumber, name: `Tap ${tapNumber}` });
+  }
+  const disabled = tapService.createTap({ tapNumber: 28, name: "Disabled Tap", enabled: false });
+  const retired = tapService.createTap({ tapNumber: 29, name: "Retired Tap" });
+  tapService.retireTap(retired.id);
+  const literal = tapService.createTap({ tapNumber: 30, name: "Literal %_ Tap" });
+
+  const beverage = beverageService.createCustomBeverage({ name: "Page Ale", beverageType: "beer" });
+  const keg = kegService.createKeg({ kegNumber: 30, capacityMl: 19_000 });
+  const fill = fillService.createFill({ beverageId: beverage.beverage.id, kegId: keg.id });
+  const assigned = tapService.createTap({ tapNumber: 31, name: "Assigned Tap" });
+  tapService.assignFill(assigned.id, { fillId: fill.id });
+
+  const first = tapService.listAdminPage({ state: "all", page: 1 });
+  assert.equal(first.total, 31);
+  assert.equal(first.items.length, 25);
+  assert.deepEqual(
+    first.items.slice(0, 3).map((item) => item.tapNumber),
+    [1, 2, 3],
+  );
+  const second = tapService.listAdminPage({ state: "all", page: 2 });
+  assert.equal(second.items[0]?.tapNumber, 26);
+  assert.equal(second.items.at(-1)?.tapNumber, 31);
+
+  assert.equal(tapService.listAdminPage({ state: "assigned" }).total, 1);
+  assert.equal(tapService.listAdminPage({ state: "assigned" }).items[0]?.id, assigned.id);
+  assert.equal(tapService.listAdminPage({ state: "unassigned" }).total, 30);
+  assert.equal(tapService.listAdminPage({ state: "disabled" }).items[0]?.id, disabled.id);
+  assert.equal(tapService.listAdminPage({ state: "retired" }).items[0]?.id, retired.id);
+  assert.equal(tapService.listAdminPage({ q: "%_" }).items[0]?.id, literal.id);
+  assert.equal(tapService.listAdminPage({ q: "x".repeat(120) }).query.length, 80);
+});
+
 void test("tap assignment lifecycles: assign, clear on deck, first_used_at monotonicity, unassign, and move", () => {
   const extensionPort = new MockExtensionPort();
   const { kegService, beverageService, fillService, tapService } =
@@ -577,7 +614,7 @@ void test("tap deletion lifecycle: only never-used taps can be deleted; used or 
   assert.ok(impact1.reasonsCannotDelete.length > 0);
 
   assert.throws(
-    () => tapService.deleteTap(tap1.id),
+    () => tapService.deleteTap(tap1.id, { confirmation: "Tap 1 — Used Tap" }),
     (error: unknown) =>
       error instanceof ApplicationError &&
       error.category === "conflict" &&
@@ -590,7 +627,10 @@ void test("tap deletion lifecycle: only never-used taps can be deleted; used or 
 
   const impact2 = tapService.getTapDeletionImpact(tap2.id);
   assert.equal(impact2.canDelete, false);
-  assert.throws(() => tapService.deleteTap(tap2.id), /cannot be deleted/);
+  assert.throws(
+    () => tapService.deleteTap(tap2.id, { confirmation: "Tap 2 — Retired Tap" }),
+    /cannot be deleted/,
+  );
 
   // 3. Tap 3 is never used -> can be deleted cleanly
   const tap3 = tapService.createTap({ tapNumber: 3, name: "Clean Tap" });
@@ -598,7 +638,28 @@ void test("tap deletion lifecycle: only never-used taps can be deleted; used or 
   assert.equal(impact3.canDelete, true);
   assert.deepEqual(impact3.reasonsCannotDelete, []);
 
-  tapService.deleteTap(tap3.id, { reason: "Mistake creation" });
+  assert.throws(
+    () => tapService.deleteTapConfirmed(tap3.id, undefined),
+    (error: unknown) =>
+      error instanceof ApplicationError &&
+      error.category === "validation" &&
+      error.code === "tap.confirmation_required",
+  );
+  assert.throws(
+    () => tapService.deleteTapConfirmed(tap3.id, "Wrong visible label"),
+    (error: unknown) =>
+      error instanceof ApplicationError &&
+      error.category === "validation" &&
+      error.code === "tap.confirmation_mismatch",
+  );
+  assert.throws(
+    () => tapService.deleteTapConfirmed(tap3.id, "Tap 3 — Clean Tap "),
+    (error: unknown) =>
+      error instanceof ApplicationError &&
+      error.category === "validation" &&
+      error.code === "tap.confirmation_mismatch",
+  );
+  tapService.deleteTapConfirmed(tap3.id, "Tap 3 — Clean Tap", { reason: "Mistake creation" });
 
   assert.throws(() => tapService.getTap(tap3.id), /Tap was not found/);
 
@@ -821,6 +882,7 @@ void test("HTTP API: full Tap and assignment lifecycle smoke test with auth, CSR
       cookie: cookieHeader,
       origin: CANONICAL_ORIGIN,
       "x-csrf-token": csrfToken,
+      "content-type": "application/json",
     },
   });
   assert.equal(unassignRes.status, 200);
@@ -863,13 +925,51 @@ void test("HTTP API: full Tap and assignment lifecycle smoke test with auth, CSR
   const impactData = (await impactRes.json()) as { impact: { canDelete: boolean } };
   assert.equal(impactData.impact.canDelete, true);
 
+  const missingConfirmationDelete = await fetch(`${baseUrl}/api/admin/taps/${tap3.tap.id}`, {
+    method: "DELETE",
+    headers: {
+      cookie: cookieHeader,
+      origin: CANONICAL_ORIGIN,
+      "x-csrf-token": csrfToken,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({}),
+  });
+  assert.equal(missingConfirmationDelete.status, 400);
+
+  const emptyConfirmationDelete = await fetch(`${baseUrl}/api/admin/taps/${tap3.tap.id}`, {
+    method: "DELETE",
+    headers: {
+      cookie: cookieHeader,
+      origin: CANONICAL_ORIGIN,
+      "x-csrf-token": csrfToken,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ confirmation: "" }),
+  });
+  assert.equal(emptyConfirmationDelete.status, 400);
+
+  const wrongConfirmationDelete = await fetch(`${baseUrl}/api/admin/taps/${tap3.tap.id}`, {
+    method: "DELETE",
+    headers: {
+      cookie: cookieHeader,
+      origin: CANONICAL_ORIGIN,
+      "x-csrf-token": csrfToken,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ confirmation: "Tap 3 — Other Tap" }),
+  });
+  assert.equal(wrongConfirmationDelete.status, 400);
+
   const deleteRes = await fetch(`${baseUrl}/api/admin/taps/${tap3.tap.id}`, {
     method: "DELETE",
     headers: {
       cookie: cookieHeader,
       origin: CANONICAL_ORIGIN,
       "x-csrf-token": csrfToken,
+      "content-type": "application/json",
     },
+    body: JSON.stringify({ confirmation: "Tap 3 — Temporary Tap" }),
   });
   assert.equal(deleteRes.status, 200);
   const deleteData = (await deleteRes.json()) as { deleted: boolean; tapId: string };

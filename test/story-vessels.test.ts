@@ -55,11 +55,29 @@ void test("representative v1 contours retain meaningful vessel features", () => 
   assert.ok(mug.detailPaths.some((item) => item.d.includes("150 75")));
   assert.match(pint.bodyPath, /L 105 225 H 55/u);
   assert.match(goblet.bodyPath, /C 42 95 48 145 80 170/u);
+  const tulip = getVesselDescriptor("tulip_glass");
+  const viewBox = tulip.viewBox.split(" ").map(Number);
+  assert.ok(
+    (viewBox[1] ?? Number.NaN) + (viewBox[3] ?? Number.NaN) >= 240,
+    "tulip viewBox includes its stem and base",
+  );
   assert.match(ipa.bodyPath, /L 105 105 L 115 220/u);
   assert.equal(
     new Set([keg.bodyPath, mug.bodyPath, pint.bodyPath, goblet.bodyPath, ipa.bodyPath]).size,
     5,
   );
+});
+
+void test("vessel metadata distinguishes light-safe contours from dark hardware", () => {
+  const pint = getVesselDescriptor("pint_glass");
+  const keg = getVesselDescriptor("corny_keg");
+  const hasContour = (item: (typeof pint.detailPaths)[number]) =>
+    (item as typeof item & { readonly contour?: boolean }).contour === true;
+  const pintContour = pint.detailPaths.find(hasContour);
+  const hardware = keg.detailPaths.find((item) => item.fill === "#000000");
+  assert.ok(pintContour, "pint body detail carries semantic contour metadata");
+  assert.ok(hardware, "keg hardware detail remains explicitly black");
+  assert.equal(hasContour(hardware), false);
 });
 
 void test("style mapping is deterministic and explicit safe fill glass wins", () => {

@@ -10,6 +10,7 @@ import {
   type BrewfatherCompletionPolicy,
   type ConfigureBrewfatherAccountInput,
   type CreateCustomBeverageInput,
+  type DeleteBeverageInput,
   type LinkBrewfatherCandidateInput,
   type UpdateBeverageSettingsInput,
   type UpdateCustomBeverageInput,
@@ -812,19 +813,28 @@ export function validateConfigureBrewfatherAccountInput(
   };
 }
 
-export interface DeleteBeverageInput {
-  readonly reason?: string | null;
-}
-
 export function validateDeleteBeverageInput(input: unknown): DeleteBeverageInput {
   if (input === undefined || input === null || input === "") {
     return {};
   }
   assertPlainObject(input, "Delete beverage input must be an object.");
-  assertKnownFields(input, ["reason"], "delete beverage input");
+  assertKnownFields(
+    input,
+    ["confirmationName", "confirmName", "expectedName", "reason"],
+    "delete beverage input",
+  );
 
   const reason = cleanOptionalString(input.reason, 255, "reason");
+  const names = [input.confirmationName, input.confirmName, input.expectedName].filter(
+    (value): value is string => value !== undefined,
+  );
+  if (names.length > 1 && names.some((value) => value !== names[0])) {
+    invalidRequest("Delete confirmation fields must agree.");
+  }
+  const confirmationName =
+    names.length === 0 ? undefined : cleanString(names[0], 160, "confirmationName");
   return {
+    ...(confirmationName !== undefined ? { confirmationName } : {}),
     ...(reason !== null ? { reason } : {}),
   };
 }

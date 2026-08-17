@@ -296,7 +296,10 @@ void test("retention preserves completed pours, closed epochs never reopen, and 
     assert.equal(count(h.database, "pours"), 1);
     h.detector.processDue(new Date(origin + 500_000));
     assert.equal(count(h.database, "pours"), 1);
-    h.fillService.deleteFill(fill.id, { reason: "cascade detector evidence" });
+    h.fillService.deleteFill(fill.id, {
+      reason: "cascade detector evidence",
+      confirmation: "Test — Keg 1",
+    });
     for (const table of [
       "telemetry_epochs",
       "telemetry_epoch_state",

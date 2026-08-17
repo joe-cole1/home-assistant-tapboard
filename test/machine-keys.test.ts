@@ -6,6 +6,7 @@ import {
   createMachineKeyService,
   parseMachineKeyToken,
 } from "../src/features/machine-keys/index.ts";
+import { listActivity } from "../src/features/activity/repository.ts";
 
 void test("machine keys are canonical, shown once, and stored as digests", () => {
   const database = openDatabase(":memory:");
@@ -46,4 +47,50 @@ void test("rotation revokes old key and verification touches at most every five 
   assert.equal(service.revoke(replacement.descriptor.id), true);
   assert.equal(service.revoke(replacement.descriptor.id), false);
   assert.equal(service.verifyToken(replacement.token), false);
+});
+
+void test("generic machine-key mutations retain one machine_api_key Activity each", () => {
+  const database = openDatabase(":memory:");
+  const service = createMachineKeyService(database, {
+    now: () => new Date("2026-08-13T12:00:00.000Z"),
+  });
+  try {
+    const created = service.create("generic activity");
+    const rotated = service.rotate(created.descriptor.id, "generic rotated");
+    assert.equal(service.revoke(rotated.descriptor.id), true);
+    const activities = listActivity(database);
+    assert.equal(activities.length, 3);
+    assert.deepEqual(
+      activities
+        .map((activity) => ({
+          action: activity.action,
+          actorType: activity.actorType,
+          entityType: activity.entityType,
+          entityId: activity.entityId,
+        }))
+        .sort((left, right) => left.action.localeCompare(right.action)),
+      [
+        {
+          action: "api_key_created",
+          actorType: "system",
+          entityType: "machine_api_key",
+          entityId: created.descriptor.id,
+        },
+        {
+          action: "api_key_revoked",
+          actorType: "system",
+          entityType: "machine_api_key",
+          entityId: rotated.descriptor.id,
+        },
+        {
+          action: "api_key_rotated",
+          actorType: "system",
+          entityType: "machine_api_key",
+          entityId: rotated.descriptor.id,
+        },
+      ],
+    );
+  } finally {
+    database.close();
+  }
 });

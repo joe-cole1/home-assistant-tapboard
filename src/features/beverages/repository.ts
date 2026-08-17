@@ -7,6 +7,11 @@ import type {
   Beverage,
   BeverageActorOptions,
   BeverageDeletionImpact,
+  DeleteBeverageInput,
+  BeverageListQuery,
+  BeverageListRecord,
+  BeverageUsage,
+  BeverageCurrentFill,
   BeverageOwnershipType,
   BeverageSensoryOverrides,
   BeverageSettings,
@@ -32,6 +37,26 @@ interface BeverageRow {
   readonly ownership_type: string;
   readonly created_at: string;
   readonly updated_at: string;
+}
+
+interface BeverageListRow {
+  readonly id: string;
+  readonly ownership_type: string;
+  readonly created_at: string;
+  readonly updated_at: string;
+  readonly name: string;
+  readonly beverage_type: string;
+  readonly style: string | null;
+  readonly abv: number | null;
+  readonly ibu: number | null;
+  readonly og: number | null;
+  readonly fg: number | null;
+  readonly srm: number | null;
+  readonly display_color: string | null;
+  readonly description: string | null;
+  readonly fill_glass: string | null;
+  readonly manual_density_override: number | null;
+  readonly current_usage: number;
 }
 
 interface BeverageSettingsRow {
@@ -443,6 +468,253 @@ export function listBeverages(database: DatabaseExecutor): readonly Beverage[] {
   return rows.map(mapBeverage);
 }
 
+const BEVERAGE_LIST_PAGE_SIZE = 25;
+const MAX_BEVERAGE_LIST_PAGE = 10_000;
+const MAX_BEVERAGE_LIST_QUERY_BYTES = 80;
+
+/**
+ * The index projection is intentionally assembled in SQL. This keeps the
+ * authenticated list to one bounded query plus one count query and avoids
+ * turning each row into a detail read.
+ */
+const BEVERAGE_LIST_CTE = `
+  WITH beverage_projection AS (
+    SELECT
+      b.id,
+      b.ownership_type,
+      b.created_at,
+      b.updated_at,
+      CASE
+        WHEN b.ownership_type = 'custom' THEN cp.name
+        WHEN po.override_name_present = 1 THEN po.name
+        ELSE sp.name
+      END AS name,
+      CASE
+        WHEN b.ownership_type = 'custom' THEN cp.beverage_type
+        WHEN po.override_beverage_type_present = 1 THEN po.beverage_type
+        ELSE sp.beverage_type
+      END AS beverage_type,
+      CASE
+        WHEN b.ownership_type = 'custom' THEN cp.style
+        WHEN po.override_style_present = 1 THEN po.style
+        ELSE sp.style
+      END AS style,
+      CASE
+        WHEN b.ownership_type = 'custom' THEN cp.abv
+        WHEN po.override_abv_present = 1 THEN po.abv
+        ELSE sp.abv
+      END AS abv,
+      CASE
+        WHEN b.ownership_type = 'custom' THEN cp.ibu
+        WHEN po.override_ibu_present = 1 THEN po.ibu
+        ELSE sp.ibu
+      END AS ibu,
+      CASE
+        WHEN b.ownership_type = 'custom' THEN cp.og
+        WHEN po.override_og_present = 1 THEN po.og
+        ELSE sp.og
+      END AS og,
+      CASE
+        WHEN b.ownership_type = 'custom' THEN cp.fg
+        WHEN po.override_fg_present = 1 THEN po.fg
+        ELSE sp.fg
+      END AS fg,
+      CASE
+        WHEN b.ownership_type = 'custom' THEN cp.srm
+        WHEN po.override_srm_present = 1 THEN po.srm
+        ELSE sp.srm
+      END AS srm,
+      CASE
+        WHEN b.ownership_type = 'custom' THEN cp.display_color
+        WHEN po.override_display_color_present = 1 THEN po.display_color
+        ELSE sp.display_color
+      END AS display_color,
+      CASE
+        WHEN b.ownership_type = 'custom' THEN cp.description
+        WHEN po.override_description_present = 1 THEN po.description
+        ELSE sp.description
+      END AS description,
+      CASE
+        WHEN b.ownership_type = 'custom' THEN cp.fill_glass
+        WHEN po.override_fill_glass_present = 1 THEN po.fill_glass
+        ELSE NULL
+      END AS fill_glass,
+      CASE
+        WHEN b.ownership_type = 'custom' THEN cp.manual_density_override
+        WHEN po.override_manual_density_override_present = 1 THEN po.manual_density_override
+        ELSE NULL
+      END AS manual_density_override,
+      (
+        SELECT COUNT(*)
+        FROM fills f
+        WHERE f.beverage_id = b.id AND f.ended_at IS NULL
+      ) AS current_usage
+    FROM beverages b
+    LEFT JOIN custom_beverage_profiles cp
+      ON cp.beverage_id = b.id AND b.ownership_type = 'custom'
+    LEFT JOIN brewfather_source_profiles sp
+      ON sp.beverage_id = b.id AND b.ownership_type = 'brewfather'
+    LEFT JOIN brewfather_presentation_overrides po
+      ON po.beverage_id = b.id AND b.ownership_type = 'brewfather'
+  )`;
+
+function normalizedListQuery(query: BeverageListQuery = {}): {
+  readonly q: string;
+  readonly page: number;
+} {
+  const rawQuery = typeof query.q === "string" ? query.q.trim() : "";
+  const q = rawQuery.slice(0, MAX_BEVERAGE_LIST_QUERY_BYTES);
+  const rawPage = query.page;
+  const page =
+    typeof rawPage === "number" && Number.isFinite(rawPage) && Number.isInteger(rawPage)
+      ? Math.min(MAX_BEVERAGE_LIST_PAGE, Math.max(1, rawPage))
+      : 1;
+  return { q, page };
+}
+
+function listSearchClause(query: string): { readonly sql: string; readonly params: unknown[] } {
+  if (query.length === 0) return { sql: "", params: [] };
+  // Search text is literal: wildcard characters supplied by an operator do
+  // not turn into an unbounded SQL pattern.
+  const escaped = query.replace(/[\\%_]/gu, (value) => `\\${value}`);
+  const pattern = `%${escaped}%`;
+  return {
+    sql: `WHERE LOWER(name) LIKE LOWER(?) ESCAPE '\\'
+       OR LOWER(style) LIKE LOWER(?) ESCAPE '\\'
+       OR LOWER(beverage_type) LIKE LOWER(?) ESCAPE '\\'
+       OR LOWER(ownership_type) LIKE LOWER(?) ESCAPE '\\'`,
+    params: [pattern, pattern, pattern, pattern],
+  };
+}
+
+function mapBeverageListRow(row: BeverageListRow): BeverageListRecord {
+  return {
+    beverage: {
+      id: row.id,
+      ownershipType: row.ownership_type as Beverage["ownershipType"],
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    },
+    effectivePresentation: {
+      name: row.name || "Unknown Beverage",
+      beverageType: row.beverage_type as BeverageType,
+      style: row.style,
+      abv: row.abv,
+      ibu: row.ibu,
+      og: row.og,
+      fg: row.fg,
+      srm: row.srm,
+      displayColor: row.display_color,
+      description: row.description,
+      fillGlass: row.fill_glass,
+      manualDensityOverride: row.manual_density_override,
+    },
+    currentUsage: Number.isFinite(row.current_usage) ? row.current_usage : 0,
+  };
+}
+
+export function countBeverages(database: DatabaseExecutor, query: BeverageListQuery = {}): number {
+  const normalized = normalizedListQuery(query);
+  const search = listSearchClause(normalized.q);
+  const row = database
+    .prepare<unknown[], { readonly count: number }>(
+      `${BEVERAGE_LIST_CTE}
+       SELECT COUNT(*) AS count
+       FROM beverage_projection
+       ${search.sql}`,
+    )
+    .get(...search.params);
+  return row?.count ?? 0;
+}
+
+export function listBeveragePage(
+  database: DatabaseExecutor,
+  query: BeverageListQuery = {},
+): readonly BeverageListRecord[] {
+  const normalized = normalizedListQuery(query);
+  const search = listSearchClause(normalized.q);
+  const offset = (normalized.page - 1) * BEVERAGE_LIST_PAGE_SIZE;
+  const rows = database
+    .prepare<unknown[], BeverageListRow>(
+      `${BEVERAGE_LIST_CTE}
+       SELECT id, ownership_type, created_at, updated_at,
+              name, beverage_type, style, abv, ibu, og, fg, srm,
+              display_color, description, fill_glass, manual_density_override,
+              current_usage
+       FROM beverage_projection
+       ${search.sql}
+       ORDER BY name COLLATE NOCASE ASC, id ASC
+       LIMIT ? OFFSET ?`,
+    )
+    .all(...search.params, BEVERAGE_LIST_PAGE_SIZE, offset);
+  return rows.map(mapBeverageListRow);
+}
+
+export function readBeverageUsage(database: DatabaseExecutor, beverageId: string): BeverageUsage {
+  const row = database
+    .prepare<[string], { readonly current: number; readonly total: number }>(
+      `SELECT
+         COALESCE(SUM(CASE WHEN ended_at IS NULL THEN 1 ELSE 0 END), 0) AS current,
+         COUNT(*) AS total
+       FROM fills
+       WHERE beverage_id = ?`,
+    )
+    .get(beverageId);
+  return {
+    current: row?.current ?? 0,
+    total: row?.total ?? 0,
+  };
+}
+
+interface CurrentBeverageFillRow {
+  readonly id: string;
+  readonly keg_id: string;
+  readonly keg_number: number;
+  readonly keg_label: string | null;
+  readonly fill_date: string;
+  readonly on_deck_order: number | null;
+  readonly tap_id: string | null;
+  readonly tap_number: number | null;
+}
+
+/** Return only the current, bounded Filled Keg projection used by Admin detail. */
+export function readCurrentBeverageFills(
+  database: DatabaseExecutor,
+  beverageId: string,
+  limit = 25,
+): readonly BeverageCurrentFill[] {
+  const boundedLimit = Math.max(1, Math.min(25, Math.trunc(limit)));
+  const rows = database
+    .prepare<[string, number], CurrentBeverageFillRow>(
+      `SELECT f.id, f.keg_id, k.keg_number, k.label AS keg_label, f.fill_date,
+              f.on_deck_order, active.tap_id, active.tap_number
+       FROM fills f
+       INNER JOIN kegs k ON k.id = f.keg_id
+       LEFT JOIN (
+         SELECT a.fill_id, a.tap_id, t.tap_number
+         FROM tap_assignment_lifecycles a
+         INNER JOIN taps t ON t.id = a.tap_id
+         WHERE a.ended_at IS NULL
+       ) active ON active.fill_id = f.id
+       WHERE f.beverage_id = ? AND f.ended_at IS NULL
+       ORDER BY CASE WHEN active.fill_id IS NOT NULL THEN 0
+                     WHEN f.on_deck_order IS NOT NULL THEN 1 ELSE 2 END ASC,
+                f.on_deck_order ASC, f.fill_date ASC, f.id ASC
+       LIMIT ?`,
+    )
+    .all(beverageId, boundedLimit);
+  return rows.map((row) => ({
+    id: row.id,
+    kegId: row.keg_id,
+    kegNumber: row.keg_number,
+    kegLabel: row.keg_label,
+    fillDate: row.fill_date,
+    state: row.tap_id !== null ? "on_tap" : row.on_deck_order !== null ? "on_deck" : "available",
+    tapId: row.tap_id,
+    tapNumber: row.tap_number,
+  }));
+}
+
 export function touchBeverage(
   database: DatabaseExecutor,
   beverageId: string,
@@ -451,6 +723,27 @@ export function touchBeverage(
   database
     .prepare<[string, string]>(`UPDATE beverages SET updated_at = ? WHERE id = ?`)
     .run(updatedAt, beverageId);
+}
+
+/**
+ * Advance a beverage revision only when the caller still owns the revision it
+ * read.  Autosave uses this narrow compare-and-swap primitive before touching
+ * the related presentation row.
+ */
+export function touchBeverageIfUpdatedAt(
+  database: DatabaseExecutor,
+  beverageId: string,
+  expectedUpdatedAt: string,
+  updatedAt: string,
+): boolean {
+  return (
+    database
+      .prepare<[string, string, string]>(
+        `UPDATE beverages SET updated_at = ?
+         WHERE id = ? AND updated_at = ?`,
+      )
+      .run(updatedAt, beverageId, expectedUpdatedAt).changes === 1
+  );
 }
 
 export function insertCustomProfile(
@@ -1562,20 +1855,9 @@ export function calculateBeverageDeletionImpact(
     });
   }
 
-  let name = "Unnamed Beverage";
-  if (beverage.ownershipType === "custom") {
-    const cp = readCustomProfile(database, beverageId);
-    if (cp) name = cp.name;
-  } else {
-    const sp = readSourceProfile(database, beverageId);
-    const po = readPresentationOverrides(database, beverageId);
-    if (po?.overrideNamePresent && po.name) {
-      name = po.name;
-    } else if (sp) {
-      name = sp.name;
-    }
-  }
-
+  const name = readEffectiveBeverageName(database, beverage);
+  /* The remaining counts are deliberately limited to tables with a
+   * beverage_id foreign key and a stable, reliable row count. */
   const recipeCount =
     database
       .prepare<[string], { readonly count: number }>(
@@ -1627,16 +1909,63 @@ export function calculateBeverageDeletionImpact(
   };
 }
 
-export function deleteBeverageWithAudit(
+function readEffectiveBeverageName(database: DatabaseExecutor, beverage: Beverage): string {
+  const beverageId = beverage.id;
+  let name = "Unnamed Beverage";
+  if (beverage.ownershipType === "custom") {
+    const cp = readCustomProfile(database, beverageId);
+    if (cp) name = cp.name;
+  } else {
+    const sp = readSourceProfile(database, beverageId);
+    const po = readPresentationOverrides(database, beverageId);
+    if (po?.overrideNamePresent && po.name) {
+      name = po.name;
+    } else if (sp) {
+      name = sp.name;
+    }
+  }
+
+  return name;
+}
+
+const LAST_FILL_AUTO_DELETE_REASON = "Auto-deleted on permanent last fill deletion";
+
+function deleteBeverageWithAuditInternal(
   database: DatabaseExecutor,
   beverageId: string,
-  input: { readonly reason?: string | null } = {},
+  input: DeleteBeverageInput = {},
   actorOptions: BeverageActorOptions = {},
+  requireConfirmation: boolean,
 ): BeverageDeletionImpact {
   const now = (actorOptions.now ?? (() => new Date()))().toISOString();
 
   return database.withTransaction(() => {
     const impact = calculateBeverageDeletionImpact(database, beverageId);
+    if (requireConfirmation) {
+      const confirmationName =
+        input.confirmationName ?? input.confirmName ?? input.expectedName ?? undefined;
+      if (confirmationName === undefined || confirmationName !== impact.name) {
+        throw new ApplicationError({
+          category: "validation",
+          code: "beverage.delete_confirmation_required",
+          clientMessage: "Type the exact current beverage name to confirm permanent deletion.",
+        });
+      }
+    } else {
+      const remainingFillCount =
+        database
+          .prepare<[string], { readonly count: number }>(
+            `SELECT COUNT(*) AS count FROM fills WHERE beverage_id = ?`,
+          )
+          .get(beverageId)?.count ?? 0;
+      if (remainingFillCount !== 0) {
+        throw new ApplicationError({
+          category: "conflict",
+          code: "beverage.auto_delete_requires_last_fill",
+          clientMessage: "A beverage can only be auto-deleted after its last Fill is deleted.",
+        });
+      }
+    }
 
     // Insert deletion audit
     appendDeletionAudit(database, {
@@ -1667,4 +1996,33 @@ export function deleteBeverageWithAudit(
 
     return impact;
   });
+}
+
+/**
+ * Lifecycle-only cascade used after FillService has atomically deleted the
+ * last Fill and already authorized the optional auto-delete policy. It does
+ * not accept client confirmation; all HTTP/Admin/API deletion paths must use
+ * deleteBeverageWithAudit instead.
+ */
+export function deleteBeverageForLastFillCascade(
+  database: DatabaseExecutor,
+  beverageId: string,
+  actorOptions: BeverageActorOptions = {},
+): BeverageDeletionImpact {
+  return deleteBeverageWithAuditInternal(
+    database,
+    beverageId,
+    { reason: LAST_FILL_AUTO_DELETE_REASON },
+    actorOptions,
+    false,
+  );
+}
+
+export function deleteBeverageWithAudit(
+  database: DatabaseExecutor,
+  beverageId: string,
+  input: DeleteBeverageInput = {},
+  actorOptions: BeverageActorOptions = {},
+): BeverageDeletionImpact {
+  return deleteBeverageWithAuditInternal(database, beverageId, input, actorOptions, true);
 }

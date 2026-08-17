@@ -313,6 +313,32 @@ void test("forecast uses stabilized volume and rejects warning or invalid capaci
   }
 });
 
+void test("Beverage pour-size overrides change servings only and can be cleared", () => {
+  const f = fixture();
+  try {
+    f.pour(2);
+    f.pour(3);
+    f.pour(4);
+    const baseline = f.service.getForecast(id(5));
+    assert.deepEqual(f.service.getEffectiveServingSizeForFill(id(5)), {
+      fillId: id(5),
+      beverageId: id(3),
+      servingSizeMl: 354.88235475,
+      source: "global",
+    });
+    assert.equal(f.service.updateBeveragePourSetting(id(3), { pourSizeMl: 125 }).pourSizeMl, 125);
+    const overridden = f.service.getForecast(id(5));
+    assert.equal(overridden.servingsRemaining, 4);
+    assert.deepEqual(overridden.days, baseline.days);
+    assert.equal(f.service.getEffectiveServingSizeForFill(id(5)).source, "beverage");
+    assert.equal(f.service.clearBeveragePourSetting(id(3)), true);
+    assert.equal(f.service.clearBeveragePourSetting(id(3)), false);
+    assert.equal(f.service.getForecast(id(5)).servingsRemaining, baseline.servingsRemaining);
+  } finally {
+    f.db.close();
+  }
+});
+
 void test("public forecast omits telemetry provenance and method counts", () => {
   const f = fixture();
   try {

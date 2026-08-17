@@ -1,11 +1,29 @@
 <% layout("/layouts/admin", { page: it.page }) %>
+<header class="admin-header admin-login-header">
+  <a class="admin-brand" href="/"><%= it.page.siteName || "Tapboard" %></a>
+  <span class="admin-header__context">Admin sign in</span>
+  <a class="admin-exit" href="/">Return to site</a>
+</header>
 <main id="main-content" class="login">
-  <h1>Admin sign in</h1>
-  <p>Enter the four-digit Admin PIN.</p>
+  <header class="page-header">
+    <p class="eyebrow">Admin</p>
+    <h1>Admin sign in</h1>
+    <p>Enter the four-digit Admin PIN.</p>
+  </header>
   <%~ include("/partials/admin-messages", { page: it.page }) %>
-  <form action="/admin/login" method="post">
+  <form action="/admin/login" method="post" data-pin-form>
     <label for="pin">Admin PIN</label>
-    <input id="pin" name="pin" type="password" inputmode="numeric" autocomplete="current-password" pattern="[0-9]{4}" minlength="4" maxlength="4" required />
+    <div class="pin-indicators" data-pin-indicators tabindex="0" role="group" aria-label="Admin PIN entry">
+      <span data-pin-indicator></span><span data-pin-indicator></span><span data-pin-indicator></span><span data-pin-indicator></span>
+    </div>
+    <span class="sr-only" data-pin-live aria-live="polite">0 of 4 digits entered</span>
+    <input id="pin" name="pin" type="password" inputmode="numeric" autocomplete="current-password" pattern="[0-9]{4}" minlength="4" maxlength="4" required data-pin-input />
+    <fieldset class="pin-keypad" data-pin-keypad><legend class="sr-only">PIN keypad</legend>
+      <button type="button" data-pin-key="1">1</button><button type="button" data-pin-key="2">2</button><button type="button" data-pin-key="3">3</button>
+      <button type="button" data-pin-key="4">4</button><button type="button" data-pin-key="5">5</button><button type="button" data-pin-key="6">6</button>
+      <button type="button" data-pin-key="7">7</button><button type="button" data-pin-key="8">8</button><button type="button" data-pin-key="9">9</button>
+      <button type="button" data-pin-action="clear">Clear</button><button type="button" data-pin-key="0">0</button><button type="button" data-pin-action="backspace" aria-label="Backspace">⌫</button>
+    </fieldset>
     <button type="submit">Sign in</button>
   </form>
 </main>

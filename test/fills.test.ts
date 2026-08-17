@@ -25,6 +25,10 @@ const CANONICAL_ORIGIN = "http://127.0.0.1:3000";
 const quietLogger = createLogger({ sink: () => undefined });
 const ROOT_KEY = Buffer.alloc(32, 1).toString("base64url");
 
+function fixedUuid(value: number): string {
+  return `00000000-0000-4000-8000-${String(value).padStart(12, "0")}`;
+}
+
 function setupTestEnvironment() {
   const database = openDatabase(":memory:");
   const secretsService = createSecretsService(database, {
@@ -667,6 +671,13 @@ void test("Fill deletion impact and isolated beverage auto-deletion", () => {
     const fill1 = fillService.createFill({ beverageId: bev.beverage.id, kegId: keg1.id });
     const fill2 = fillService.createFill({ beverageId: bev.beverage.id, kegId: keg2.id });
 
+    // HTTP/Admin-facing Beverage deletion remains confirmation-bound even
+    // when the last-Fill lifecycle cascade is authorized separately.
+    assert.throws(
+      () => beverageService.deleteBeverage(bev.beverage.id),
+      (err: ApplicationError) => err.code === "beverage.delete_confirmation_required",
+    );
+
     // Case 1: Default setting (autoDeleteBeverageOnLastFill = false)
     assert.equal(fillService.getSettings().autoDeleteBeverageOnLastFill, false);
 
@@ -674,8 +685,16 @@ void test("Fill deletion impact and isolated beverage auto-deletion", () => {
     assert.equal(impact1.isLastFillForBeverage, false);
     assert.equal(impact1.beverageAutoDeleted, false);
 
+    assert.throws(
+      () => fillService.deleteFill(fill1.id, { confirmation: "Wrong visible label" }),
+      (err: ApplicationError) => err.code === "fill.confirmation_mismatch",
+    );
+
     // Delete fill1
-    fillService.deleteFill(fill1.id, { reason: "cleanup" });
+    fillService.deleteFill(fill1.id, {
+      reason: "cleanup",
+      confirmation: "Blonde Ale — Keg 1",
+    });
     assert.equal(fillService.listFills().length, 1);
     assert.notEqual(beverageService.getBeverage(bev.beverage.id), undefined);
 
@@ -683,6 +702,15 @@ void test("Fill deletion impact and isolated beverage auto-deletion", () => {
     const impact2 = fillService.getDeletionImpact(fill2.id);
     assert.equal(impact2.isLastFillForBeverage, true);
     assert.equal(impact2.beverageAutoDeleted, false);
+
+    assert.throws(
+      () => fillService.deleteFill(fill2.id),
+      (err: ApplicationError) => err.code === "fill.confirmation_required",
+    );
+    assert.throws(
+      () => fillService.deleteFill(fill2.id, { confirmation: "" }),
+      (err: ApplicationError) => err.code === "fill.confirmation_required",
+    );
 
     // Turn setting ON
     fillService.updateSettings({ autoDeleteBeverageOnLastFill: true });
@@ -696,9 +724,28 @@ void test("Fill deletion impact and isolated beverage auto-deletion", () => {
       { code: "beverages", count: 1 },
     ]);
 
-    // Delete last fill -> beverage is auto-deleted atomically with audit
-    fillService.deleteFill(fill2.id, { reason: "final delete" });
+    // Delete last fill -> beverage is auto-deleted atomically with one audit
+    // and one activity record inside the same transaction.
+    const auditsBeforeAutoDelete = listDeletionAudits(database);
+    const activityBeforeAutoDelete = listActivity(database);
+    fillService.deleteFill(fill2.id, {
+      reason: "final delete",
+      confirmation: "Blonde Ale — Keg 2",
+    });
     assert.equal(fillService.listFills().length, 0);
+    const beverageAudits = listDeletionAudits(database).filter(
+      (audit) => audit.entityType === "beverage" && audit.entityId === bev.beverage.id,
+    );
+    const beverageDeletionActivities = listActivity(database).filter(
+      (activity) =>
+        activity.entityType === "beverage" &&
+        activity.entityId === bev.beverage.id &&
+        activity.action === "deletion",
+    );
+    assert.equal(listDeletionAudits(database).length, auditsBeforeAutoDelete.length + 2);
+    assert.equal(listActivity(database).length, activityBeforeAutoDelete.length + 2);
+    assert.equal(beverageAudits.length, 1);
+    assert.equal(beverageDeletionActivities.length, 1);
     assert.throws(
       () => beverageService.getBeverage(bev.beverage.id),
       (err: ApplicationError) => err.code === "beverage.not_found",
@@ -725,7 +772,11 @@ void test("Fill deletion impact and isolated beverage auto-deletion", () => {
 
     try {
       assert.throws(
-        () => fillService.deleteFill(fillRollback.id, { reason: "test fail" }),
+        () =>
+          fillService.deleteFill(fillRollback.id, {
+            reason: "test fail",
+            confirmation: "Rollback Beer — Keg 99",
+          }),
         (err: Error) => err.message.includes("injected beverage delete failure"),
       );
 
@@ -749,6 +800,67 @@ void test("Fill deletion impact and isolated beverage auto-deletion", () => {
     } finally {
       database.execute("DROP TRIGGER IF EXISTS fail_bev_delete;");
     }
+  } finally {
+    database.close();
+  }
+});
+
+void test("admin Fill pages use bounded SQL search, filters, and deterministic 25-row windows", () => {
+  const { database, kegService, beverageService, fillService } = setupTestEnvironment();
+  try {
+    const specialBeverage = beverageService.createCustomBeverage({
+      id: fixedUuid(1),
+      name: "Percent%_ Lager",
+      beverageType: "beer",
+    });
+    const plainBeverage = beverageService.createCustomBeverage({
+      id: fixedUuid(2),
+      name: "Plain Lager",
+      beverageType: "beer",
+    });
+
+    for (let index = 1; index <= 27; index += 1) {
+      const keg = kegService.createKeg({
+        id: fixedUuid(100 + index),
+        kegNumber: index,
+        capacityMl: 19_000,
+      });
+      fillService.createFill({
+        id: fixedUuid(200 + index),
+        beverageId: index === 27 ? plainBeverage.beverage.id : specialBeverage.beverage.id,
+        kegId: keg.id,
+        fillDate: "2026-08-14",
+      });
+    }
+
+    const firstPage = fillService.listAdminPage({ state: "active", sort: "keg", page: 1 });
+    assert.equal(firstPage.total, 27);
+    assert.equal(firstPage.pageSize, 25);
+    assert.equal(firstPage.pageCount, 2);
+    assert.equal(firstPage.page, 1);
+    assert.equal(firstPage.items.length, 25);
+    assert.equal(firstPage.items[0]?.kegNumber, 1);
+    assert.equal(firstPage.items[24]?.kegNumber, 25);
+
+    const secondPage = fillService.listAdminPage({ state: "active", sort: "keg", page: 2 });
+    assert.equal(secondPage.items.length, 2);
+    assert.deepEqual(
+      secondPage.items.map((item) => item.kegNumber),
+      [26, 27],
+    );
+
+    // Wildcards are literal operator search text, not unbounded LIKE syntax.
+    const escapedSearch = fillService.listAdminPage({ q: "%_", state: "active", sort: "keg" });
+    assert.equal(escapedSearch.total, 26);
+    assert.equal(
+      escapedSearch.items.every((item) => item.beverageName === "Percent%_ Lager"),
+      true,
+    );
+
+    fillService.markOnDeck(fixedUuid(201));
+    const onDeck = fillService.listAdminPage({ state: "on_deck", sort: "state" });
+    assert.equal(onDeck.total, 1);
+    assert.equal(onDeck.items[0]?.id, fixedUuid(201));
   } finally {
     database.close();
   }
@@ -945,7 +1057,7 @@ void test("HTTP Admin API: fills and on deck full lifecycle smoke test with auth
   });
   assert.equal(impactRes.status, 200);
 
-  const deleteRes = await fetch(`${baseUrl}/api/admin/fills/${fill2.fill.id}`, {
+  const missingConfirmationDelete = await fetch(`${baseUrl}/api/admin/fills/${fill2.fill.id}`, {
     method: "DELETE",
     headers: {
       cookie: cookieHeader,
@@ -954,6 +1066,42 @@ void test("HTTP Admin API: fills and on deck full lifecycle smoke test with auth
       "content-type": "application/json",
     },
     body: JSON.stringify({ reason: "Mistake fill" }),
+  });
+  assert.equal(missingConfirmationDelete.status, 400);
+
+  const emptyConfirmationDelete = await fetch(`${baseUrl}/api/admin/fills/${fill2.fill.id}`, {
+    method: "DELETE",
+    headers: {
+      cookie: cookieHeader,
+      origin: CANONICAL_ORIGIN,
+      "x-csrf-token": csrfToken,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ confirmation: "" }),
+  });
+  assert.equal(emptyConfirmationDelete.status, 400);
+
+  const wrongConfirmationDelete = await fetch(`${baseUrl}/api/admin/fills/${fill2.fill.id}`, {
+    method: "DELETE",
+    headers: {
+      cookie: cookieHeader,
+      origin: CANONICAL_ORIGIN,
+      "x-csrf-token": csrfToken,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ confirmation: "Stout — Keg 3" }),
+  });
+  assert.equal(wrongConfirmationDelete.status, 400);
+
+  const deleteRes = await fetch(`${baseUrl}/api/admin/fills/${fill2.fill.id}`, {
+    method: "DELETE",
+    headers: {
+      cookie: cookieHeader,
+      origin: CANONICAL_ORIGIN,
+      "x-csrf-token": csrfToken,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ reason: "Mistake fill", confirmation: "Stout — Keg 2" }),
   });
   assert.equal(deleteRes.status, 200);
   const deleteBody = (await deleteRes.json()) as { impact: { beverageAutoDeleted: boolean } };

@@ -404,6 +404,21 @@ export function registerTelemetryRoutes(dependencies: TelemetryRouteDependencies
     },
   );
 
+  // POST /api/admin/telemetry/sources/:id/disable
+  router.post(
+    "/api/admin/telemetry/sources/:id/disable",
+    async (request: IncomingMessage, response: ServerResponse, params: Record<string, string>) => {
+      const session = requireMutationAuth(request, authService);
+      validateEmptyOptionalBody(await readOptionalJsonBody(request));
+      const source = telemetryService.disableSource(params.id ?? "", {
+        actorType: "admin",
+        actorId: session.id,
+        sessionId: session.id,
+      });
+      sendJson(response, 200, { source });
+    },
+  );
+
   // GET /api/admin/telemetry/authorities
   router.get(
     "/api/admin/telemetry/authorities",

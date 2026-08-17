@@ -8,6 +8,8 @@ import {
 import type {
   CreateKegInput,
   DeleteKegInput,
+  AdminKegPageSort,
+  AdminKegPageStatus,
   RecordMaintenanceInput,
   UpdateKegInput,
 } from "./types.ts";
@@ -52,6 +54,25 @@ function normalizeOptionalText(value: unknown, field: string, maxLength: number)
     throw validationError(field, `must not exceed ${maxLength} characters`);
   }
   return trimmed;
+}
+
+/**
+ * Destructive confirmations are exact visible labels. Keep whitespace intact
+ * so the service can reject leading/trailing or otherwise altered input.
+ */
+function normalizeExactConfirmation(
+  value: unknown,
+  field: string,
+  maxLength: number,
+): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string") {
+    throw validationError(field, "must be a string or null");
+  }
+  if (value.length > maxLength) {
+    throw validationError(field, `must not exceed ${maxLength} characters`);
+  }
+  return value;
 }
 
 function normalizeBoolean(value: unknown, field: string, defaultValue = true): boolean {
@@ -190,7 +211,52 @@ export function validateDeleteKegInput(input: unknown): DeleteKegInput {
     return { reason: null };
   }
   const object = requirePlainObject(input, "body");
-  rejectUnknownKeys(object, ["reason"], "body");
+  rejectUnknownKeys(object, ["reason", "confirmation"], "body");
   const reason = normalizeOptionalText(object.reason, "reason", MAX_REASON_LENGTH);
-  return { reason };
+  const confirmation = normalizeExactConfirmation(object.confirmation, "confirmation", 255);
+  return { reason, confirmation };
+}
+
+const ADMIN_KEG_PAGE_SIZE = 25;
+const ADMIN_KEG_PAGE_MAX = 10_000;
+
+function normalizePage(value: unknown): number {
+  if (value === undefined || value === null || value === "") return 1;
+  if (typeof value !== "number" && typeof value !== "string") {
+    throw validationError("page", "must be a positive integer");
+  }
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isInteger(parsed) || !Number.isFinite(parsed) || parsed < 1) {
+    throw validationError("page", "must be a positive integer");
+  }
+  return Math.min(ADMIN_KEG_PAGE_MAX, parsed);
+}
+
+export interface ValidatedAdminKegPageQuery {
+  readonly q: string;
+  readonly status: AdminKegPageStatus;
+  readonly sort: AdminKegPageSort;
+  readonly page: number;
+}
+
+export function validateAdminKegPageQuery(input: unknown = {}): ValidatedAdminKegPageQuery {
+  const object =
+    input !== null && typeof input === "object" ? (input as Record<string, unknown>) : {};
+  const q = (typeof object.q === "string" ? object.q.trim() : "").slice(0, 80);
+  const rawStatus =
+    typeof object.status === "string" ? object.status.trim().toLowerCase() : "active";
+  const status = rawStatus as AdminKegPageStatus;
+  if (!["active", "inactive", "all"].includes(status)) {
+    throw validationError("status", "must be active, inactive, or all");
+  }
+  const rawSort = typeof object.sort === "string" ? object.sort.trim().toLowerCase() : "number";
+  const sort = rawSort as AdminKegPageSort;
+  if (!["number", "label", "updated"].includes(sort)) {
+    throw validationError("sort", "must be number, label, or updated");
+  }
+  return { q, status, sort, page: normalizePage(object.page) };
+}
+
+export function adminKegPageSize(): number {
+  return ADMIN_KEG_PAGE_SIZE;
 }

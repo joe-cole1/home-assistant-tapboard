@@ -81,7 +81,7 @@ void test("application starts on an ephemeral port and exposes only local readin
   assert.equal(health.headers.get("cache-control"), "no-store");
   assert.equal(health.headers.get("x-content-type-options"), "nosniff");
   assert.equal(health.headers.get("x-frame-options"), "DENY");
-  assert.deepEqual(await health.json(), { status: "ok", schemaVersion: 13 });
+  assert.deepEqual(await health.json(), { status: "ok", schemaVersion: 17 });
 
   const unknown = await fetch(`http://127.0.0.1:${address.port}/not-a-route`);
   assert.equal(unknown.status, 404);
@@ -104,6 +104,57 @@ void test("application starts on an ephemeral port and exposes only local readin
 
   const reopened = openDatabase(databasePath);
   reopened.close();
+});
+
+void test("dynamic display stylesheet enforces its exact versioned contract", async (context) => {
+  const application = createApplication({
+    config: appConfig(makeDatabasePath(context)),
+    logger: quietLogger,
+  });
+  context.after(() => application.stop());
+  const address = await application.start();
+  const base = `http://127.0.0.1:${address.port}`;
+  const valid = await fetch(
+    `${base}/assets/css/display.css?v=1&theme=modern_dark&accent=%23fbc02d&font=system`,
+  );
+  assert.equal(valid.status, 200);
+  assert.equal(valid.headers.get("content-type"), "text/css; charset=utf-8");
+  assert.equal(valid.headers.get("cache-control"), "public, max-age=300, must-revalidate");
+  assert.equal(valid.headers.get("x-content-type-options"), "nosniff");
+  const css = await valid.text();
+  assert.doesNotMatch(css, /https?:|<script|url\s*\([^"']*['"]|javascript:/iu);
+  const etag = valid.headers.get("etag");
+  assert.ok(etag);
+
+  const cached = await fetch(
+    `${base}/assets/css/display.css?v=1&theme=modern_dark&accent=%23fbc02d&font=system`,
+    { headers: { "if-none-match": etag } },
+  );
+  assert.equal(cached.status, 304);
+  assert.equal(cached.headers.get("etag"), etag);
+
+  const selectedFont = await fetch(
+    `${base}/assets/css/display.css?v=1&theme=modern_dark&accent=amber&font=bungee`,
+  );
+  assert.equal(selectedFont.status, 200);
+  const selectedFontCss = await selectedFont.text();
+  assert.match(selectedFontCss, /assets\/fonts\/bungee-[0-9a-f]+\.woff2/u);
+  assert.doesNotMatch(
+    selectedFontCss,
+    /assets\/fonts\/(?:outfit|inter|roboto|fredoka|montserrat|barlow_condensed|bree_serif|rye|special_elite)-/u,
+  );
+
+  for (const query of [
+    "theme=modern_dark&accent=amber&font=system",
+    "v=2&theme=modern_dark&accent=amber&font=system",
+    "v=1&v=1&theme=modern_dark&accent=amber&font=system",
+    "v=1&theme=modern_dark&accent=%23ABCDEF&font=system",
+    "v=1&theme=modern_dark&accent=%23abcdef%22%3Bbody%7Bcolor%3Ared&font=system",
+    "v=1&theme=modern_dark&accent=amber&font=system&extra=1",
+  ]) {
+    const response = await fetch(`${base}/assets/css/display.css?${query}`);
+    assert.equal(response.status, 400, query);
+  }
 });
 
 void test("database startup failure occurs before any HTTP server is created", async (context) => {

@@ -12,7 +12,9 @@ import * as settings from "../src/features/forecasting/repository.ts";
 import {
   decodeForecastHistoryCursor,
   encodeForecastHistoryCursor,
+  validateBeverageId,
   validateForecastHistoryLimit,
+  validateUpdateBeveragePourSettingInput,
   validateUpdateForecastSettingsInput,
 } from "../src/features/forecasting/forecast-validation.ts";
 import type { CreateTelemetryEpoch } from "../src/features/telemetry/epoch-types.ts";
@@ -189,6 +191,51 @@ void test("forecast validators strictly bound PATCH, history limits, and cursors
   });
   for (const value of ["%%%", "eyJjb21wbGV0ZWRBdCI6ImJhZCIsImlkIjoieCJ9", "e30", "A", offsetCursor])
     assert.throws(() => decodeForecastHistoryCursor(value));
+});
+
+void test("Beverage pour settings persist canonical overrides and fall back to global serving size", () => {
+  const f = fixture();
+  try {
+    assert.deepEqual(settings.readEffectiveServingSizeForBeverage(f.db, ids.beverage), {
+      servingSizeMl: 354.88235475,
+      source: "global",
+    });
+    assert.equal(validateBeverageId(ids.beverage), ids.beverage);
+    assert.deepEqual(validateUpdateBeveragePourSettingInput({ pourSizeMl: 147.86 }), {
+      pourSizeMl: 147.86,
+    });
+    for (const value of [
+      {},
+      { pourSizeMl: 0 },
+      { pourSizeMl: Infinity },
+      { pourSizeMl: 1, extra: true },
+      { pourSizeMl: "147.86" },
+    ])
+      assert.throws(() => validateUpdateBeveragePourSettingInput(value));
+    const first = settings.updateBeveragePourSetting(
+      f.db,
+      ids.beverage,
+      147.86,
+      "2026-01-02T00:00:00.000Z",
+    );
+    assert.equal(first.changed, true);
+    assert.equal(first.current?.pourSizeMl, 147.86);
+    assert.deepEqual(settings.readEffectiveServingSizeForBeverage(f.db, ids.beverage), {
+      servingSizeMl: 147.86,
+      source: "beverage",
+    });
+    assert.equal(
+      settings.updateBeveragePourSetting(f.db, ids.beverage, 147.86, "later").changed,
+      false,
+    );
+    assert.equal(settings.deleteBeveragePourSetting(f.db, ids.beverage), true);
+    assert.deepEqual(settings.readEffectiveServingSizeForBeverage(f.db, ids.beverage), {
+      servingSizeMl: 354.88235475,
+      source: "global",
+    });
+  } finally {
+    f.close();
+  }
 });
 
 void test("Fill history reads preserve attribution, deterministic order, keysets, isolation, and deletion cascade", () => {

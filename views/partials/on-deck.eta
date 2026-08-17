@@ -1,1 +1,10 @@
-<footer class="on-deck" data-on-deck><h2>On deck</h2><ul><% for (const item of it.onDeck.items) { %><li data-fill-id="<%= item.fillId %>"><strong><%= item.name %></strong><% if (item.style) { %> — <span><%= item.style %></span><% } %></li><% } %></ul></footer>
+<footer class="on-deck" data-on-deck>
+  <h2>On Deck:</h2>
+  <div class="on-deck-items" data-on-deck-viewport tabindex="0" aria-label="On Deck queue">
+    <ol class="on-deck-track" data-on-deck-list>
+      <% if (it.onDeck.items.length === 0) { %><li class="on-deck-empty">Nothing queued</li><% } %>
+      <% for (let index = 0; index < it.onDeck.items.length; index += 1) { const item = it.onDeck.items[index]; %><li data-fill-id="<%= item.fillId %>"><span class="on-deck-number" aria-hidden="true"><%= index + 1 %></span><span><strong><%= item.name %></strong><% if (item.style) { %> — <span><%= item.style %></span><% } %></span></li><% } %>
+    </ol>
+  </div>
+  <button class="on-deck-toggle" data-on-deck-toggle type="button" aria-label="Pause On Deck scrolling" aria-pressed="false" hidden>Pause</button>
+</footer>

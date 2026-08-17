@@ -21,14 +21,19 @@ import {
 import { InMemoryTelemetryRateLimiter } from "./rate-limiter.ts";
 import { TELEMETRY_NORMALIZATION_VERSION } from "./types.ts";
 import {
+  countTapTelemetryAuthoritiesForSource,
   deleteTapTelemetryAuthority,
+  disableTelemetrySource,
   insertTelemetryMeasurement,
   insertTelemetryReceipt,
   insertTelemetrySource,
   listAllSourceTapStatuses,
   listSourceTapStatusesForTap,
   listTapTelemetryAuthorities,
+  listActiveTelemetrySources,
   listTelemetrySources,
+  countTelemetrySourcesPage,
+  listTelemetrySourcePage,
   pruneMeasurementsOlderThan,
   pruneReceiptsOlderThan,
   readReceiptByClientSampleId,
@@ -39,6 +44,7 @@ import {
   readTelemetrySourceByCurrentMachineKeyId,
   readTelemetrySourceById,
   readTelemetrySourceByName,
+  searchTelemetrySources,
   updateTelemetrySettings,
   updateTelemetrySourceCurrentMachineKey,
   updateTelemetrySourceName,
@@ -71,8 +77,12 @@ import type {
   TelemetryRateLimiter,
   TelemetrySettings,
   TelemetrySource,
+  TelemetrySourceRow,
   TelemetrySourceTapStatus,
   TelemetrySourceWithKeyDetails,
+  TelemetryAdminSourcePage,
+  TelemetryAdminSourcePageQuery,
+  TelemetryAdminSourceState,
   UpdateTelemetrySettingsInput,
 } from "./types.ts";
 
@@ -80,6 +90,62 @@ function compareCanonicalStrings(left: string, right: string): number {
   if (left < right) return -1;
   if (left > right) return 1;
   return 0;
+}
+
+function boundedAdminSourceQuery(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const characters = Array.from(value.trim());
+  while (characters.length > 0 && Buffer.byteLength(characters.join(""), "utf8") > 80) {
+    characters.pop();
+  }
+  return characters.join("");
+}
+
+function mapTelemetrySource(row: {
+  readonly id: string;
+  readonly name: string;
+  readonly current_machine_key_id: string;
+  readonly created_at: string;
+  readonly updated_at: string;
+  readonly disabled_at: string | null;
+}): TelemetrySource {
+  return {
+    id: row.id,
+    name: row.name,
+    currentMachineKeyId: row.current_machine_key_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    disabledAt: row.disabled_at,
+  };
+}
+
+function mapTelemetrySourceWithKey(
+  row: {
+    readonly id: string;
+    readonly name: string;
+    readonly current_machine_key_id: string;
+    readonly created_at: string;
+    readonly updated_at: string;
+    readonly disabled_at: string | null;
+  },
+  key: {
+    readonly id: string;
+    readonly publicId: string;
+    readonly label: string;
+    readonly createdAt: string;
+    readonly revokedAt: string | null;
+  },
+): TelemetrySourceWithKeyDetails {
+  return {
+    ...mapTelemetrySource(row),
+    currentMachineKey: {
+      id: key.id,
+      publicId: key.publicId,
+      label: key.label,
+      createdAt: key.createdAt,
+      revokedAt: key.revokedAt,
+    },
+  };
 }
 
 const TELEMETRY_MAINTENANCE_SAMPLE_INTERVAL = 100;
@@ -145,6 +211,7 @@ export class TelemetryService {
       const keyLabel = input.label ?? input.name;
       const issued = this.machineKeyService.create(keyLabel, {
         now: this.clock,
+        suppressActivity: true,
       });
 
       const nowIso = this.clock().toISOString();
@@ -156,6 +223,7 @@ export class TelemetryService {
         current_machine_key_id: issued.descriptor.id,
         created_at: nowIso,
         updated_at: nowIso,
+        disabled_at: null,
       });
 
       appendActivity(
@@ -170,7 +238,7 @@ export class TelemetryService {
           entityId: sourceId,
           details: { name: input.name, machineKeyId: issued.descriptor.id },
         },
-        { now: this.clock },
+        { now: () => new Date(nowIso) },
       );
 
       return {
@@ -180,6 +248,7 @@ export class TelemetryService {
           currentMachineKeyId: issued.descriptor.id,
           createdAt: nowIso,
           updatedAt: nowIso,
+          disabledAt: null,
         },
         initialToken: issued.token,
       };
@@ -204,14 +273,17 @@ export class TelemetryService {
         });
       }
 
+      if (source.disabled_at !== null) {
+        throw new ApplicationError({
+          category: "conflict",
+          code: "telemetry.source_disabled",
+          clientMessage: "Disabled telemetry sources cannot be renamed.",
+          details: { sourceId },
+        });
+      }
+
       if (source.name === input.name) {
-        return {
-          id: source.id,
-          name: source.name,
-          currentMachineKeyId: source.current_machine_key_id,
-          createdAt: source.created_at,
-          updatedAt: source.updated_at,
-        };
+        return mapTelemetrySource(source);
       }
 
       const existingName = readTelemetrySourceByName(this.database, input.name);
@@ -225,7 +297,9 @@ export class TelemetryService {
       }
 
       const nowIso = this.clock().toISOString();
-      updateTelemetrySourceName(this.database, sourceId, input.name, nowIso);
+      if (!updateTelemetrySourceName(this.database, sourceId, input.name, nowIso)) {
+        throw new Error("Telemetry source rename failed");
+      }
 
       appendActivity(
         this.database,
@@ -242,13 +316,7 @@ export class TelemetryService {
         { now: this.clock },
       );
 
-      return {
-        id: source.id,
-        name: input.name,
-        currentMachineKeyId: source.current_machine_key_id,
-        createdAt: source.created_at,
-        updatedAt: nowIso,
-      };
+      return mapTelemetrySource({ ...source, name: input.name, updated_at: nowIso });
     });
   }
 
@@ -270,13 +338,32 @@ export class TelemetryService {
         });
       }
 
+      if (source.disabled_at !== null) {
+        throw new ApplicationError({
+          category: "conflict",
+          code: "telemetry.source_disabled",
+          clientMessage: "Disabled telemetry sources cannot rotate keys.",
+          details: { sourceId },
+        });
+      }
+
       const keyLabel = input.label ?? source.name;
       const issued = this.machineKeyService.rotate(source.current_machine_key_id, keyLabel, {
         now: this.clock,
+        suppressActivity: true,
       });
 
       const nowIso = this.clock().toISOString();
-      updateTelemetrySourceCurrentMachineKey(this.database, sourceId, issued.descriptor.id, nowIso);
+      if (
+        !updateTelemetrySourceCurrentMachineKey(
+          this.database,
+          sourceId,
+          issued.descriptor.id,
+          nowIso,
+        )
+      ) {
+        throw new Error("Telemetry source key rotation failed");
+      }
 
       appendActivity(
         this.database,
@@ -297,16 +384,94 @@ export class TelemetryService {
       );
 
       return {
-        source: {
-          id: source.id,
-          name: source.name,
-          currentMachineKeyId: issued.descriptor.id,
-          createdAt: source.created_at,
-          updatedAt: nowIso,
-        },
+        source: mapTelemetrySource({
+          ...source,
+          current_machine_key_id: issued.descriptor.id,
+          updated_at: nowIso,
+        }),
         replacementToken: issued.token,
       };
     });
+  }
+
+  disableSource(sourceIdRaw: string, options: TelemetryActorOptions = {}): TelemetrySource {
+    const sourceId = validateTelemetrySourceId(sourceIdRaw);
+    return this.database.withTransaction(() => {
+      const source = readTelemetrySourceById(this.database, sourceId);
+      if (!source) {
+        throw new ApplicationError({
+          category: "not_found",
+          code: "telemetry.source_not_found",
+          clientMessage: "Telemetry source not found.",
+          details: { sourceId },
+        });
+      }
+      if (source.disabled_at !== null) {
+        throw new ApplicationError({
+          category: "conflict",
+          code: "telemetry.source_disabled",
+          clientMessage: "Telemetry source is already disabled.",
+          details: { sourceId },
+        });
+      }
+
+      // Check authority before revoking the key or changing source state. The
+      // database trigger repeats this invariant for direct SQL writers.
+      if (countTapTelemetryAuthoritiesForSource(this.database, sourceId) > 0) {
+        throw new ApplicationError({
+          category: "conflict",
+          code: "telemetry.source_has_authority",
+          clientMessage: "Telemetry source cannot be disabled while assigned to a Tap.",
+          details: { sourceId },
+        });
+      }
+
+      const currentKey = this.machineKeyService.get(source.current_machine_key_id);
+      if (currentKey === undefined) {
+        throw new ApplicationError({
+          category: "conflict",
+          code: "telemetry.source_key_unavailable",
+          clientMessage: "Telemetry source key is unavailable.",
+          details: { sourceId },
+        });
+      }
+
+      const nowIso = this.clock().toISOString();
+      if (currentKey.revokedAt === null) {
+        if (
+          !this.machineKeyService.revoke(source.current_machine_key_id, {
+            now: () => new Date(nowIso),
+            suppressActivity: true,
+          })
+        ) {
+          throw new Error("Telemetry source key revocation failed");
+        }
+      }
+      if (!disableTelemetrySource(this.database, sourceId, nowIso, nowIso)) {
+        throw new Error("Telemetry source disable failed");
+      }
+
+      appendActivity(
+        this.database,
+        {
+          category: "integration",
+          action: "api_key_revoked",
+          actorType: options.actorType ?? "operator",
+          ...(options.actorId !== undefined ? { actorId: options.actorId } : {}),
+          ...(options.sessionId !== undefined ? { sessionId: options.sessionId } : {}),
+          entityType: "telemetry_source",
+          entityId: sourceId,
+          details: { machineKeyId: source.current_machine_key_id, disabled: true },
+        },
+        { now: () => new Date(nowIso) },
+      );
+
+      return mapTelemetrySource({ ...source, disabled_at: nowIso, updated_at: nowIso });
+    });
+  }
+
+  revokeSource(sourceIdRaw: string, options: TelemetryActorOptions = {}): TelemetrySource {
+    return this.disableSource(sourceIdRaw, options);
   }
 
   getSourceById(sourceIdRaw: string): TelemetrySource | undefined {
@@ -315,36 +480,69 @@ export class TelemetryService {
     if (!row) {
       return undefined;
     }
-    return {
-      id: row.id,
-      name: row.name,
-      currentMachineKeyId: row.current_machine_key_id,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    };
+    return mapTelemetrySource(row);
   }
 
   listSources(): readonly TelemetrySourceWithKeyDetails[] {
-    const rows = listTelemetrySources(this.database);
+    return this.listSourceRows(listTelemetrySources(this.database));
+  }
+
+  listActiveSources(): readonly TelemetrySourceWithKeyDetails[] {
+    return this.listSourceRows(listActiveTelemetrySources(this.database));
+  }
+
+  /**
+   * Return a bounded, identity-only projection for authenticated Admin
+   * navigation.  Key descriptors and telemetry data are intentionally not
+   * resolved for this path.
+   */
+  searchAdminSources(
+    query: string,
+    limit = 20,
+  ): readonly { readonly id: string; readonly name: string; readonly disabledAt: string | null }[] {
+    return searchTelemetrySources(this.database, query, limit).map((row) => ({
+      id: row.id,
+      name: row.name,
+      disabledAt: row.disabled_at,
+    }));
+  }
+
+  listAdminSourcePage(query: TelemetryAdminSourcePageQuery = {}): TelemetryAdminSourcePage {
+    const requested = query !== null && typeof query === "object" ? query : {};
+    const normalizedQuery = boundedAdminSourceQuery(requested.q);
+    const state: TelemetryAdminSourceState = requested.state === "disabled" ? "disabled" : "active";
+    const rawPage =
+      typeof requested.page === "number" ? requested.page : Number(requested.page ?? 1);
+    const requestedPage =
+      Number.isInteger(rawPage) && Number.isFinite(rawPage)
+        ? Math.max(1, Math.min(10_000, rawPage))
+        : 1;
+    const total = countTelemetrySourcesPage(this.database, normalizedQuery, state);
+    const pageSize = 25;
+    const pageCount = Math.max(1, Math.ceil(total / pageSize));
+    const page = Math.min(requestedPage, pageCount);
+    return {
+      items: this.listSourceRows(
+        listTelemetrySourcePage(this.database, normalizedQuery, state, page, pageSize),
+      ),
+      total,
+      page,
+      pageSize,
+      pageCount,
+      query: normalizedQuery,
+      state,
+    };
+  }
+
+  private listSourceRows(
+    rows: readonly TelemetrySourceRow[],
+  ): readonly TelemetrySourceWithKeyDetails[] {
     return rows.map((r) => {
       const key = this.machineKeyService.get(r.current_machine_key_id);
       if (!key) {
         throw new Error(`Telemetry source ${r.id} references a missing machine key`);
       }
-      return {
-        id: r.id,
-        name: r.name,
-        currentMachineKeyId: r.current_machine_key_id,
-        createdAt: r.created_at,
-        updatedAt: r.updated_at,
-        currentMachineKey: {
-          id: key.id,
-          publicId: key.publicId,
-          label: key.label,
-          createdAt: key.createdAt,
-          revokedAt: key.revokedAt,
-        },
-      };
+      return mapTelemetrySourceWithKey(r, key);
     });
   }
 
@@ -357,13 +555,8 @@ export class TelemetryService {
     if (!source) {
       return undefined;
     }
-    return {
-      id: source.id,
-      name: source.name,
-      currentMachineKeyId: source.current_machine_key_id,
-      createdAt: source.created_at,
-      updatedAt: source.updated_at,
-    };
+    if (source.disabled_at !== null) return undefined;
+    return mapTelemetrySource(source);
   }
 
   // --- Authority Management ---
@@ -418,6 +611,14 @@ export class TelemetryService {
             category: "not_found",
             code: "telemetry.source_not_found",
             clientMessage: "Telemetry source not found.",
+            details: { sourceId: input.sourceId },
+          });
+        }
+        if (source.disabled_at !== null) {
+          throw new ApplicationError({
+            category: "conflict",
+            code: "telemetry.source_disabled",
+            clientMessage: "Disabled telemetry sources cannot be assigned to a Tap.",
             details: { sourceId: input.sourceId },
           });
         }

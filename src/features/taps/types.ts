@@ -123,6 +123,58 @@ export interface RetireTapInput {
 
 export interface DeleteTapInput {
   readonly reason?: string | null;
+  /** Exact visible label used by the authenticated Admin web confirmation. */
+  readonly confirmation?: string | null;
+}
+
+export type AdminTapPageState = "all" | "assigned" | "unassigned" | "disabled" | "retired";
+
+export interface AdminTapPageQuery {
+  readonly q?: unknown;
+  readonly state?: unknown;
+  readonly page?: unknown;
+}
+
+/** Normalized query consumed by the bounded SQL Tap administration projection. */
+export interface ValidatedAdminTapPageQuery {
+  readonly q: string;
+  readonly state: AdminTapPageState;
+  readonly page: number;
+}
+
+/** Safe assignment summary used by the compact Admin Tap list. */
+export interface AdminTapPageAssignment {
+  readonly id: string;
+  readonly fillId: string;
+  readonly beverageId: string | null;
+  readonly beverageName: string | null;
+  readonly kegId: string | null;
+  readonly kegNumber: number | null;
+  readonly kegLabel: string | null;
+  readonly assignedAt: string;
+}
+
+/** Bounded, non-privileged row returned by the Admin Tap list query. */
+export interface AdminTapPageItem {
+  readonly id: string;
+  readonly tapNumber: number;
+  readonly name: string | null;
+  readonly enabled: boolean;
+  readonly isRetired: boolean;
+  readonly firstUsedAt: string | null;
+  readonly retiredAt: string | null;
+  readonly assignment: AdminTapPageAssignment | null;
+  readonly updatedAt: string;
+}
+
+export interface AdminTapPage {
+  readonly items: readonly AdminTapPageItem[];
+  readonly total: number;
+  readonly page: number;
+  readonly pageSize: number;
+  readonly pageCount: number;
+  readonly query: string;
+  readonly state: AdminTapPageState;
 }
 
 export interface AssignmentOpenedContext {
@@ -193,6 +245,7 @@ export interface TapActorOptions {
   readonly actorType?: ActivityActorType;
   readonly actorId?: string;
   readonly sessionId?: string;
+  readonly now?: () => Date;
 }
 
 export const MYSTERY_REVEAL_FIELDS = [
