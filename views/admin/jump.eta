@@ -1,0 +1,19 @@
+<% layout("/layouts/admin", { page: it.page }) %>
+<%~ include("/partials/admin-nav", { page: it.page, items: it.navItems || [] }) %>
+<main id="main-content" class="admin-page">
+  <header class="page-header">
+    <p class="eyebrow">Admin / Jump</p>
+    <h1>Jump to a destination</h1>
+    <p>Search Admin destinations, Taps, Beverages, Filled Kegs, physical Kegs, and Telemetry sources.</p>
+  </header>
+  <form class="jump-page-form" action="/admin/jump" method="get">
+    <label for="jump-page-query">Destination</label>
+    <input id="jump-page-query" name="q" type="search" maxlength="80" value="<%= it.jump.query %>" autocomplete="off" />
+    <button type="submit">Search destinations</button>
+  </form>
+  <% if (it.jump.query && it.jump.results.length === 0) { %><p class="empty-state" role="status">No Admin destinations matched that search.</p><% } %>
+  <% if (!it.jump.query) { %><p class="empty-state" role="status">Enter a destination name or path to begin.</p><% } %>
+  <% if (it.jump.results.length > 0) { %>
+    <section aria-labelledby="jump-results-heading"><h2 id="jump-results-heading">Results</h2><ul class="jump-results"><% for (const result of it.jump.results) { %><li><a href="<%= result.href %>"><span class="admin-nav-mark" aria-hidden="true"><%= result.mark %></span><span><strong><%= result.label %></strong><small><%= result.context %></small></span></a></li><% } %></ul></section>
+  <% } %>
+</main>

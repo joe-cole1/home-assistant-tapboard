@@ -11,6 +11,111 @@ import type {
 /** Maximum rows removed per table by one bounded telemetry prune call. */
 export const TELEMETRY_PRUNE_BATCH_SIZE = 500;
 
+export interface TelemetrySourceSearchRow {
+  readonly id: string;
+  readonly name: string;
+  readonly disabled_at: string | null;
+}
+
+export const TELEMETRY_ADMIN_SOURCE_PAGE_SIZE = 25;
+
+function boundedTelemetryQuery(query: string): string {
+  const characters = Array.from(query.trim());
+  while (characters.length > 0 && Buffer.byteLength(characters.join(""), "utf8") > 80) {
+    characters.pop();
+  }
+  return characters.join("");
+}
+
+function telemetrySourceSearch(query: string): {
+  readonly pattern: string;
+  readonly enabled: boolean;
+} {
+  const bounded = boundedTelemetryQuery(query);
+  const escaped = bounded.replace(/[\\%_]/gu, (value) => `\\${value}`);
+  return { pattern: `%${escaped}%`, enabled: bounded.length > 0 };
+}
+
+export function countTelemetrySourcesPage(
+  database: DatabaseExecutor,
+  query: string,
+  state: "active" | "disabled",
+): number {
+  const search = telemetrySourceSearch(query);
+  const stateClause = state === "active" ? "disabled_at IS NULL" : "disabled_at IS NOT NULL";
+  const searchClause = search.enabled
+    ? `AND (LOWER(name) LIKE LOWER(?) ESCAPE '\\'
+            OR LOWER(id) LIKE LOWER(?) ESCAPE '\\')`
+    : "";
+  const params = search.enabled ? [search.pattern, search.pattern] : [];
+  return (
+    database
+      .prepare<unknown[], { readonly count: number }>(
+        `SELECT COUNT(*) AS count FROM telemetry_sources WHERE ${stateClause} ${searchClause}`,
+      )
+      .get(...params)?.count ?? 0
+  );
+}
+
+export function listTelemetrySourcePage(
+  database: DatabaseExecutor,
+  query: string,
+  state: "active" | "disabled",
+  page: number,
+  pageSize = TELEMETRY_ADMIN_SOURCE_PAGE_SIZE,
+): readonly TelemetrySourceRow[] {
+  const search = telemetrySourceSearch(query);
+  const boundedPage = Math.max(1, Math.trunc(page));
+  const boundedSize = Math.max(1, Math.min(25, Math.trunc(pageSize)));
+  const stateClause = state === "active" ? "disabled_at IS NULL" : "disabled_at IS NOT NULL";
+  const searchClause = search.enabled
+    ? `AND (LOWER(name) LIKE LOWER(?) ESCAPE '\\'
+            OR LOWER(id) LIKE LOWER(?) ESCAPE '\\')`
+    : "";
+  const params = search.enabled
+    ? [search.pattern, search.pattern, boundedSize, (boundedPage - 1) * boundedSize]
+    : [boundedSize, (boundedPage - 1) * boundedSize];
+  return database
+    .prepare<unknown[], TelemetrySourceRow>(
+      `SELECT id, name, current_machine_key_id, created_at, updated_at, disabled_at
+       FROM telemetry_sources
+       WHERE ${stateClause} ${searchClause}
+       ORDER BY name COLLATE NOCASE ASC, id ASC
+       LIMIT ? OFFSET ?`,
+    )
+    .all(...params);
+}
+
+/**
+ * Return only the small source identity projection needed by authenticated
+ * Admin navigation.  This intentionally never joins or returns machine-key
+ * descriptors, telemetry payloads, or source history.
+ */
+export function searchTelemetrySources(
+  database: DatabaseExecutor,
+  query: string,
+  limit = 20,
+): readonly TelemetrySourceSearchRow[] {
+  const boundedQuery = boundedTelemetryQuery(query);
+  const escaped = boundedQuery.replace(/[\\%_]/gu, (value) => `\\${value}`);
+  const pattern = `%${escaped}%`;
+  const boundedLimit = Math.max(1, Math.min(20, Math.trunc(limit)));
+  return database
+    .prepare<[string, string, string, number], TelemetrySourceSearchRow>(
+      `SELECT id, name, disabled_at
+       FROM telemetry_sources
+       WHERE LOWER(name) LIKE LOWER(?) ESCAPE '\\'
+          OR LOWER(id) LIKE LOWER(?) ESCAPE '\\'
+          OR LOWER(CASE WHEN disabled_at IS NULL THEN 'active' ELSE 'disabled' END)
+             LIKE LOWER(?) ESCAPE '\\'
+       ORDER BY CASE WHEN disabled_at IS NULL THEN 0 ELSE 1 END,
+                name COLLATE NOCASE ASC,
+                id ASC
+       LIMIT ?`,
+    )
+    .all(pattern, pattern, pattern, boundedLimit);
+}
+
 export function insertTelemetrySource(
   database: DatabaseExecutor,
   row: {
@@ -19,14 +124,23 @@ export function insertTelemetrySource(
     readonly current_machine_key_id: string;
     readonly created_at: string;
     readonly updated_at: string;
+    readonly disabled_at: string | null;
   },
 ): void {
   database
-    .prepare<[string, string, string, string, string]>(
-      `INSERT INTO telemetry_sources (id, name, current_machine_key_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?)`,
+    .prepare<[string, string, string, string, string, string | null]>(
+      `INSERT INTO telemetry_sources
+       (id, name, current_machine_key_id, created_at, updated_at, disabled_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
     )
-    .run(row.id, row.name, row.current_machine_key_id, row.created_at, row.updated_at);
+    .run(
+      row.id,
+      row.name,
+      row.current_machine_key_id,
+      row.created_at,
+      row.updated_at,
+      row.disabled_at,
+    );
 }
 
 export function updateTelemetrySourceName(
@@ -39,7 +153,7 @@ export function updateTelemetrySourceName(
     .prepare<[string, string, string]>(
       `UPDATE telemetry_sources
        SET name = ?, updated_at = ?
-       WHERE id = ?`,
+       WHERE id = ? AND disabled_at IS NULL`,
     )
     .run(name, updatedAt, id);
   return result.changes > 0;
@@ -55,10 +169,26 @@ export function updateTelemetrySourceCurrentMachineKey(
     .prepare<[string, string, string]>(
       `UPDATE telemetry_sources
        SET current_machine_key_id = ?, updated_at = ?
-       WHERE id = ?`,
+       WHERE id = ? AND disabled_at IS NULL`,
     )
     .run(currentMachineKeyId, updatedAt, id);
   return result.changes > 0;
+}
+
+export function disableTelemetrySource(
+  database: DatabaseExecutor,
+  id: string,
+  disabledAt: string,
+  updatedAt: string,
+): boolean {
+  const result = database
+    .prepare<[string, string, string]>(
+      `UPDATE telemetry_sources
+       SET disabled_at = ?, updated_at = ?
+       WHERE id = ? AND disabled_at IS NULL`,
+    )
+    .run(disabledAt, updatedAt, id);
+  return result.changes === 1;
 }
 
 export function readTelemetrySourceById(
@@ -67,7 +197,7 @@ export function readTelemetrySourceById(
 ): TelemetrySourceRow | undefined {
   return database
     .prepare<[string], TelemetrySourceRow>(
-      `SELECT id, name, current_machine_key_id, created_at, updated_at
+      `SELECT id, name, current_machine_key_id, created_at, updated_at, disabled_at
        FROM telemetry_sources
        WHERE id = ?`,
     )
@@ -80,7 +210,7 @@ export function readTelemetrySourceByName(
 ): TelemetrySourceRow | undefined {
   return database
     .prepare<[string], TelemetrySourceRow>(
-      `SELECT id, name, current_machine_key_id, created_at, updated_at
+      `SELECT id, name, current_machine_key_id, created_at, updated_at, disabled_at
        FROM telemetry_sources
        WHERE name = ?`,
     )
@@ -93,7 +223,7 @@ export function readTelemetrySourceByCurrentMachineKeyId(
 ): TelemetrySourceRow | undefined {
   return database
     .prepare<[string], TelemetrySourceRow>(
-      `SELECT id, name, current_machine_key_id, created_at, updated_at
+      `SELECT id, name, current_machine_key_id, created_at, updated_at, disabled_at
        FROM telemetry_sources
        WHERE current_machine_key_id = ?`,
     )
@@ -104,11 +234,39 @@ export function readTelemetrySourceByCurrentMachineKeyId(
 export function listTelemetrySources(database: DatabaseExecutor): readonly TelemetrySourceRow[] {
   return database
     .prepare<[], TelemetrySourceRow>(
-      `SELECT id, name, current_machine_key_id, created_at, updated_at
+      `SELECT id, name, current_machine_key_id, created_at, updated_at, disabled_at
        FROM telemetry_sources
        ORDER BY created_at ASC, name ASC`,
     )
     .all();
+}
+
+export function listActiveTelemetrySources(
+  database: DatabaseExecutor,
+): readonly TelemetrySourceRow[] {
+  return database
+    .prepare<[], TelemetrySourceRow>(
+      `SELECT id, name, current_machine_key_id, created_at, updated_at, disabled_at
+       FROM telemetry_sources
+       WHERE disabled_at IS NULL
+       ORDER BY created_at ASC, name ASC`,
+    )
+    .all();
+}
+
+export function countTapTelemetryAuthoritiesForSource(
+  database: DatabaseExecutor,
+  sourceId: string,
+): number {
+  return (
+    database
+      .prepare<[string], { readonly count: number }>(
+        `SELECT COUNT(*) AS count
+         FROM tap_telemetry_authority
+         WHERE source_id = ?`,
+      )
+      .get(sourceId)?.count ?? 0
+  );
 }
 
 /**

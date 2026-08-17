@@ -1,11 +1,12 @@
 import { readFile, stat } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 import type { Router } from "./router.ts";
 import { resolveContainedPath } from "./security/static.ts";
 
-export type StaticAssetKind = "js" | "css" | "svg";
+export type StaticAssetKind = "js" | "css" | "svg" | "font";
 export interface StaticAssetDescriptor {
   readonly kind: StaticAssetKind;
   readonly file: string;
@@ -23,6 +24,7 @@ const MIME: Readonly<Record<StaticAssetKind, string>> = {
   js: "text/javascript; charset=utf-8",
   css: "text/css; charset=utf-8",
   svg: "image/svg+xml",
+  font: "font/woff2",
 };
 function safeToken(value: string): boolean {
   return /^[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(value) && !value.includes("..");
@@ -68,10 +70,12 @@ export function createStaticAssetHandler(
       const file = await resolveContainedPath(root, `/${asset.path}`);
       if (!(await stat(file)).isFile()) throw new Error("not a file");
       const data = await readFile(file);
+      const etag = `"${createHash("sha256").update(data).digest("hex")}"`;
       response.writeHead(200, {
         "content-type": asset.contentType ?? MIME[asset.kind],
         "cache-control": asset.cacheControl ?? options.cacheControl ?? "no-store",
         "x-content-type-options": "nosniff",
+        etag,
       });
       response.end(data);
     } catch {
@@ -81,5 +85,9 @@ export function createStaticAssetHandler(
   };
 }
 export function registerStaticAssets(router: Router, options: StaticAssetOptions): void {
-  router.get("/assets/:kind/:file", createStaticAssetHandler(options));
+  const handler = createStaticAssetHandler(options);
+  router.get("/assets/fonts/:file", (request, response, params) =>
+    handler(request, response, { kind: "font", file: params.file ?? "" }),
+  );
+  router.get("/assets/:kind/:file", handler);
 }

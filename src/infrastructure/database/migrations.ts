@@ -26,7 +26,21 @@ export const DISPLAY_SCHEMA_VERSION = 12;
 export const DISPLAY_MIGRATION_NAME = "ssr-dashboard-display-settings";
 export const BREW_STORY_SENSORY_MYSTERY_SCHEMA_VERSION = 13;
 export const BREW_STORY_SENSORY_MYSTERY_MIGRATION_NAME = "brew-story-sensory-mystery";
-export const CURRENT_SCHEMA_VERSION = BREW_STORY_SENSORY_MYSTERY_SCHEMA_VERSION;
+export const TAP_CARD_DISPLAY_SCHEMA_VERSION = 14;
+export const TAP_CARD_DISPLAY_MIGRATION_NAME = "tap-card-display-and-beverage-pour-settings";
+export const DISPLAY_CUSTOM_ACCENT_SCHEMA_VERSION = 15;
+export const DISPLAY_CUSTOM_ACCENT_MIGRATION_NAME = "display-custom-accent-contract";
+export const TELEMETRY_DISABLED_LIFECYCLE_SCHEMA_VERSION = 16;
+export const TELEMETRY_DISABLED_LIFECYCLE_MIGRATION_NAME = "telemetry-source-disabled-lifecycle";
+export const DISPLAY_FONT_SCHEMA_VERSION = 17;
+export const DISPLAY_FONT_MIGRATION_NAME = "display-font-allowlist";
+
+// Compatibility aliases for callers that use the shorter domain names.
+export const DISPLAY_ACCENT_SCHEMA_VERSION = DISPLAY_CUSTOM_ACCENT_SCHEMA_VERSION;
+export const DISPLAY_ACCENT_MIGRATION_NAME = DISPLAY_CUSTOM_ACCENT_MIGRATION_NAME;
+export const TELEMETRY_SOURCE_DISABLED_SCHEMA_VERSION = TELEMETRY_DISABLED_LIFECYCLE_SCHEMA_VERSION;
+export const TELEMETRY_SOURCE_DISABLED_MIGRATION_NAME = TELEMETRY_DISABLED_LIFECYCLE_MIGRATION_NAME;
+export const CURRENT_SCHEMA_VERSION = DISPLAY_FONT_SCHEMA_VERSION;
 
 export interface MigrationDefinition {
   readonly version: number;
@@ -1483,6 +1497,169 @@ const BREW_STORY_SENSORY_MYSTERY_SCHEMA_OBJECTS = [
   ["table", "tap_assignment_mystery"],
 ] as const;
 
+export const TAP_CARD_DISPLAY_SCHEMA_SQL = `
+  CREATE TABLE tap_card_display_settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    revision INTEGER NOT NULL CHECK (revision > 0),
+    show_abv INTEGER NOT NULL DEFAULT 1 CHECK (show_abv IN (0, 1)),
+    show_ibu INTEGER NOT NULL DEFAULT 1 CHECK (show_ibu IN (0, 1)),
+    show_og INTEGER NOT NULL DEFAULT 1 CHECK (show_og IN (0, 1)),
+    show_fg INTEGER NOT NULL DEFAULT 1 CHECK (show_fg IN (0, 1)),
+    show_srm INTEGER NOT NULL DEFAULT 0 CHECK (show_srm IN (0, 1)),
+    remaining_mode TEXT NOT NULL DEFAULT 'percent' CHECK (remaining_mode IN ('percent', 'pints', 'pours', 'volume')),
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE tap_card_display_overrides (
+    tap_id TEXT PRIMARY KEY REFERENCES taps(id) ON DELETE CASCADE,
+    show_abv INTEGER CHECK (show_abv IS NULL OR show_abv IN (0, 1)),
+    show_ibu INTEGER CHECK (show_ibu IS NULL OR show_ibu IN (0, 1)),
+    show_og INTEGER CHECK (show_og IS NULL OR show_og IN (0, 1)),
+    show_fg INTEGER CHECK (show_fg IS NULL OR show_fg IN (0, 1)),
+    show_srm INTEGER CHECK (show_srm IS NULL OR show_srm IN (0, 1)),
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE beverage_pour_settings (
+    beverage_id TEXT PRIMARY KEY REFERENCES beverages(id) ON DELETE CASCADE,
+    pour_size_ml REAL NOT NULL CHECK (
+      typeof(pour_size_ml) IN ('integer', 'real') AND
+      pour_size_ml > 0 AND
+      pour_size_ml < 1.7976931348623157e308
+    ),
+    updated_at TEXT NOT NULL
+  );
+`;
+
+const TAP_CARD_DISPLAY_SCHEMA_OBJECTS = [
+  ...BREW_STORY_SENSORY_MYSTERY_SCHEMA_OBJECTS,
+  ["table", "tap_card_display_settings"],
+  ["table", "tap_card_display_overrides"],
+  ["table", "beverage_pour_settings"],
+] as const;
+
+/**
+ * v15 deliberately keeps the v12 display DDL above unchanged. Older schema
+ * validators must continue to reject custom accents; only the v15 validator
+ * uses this replacement table declaration.
+ */
+export const DISPLAY_CUSTOM_ACCENT_SCHEMA_SQL = `
+  CREATE TABLE display_settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    revision INTEGER NOT NULL CHECK (revision > 0),
+    tapboard_name TEXT NOT NULL CHECK (length(trim(tapboard_name)) BETWEEN 1 AND 80),
+    theme TEXT NOT NULL CHECK (theme IN ('modern_dark', 'warm_pub', 'cyberpunk', 'light_minimal')),
+    font TEXT NOT NULL CHECK (font IN ('system', 'outfit', 'inter', 'roboto', 'fredoka', 'montserrat')),
+    accent TEXT NOT NULL CHECK (
+      accent IN ('amber', 'sky', 'rose', 'cyan', 'tan', 'orange', 'blue')
+      OR (
+        length(CAST(accent AS BLOB)) = 7
+        AND accent GLOB '#[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]'
+      )
+    ),
+    unit_system TEXT NOT NULL CHECK (unit_system IN ('us', 'metric')),
+    show_serving_temperature INTEGER NOT NULL CHECK (show_serving_temperature IN (0, 1)),
+    layout_mode TEXT NOT NULL CHECK (layout_mode IN ('scroll', 'rotation')),
+    updated_at TEXT NOT NULL
+  );
+`;
+
+const DISPLAY_CUSTOM_ACCENT_SCHEMA_OBJECTS = [...TAP_CARD_DISPLAY_SCHEMA_OBJECTS] as const;
+
+/** v17 expands the selectable font contract without changing any display columns. */
+export const DISPLAY_FONT_SCHEMA_SQL = DISPLAY_CUSTOM_ACCENT_SCHEMA_SQL.replace(
+  "font IN ('system', 'outfit', 'inter', 'roboto', 'fredoka', 'montserrat')",
+  "font IN ('system', 'outfit', 'inter', 'roboto', 'fredoka', 'montserrat', 'barlow_condensed', 'bree_serif', 'bungee', 'rye', 'special_elite')",
+);
+
+const DISPLAY_FONT_SCHEMA_OBJECTS = [...DISPLAY_CUSTOM_ACCENT_SCHEMA_OBJECTS] as const;
+
+/** Final v16 declaration for exact canonical schema validation. */
+const TELEMETRY_DISABLED_SOURCE_SCHEMA_SQL = `
+  CREATE TABLE telemetry_sources (
+    id TEXT PRIMARY KEY CHECK (length(CAST(id AS BLOB)) = 36),
+    name TEXT NOT NULL UNIQUE CHECK (length(CAST(name AS BLOB)) BETWEEN 1 AND 120),
+    current_machine_key_id TEXT NOT NULL UNIQUE REFERENCES machine_api_keys(id) ON DELETE RESTRICT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    disabled_at TEXT NULL
+  );
+`;
+
+/** Database-level lifecycle guards for telemetry source disable/revoke. */
+export const TELEMETRY_DISABLED_LIFECYCLE_GUARDS_SQL = `
+  CREATE TRIGGER trg_tap_telemetry_authority_no_disabled_insert
+    BEFORE INSERT ON tap_telemetry_authority
+    FOR EACH ROW
+    WHEN EXISTS (
+      SELECT 1 FROM telemetry_sources
+      WHERE id = NEW.source_id AND disabled_at IS NOT NULL
+    )
+    BEGIN
+      SELECT RAISE(ABORT, 'disabled telemetry sources cannot be Tap authority');
+    END;
+
+  CREATE TRIGGER trg_tap_telemetry_authority_no_disabled_update
+    BEFORE UPDATE ON tap_telemetry_authority
+    FOR EACH ROW
+    WHEN EXISTS (
+      SELECT 1 FROM telemetry_sources
+      WHERE id = NEW.source_id AND disabled_at IS NOT NULL
+    )
+    BEGIN
+      SELECT RAISE(ABORT, 'disabled telemetry sources cannot be Tap authority');
+    END;
+
+  CREATE TRIGGER trg_telemetry_sources_no_disable_with_authority
+    BEFORE UPDATE OF disabled_at ON telemetry_sources
+    FOR EACH ROW
+    WHEN OLD.disabled_at IS NULL
+      AND NEW.disabled_at IS NOT NULL
+      AND EXISTS (
+        SELECT 1 FROM tap_telemetry_authority
+        WHERE source_id = OLD.id
+      )
+    BEGIN
+      SELECT RAISE(ABORT, 'telemetry sources with Tap authority cannot be disabled');
+    END;
+
+  CREATE TRIGGER trg_telemetry_sources_disabled_immutable
+    BEFORE UPDATE ON telemetry_sources
+    FOR EACH ROW
+    WHEN OLD.disabled_at IS NOT NULL
+    BEGIN
+      SELECT RAISE(ABORT, 'disabled telemetry sources are immutable');
+    END;
+
+  CREATE TRIGGER trg_telemetry_sources_disabled_no_delete
+    BEFORE DELETE ON telemetry_sources
+    FOR EACH ROW
+    WHEN OLD.disabled_at IS NOT NULL
+    BEGIN
+      SELECT RAISE(ABORT, 'disabled telemetry sources cannot be deleted');
+    END;
+`;
+
+export const TELEMETRY_DISABLED_LIFECYCLE_SCHEMA_SQL = `${TELEMETRY_DISABLED_SOURCE_SCHEMA_SQL}\n${TELEMETRY_DISABLED_LIFECYCLE_GUARDS_SQL}`;
+
+const TELEMETRY_DISABLED_LIFECYCLE_SCHEMA_OBJECTS = [
+  ...DISPLAY_CUSTOM_ACCENT_SCHEMA_OBJECTS,
+  ["trigger", "trg_tap_telemetry_authority_no_disabled_insert"],
+  ["trigger", "trg_tap_telemetry_authority_no_disabled_update"],
+  ["trigger", "trg_telemetry_sources_no_disable_with_authority"],
+  ["trigger", "trg_telemetry_sources_disabled_immutable"],
+  ["trigger", "trg_telemetry_sources_disabled_no_delete"],
+] as const;
+
+const DISPLAY_FONT_LIFECYCLE_SCHEMA_OBJECTS = [
+  ...DISPLAY_FONT_SCHEMA_OBJECTS,
+  ["trigger", "trg_tap_telemetry_authority_no_disabled_insert"],
+  ["trigger", "trg_tap_telemetry_authority_no_disabled_update"],
+  ["trigger", "trg_telemetry_sources_no_disable_with_authority"],
+  ["trigger", "trg_telemetry_sources_disabled_immutable"],
+  ["trigger", "trg_telemetry_sources_disabled_no_delete"],
+] as const;
+
 function splitSqlStatements(sql: string): string[] {
   const statements: string[] = [];
   let start = 0;
@@ -2167,7 +2344,7 @@ function validateTapsSchema(database: DatabaseExecutor): void {
   validateTapsColumns(database);
 }
 
-function validateTelemetryColumns(database: DatabaseExecutor): void {
+function validateTelemetryColumns(database: DatabaseExecutor, includeDisabledAt = false): void {
   validateTapsColumns(database);
   const required: Readonly<Record<string, readonly Omit<TableColumnRow, "cid">[]>> = {
     telemetry_sources: [
@@ -2176,6 +2353,9 @@ function validateTelemetryColumns(database: DatabaseExecutor): void {
       { name: "current_machine_key_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
       { name: "created_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
       { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      ...(includeDisabledAt
+        ? [{ name: "disabled_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 }]
+        : []),
     ],
     tap_telemetry_authority: [
       { name: "tap_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
@@ -2273,6 +2453,7 @@ function validateTelemetrySchemaDefinition(
   objects: readonly (readonly [string, string])[],
   additionalSql: string,
   version: number,
+  validateColumns: (database: DatabaseExecutor) => void = validateTelemetryColumns,
 ): void {
   const expected = new Map(objects.map(([type, name]) => [`${type}:${name}`, type]));
   const actual = readSchemaObjects(database).filter(
@@ -2306,7 +2487,7 @@ function validateTelemetrySchemaDefinition(
       throw incompatibleSchema(`schema object ${row.name} has invalid DDL`);
     }
   }
-  validateTelemetryColumns(database);
+  validateColumns(database);
 }
 
 function validateTelemetryV7Schema(database: DatabaseExecutor): void {
@@ -2672,6 +2853,112 @@ function validateBrewStorySensoryMysterySchema(database: DatabaseExecutor): void
   ]);
 }
 
+function validateTapCardDisplaySchema(database: DatabaseExecutor): void {
+  validateTelemetrySchemaDefinition(
+    database,
+    TAP_CARD_DISPLAY_SCHEMA_OBJECTS,
+    `${FORENSIC_QC_SCHEMA_SQL}\n${TELEMETRY_EPOCHS_SCHEMA_SQL}\n${FORECASTING_SCHEMA_SQL}\n${HEALTH_MAINTENANCE_SCHEMA_SQL}\n${DISPLAY_SCHEMA_SQL}\n${BREW_STORY_SENSORY_MYSTERY_SCHEMA_SQL}\n${TAP_CARD_DISPLAY_SCHEMA_SQL}`,
+    TAP_CARD_DISPLAY_SCHEMA_VERSION,
+  );
+  validateHealthMaintenanceColumns(database);
+  expectColumns(database, "tap_card_display_settings", [
+    { name: "id", type: "INTEGER", notnull: 0, dflt_value: null, pk: 1 },
+    { name: "revision", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+    { name: "show_abv", type: "INTEGER", notnull: 1, dflt_value: "1", pk: 0 },
+    { name: "show_ibu", type: "INTEGER", notnull: 1, dflt_value: "1", pk: 0 },
+    { name: "show_og", type: "INTEGER", notnull: 1, dflt_value: "1", pk: 0 },
+    { name: "show_fg", type: "INTEGER", notnull: 1, dflt_value: "1", pk: 0 },
+    { name: "show_srm", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
+    { name: "remaining_mode", type: "TEXT", notnull: 1, dflt_value: "'percent'", pk: 0 },
+    { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+  ]);
+  expectColumns(database, "tap_card_display_overrides", [
+    { name: "tap_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+    { name: "show_abv", type: "INTEGER", notnull: 0, dflt_value: null, pk: 0 },
+    { name: "show_ibu", type: "INTEGER", notnull: 0, dflt_value: null, pk: 0 },
+    { name: "show_og", type: "INTEGER", notnull: 0, dflt_value: null, pk: 0 },
+    { name: "show_fg", type: "INTEGER", notnull: 0, dflt_value: null, pk: 0 },
+    { name: "show_srm", type: "INTEGER", notnull: 0, dflt_value: null, pk: 0 },
+    { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+  ]);
+  expectColumns(database, "beverage_pour_settings", [
+    { name: "beverage_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+    { name: "pour_size_ml", type: "REAL", notnull: 1, dflt_value: null, pk: 0 },
+    { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+  ]);
+}
+
+function validateDisplayCustomAccentSchema(database: DatabaseExecutor): void {
+  validateTelemetrySchemaDefinition(
+    database,
+    DISPLAY_CUSTOM_ACCENT_SCHEMA_OBJECTS,
+    `${FORENSIC_QC_SCHEMA_SQL}\n${TELEMETRY_EPOCHS_SCHEMA_SQL}\n${FORECASTING_SCHEMA_SQL}\n${HEALTH_MAINTENANCE_SCHEMA_SQL}\n${DISPLAY_SCHEMA_SQL}\n${BREW_STORY_SENSORY_MYSTERY_SCHEMA_SQL}\n${TAP_CARD_DISPLAY_SCHEMA_SQL}\n${DISPLAY_CUSTOM_ACCENT_SCHEMA_SQL}`,
+    DISPLAY_CUSTOM_ACCENT_SCHEMA_VERSION,
+  );
+  validateHealthMaintenanceColumns(database);
+  expectColumns(database, "tap_card_display_settings", [
+    { name: "id", type: "INTEGER", notnull: 0, dflt_value: null, pk: 1 },
+    { name: "revision", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+    { name: "show_abv", type: "INTEGER", notnull: 1, dflt_value: "1", pk: 0 },
+    { name: "show_ibu", type: "INTEGER", notnull: 1, dflt_value: "1", pk: 0 },
+    { name: "show_og", type: "INTEGER", notnull: 1, dflt_value: "1", pk: 0 },
+    { name: "show_fg", type: "INTEGER", notnull: 1, dflt_value: "1", pk: 0 },
+    { name: "show_srm", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
+    { name: "remaining_mode", type: "TEXT", notnull: 1, dflt_value: "'percent'", pk: 0 },
+    { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+  ]);
+  expectColumns(database, "tap_card_display_overrides", [
+    { name: "tap_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+    { name: "show_abv", type: "INTEGER", notnull: 0, dflt_value: null, pk: 0 },
+    { name: "show_ibu", type: "INTEGER", notnull: 0, dflt_value: null, pk: 0 },
+    { name: "show_og", type: "INTEGER", notnull: 0, dflt_value: null, pk: 0 },
+    { name: "show_fg", type: "INTEGER", notnull: 0, dflt_value: null, pk: 0 },
+    { name: "show_srm", type: "INTEGER", notnull: 0, dflt_value: null, pk: 0 },
+    { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+  ]);
+  expectColumns(database, "beverage_pour_settings", [
+    { name: "beverage_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+    { name: "pour_size_ml", type: "REAL", notnull: 1, dflt_value: null, pk: 0 },
+    { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+  ]);
+  expectColumns(database, "display_settings", [
+    { name: "id", type: "INTEGER", notnull: 0, dflt_value: null, pk: 1 },
+    { name: "revision", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+    { name: "tapboard_name", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    { name: "theme", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    { name: "font", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    { name: "accent", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    { name: "unit_system", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    { name: "show_serving_temperature", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+    { name: "layout_mode", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+  ]);
+}
+
+function validateTelemetryDisabledLifecycleColumns(database: DatabaseExecutor): void {
+  validateTelemetryColumns(database, true);
+}
+
+function validateTelemetryDisabledLifecycleSchema(database: DatabaseExecutor): void {
+  validateTelemetrySchemaDefinition(
+    database,
+    TELEMETRY_DISABLED_LIFECYCLE_SCHEMA_OBJECTS,
+    `${FORENSIC_QC_SCHEMA_SQL}\n${TELEMETRY_EPOCHS_SCHEMA_SQL}\n${FORECASTING_SCHEMA_SQL}\n${HEALTH_MAINTENANCE_SCHEMA_SQL}\n${DISPLAY_SCHEMA_SQL}\n${BREW_STORY_SENSORY_MYSTERY_SCHEMA_SQL}\n${TAP_CARD_DISPLAY_SCHEMA_SQL}\n${DISPLAY_CUSTOM_ACCENT_SCHEMA_SQL}\n${TELEMETRY_DISABLED_LIFECYCLE_SCHEMA_SQL}`,
+    TELEMETRY_DISABLED_LIFECYCLE_SCHEMA_VERSION,
+    validateTelemetryDisabledLifecycleColumns,
+  );
+}
+
+function validateDisplayFontLifecycleSchema(database: DatabaseExecutor): void {
+  validateTelemetrySchemaDefinition(
+    database,
+    DISPLAY_FONT_LIFECYCLE_SCHEMA_OBJECTS,
+    `${FORENSIC_QC_SCHEMA_SQL}\n${TELEMETRY_EPOCHS_SCHEMA_SQL}\n${FORECASTING_SCHEMA_SQL}\n${HEALTH_MAINTENANCE_SCHEMA_SQL}\n${DISPLAY_SCHEMA_SQL}\n${BREW_STORY_SENSORY_MYSTERY_SCHEMA_SQL}\n${TAP_CARD_DISPLAY_SCHEMA_SQL}\n${DISPLAY_FONT_SCHEMA_SQL}\n${TELEMETRY_DISABLED_LIFECYCLE_SCHEMA_SQL}`,
+    DISPLAY_FONT_SCHEMA_VERSION,
+    validateTelemetryDisabledLifecycleColumns,
+  );
+}
+
 function validatePhysicalKegsSchema(database: DatabaseExecutor): void {
   const expected = new Map(
     PHYSICAL_KEGS_SCHEMA_OBJECTS.map(([type, name]) => [`${type}:${name}`, type]),
@@ -2950,6 +3237,88 @@ export const BREW_STORY_SENSORY_MYSTERY_MIGRATION: MigrationDefinition = {
   },
 };
 
+function seedTapCardDisplaySettings(database: DatabaseExecutor): void {
+  database.execute(`
+    INSERT INTO tap_card_display_settings (
+      id, revision, show_abv, show_ibu, show_og, show_fg, show_srm, remaining_mode, updated_at
+    ) VALUES (1, 1, 1, 1, 1, 1, 0, 'percent', '1970-01-01T00:00:00.000Z');
+  `);
+}
+
+export const TAP_CARD_DISPLAY_MIGRATION: MigrationDefinition = {
+  version: TAP_CARD_DISPLAY_SCHEMA_VERSION,
+  name: TAP_CARD_DISPLAY_MIGRATION_NAME,
+  apply(database) {
+    database.execute(TAP_CARD_DISPLAY_SCHEMA_SQL);
+    seedTapCardDisplaySettings(database);
+    return undefined;
+  },
+};
+
+export const DISPLAY_CUSTOM_ACCENT_MIGRATION: MigrationDefinition = {
+  version: DISPLAY_CUSTOM_ACCENT_SCHEMA_VERSION,
+  name: DISPLAY_CUSTOM_ACCENT_MIGRATION_NAME,
+  apply(database) {
+    // SQLite cannot alter a CHECK constraint in place. Rebuild only this
+    // singleton table inside the migration transaction and copy every row.
+    const temporaryTableSql = DISPLAY_CUSTOM_ACCENT_SCHEMA_SQL.replace(
+      "CREATE TABLE display_settings",
+      "CREATE TABLE display_settings_v15",
+    );
+    database.execute(temporaryTableSql);
+    database.execute(`
+      INSERT INTO display_settings_v15 (
+        id, revision, tapboard_name, theme, font, accent, unit_system,
+        show_serving_temperature, layout_mode, updated_at
+      )
+      SELECT
+        id, revision, tapboard_name, theme, font, accent, unit_system,
+        show_serving_temperature, layout_mode, updated_at
+      FROM display_settings;
+      DROP TABLE display_settings;
+      ALTER TABLE display_settings_v15 RENAME TO display_settings;
+    `);
+    return undefined;
+  },
+};
+
+export const TELEMETRY_DISABLED_LIFECYCLE_MIGRATION: MigrationDefinition = {
+  version: TELEMETRY_DISABLED_LIFECYCLE_SCHEMA_VERSION,
+  name: TELEMETRY_DISABLED_LIFECYCLE_MIGRATION_NAME,
+  apply(database) {
+    database.execute("ALTER TABLE telemetry_sources ADD COLUMN disabled_at TEXT NULL");
+    database.execute(TELEMETRY_DISABLED_LIFECYCLE_GUARDS_SQL);
+    return undefined;
+  },
+};
+
+export const DISPLAY_FONT_MIGRATION: MigrationDefinition = {
+  version: DISPLAY_FONT_SCHEMA_VERSION,
+  name: DISPLAY_FONT_MIGRATION_NAME,
+  apply(database) {
+    // SQLite cannot alter a CHECK constraint in place. Rebuild only this
+    // singleton table and copy every existing setting unchanged.
+    const temporaryTableSql = DISPLAY_FONT_SCHEMA_SQL.replace(
+      "CREATE TABLE display_settings",
+      "CREATE TABLE display_settings_v17",
+    );
+    database.execute(temporaryTableSql);
+    database.execute(`
+      INSERT INTO display_settings_v17 (
+        id, revision, tapboard_name, theme, font, accent, unit_system,
+        show_serving_temperature, layout_mode, updated_at
+      )
+      SELECT
+        id, revision, tapboard_name, theme, font, accent, unit_system,
+        show_serving_temperature, layout_mode, updated_at
+      FROM display_settings;
+      DROP TABLE display_settings;
+      ALTER TABLE display_settings_v17 RENAME TO display_settings;
+    `);
+    return undefined;
+  },
+};
+
 /** Canonical production migration list. Keep this array identity stable. */
 export const MIGRATIONS: readonly MigrationDefinition[] = [
   FOUNDATION_MIGRATIONS[0]!,
@@ -2965,6 +3334,10 @@ export const MIGRATIONS: readonly MigrationDefinition[] = [
   HEALTH_MAINTENANCE_MIGRATION,
   DISPLAY_MIGRATION,
   BREW_STORY_SENSORY_MYSTERY_MIGRATION,
+  TAP_CARD_DISPLAY_MIGRATION,
+  DISPLAY_CUSTOM_ACCENT_MIGRATION,
+  TELEMETRY_DISABLED_LIFECYCLE_MIGRATION,
+  DISPLAY_FONT_MIGRATION,
 ];
 
 // Compatibility aliases for callers that prefer an explicit application name.
@@ -2981,7 +3354,11 @@ function recordMigration(database: DatabaseExecutor, migration: MigrationDefinit
   database.pragma(`user_version = ${migration.version}`);
 }
 
-function applyMigration(database: DatabaseExecutor, migration: MigrationDefinition): void {
+function applyMigration(
+  database: DatabaseExecutor,
+  migration: MigrationDefinition,
+  validateCanonical = false,
+): void {
   database.withTransaction(() => {
     const result: unknown = migration.apply(database);
     if (
@@ -2990,6 +3367,14 @@ function applyMigration(database: DatabaseExecutor, migration: MigrationDefiniti
       typeof result.then === "function"
     ) {
       throw new TypeError("Database migrations must complete synchronously");
+    }
+    if (
+      validateCanonical &&
+      (migration.version === DISPLAY_CUSTOM_ACCENT_SCHEMA_VERSION ||
+        migration.version === TELEMETRY_DISABLED_LIFECYCLE_SCHEMA_VERSION ||
+        migration.version === DISPLAY_FONT_SCHEMA_VERSION)
+    ) {
+      validateCanonicalSchemaAtVersion(database, migration.version);
     }
     recordMigration(database, migration);
   });
@@ -3047,6 +3432,9 @@ function validateRequiredCanonicalState(database: DatabaseExecutor, version: num
   if (version >= DISPLAY_SCHEMA_VERSION) {
     expectRequiredRows(database, "display_settings", "id = 1", 1);
   }
+  if (version >= TAP_CARD_DISPLAY_SCHEMA_VERSION) {
+    expectRequiredRows(database, "tap_card_display_settings", "id = 1", 1);
+  }
 }
 
 function validateCanonicalSchemaAtVersion(database: DatabaseExecutor, version: number): void {
@@ -3080,6 +3468,14 @@ function validateCanonicalSchemaAtVersion(database: DatabaseExecutor, version: n
     validateDisplaySchema(database);
   } else if (version === BREW_STORY_SENSORY_MYSTERY_SCHEMA_VERSION) {
     validateBrewStorySensoryMysterySchema(database);
+  } else if (version === TAP_CARD_DISPLAY_SCHEMA_VERSION) {
+    validateTapCardDisplaySchema(database);
+  } else if (version === DISPLAY_CUSTOM_ACCENT_SCHEMA_VERSION) {
+    validateDisplayCustomAccentSchema(database);
+  } else if (version === TELEMETRY_DISABLED_LIFECYCLE_SCHEMA_VERSION) {
+    validateTelemetryDisabledLifecycleSchema(database);
+  } else if (version === DISPLAY_FONT_SCHEMA_VERSION) {
+    validateDisplayFontLifecycleSchema(database);
   } else {
     throw incompatibleSchema("schema version is not a canonical Tapboard version");
   }
@@ -3109,8 +3505,9 @@ export function initializeSchema(
     }
   }
 
+  const canonicalPrefix = isCanonicalMigrationPrefix(migrations);
   for (const migration of migrations.slice(userVersion)) {
-    applyMigration(database, migration);
+    applyMigration(database, migration, canonicalPrefix);
   }
 
   const finalVersion = readUserVersion(database);
@@ -3119,7 +3516,28 @@ export function initializeSchema(
   }
   validateMigrationLedger(database, currentVersion, migrations);
 
-  if (
+  if (isCanonicalMigrationPrefix(migrations) && currentVersion === DISPLAY_FONT_SCHEMA_VERSION) {
+    validateFoundationLedgerStructure(database);
+    validateDisplayFontLifecycleSchema(database);
+  } else if (
+    isCanonicalMigrationPrefix(migrations) &&
+    currentVersion === TELEMETRY_DISABLED_LIFECYCLE_SCHEMA_VERSION
+  ) {
+    validateFoundationLedgerStructure(database);
+    validateTelemetryDisabledLifecycleSchema(database);
+  } else if (
+    isCanonicalMigrationPrefix(migrations) &&
+    currentVersion === DISPLAY_CUSTOM_ACCENT_SCHEMA_VERSION
+  ) {
+    validateFoundationLedgerStructure(database);
+    validateDisplayCustomAccentSchema(database);
+  } else if (
+    isCanonicalMigrationPrefix(migrations) &&
+    currentVersion === TAP_CARD_DISPLAY_SCHEMA_VERSION
+  ) {
+    validateFoundationLedgerStructure(database);
+    validateTapCardDisplaySchema(database);
+  } else if (
     isCanonicalMigrationPrefix(migrations) &&
     currentVersion === BREW_STORY_SENSORY_MYSTERY_SCHEMA_VERSION
   ) {

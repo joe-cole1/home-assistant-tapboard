@@ -6,7 +6,8 @@ import type {
   BeverageSourceRecipeSnapshot,
   EffectiveBeveragePresentation,
 } from "../beverages/types.ts";
-import type { PublicTapCardView } from "../dashboard/types.ts";
+import type { PublicTapCardView, PublicTapMetricView } from "../dashboard/types.ts";
+import type { DisplaySettingsService } from "../display/service.ts";
 import type { FillService } from "../fills/service.ts";
 import type { AdminFillView } from "../fills/types.ts";
 import type { ForecastService } from "../forecasting/service.ts";
@@ -58,6 +59,7 @@ export interface PublicStoryServiceDependencies {
   readonly detectorService: DetectorService;
   readonly forecastService: ForecastService;
   readonly healthService: HealthService;
+  readonly displayService?: DisplaySettingsService;
 }
 
 interface StoryContext {
@@ -178,6 +180,27 @@ function visible(
   key: keyof MysteryVisibilityPolicy["reveal"],
 ): boolean {
   return !policy.enabled || policy.reveal[key];
+}
+
+const DEFAULT_TAP_CARD_METRICS = Object.freeze({
+  showAbv: true,
+  showIbu: true,
+  showOg: true,
+  showFg: true,
+  showSrm: false,
+});
+
+function metricValue(key: PublicTapMetricView["key"], value: number): PublicTapMetricView {
+  const labels = { abv: "ABV", ibu: "IBU", og: "OG", fg: "FG", srm: "SRM" } as const;
+  const formatted =
+    key === "abv"
+      ? `${value.toFixed(1)}%`
+      : key === "ibu"
+        ? `${Math.round(value)}`
+        : key === "og" || key === "fg"
+          ? value.toFixed(3)
+          : value.toFixed(1);
+  return { key, label: labels[key], value: formatted };
 }
 
 export class PublicStoryService {
@@ -429,11 +452,44 @@ export class PublicStoryService {
     };
   }
 
+  #metricsFor(
+    tapId: string,
+    presentation: PublicStoryPresentationView,
+  ): readonly PublicTapMetricView[] {
+    let settings: {
+      readonly showAbv: boolean;
+      readonly showIbu: boolean;
+      readonly showOg: boolean;
+      readonly showFg: boolean;
+      readonly showSrm: boolean;
+    } = DEFAULT_TAP_CARD_METRICS;
+    if (this.#dependencies.displayService !== undefined) {
+      try {
+        settings = this.#dependencies.displayService.getEffectiveTapCardSettings(tapId).settings;
+      } catch {
+        // Display preference failures must not make configured-hidden metrics visible.
+        return [];
+      }
+    }
+    const values: readonly [PublicTapMetricView["key"], boolean, number | null][] = [
+      ["abv", settings.showAbv, presentation.abv],
+      ["ibu", settings.showIbu, presentation.ibu],
+      ["og", settings.showOg, presentation.og],
+      ["fg", settings.showFg, presentation.fg],
+      ["srm", settings.showSrm, presentation.srm],
+    ];
+    return values
+      .filter(
+        (entry): entry is [PublicTapMetricView["key"], true, number] =>
+          entry[1] && typeof entry[2] === "number" && Number.isFinite(entry[2]),
+      )
+      .map(([key, _enabled, value]) => metricValue(key, value));
+  }
+
   #cardForContext(context: StoryContext): PublicTapCardView {
     const tap = context.tap;
     if (context.assignment === null || context.beverage === null || context.fill === null) {
       const vessel = resolveVessel({ fillGlass: null, style: null });
-      const title = tap.name ?? `Tap ${tap.tapNumber}`;
       return {
         id: tap.id,
         tapNumber: tap.tapNumber,
@@ -444,10 +500,10 @@ export class PublicStoryService {
         beverageName: null,
         style: null,
         abv: null,
+        metrics: [],
         description: null,
-        title,
-        accessibleLabel:
-          tap.name === null ? `Tap ${tap.tapNumber}` : `Tap ${tap.tapNumber}, ${title}`,
+        title: "Empty Tap",
+        accessibleLabel: `Tap ${tap.tapNumber}, Empty Tap`,
         storyPath: null,
         fillId: null,
         fillPercent: null,
@@ -466,7 +522,7 @@ export class PublicStoryService {
     const runtime = this.#runtimeFor(context);
     const visiblePresentation = this.#presentation(presentation, policy);
     const vessel = this.#vessel(presentation);
-    const title = policy.title ?? tap.name ?? presentation.name;
+    const title = policy.title ?? presentation.name;
     return {
       id: tap.id,
       tapNumber: tap.tapNumber,
@@ -477,6 +533,7 @@ export class PublicStoryService {
       beverageName: visiblePresentation.beverageName,
       style: visiblePresentation.style,
       abv: visiblePresentation.abv,
+      metrics: this.#metricsFor(tap.id, visiblePresentation),
       description: visiblePresentation.description,
       title,
       accessibleLabel: policy.enabled
@@ -528,7 +585,7 @@ export class PublicStoryService {
       ? { custom: guidance.customRecipe, sources: guidance.sourceRecipes }
       : null;
     const history = this.#history(fill.id, visible(policy, "history"));
-    const title = policy.title ?? context.tap.name ?? presentation.name;
+    const title = policy.title ?? presentation.name;
 
     const currentFill: PublicStoryCurrentFillView = {
       fillDate: visible(policy, "history") ? fill.fillDate : null,

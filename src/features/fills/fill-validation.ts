@@ -4,6 +4,8 @@ import type {
   CreateFillInput,
   DeleteFillInput,
   KickFillInput,
+  AdminFillPageSort,
+  AdminFillPageState,
   ReorderOnDeckInput,
   UpdateFillSettingsInput,
 } from "./types.ts";
@@ -71,6 +73,25 @@ function normalizeOptionalText(value: unknown, field: string, maxLength: number)
     throw validationError(field, `must not exceed ${maxLength} bytes`);
   }
   return trimmed;
+}
+
+/**
+ * Destructive confirmations are exact visible labels. Keep whitespace intact
+ * so the service can reject leading/trailing or otherwise altered input.
+ */
+function normalizeExactConfirmation(
+  value: unknown,
+  field: string,
+  maxLength: number,
+): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string") {
+    throw validationError(field, "must be a string or null");
+  }
+  if (value.length > maxLength) {
+    throw validationError(field, `must not exceed ${maxLength} characters`);
+  }
+  return value;
 }
 
 export function validateCreateFillInput(input: unknown): CreateFillInput {
@@ -152,9 +173,56 @@ export function validateDeleteFillInput(input: unknown): DeleteFillInput {
     return { reason: null };
   }
   const object = requirePlainObject(input, "body");
-  rejectUnknownKeys(object, ["reason"], "body");
+  rejectUnknownKeys(object, ["reason", "confirmation"], "body");
   const reason = normalizeOptionalText(object.reason, "reason", MAX_REASON_LENGTH);
-  return { reason };
+  const confirmation = normalizeExactConfirmation(object.confirmation, "confirmation", 255);
+  return { reason, confirmation };
+}
+
+const ADMIN_FILL_PAGE_SIZE = 25;
+const ADMIN_FILL_PAGE_MAX = 10_000;
+
+function normalizePage(value: unknown): number {
+  if (value === undefined || value === null || value === "") return 1;
+  if (typeof value !== "number" && typeof value !== "string") {
+    throw validationError("page", "must be a positive integer");
+  }
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isInteger(parsed) || !Number.isFinite(parsed) || parsed < 1) {
+    throw validationError("page", "must be a positive integer");
+  }
+  return Math.min(ADMIN_FILL_PAGE_MAX, parsed);
+}
+
+export interface ValidatedAdminFillPageQuery {
+  readonly q: string;
+  readonly state: AdminFillPageState;
+  readonly sort: AdminFillPageSort;
+  readonly page: number;
+}
+
+/** Normalize the bounded Keg Room list query before it reaches SQL. */
+export function validateAdminFillPageQuery(input: unknown = {}): ValidatedAdminFillPageQuery {
+  const object =
+    input !== null && typeof input === "object" ? (input as Record<string, unknown>) : {};
+  const rawQuery = typeof object.q === "string" ? object.q.trim() : "";
+  const q = rawQuery.slice(0, 80);
+  const rawState = typeof object.state === "string" ? object.state.trim().toLowerCase() : "active";
+  const state: AdminFillPageState =
+    rawState === "history" ? "ended" : (rawState as AdminFillPageState);
+  if (!["active", "available", "on_deck", "on_tap", "ended", "all"].includes(state)) {
+    throw validationError("state", "must be active, available, on_deck, on_tap, ended, or all");
+  }
+  const rawSort = typeof object.sort === "string" ? object.sort.trim().toLowerCase() : "state";
+  const sort = rawSort as AdminFillPageSort;
+  if (!["state", "name", "fill_date", "updated", "keg"].includes(sort)) {
+    throw validationError("sort", "must be state, name, fill_date, updated, or keg");
+  }
+  return { q, state, sort, page: normalizePage(object.page) };
+}
+
+export function adminFillPageSize(): number {
+  return ADMIN_FILL_PAGE_SIZE;
 }
 
 export interface ListFillsQuery {

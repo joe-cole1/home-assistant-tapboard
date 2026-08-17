@@ -46,6 +46,7 @@ export class DashboardService {
       unitSystem: settings.unitSystem,
       showServingTemperature: settings.showServingTemperature,
       layoutMode: settings.layoutMode,
+      remainingMode: this.#dependencies.displayService.getTapCardSettings().remainingMode,
     };
   }
 
@@ -87,9 +88,7 @@ export class DashboardService {
     return {
       tapboardName: shared.tapboardName,
       connectivity: degraded ? "degraded" : "healthy",
-      connectivityLabel: degraded
-        ? "Connectivity needs attention. Open Admin for details."
-        : "Tapboard is connected.",
+      connectivityLabel: degraded ? "Degraded" : "Connected",
     };
   }
 
@@ -135,6 +134,7 @@ export class DashboardService {
       detectorService: this.#dependencies.detectorService,
       forecastService: this.#dependencies.forecastService,
       healthService: this.#dependencies.healthService,
+      displayService: this.#dependencies.displayService,
     });
   }
 }

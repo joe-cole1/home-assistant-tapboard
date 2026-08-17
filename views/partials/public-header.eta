@@ -1,4 +1,4 @@
 <header class="public-header" data-connectivity="<%= it.header.connectivity %>" data-connectivity-label="<%= it.header.connectivityLabel %>">
-  <div><p class="eyebrow">Tapboard</p><h1><%= it.header.tapboardName %></h1></div>
+  <h1><a class="public-brand" href="/"><%= it.header.tapboardName %></a></h1>
   <a class="connectivity" href="/admin"><span aria-hidden="true"></span><span data-connectivity-label><%= it.header.connectivityLabel %></span><span class="sr-only"> Open administration</span></a>
 </header>

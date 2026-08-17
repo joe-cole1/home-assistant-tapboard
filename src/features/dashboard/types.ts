@@ -2,6 +2,7 @@ import type {
   DisplayAccent,
   DisplayFont,
   DisplayLayoutMode,
+  TapCardRemainingMode,
   DisplayTheme,
   DisplayUnitSystem,
 } from "../display/types.ts";
@@ -16,6 +17,7 @@ export interface PublicDisplayDefaultsView {
   readonly unitSystem: DisplayUnitSystem;
   readonly showServingTemperature: boolean;
   readonly layoutMode: DisplayLayoutMode;
+  readonly remainingMode: TapCardRemainingMode;
 }
 
 export interface PublicHeaderView {
@@ -27,6 +29,7 @@ export interface PublicHeaderView {
 export interface PublicTapCardView {
   readonly id: string;
   readonly tapNumber: number;
+  /** Legacy tap identity retained for public API consumers. */
   readonly tapName: string | null;
   readonly graphicId: string;
   /** Present on projections produced by PublicStoryService. */
@@ -34,7 +37,9 @@ export interface PublicTapCardView {
   readonly displayColor: string;
   readonly beverageName: string | null;
   readonly style: string | null;
+  /** Legacy ABV value retained alongside the display-ready metric rail. */
   readonly abv: number | null;
+  readonly metrics: readonly PublicTapMetricView[];
   readonly description: string | null;
   /** Present on projections produced by PublicStoryService. */
   readonly title?: string;
@@ -49,6 +54,15 @@ export interface PublicTapCardView {
   readonly temperatureC: number | null;
   readonly waitingForMeasurement: boolean;
   readonly health: "healthy" | "degraded" | "unknown";
+}
+
+export type PublicTapMetricKey = "abv" | "ibu" | "og" | "fg" | "srm";
+
+export interface PublicTapMetricView {
+  readonly key: PublicTapMetricKey;
+  readonly label: "ABV" | "IBU" | "OG" | "FG" | "SRM";
+  /** A display-ready value. Hidden or unavailable values are not serialized. */
+  readonly value: string;
 }
 
 export interface PublicOnDeckItemView {

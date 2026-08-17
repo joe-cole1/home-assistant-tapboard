@@ -6,6 +6,11 @@
   --muted: #9ca3af;
   --border: rgba(255, 255, 255, 0.2);
   --accent: #fbc02d;
+  --accent-readable: #fbc02d;
+  --accent-strong: #fbc02d;
+  --accent-hover: #fbc02d;
+  --on-accent: #000000;
+  --on-accent-hover: #000000;
   --secondary: #38bdf8;
   --danger: #ef4444;
   --warning: #f59e0b;
@@ -33,7 +38,7 @@
   --surface: #19053b;
   --surface-raised: #26075a;
   --text: #00f0ff;
-  --muted: #b800ff;
+  --muted: #c52cff;
   --border: #00f0ff;
   --accent: #ff007f;
   --secondary: #00f0ff;
@@ -89,6 +94,21 @@
 [data-font="montserrat"] {
   --font-family: "Montserrat", system-ui, sans-serif;
 }
+[data-font="barlow_condensed"] {
+  --font-family: "Barlow Condensed", system-ui, sans-serif;
+}
+[data-font="bree_serif"] {
+  --font-family: "Bree Serif", Georgia, serif;
+}
+[data-font="bungee"] {
+  --font-family: "Bungee", system-ui, sans-serif;
+}
+[data-font="rye"] {
+  --font-family: "Rye", Georgia, serif;
+}
+[data-font="special_elite"] {
+  --font-family: "Special Elite", ui-monospace, monospace;
+}
 
 * {
   box-sizing: border-box;
@@ -121,13 +141,13 @@ a {
   z-index: 100;
   padding: 0.65rem 0.9rem;
   background: var(--accent);
-  color: #07100e;
+  color: var(--on-accent);
 }
 .skip-link:focus {
   top: 1rem;
 }
 :focus-visible {
-  outline: 3px solid var(--accent);
+  outline: 3px solid var(--accent-strong);
   outline-offset: 3px;
 }
 .sr-only {

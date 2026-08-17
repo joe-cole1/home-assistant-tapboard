@@ -1,0 +1,95 @@
+{
+  "generatedAt": "2026-08-17",
+  "assets": {
+    "outfit": {
+      "file": "outfit-6c18d579.woff2",
+      "sha256": "6c18d579fd87c3776be068b762cbc83fde3acb543d49eabd3ade842eb987e887",
+      "license": "OFL-1.1",
+      "licenseFile": "OFL-1.1.txt",
+      "sourceRef": "Google Fonts CSS API Outfit v15 (Latin subset)",
+      "officialCssUrl": "https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap",
+      "sourceUrl": "https://fonts.gstatic.com/s/outfit/v15/QGYvz_MVcBeNP4NJtEtq.woff2"
+    },
+    "inter": {
+      "file": "inter-3100e775.woff2",
+      "sha256": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62",
+      "license": "OFL-1.1",
+      "licenseFile": "OFL-1.1.txt",
+      "sourceRef": "Google Fonts CSS API Inter v20 (Latin subset)",
+      "officialCssUrl": "https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap",
+      "sourceUrl": "https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1ZL7.woff2"
+    },
+    "montserrat": {
+      "file": "montserrat-06b16db7.woff2",
+      "sha256": "06b16db7a969135d48d38c49183be7fb88d4452e2a3011957c7851941f4e4879",
+      "license": "OFL-1.1",
+      "licenseFile": "OFL-1.1.txt",
+      "sourceRef": "Google Fonts CSS API Montserrat v31 (Latin subset)",
+      "officialCssUrl": "https://fonts.googleapis.com/css2?family=Montserrat:wght@100..900&display=swap",
+      "sourceUrl": "https://fonts.gstatic.com/s/montserrat/v31/JTUSjIg1_i6t8kCHKm459Wlhyw.woff2"
+    },
+    "fredoka": {
+      "file": "fredoka-99d6c78e.woff2",
+      "sha256": "99d6c78e043710d4f83ed90716779798b7b04eb690f73e0ad0e8f32d1f0e98c2",
+      "license": "OFL-1.1",
+      "licenseFile": "OFL-1.1.txt",
+      "sourceRef": "Google Fonts CSS API Fredoka v17 (Latin subset)",
+      "officialCssUrl": "https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap",
+      "sourceUrl": "https://fonts.gstatic.com/s/fredoka/v17/X7n64b87HvSqjb_WIi2yDCRwoQ_k7367_DWu89U.woff2"
+    },
+    "roboto": {
+      "file": "roboto-1404ca34.woff2",
+      "sha256": "1404ca348bd75ef836f4dd8b6f2cc719458642d1237c368296b2fc652dca47dc",
+      "license": "Apache-2.0",
+      "licenseFile": "APACHE-2.0.txt",
+      "sourceRef": "Google Fonts CSS API Roboto v51 (Latin subset)",
+      "officialCssUrl": "https://fonts.googleapis.com/css2?family=Roboto:wght@100..900&display=swap",
+      "sourceUrl": "https://fonts.gstatic.com/s/roboto/v51/KFO7CnqEu92Fr1ME7kSn66aGLdTylUAMa3yUBA.woff2"
+    },
+    "barlow_condensed": {
+      "file": "barlow_condensed-7fff1bb2.woff2",
+      "sha256": "7fff1bb22e5773f0d1a55d3093068b6dac4539e8bb3ac23fb9f0a729df2c7bb4",
+      "license": "OFL-1.1",
+      "licenseFile": "OFL-1.1.txt",
+      "sourceRef": "Google Fonts CSS API Barlow Condensed v13 (Latin subset, weight 400)",
+      "officialCssUrl": "https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400&display=swap",
+      "sourceUrl": "https://fonts.gstatic.com/s/barlowcondensed/v13/HTx3L3I-JCGChYJ8VI-L6OO_au7B6xHT2g.woff2"
+    },
+    "bree_serif": {
+      "file": "bree_serif-ca092b41.woff2",
+      "sha256": "ca092b4130ee50797d9ba9790e5504ff66649cd7a144f2efe54147e313299e48",
+      "license": "OFL-1.1",
+      "licenseFile": "OFL-1.1.txt",
+      "sourceRef": "Google Fonts CSS API Bree Serif v18 (Latin subset, weight 400)",
+      "officialCssUrl": "https://fonts.googleapis.com/css2?family=Bree+Serif:wght@400&display=swap",
+      "sourceUrl": "https://fonts.gstatic.com/s/breeserif/v18/4UaHrEJCrhhnVA3DgluA96rp5w.woff2"
+    },
+    "bungee": {
+      "file": "bungee-126eec70.woff2",
+      "sha256": "126eec706b7931682dbcf6c6efc274132c603f181fbf912678e6cfeb341e721b",
+      "license": "OFL-1.1",
+      "licenseFile": "OFL-1.1.txt",
+      "sourceRef": "Google Fonts CSS API Bungee v17 (Latin subset, weight 400)",
+      "officialCssUrl": "https://fonts.googleapis.com/css2?family=Bungee:wght@400&display=swap",
+      "sourceUrl": "https://fonts.gstatic.com/s/bungee/v17/N0bU2SZBIuF2PU_0DXR1.woff2"
+    },
+    "rye": {
+      "file": "rye-00de26ff.woff2",
+      "sha256": "00de26ff9e435fb8f9e3ad15877f9deb4b70f3945ae0abcf7f0ed278d593014b",
+      "license": "OFL-1.1",
+      "licenseFile": "OFL-1.1.txt",
+      "sourceRef": "Google Fonts CSS API Rye v17 (Latin subset, weight 400)",
+      "officialCssUrl": "https://fonts.googleapis.com/css2?family=Rye:wght@400&display=swap",
+      "sourceUrl": "https://fonts.gstatic.com/s/rye/v17/r05XGLJT86YzEZ7t.woff2"
+    },
+    "special_elite": {
+      "file": "special_elite-770493d8.woff2",
+      "sha256": "770493d84cbb753cd0573d0f014550583138f40469d137e310d239593a1949d8",
+      "license": "OFL-1.1",
+      "licenseFile": "OFL-1.1.txt",
+      "sourceRef": "Google Fonts CSS API Special Elite v20 (Latin subset, weight 400)",
+      "officialCssUrl": "https://fonts.googleapis.com/css2?family=Special+Elite:wght@400&display=swap",
+      "sourceUrl": "https://fonts.gstatic.com/s/specialelite/v20/XLYgIZbkc4JPUL5CVArUVL0ntnAOSA.woff2"
+    }
+  }
+}

@@ -10,17 +10,21 @@ import { resolveBeverageDensity } from "./density.ts";
 import { resolveCustomPresentation, resolveLinkedPresentation } from "./presentation.ts";
 import {
   calculateBeverageDeletionImpact,
+  countBeverages,
   deleteBeverageWithAudit,
   deleteCustomRecipe,
   insertBeverage,
   insertBeverageLink,
   insertCustomProfile,
   listBeverageLinks,
+  listBeveragePage,
   listBeverages,
   listCandidates,
   readBeverage,
   readBeverageLink,
   readBeverageLinkByBatch,
+  readBeverageUsage,
+  readCurrentBeverageFills,
   readBeverageSettings,
   readBrewfatherAccount,
   readCandidate,
@@ -33,6 +37,7 @@ import {
   readSourceProfile,
   saveCustomRecipe,
   touchBeverage,
+  touchBeverageIfUpdatedAt,
   unlinkBeverageTransaction,
   updateBeverageSettings,
   updateCustomProfile,
@@ -44,6 +49,7 @@ import {
 import {
   validateConfigureBrewfatherAccountInput,
   validateCreateCustomBeverageInput,
+  validateDeleteBeverageInput,
   validateLinkBrewfatherCandidateInput,
   validateUpdateBeverageSettingsInput,
   validateUpdateCustomBeverageInput,
@@ -57,6 +63,11 @@ import type {
   BeverageActorOptions,
   BeverageDensityExtensionPort,
   BeverageDeletionImpact,
+  BeverageListPage,
+  BeverageListQuery,
+  BeverageUsage,
+  BeverageCurrentFill,
+  DeleteBeverageInput,
   BeverageSensoryOverrides,
   BeverageSettings,
   BeverageSourceRecipeSnapshot,
@@ -705,6 +716,276 @@ export class BeverageService {
     });
   }
 
+  /**
+   * Autosave the safe public presentation fields for a Custom Beverage.  The
+   * caller supplies the whole resource revision that was rendered in the
+   * form; no recipe, sensory, density, lifecycle, or assignment field is
+   * accepted here.
+   */
+  autosaveCustomPresentation(
+    beverageId: string,
+    expectedUpdatedAt: string,
+    input: unknown,
+    actorOptions: BeverageActorOptions = {},
+  ): BeverageDetailResult {
+    const validated = validateUpdateCustomBeverageInput(input);
+    if (
+      validated.manualDensityOverride !== undefined ||
+      validated.recipe !== undefined ||
+      validated.sensoryOverrides !== undefined
+    ) {
+      throw new ApplicationError({
+        category: "validation",
+        code: "beverage.autosave_unsafe_field",
+        clientMessage: "Only public presentation fields can be autosaved.",
+      });
+    }
+    const now = (actorOptions.now ?? this.#now)().toISOString();
+    return this.#database.withTransaction(() => {
+      const beverage = readBeverage(this.#database, beverageId);
+      const current = readCustomProfile(this.#database, beverageId);
+      if (beverage === undefined || current === undefined) {
+        throw new ApplicationError({
+          category: "not_found",
+          code: "beverage.not_found",
+          clientMessage: "Beverage was not found.",
+        });
+      }
+      if (beverage.ownershipType !== "custom") {
+        throw new ApplicationError({
+          category: "conflict",
+          code: "beverage.not_custom",
+          clientMessage: "Only Custom Beverages support direct presentation autosave.",
+        });
+      }
+      if (beverage.updatedAt !== expectedUpdatedAt) {
+        throw new ApplicationError({
+          category: "conflict",
+          code: "beverage.settings_changed",
+          clientMessage: "This Beverage changed elsewhere. Reload before saving again.",
+        });
+      }
+      const desired = {
+        name: validated.name ?? current.name,
+        beverageType: validated.beverageType ?? current.beverageType,
+        style: validated.style !== undefined ? validated.style : current.style,
+        abv: validated.abv !== undefined ? validated.abv : current.abv,
+        ibu: validated.ibu !== undefined ? validated.ibu : current.ibu,
+        og: validated.og !== undefined ? validated.og : current.og,
+        fg: validated.fg !== undefined ? validated.fg : current.fg,
+        srm: validated.srm !== undefined ? validated.srm : current.srm,
+        displayColor:
+          validated.displayColor !== undefined ? validated.displayColor : current.displayColor,
+        description:
+          validated.description !== undefined ? validated.description : current.description,
+        fillGlass: validated.fillGlass !== undefined ? validated.fillGlass : current.fillGlass,
+      };
+      const changed = (
+        [
+          "name",
+          "beverageType",
+          "style",
+          "abv",
+          "ibu",
+          "og",
+          "fg",
+          "srm",
+          "displayColor",
+          "description",
+          "fillGlass",
+        ] as const
+      ).some((field) => desired[field] !== current[field]);
+      if (!changed) return this.getBeverage(beverageId);
+      if (!touchBeverageIfUpdatedAt(this.#database, beverageId, expectedUpdatedAt, now)) {
+        throw new ApplicationError({
+          category: "conflict",
+          code: "beverage.settings_changed",
+          clientMessage: "This Beverage changed elsewhere. Reload before saving again.",
+        });
+      }
+      const previousDensity = resolveBeverageDensity(
+        resolveCustomPresentation(current),
+        readBeverageSettings(this.#database).fallbackFg,
+      );
+      const profile = updateCustomProfile(this.#database, beverageId, desired, now);
+      const settings = readBeverageSettings(this.#database);
+      const effectivePresentation = resolveCustomPresentation(profile);
+      const density = resolveBeverageDensity(effectivePresentation, settings.fallbackFg);
+      appendActivity(this.#database, {
+        category: "domain",
+        action: "entity_changed",
+        actorType: actorOptions.actorType ?? "admin",
+        ...(actorOptions.actorId === undefined ? {} : { actorId: actorOptions.actorId }),
+        ...(actorOptions.sessionId === undefined ? {} : { sessionId: actorOptions.sessionId }),
+        entityType: "beverage",
+        entityId: beverageId,
+        details: { change: "presentation_autosaved", name: profile.name },
+        occurredAt: now,
+      });
+      this.#notifyDensityChanged(beverageId, previousDensity, density, now);
+      return {
+        beverage: { ...beverage, updatedAt: now },
+        effectivePresentation,
+        density,
+        customProfile: profile,
+        ...(readCustomRecipe(this.#database, beverageId)
+          ? { customRecipe: readCustomRecipe(this.#database, beverageId) }
+          : {}),
+        ...(readSensoryOverrides(this.#database, beverageId)
+          ? { sensoryOverrides: readSensoryOverrides(this.#database, beverageId) }
+          : {}),
+      };
+    });
+  }
+
+  /** Autosave the safe Brewfather override fields with a parent CAS. */
+  autosavePresentationOverrides(
+    beverageId: string,
+    expectedUpdatedAt: string,
+    input: unknown,
+    actorOptions: BeverageActorOptions = {},
+  ): BeverageDetailResult {
+    const validated = validateUpdatePresentationOverridesInput(input);
+    if (validated.manualDensityOverride !== undefined) {
+      throw new ApplicationError({
+        category: "validation",
+        code: "beverage.autosave_unsafe_field",
+        clientMessage: "Density overrides require an explicit Save action.",
+      });
+    }
+    const now = (actorOptions.now ?? this.#now)().toISOString();
+    return this.#database.withTransaction(() => {
+      const beverage = readBeverage(this.#database, beverageId);
+      const sourceProfile = readSourceProfile(this.#database, beverageId);
+      if (beverage === undefined || sourceProfile === undefined) {
+        throw new ApplicationError({
+          category: "not_found",
+          code: "beverage.not_found",
+          clientMessage: "Beverage was not found.",
+        });
+      }
+      if (beverage.ownershipType !== "brewfather") {
+        throw new ApplicationError({
+          category: "conflict",
+          code: "beverage.not_linked",
+          clientMessage: "Only Brewfather-linked Beverages support override autosave.",
+        });
+      }
+      if (beverage.updatedAt !== expectedUpdatedAt) {
+        throw new ApplicationError({
+          category: "conflict",
+          code: "beverage.settings_changed",
+          clientMessage: "This Beverage changed elsewhere. Reload before saving again.",
+        });
+      }
+      const current = readPresentationOverrides(this.#database, beverageId);
+      const settings = readBeverageSettings(this.#database);
+      const previousDensity = resolveBeverageDensity(
+        resolveLinkedPresentation(sourceProfile, current),
+        settings.fallbackFg,
+      );
+      const fieldNames = [
+        "name",
+        "beverageType",
+        "style",
+        "abv",
+        "ibu",
+        "og",
+        "fg",
+        "srm",
+        "displayColor",
+        "description",
+        "fillGlass",
+        "manualDensityOverride",
+      ] as const;
+      const desiredFields = Object.fromEntries(
+        fieldNames.map((field) => [
+          field,
+          mergeOverrideField(
+            validated[field],
+            current?.[
+              `override${field[0]!.toUpperCase()}${field.slice(1)}Present` as keyof typeof current
+            ] as boolean | undefined,
+            current?.[field as keyof typeof current] as string | number | null | undefined,
+          ),
+        ]),
+      ) as Record<(typeof fieldNames)[number], { present: boolean; value: string | number | null }>;
+      const changed = fieldNames.some((field) => {
+        const presentKey =
+          `override${field[0]!.toUpperCase()}${field.slice(1)}Present` as keyof typeof current;
+        return (
+          desiredFields[field].present !== Boolean(current?.[presentKey]) ||
+          desiredFields[field].value !== (current?.[field as keyof typeof current] ?? null)
+        );
+      });
+      if (!changed) return this.getBeverage(beverageId);
+      if (!touchBeverageIfUpdatedAt(this.#database, beverageId, expectedUpdatedAt, now)) {
+        throw new ApplicationError({
+          category: "conflict",
+          code: "beverage.settings_changed",
+          clientMessage: "This Beverage changed elsewhere. Reload before saving again.",
+        });
+      }
+      const overrides = {
+        beverageId,
+        overrideNamePresent: desiredFields.name.present,
+        name: desiredFields.name.value as string | null,
+        overrideBeverageTypePresent: desiredFields.beverageType.present,
+        beverageType: desiredFields.beverageType.value as BeverageType | null,
+        overrideStylePresent: desiredFields.style.present,
+        style: desiredFields.style.value as string | null,
+        overrideAbvPresent: desiredFields.abv.present,
+        abv: desiredFields.abv.value as number | null,
+        overrideIbuPresent: desiredFields.ibu.present,
+        ibu: desiredFields.ibu.value as number | null,
+        overrideOgPresent: desiredFields.og.present,
+        og: desiredFields.og.value as number | null,
+        overrideFgPresent: desiredFields.fg.present,
+        fg: desiredFields.fg.value as number | null,
+        overrideSrmPresent: desiredFields.srm.present,
+        srm: desiredFields.srm.value as number | null,
+        overrideDisplayColorPresent: desiredFields.displayColor.present,
+        displayColor: desiredFields.displayColor.value as string | null,
+        overrideDescriptionPresent: desiredFields.description.present,
+        description: desiredFields.description.value as string | null,
+        overrideFillGlassPresent: desiredFields.fillGlass.present,
+        fillGlass: desiredFields.fillGlass.value as string | null,
+        overrideManualDensityOverridePresent: desiredFields.manualDensityOverride.present,
+        manualDensityOverride: desiredFields.manualDensityOverride.value as number | null,
+        updatedAt: now,
+      } satisfies BrewfatherPresentationOverrides;
+      upsertPresentationOverrides(this.#database, overrides);
+      appendActivity(this.#database, {
+        category: "domain",
+        action: "entity_changed",
+        actorType: actorOptions.actorType ?? "admin",
+        ...(actorOptions.actorId === undefined ? {} : { actorId: actorOptions.actorId }),
+        ...(actorOptions.sessionId === undefined ? {} : { sessionId: actorOptions.sessionId }),
+        entityType: "beverage",
+        entityId: beverageId,
+        details: { change: "presentation_override_autosaved" },
+        occurredAt: now,
+      });
+      const effectivePresentation = resolveLinkedPresentation(sourceProfile, overrides);
+      const density = resolveBeverageDensity(effectivePresentation, settings.fallbackFg);
+      this.#notifyDensityChanged(beverageId, previousDensity, density, now);
+      return {
+        beverage: { ...beverage, updatedAt: now },
+        effectivePresentation,
+        density,
+        brewfatherLink: readBeverageLink(this.#database, beverageId),
+        brewfatherSourceProfile: sourceProfile,
+        presentationOverrides: overrides,
+        ...(readCurrentRecipeSnapshot(this.#database, beverageId)
+          ? { recipeSnapshot: readCurrentRecipeSnapshot(this.#database, beverageId) }
+          : {}),
+        ...(readSensoryOverrides(this.#database, beverageId)
+          ? { sensoryOverrides: readSensoryOverrides(this.#database, beverageId) }
+          : {}),
+      };
+    });
+  }
+
   #applyOverridesToDatabase(
     beverageId: string,
     input: UpdatePresentationOverridesInput,
@@ -1032,16 +1313,75 @@ export class BeverageService {
     });
   }
 
+  /**
+   * Return the bounded, deterministic authenticated index projection. The
+   * repository performs the effective-value joins and usage count in SQL;
+   * this method normalizes the bounded query and page window.
+   */
+  listBeveragePage(query: BeverageListQuery = {}): BeverageListPage {
+    const requestedQuery =
+      query !== null && typeof query === "object" ? query : ({} as BeverageListQuery);
+    const rawQuery = typeof requestedQuery.q === "string" ? requestedQuery.q.trim() : "";
+    const normalizedQuery = rawQuery.slice(0, 80);
+    const rawPage = requestedQuery.page;
+    const requestedPage =
+      typeof rawPage === "number" && Number.isInteger(rawPage) && Number.isFinite(rawPage)
+        ? Math.max(1, Math.min(10_000, rawPage))
+        : 1;
+    const total = countBeverages(this.#database, { q: normalizedQuery });
+    const pageSize = 25;
+    const pageCount = Math.max(1, Math.ceil(total / pageSize));
+    const page = Math.min(requestedPage, pageCount);
+    const records = listBeveragePage(this.#database, {
+      q: normalizedQuery,
+      page,
+    });
+
+    return {
+      items: records,
+      total,
+      page,
+      pageSize,
+      pageCount,
+      query: normalizedQuery,
+    };
+  }
+
+  getBeverageUsage(beverageId: string): BeverageUsage {
+    const beverage = readBeverage(this.#database, beverageId);
+    if (beverage === undefined) {
+      throw new ApplicationError({
+        category: "not_found",
+        code: "beverage.not_found",
+        clientMessage: "Beverage was not found.",
+      });
+    }
+    return readBeverageUsage(this.#database, beverageId);
+  }
+
+  listCurrentFills(beverageId: string, limit = 25): readonly BeverageCurrentFill[] {
+    const beverage = readBeverage(this.#database, beverageId);
+    if (beverage === undefined) {
+      throw new ApplicationError({
+        category: "not_found",
+        code: "beverage.not_found",
+        clientMessage: "Beverage was not found.",
+      });
+    }
+    return readCurrentBeverageFills(this.#database, beverage.id, limit);
+  }
+
   getDeletionImpact(id: string): BeverageDeletionImpact {
     return calculateBeverageDeletionImpact(this.#database, id);
   }
 
   deleteBeverage(
     id: string,
-    input: { readonly reason?: string | null } = {},
+    input: DeleteBeverageInput = {},
     actorOptions: BeverageActorOptions = {},
   ): BeverageDeletionImpact {
-    return deleteBeverageWithAudit(this.#database, id, input, actorOptions);
+    const validated = validateDeleteBeverageInput(input);
+    return deleteBeverageWithAudit(this.#database, id, validated, actorOptions);
   }
 
   configureBrewfatherAccount(
@@ -1115,10 +1455,21 @@ export class BeverageService {
     readonly apiKeyConfigured: boolean;
     readonly totalCandidates: number;
     readonly totalLinkedBeverages: number;
+    readonly lastDataUpdateAt: string | null;
   } {
     const account = readBrewfatherAccount(this.#database, accountId);
     const candidates = listCandidates(this.#database, accountId);
     const links = listBeverageLinks(this.#database).filter((l) => l.accountId === accountId);
+    const dataUpdateTimes = [
+      ...candidates.map((candidate) => candidate.syncedAt),
+      ...links.flatMap((link) => (link.lastSyncedAt === null ? [] : [link.lastSyncedAt])),
+    ];
+    const lastDataUpdateAt =
+      dataUpdateTimes.length === 0
+        ? null
+        : dataUpdateTimes.reduce((latest, current) =>
+            Date.parse(current) > Date.parse(latest) ? current : latest,
+          );
 
     let apiKeyConfigured = false;
     if (this.#secretsService) {
@@ -1143,6 +1494,7 @@ export class BeverageService {
       apiKeyConfigured,
       totalCandidates: candidates.length,
       totalLinkedBeverages: links.length,
+      lastDataUpdateAt,
     };
   }
 

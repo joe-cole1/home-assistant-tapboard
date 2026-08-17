@@ -1,0 +1,36 @@
+<% layout("/layouts/admin", { page: it.page }) %>
+<%~ include("/partials/admin-nav", { page: it.page, items: it.navItems || [] }) %>
+<main id="main-content">
+  <header class="page-header">
+    <p class="eyebrow"><a href="/admin/integrations">Integrations</a> / Beverage source</p>
+    <h1>Brewfather</h1>
+    <p>Connect Brewfather to import beverage data. Stored credentials are never shown.</p>
+  </header>
+  <%~ include("/partials/admin-messages", { page: it.page }) %>
+  <section class="admin-card" aria-labelledby="brewfather-status-heading">
+    <div class="section-heading"><div><h2 id="brewfather-status-heading">Connection status</h2><p class="muted">Read-only summary of the current integration.</p></div><span class="status-badge status-badge--<%= it.brewfather.configured && it.brewfather.apiKeyConfigured ? "healthy" : "muted" %>"><%= it.brewfather.configured && it.brewfather.apiKeyConfigured ? "Connected" : "Not configured" %></span></div>
+    <dl class="metrics metrics--compact"><div><dt>Account</dt><dd><%= it.brewfather.configured ? "Configured" : "Not configured" %></dd></div><div><dt>API key</dt><dd><%= it.brewfather.apiKeyConfigured ? "Stored" : "Not stored" %></dd></div><div><dt>Linked beverages</dt><dd><%= it.brewfather.linkedBeverages %></dd></div><div><dt>Import candidates</dt><dd><%= it.brewfather.candidates %></dd></div></dl>
+  </section>
+  <section class="admin-card" aria-labelledby="brewfather-settings-heading">
+    <details class="admin-disclosure">
+      <summary><span><strong id="brewfather-settings-heading">Connection settings</strong><small>Update the account or replace the stored API key.</small></span></summary>
+      <form action="/admin/integrations/brewfather" method="post">
+        <input type="hidden" name="_csrf" value="<%= it.page.csrfToken %>" />
+        <label>User ID <input name="userId" autocomplete="off" maxlength="120" required /></label>
+        <label>Replace API key <input name="apiKey" type="password" autocomplete="new-password" maxlength="256" /></label>
+        <label>Enabled <select name="enabled"><option value="true"<% if (it.brewfather.enabled) { %> selected<% } %>>Enabled</option><option value="false"<% if (!it.brewfather.enabled) { %> selected<% } %>>Disabled</option></select></label>
+        <button type="submit">Save Brewfather configuration</button>
+      </form>
+    </details>
+  </section>
+  <section class="admin-card" aria-labelledby="brewfather-actions-heading">
+    <p class="status-line"><strong>Last data update:</strong> <% if (it.brewfather.lastDataUpdateAt) { %><time datetime="<%= it.brewfather.lastDataUpdateAt %>"><%= it.brewfather.lastDataUpdateAtLabel %></time><% } else { %>Never<% } %></p>
+    <details class="admin-disclosure">
+      <summary><span><strong id="brewfather-actions-heading">Maintenance</strong><small>Refresh imported data or remove the stored credential.</small></span></summary>
+      <div class="action-group">
+        <% if (it.brewfather.configured) { %><form action="/admin/integrations/brewfather/sync" method="post"><input type="hidden" name="_csrf" value="<%= it.page.csrfToken %>" /><button type="submit">Refresh Brewfather now</button></form><% } %>
+        <% if (it.brewfather.apiKeyConfigured) { %><form action="/admin/integrations/brewfather/remove-key" method="post"><input type="hidden" name="_csrf" value="<%= it.page.csrfToken %>" /><button class="danger" type="submit">Remove stored API key</button></form><% } %>
+      </div>
+    </details>
+  </section>
+</main>

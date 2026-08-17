@@ -1,34 +1,31 @@
 <% layout("/layouts/admin", { page: it.page }) %>
 <%~ include("/partials/admin-nav", { page: it.page, items: it.navItems || [] }) %>
 <main id="main-content">
-  <h1>Integrations</h1>
+  <header class="page-header">
+    <p class="eyebrow">Configure</p>
+    <h1>Integrations</h1>
+    <p>Connect the services that supply beverage data and Tap measurements.</p>
+  </header>
   <%~ include("/partials/admin-messages", { page: it.page }) %>
-  <section aria-labelledby="integration-status"><h2 id="integration-status">Status</h2><dl class="metrics"><% for (const item of it.integrations) { %><div><dt><%= item.name %></dt><dd><%= item.status %></dd></div><% } %></dl></section>
-  <section aria-labelledby="telemetry-heading">
-    <h2 id="telemetry-heading">Telemetry sources</h2>
-    <p>Machine keys are shown once when created and are never recoverable.</p>
-    <% if (it.telemetrySources.length === 0) { %><p>No telemetry sources are configured.</p><% } else { %>
-      <table><thead><tr><th scope="col">Source</th><th scope="col">Key identifier</th><th scope="col">Created</th><th scope="col">Key action</th></tr></thead><tbody><% for (const source of it.telemetrySources) { %><tr><th scope="row"><%= source.name %></th><td><code><%= source.keyPublicId %></code></td><td><time datetime="<%= source.keyCreatedAt %>"><%= source.keyCreatedAt %></time></td><td><details><summary>Rotate key</summary><form action="/admin/integrations/telemetry-sources/<%= source.id %>/rotate" method="post"><input type="hidden" name="_csrf" value="<%= it.page.csrfToken %>" /><label>New key label <input name="label" maxlength="120" /></label><button type="submit">Rotate and show replacement once</button></form></details></td></tr><% } %></tbody></table>
-    <% } %>
-    <form action="/admin/integrations/telemetry-sources/create" method="post">
-      <input type="hidden" name="_csrf" value="<%= it.page.csrfToken %>" />
-      <label>Source name <input name="name" maxlength="120" required /></label>
-      <label>Key label <input name="label" maxlength="120" /></label>
-      <button type="submit">Create source and show key</button>
-    </form>
-  </section>
-  <section aria-labelledby="brewfather-heading">
-    <h2 id="brewfather-heading">Brewfather</h2>
-    <p><%= it.brewfather.configured ? "Configured" : "Not configured" %>; API key <%= it.brewfather.apiKeyConfigured ? "stored" : "not stored" %>; <%= it.brewfather.linkedBeverages %> linked Beverages.</p>
-    <form action="/admin/integrations/brewfather" method="post">
-      <input type="hidden" name="_csrf" value="<%= it.page.csrfToken %>" />
-      <label>User ID <input name="userId" autocomplete="off" maxlength="120" required /></label>
-      <label>Replace API key <input name="apiKey" type="password" autocomplete="new-password" maxlength="256" /></label>
-      <label>Enabled <select name="enabled"><option value="true">Enabled</option><option value="false">Disabled</option></select></label>
-      <button type="submit">Save Brewfather configuration</button>
-    </form>
-    <% if (it.brewfather.apiKeyConfigured) { %><form action="/admin/integrations/brewfather/remove-key" method="post"><input type="hidden" name="_csrf" value="<%= it.page.csrfToken %>" /><button class="danger" type="submit">Remove stored API key</button></form><% } %>
-    <% if (it.brewfather.configured) { %><form action="/admin/integrations/brewfather/sync" method="post"><input type="hidden" name="_csrf" value="<%= it.page.csrfToken %>" /><button type="submit">Refresh Brewfather now</button></form><% } %>
-    <h3>Future integrations</h3><p>Home Assistant outbound delivery and generic webhooks are not yet available in this rebuild.</p>
+  <section class="integration-resource-grid" aria-labelledby="integration-resources-heading">
+    <h2 id="integration-resources-heading" class="sr-only">Integration resources</h2>
+    <article class="admin-card integration-resource-card">
+      <div class="integration-resource-card__header">
+        <div><p class="eyebrow">Beverage source</p><h2>Brewfather</h2></div>
+        <span class="status-badge status-badge--<%= it.brewfather.configured && it.brewfather.apiKeyConfigured ? "healthy" : "muted" %>"><%= it.brewfather.configured && it.brewfather.apiKeyConfigured ? "Connected" : "Not configured" %></span>
+      </div>
+      <p><%= it.brewfather.apiKeyConfigured ? "Beverage data is available for linking." : "Add an API key to import and refresh beverage data." %></p>
+      <dl class="integration-resource-card__summary"><div><dt>Linked beverages</dt><dd><%= it.brewfather.linkedBeverages %></dd></div><div><dt>Import candidates</dt><dd><%= it.brewfather.candidates %></dd></div></dl>
+      <a class="button secondary button--small" href="/admin/integrations/brewfather">Open Brewfather</a>
+    </article>
+    <article class="admin-card integration-resource-card">
+      <div class="integration-resource-card__header">
+        <div><p class="eyebrow">Measurement sources</p><h2>Telemetry</h2></div>
+        <span class="status-badge status-badge--<%= it.telemetry.activeCount > 0 ? "healthy" : "muted" %>"><%= it.telemetry.activeCount > 0 ? `${it.telemetry.activeCount} active` : "Not configured" %></span>
+      </div>
+      <p>Manage source keys and the devices that report Tap measurements.</p>
+      <dl class="integration-resource-card__summary"><div><dt>Active sources</dt><dd><%= it.telemetry.activeCount %></dd></div><div><dt>Disabled history</dt><dd><%= it.telemetry.disabledCount %></dd></div></dl>
+      <a class="button secondary button--small" href="/admin/integrations/telemetry">Open Telemetry</a>
+    </article>
   </section>
 </main>

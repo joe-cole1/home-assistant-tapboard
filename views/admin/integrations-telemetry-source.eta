@@ -1,0 +1,38 @@
+<% layout("/layouts/admin", { page: it.page }) %>
+<%~ include("/partials/admin-nav", { page: it.page, items: it.navItems || [] }) %>
+<main id="main-content">
+  <header class="page-header">
+    <p class="eyebrow"><a href="/admin/integrations/telemetry">Telemetry</a> / Source</p>
+    <h1><%= it.source.name %></h1>
+    <p>Safe source metadata only. Machine key secrets and digests are never displayed.</p>
+  </header>
+  <%~ include("/partials/admin-messages", { page: it.page }) %>
+  <section class="admin-card" aria-labelledby="source-status-heading">
+    <div class="section-heading"><div><h2 id="source-status-heading">Source status</h2><p class="muted">Authentication and key information for this source.</p></div><span class="status-badge status-badge--<%= it.source.disabledAt === null ? "healthy" : "muted" %>"><%= it.source.disabledAt === null ? "Active" : "Disabled" %></span></div>
+    <div class="table-scroll"><table class="admin-table"><tbody>
+      <tr><th scope="row">Key ID (audit reference)</th><td><code><%= it.source.keyPublicId %></code><br /><span class="muted">Reference only; it is not sent in the URL or request.</span></td></tr>
+      <tr><th scope="row">Key label</th><td><%= it.source.keyLabel %></td></tr>
+      <tr><th scope="row">Source created</th><td><time datetime="<%= it.source.createdAt %>"><%= it.source.createdAtLabel %></time></td></tr>
+      <tr><th scope="row">Key created</th><td><time datetime="<%= it.source.keyCreatedAt %>"><%= it.source.keyCreatedAtLabel %></time></td></tr>
+      <% if (it.source.disabledAt !== null) { %><tr><th scope="row">Disabled</th><td><time datetime="<%= it.source.disabledAt %>"><%= it.source.disabledAtLabel %></time></td></tr><% } %>
+    </tbody></table></div>
+  </section>
+  <section class="admin-card" aria-labelledby="source-usage-heading">
+    <h2 id="source-usage-heading">Usage</h2>
+    <p>Assign this source to a Tap’s telemetry authority, then send measurements to <code>POST /api/v1/telemetry/taps/{tapNumber}</code>.</p>
+    <p>Authenticate with the complete machine key in <code>Authorization: Bearer …</code>. The Key ID above is an audit reference only; it is not sent in the URL or request.</p>
+  </section>
+  <% if (it.source.disabledAt === null) { %>
+    <section class="admin-card" aria-labelledby="source-key-actions-heading">
+      <details class="admin-disclosure">
+        <summary><span><strong id="source-key-actions-heading">Key actions</strong><small>Explicit actions issue a replacement secret or permanently disable this source.</small></span></summary>
+        <div class="action-group">
+          <form action="/admin/integrations/telemetry-sources/<%= it.source.id %>/rotate" method="post"><input type="hidden" name="_csrf" value="<%= it.page.csrfToken %>" /><label>New key label <input name="label" maxlength="120" /></label><button type="submit">Rotate key and show replacement once</button></form>
+          <form action="/admin/integrations/telemetry-sources/<%= it.source.id %>/disable" method="post"><input type="hidden" name="_csrf" value="<%= it.page.csrfToken %>" /><button class="danger" type="submit">Disable source</button><p class="muted">A source assigned to any Tap must be unassigned before it can be disabled.</p></form>
+        </div>
+      </details>
+    </section>
+  <% } else { %>
+    <section class="admin-card"><h2>Immutable history</h2><p>This source is disabled and its current key is revoked. It cannot be rotated, renamed, or re-enabled.</p></section>
+  <% } %>
+</main>

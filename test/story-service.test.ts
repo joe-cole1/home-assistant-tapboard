@@ -32,7 +32,20 @@ function mystery(overrides: Partial<TapAssignmentMysteryConfig>): TapAssignmentM
   return { ...defaultMystery, ...overrides };
 }
 
-function fixture() {
+interface TapCardMetricSettings {
+  readonly showAbv: boolean;
+  readonly showIbu: boolean;
+  readonly showOg: boolean;
+  readonly showFg: boolean;
+  readonly showSrm: boolean;
+}
+
+function fixture(
+  options: {
+    readonly tapCardMetricSettings?: TapCardMetricSettings;
+    readonly displaySettingsFailure?: boolean;
+  } = {},
+) {
   let tap: AdminTapView = {
     id: TAP_ID,
     tapNumber: 7,
@@ -270,6 +283,23 @@ function fixture() {
         aggregate: { state: "healthy", severity: "none" },
       }),
     },
+    ...(options.tapCardMetricSettings === undefined && options.displaySettingsFailure !== true
+      ? {}
+      : {
+          displayService: {
+            getEffectiveTapCardSettings: () => {
+              if (options.displaySettingsFailure === true) throw new Error("display unavailable");
+              return {
+                tapId: TAP_ID,
+                settings: {
+                  ...options.tapCardMetricSettings!,
+                  remainingMode: "percent",
+                },
+                override: null,
+              };
+            },
+          },
+        }),
   } as unknown as PublicStoryServiceDependencies;
 
   const service = new PublicStoryService(dependencies);
@@ -289,11 +319,17 @@ void test("public Story projection keeps normal fields and redacts internal IDs"
   const { service, getRecipeSnapshotsCalls } = fixture();
   const card = service.getCard(TAP_ID);
   assert.ok(card);
-  assert.equal(card.title, "Secret Tap Name");
+  assert.equal(card.title, "Secret Beverage Name");
+  assert.equal(card.tapName, "Secret Tap Name");
   assert.equal(card.beverageName, "Secret Beverage Name");
+  assert.equal(card.abv, 6.4);
   assert.equal(card.storyPath, `/taps/${encodeURIComponent(TAP_ID)}/story`);
   assert.equal(card.graphicId, "pint_glass");
   assert.equal(card.graphic?.token, "vessel/pint-glass");
+  assert.deepEqual(
+    card.metrics.map((metric) => metric.key),
+    ["abv", "ibu", "og", "fg"],
+  );
 
   const story = service.getStory(TAP_ID);
   assert.ok(story);
@@ -328,7 +364,9 @@ void test("Mystery defaults are safe across card, legacy, Story, and accessibili
   assert.ok(card);
   assert.equal(card.title, "Mystery Tap");
   assert.equal(card.tapName, null);
+  assert.equal(card.abv, null);
   assert.equal(card.beverageName, null);
+  assert.deepEqual(card.metrics, []);
   assert.equal(card.fillId, null);
   assert.equal(card.accessibleLabel, "Tap 7, Mystery Tap");
   assert.equal(card.storyPath, `/taps/${encodeURIComponent(TAP_ID)}/story`);
@@ -371,6 +409,34 @@ void test("Mystery defaults are safe across card, legacy, Story, and accessibili
   ]) {
     assert.equal(serialized.includes(forbidden), false, forbidden);
   }
+});
+
+void test("Tap metric preferences intersect with Mystery redaction and fail closed", () => {
+  const configured = fixture({
+    tapCardMetricSettings: {
+      showAbv: false,
+      showIbu: true,
+      showOg: false,
+      showFg: false,
+      showSrm: false,
+    },
+  });
+  assert.deepEqual(configured.service.getCard(TAP_ID)?.metrics, [
+    { key: "ibu", label: "IBU", value: "42" },
+  ]);
+
+  configured.setMystery(mystery({ enabled: true }));
+  assert.equal(configured.service.getCard(TAP_ID)?.abv, null);
+  assert.deepEqual(configured.service.getCard(TAP_ID)?.metrics, []);
+  configured.setMystery(mystery({ enabled: true, revealAbv: true }));
+  assert.equal(configured.service.getCard(TAP_ID)?.abv, 6.4);
+  configured.setMystery(mystery({ enabled: true, revealIbu: true }));
+  assert.deepEqual(configured.service.getCard(TAP_ID)?.metrics, [
+    { key: "ibu", label: "IBU", value: "42" },
+  ]);
+
+  const failed = fixture({ displaySettingsFailure: true });
+  assert.deepEqual(failed.service.getCard(TAP_ID)?.metrics, []);
 });
 
 void test("each Mystery reveal controls only its allowlisted surface", () => {
@@ -416,6 +482,8 @@ void test("invalid, disabled, retired, and unassigned taps are safe", () => {
   const unassigned = service.getCard(TAP_ID);
   assert.ok(unassigned);
   assert.equal(unassigned.storyPath, null);
+  assert.equal(unassigned.tapName, "Secret Tap Name");
+  assert.equal(unassigned.abv, null);
   assert.equal(service.getStory(TAP_ID), undefined);
 
   setTap({ enabled: false });

@@ -18,8 +18,9 @@ function detail(
   stroke = DETAIL_STROKE,
   strokeWidth = 2,
   opacity = 0.6,
+  contour = false,
 ) {
-  return Object.freeze({ d, className, fill, stroke, strokeWidth, opacity });
+  return Object.freeze({ d, className, fill, stroke, strokeWidth, opacity, contour });
 }
 
 /**
@@ -60,7 +61,15 @@ const GEOMETRY: Record<VesselId, VesselGeometryDescriptor> = {
         0,
         1,
       ),
-      detail("M 35 65 H 125 V 220 H 35 Z", "glass-detail", DETAIL_FILL, DETAIL_STROKE, 2, 0.75),
+      detail(
+        "M 35 65 H 125 V 220 H 35 Z",
+        "glass-detail",
+        DETAIL_FILL,
+        DETAIL_STROKE,
+        2,
+        0.75,
+        true,
+      ),
       detail("M 40 68 H 46 V 215 H 40 Z", "glass-highlight", "#FFFFFF", "none", 0, 0.15),
       detail(
         "M 32 220 H 128 L 125 245 C 125 250 35 250 35 245 Z",
@@ -92,7 +101,15 @@ const GEOMETRY: Record<VesselId, VesselGeometryDescriptor> = {
     fillX: 30,
     fillWidth: 100,
     detailPaths: [
-      detail("M 45 40 H 115 L 105 225 H 55 Z", "glass-detail", DETAIL_FILL, DETAIL_STROKE, 2, 0.6),
+      detail(
+        "M 45 40 H 115 L 105 225 H 55 Z",
+        "glass-detail",
+        DETAIL_FILL,
+        DETAIL_STROKE,
+        2,
+        0.6,
+        true,
+      ),
       detail("M 48 45 H 54 L 59 220 H 54 Z", "glass-highlight", "#FFFFFF", "none", 0, 0.25),
     ],
   },
@@ -102,7 +119,7 @@ const GEOMETRY: Record<VesselId, VesselGeometryDescriptor> = {
     bodyPath: "M 52 40 C 40 90 30 150 80 170 C 130 150 120 90 108 40 Z",
     clipPath: "M 30 0 H 130 L 108 40 C 120 90 130 150 80 170 C 30 150 40 90 52 40 Z",
     rimPath: "M 52 40 H 108",
-    viewBox: "0 35 160 195",
+    viewBox: "0 35 160 205",
     topY: 40,
     bottomY: 170,
     fillX: 25,
@@ -228,6 +245,7 @@ const GEOMETRY: Record<VesselId, VesselGeometryDescriptor> = {
         DETAIL_STROKE,
         2,
         0.6,
+        true,
       ),
     ],
   },
@@ -243,7 +261,15 @@ const GEOMETRY: Record<VesselId, VesselGeometryDescriptor> = {
     fillX: 36,
     fillWidth: 88,
     detailPaths: [
-      detail("M 44 45 H 116 L 108 225 H 52 Z", "glass-detail", DETAIL_FILL, DETAIL_STROKE, 2, 0.6),
+      detail(
+        "M 44 45 H 116 L 108 225 H 52 Z",
+        "glass-detail",
+        DETAIL_FILL,
+        DETAIL_STROKE,
+        2,
+        0.6,
+        true,
+      ),
     ],
   },
   pilsner_flute: {
@@ -258,7 +284,15 @@ const GEOMETRY: Record<VesselId, VesselGeometryDescriptor> = {
     fillX: 46,
     fillWidth: 68,
     detailPaths: [
-      detail("M 58 30 H 102 L 112 220 H 48 Z", "glass-detail", DETAIL_FILL, DETAIL_STROKE, 2, 0.6),
+      detail(
+        "M 58 30 H 102 L 112 220 H 48 Z",
+        "glass-detail",
+        DETAIL_FILL,
+        DETAIL_STROKE,
+        2,
+        0.6,
+        true,
+      ),
     ],
   },
   stange: {
@@ -273,7 +307,15 @@ const GEOMETRY: Record<VesselId, VesselGeometryDescriptor> = {
     fillX: 53,
     fillWidth: 54,
     detailPaths: [
-      detail("M 55 40 H 105 V 220 H 55 Z", "glass-detail", DETAIL_FILL, DETAIL_STROKE, 2, 0.6),
+      detail(
+        "M 55 40 H 105 V 220 H 55 Z",
+        "glass-detail",
+        DETAIL_FILL,
+        DETAIL_STROKE,
+        2,
+        0.6,
+        true,
+      ),
     ],
   },
   goblet: {
@@ -364,6 +406,7 @@ const GEOMETRY: Record<VesselId, VesselGeometryDescriptor> = {
         DETAIL_STROKE,
         2,
         0.6,
+        true,
       ),
     ],
   },

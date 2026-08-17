@@ -368,6 +368,121 @@ void test("telemetry HTTP is Bearer-only, strict, and maps durable outcomes", as
   assert.equal(revoked.response.status, 401);
 });
 
+void test("telemetry source disable HTTP route enforces security, status, and token revocation", async (context) => {
+  let now = new Date("2026-08-14T12:00:00.000Z");
+  const database = openDatabase(":memory:");
+  const authService = createAuthService(database, {
+    canonicalOrigin: CANONICAL_ORIGIN,
+    now: () => now,
+  });
+  const machineKeyService = createMachineKeyService(database, { now: () => now });
+  const telemetryService = new TelemetryService({
+    database,
+    machineKeyService,
+    clock: () => now,
+  });
+  const router = new Router(quietLogger);
+  registerTelemetryRoutes({
+    router,
+    telemetryService,
+    detectorService: new DetectorService(database),
+    authService,
+  });
+  const server = new HttpServer({ router, logger: quietLogger, shutdownGraceMs: 250 });
+  context.after(async () => {
+    await server.stop();
+    database.close();
+  });
+
+  await authService.setPin("1234");
+  const login = await authService.authenticate("1234");
+  assert.equal(login.authenticated, true);
+  assert.ok(login.session);
+  assert.ok(login.csrfToken);
+  const cookie = `tapboard_admin_session=${login.session}`;
+  const sourceResult = telemetryService.createSource({ name: "Disable HTTP Source" });
+  const address = await server.start("127.0.0.1", 0);
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+  const path = `/api/admin/telemetry/sources/${sourceResult.source.id}/disable`;
+  const mutationHeaders = {
+    cookie,
+    origin: CANONICAL_ORIGIN,
+    "x-csrf-token": login.csrfToken,
+    "content-type": "application/json",
+  } as const;
+
+  const noAuth = await readJsonResponse(
+    await fetch(`${baseUrl}${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "not-json",
+    }),
+  );
+  assert.equal(noAuth.response.status, 401);
+  const bearer = await readJsonResponse(
+    await fetch(`${baseUrl}${path}`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${login.session}`, "content-type": "application/json" },
+      body: "not-json",
+    }),
+  );
+  assert.equal(bearer.response.status, 401);
+  const wrongOrigin = await readJsonResponse(
+    await fetch(`${baseUrl}${path}`, {
+      method: "POST",
+      headers: { ...mutationHeaders, origin: "https://evil.example" },
+      body: "not-json",
+    }),
+  );
+  assert.equal(wrongOrigin.response.status, 401);
+
+  const success = await readJsonResponse(
+    await fetch(`${baseUrl}${path}`, {
+      method: "POST",
+      headers: mutationHeaders,
+    }),
+  );
+  assert.equal(success.response.status, 200);
+  const successBody = success.body as {
+    readonly source: { readonly id: string; readonly disabledAt: string | null };
+  };
+  assert.equal(successBody.source.id, sourceResult.source.id);
+  assert.equal(typeof successBody.source.disabledAt, "string");
+  assert.equal(JSON.stringify(success.body).includes(sourceResult.initialToken), false);
+
+  const repeated = await readJsonResponse(
+    await fetch(`${baseUrl}${path}`, {
+      method: "POST",
+      headers: mutationHeaders,
+    }),
+  );
+  assert.equal(repeated.response.status, 409);
+
+  now = new Date("2026-08-14T12:00:01.000Z");
+  const oldTokenSingle = await readJsonResponse(
+    await fetch(`${baseUrl}/api/v1/telemetry/taps/1`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${sourceResult.initialToken}`,
+        "content-type": "application/json",
+      },
+      body: "not-json",
+    }),
+  );
+  assert.equal(oldTokenSingle.response.status, 401);
+  const oldTokenBatch = await readJsonResponse(
+    await fetch(`${baseUrl}/api/v1/telemetry/batch`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${sourceResult.initialToken}`,
+        "content-type": "application/json",
+      },
+      body: "not-json",
+    }),
+  );
+  assert.equal(oldTokenBatch.response.status, 401);
+});
+
 void test("telemetry HTTP body caps and batch outcomes use the documented statuses", async (context) => {
   let now = new Date("2026-08-14T12:00:00.000Z");
   const database = openDatabase(":memory:");

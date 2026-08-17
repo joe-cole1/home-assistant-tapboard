@@ -1,0 +1,7 @@
+<% layout("/layouts/admin", { page: it.page }) %>
+<%~ include("/partials/admin-nav", { page: it.page, items: it.navItems || [] }) %>
+<main id="main-content">
+  <div class="page-header"><p class="eyebrow">Keg Room · Inventory</p><h1>Add a Physical Keg</h1><p class="muted">Start with the operator-facing Keg number and label. Hardware and tare maintenance stay on the detail page.</p></div>
+  <%~ include("/partials/admin-messages", { page: it.page }) %>
+  <section class="admin-card" aria-labelledby="new-keg-form"><h2 id="new-keg-form">Physical Keg</h2><form class="admin-form" action="/admin/kegs/create" method="post"><input type="hidden" name="_csrf" value="<%= it.page.csrfToken %>" /><label>Keg number <input name="kegNumber" type="number" min="1" required /></label><label>Label <input name="label" maxlength="120" /></label><label>Capacity (mL) <input name="capacityMl" type="number" min="1" required /></label><details><summary>Advanced tare</summary><label>Tare (g) <input name="currentTareG" type="number" min="0" step="1" /></label></details><input type="hidden" name="isActive" value="true" /><div class="card-actions"><button class="primary" type="submit">Add Keg</button><a class="secondary" href="/admin/keg-room/kegs">Cancel</a></div></form></section>
+</main>

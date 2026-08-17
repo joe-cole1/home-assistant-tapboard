@@ -1,15 +1,23 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-admin-accent="<%= it.page.adminAccent || "amber" %>">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title><%= it.page.title %> · Tapboard</title>
+    <title><%= it.page.title %> · <%= it.page.siteName || "Tapboard" %></title>
     <link rel="stylesheet" href="/assets/css/tokens.css" />
     <link rel="stylesheet" href="/assets/css/components.css" />
     <link rel="stylesheet" href="/assets/css/admin.css" />
+    <% if (it.page.displayStylesheetHref) { %>
+      <link id="display-stylesheet" data-display-stylesheet rel="stylesheet" href="<%= it.page.displayStylesheetHref %>" />
+    <% } %>
+    <% if (it.page.includeDashboardStyles === true) { %>
+      <link rel="stylesheet" href="/assets/css/dashboard.css" />
+    <% } %>
   </head>
   <body class="admin-shell">
     <a class="skip-link" href="#main-content">Skip to content</a>
     <%~ it.body %>
+    <script type="module" src="/assets/js/admin-shell.js"></script>
+    <script type="module" src="/assets/js/admin-autosave.js"></script>
   </body>
 </html>

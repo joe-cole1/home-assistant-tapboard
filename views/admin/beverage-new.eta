@@ -1,0 +1,49 @@
+<% layout("/layouts/admin", { page: it.page }) %>
+<%~ include("/partials/admin-nav", { page: it.page, items: it.navItems || [] }) %>
+<main id="main-content">
+  <nav class="admin-back-link" aria-label="Breadcrumb"><a href="/admin/beverages">← Beverages</a></nav>
+  <header class="page-header">
+    <p class="eyebrow">Beverage library</p>
+    <h1>New beverage</h1>
+    <p class="muted">Start with the details operators need at a glance. Advanced recipe and sensory guidance can be added now or later.</p>
+  </header>
+  <%~ include("/partials/admin-messages", { page: it.page }) %>
+  <form class="admin-form" action="/admin/beverages/create" method="post">
+    <input type="hidden" name="_csrf" value="<%= it.page.csrfToken %>" />
+    <section class="admin-card" aria-labelledby="new-beverage-basics">
+      <h2 id="new-beverage-basics">Basics</h2>
+      <div class="config-grid">
+        <label>Name <input name="name" maxlength="160" required autofocus /></label>
+        <label>Type <select name="beverageType"><% for (const type of it.beverageTypes) { %><option value="<%= type %>"><%= type[0].toUpperCase() + type.slice(1) %></option><% } %></select></label>
+        <label>Style <input name="style" maxlength="120" /></label>
+        <label>ABV (%) <input name="abv" type="number" min="0" max="100" step="0.1" /></label>
+      </div>
+    </section>
+    <details class="admin-card" open>
+      <summary><strong>Technical presentation</strong><span class="muted"> ABV, gravity, color, and serving vessel</span></summary>
+      <div class="config-grid">
+        <label>IBU <input name="ibu" type="number" min="0" max="2000" step="0.1" /></label>
+        <label>Original gravity <input name="og" type="number" min="0.5" max="2" step="0.001" /></label>
+        <label>Final gravity <input name="fg" type="number" min="0.5" max="2" step="0.001" /></label>
+        <label>SRM <input name="srm" type="number" min="0" max="100" step="0.1" /></label>
+        <label>Manual density override <input name="manualDensityOverride" type="number" min="0.5" max="2" step="0.001" /></label>
+        <label>Display color <input name="displayColor" pattern="#[0-9A-Fa-f]{6}" placeholder="#D97706" /></label>
+      </div>
+      <%~ include("/partials/fill-glass-picker", { label: "Fill Glass", name: "fillGlass", id: "new-fill-glass", selected: "", options: it.fillGlassOptions || [] }) %>
+      <label>Description <textarea name="description" maxlength="4000" rows="4"></textarea></label>
+    </details>
+    <details class="admin-card">
+      <summary><strong>Sensory guidance</strong><span class="muted"> Optional canonical manual overrides from 0 to 10</span></summary>
+      <p class="muted">These bounded values drive derived guidance for Story and authenticated operators.</p>
+      <div class="config-grid">
+        <% for (const axis of ["bitterness", "sweetness", "body", "roast", "tartness", "alcohol"]) { %><label><%= axis[0].toUpperCase() + axis.slice(1) %><input name="<%= axis %>" type="number" min="0" max="10" step="0.1" /></label><% } %>
+      </div>
+    </details>
+    <details class="admin-card">
+      <summary><strong>Custom recipe</strong><span class="muted"> Optional bounded JSON for ingredients and process steps</span></summary>
+      <p class="muted">Use the supported recipe object with <code>notes</code>, <code>ingredients</code>, and <code>steps</code>. Leave blank to add it later.</p>
+      <label>Recipe JSON <textarea name="recipeJson" rows="14" spellcheck="false" placeholder="{\n  &quot;notes&quot;: &quot;&quot;,\n  &quot;ingredients&quot;: [],\n  &quot;steps&quot;: []\n}"></textarea></label>
+    </details>
+    <div class="form-actions"><a class="button secondary" href="/admin/beverages">Cancel</a><button class="primary" type="submit">Create beverage</button></div>
+  </form>
+</main>

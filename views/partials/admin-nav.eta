@@ -1,12 +1,43 @@
 <header class="admin-header">
-  <a class="admin-brand" href="/admin/overview">Tapboard admin</a>
-  <nav aria-label="Admin">
-    <% for (const item of it.items) { %>
-      <a href="<%= item.href %>"<% if (it.page.path === item.href) { %> aria-current="page"<% } %>><%= item.label %></a>
-    <% } %>
-  </nav>
-  <form class="logout-form" action="/admin/logout" method="post">
-    <input type="hidden" name="_csrf" value="<%= it.page.csrfToken %>" />
-    <button type="submit">Log out</button>
+  <div class="admin-header__identity">
+    <a class="admin-brand" href="/"><%= it.page.siteName || "Tapboard" %></a>
+    <span class="admin-header__context">Admin</span>
+  </div>
+  <button class="admin-menu-toggle" type="button" data-admin-menu-toggle hidden aria-controls="admin-sidebar" aria-expanded="false">Menu</button>
+  <form class="admin-jump-form" action="/admin/jump" method="get" role="search">
+    <label class="sr-only" for="admin-jump-query">Jump to destination</label>
+    <input id="admin-jump-query" name="q" type="search" maxlength="80" autocomplete="off" placeholder="Jump to…" data-admin-jump-input />
+    <button type="submit">Jump</button>
   </form>
+  <div class="admin-header__actions">
+    <a class="button secondary button--small admin-exit" href="/">Exit Admin</a>
+    <form class="logout-form" action="/admin/logout" method="post">
+      <input type="hidden" name="_csrf" value="<%= it.page.csrfToken %>" />
+      <button type="submit">Log out</button>
+    </form>
+  </div>
 </header>
+<aside id="admin-sidebar" class="admin-sidebar" data-admin-sidebar>
+  <div class="admin-sidebar__controls">
+    <button class="admin-sidebar-toggle" type="button" data-admin-sidebar-toggle hidden aria-controls="admin-sidebar" aria-expanded="true">Collapse</button>
+    <button class="admin-sidebar-close" type="button" data-admin-sidebar-close hidden>Close menu</button>
+  </div>
+  <nav aria-label="Admin">
+    <% const navItems = it.items.map((item) => ({ ...item, group: item.group || (item.href === "/admin/overview" ? "Overview" : "Manage"), activePaths: item.activePaths || [item.href], mark: item.mark || item.label.slice(0, 1).toUpperCase() })); %>
+    <% for (const group of ["Overview", "Manage", "Configure", "Future"]) { const groupItems = navItems.filter((item) => item.group === group); if (groupItems.length > 0) { %>
+      <section class="admin-nav-group" aria-labelledby="admin-nav-<%= group.toLocaleLowerCase() %>">
+        <h2 id="admin-nav-<%= group.toLocaleLowerCase() %>"><%= group %></h2>
+        <ul>
+          <% for (const item of groupItems) { const active = item.activePaths.some((path) => it.page.path === path || it.page.path.startsWith(`${path}/`)); %>
+            <li><a href="<%= item.href %>" title="<%= item.label %>" aria-label="<%= item.label %>"<% if (active) { %> aria-current="page"<% } %>><span class="admin-nav-mark" aria-hidden="true"><%= item.mark %></span><span class="admin-nav-label"><%= item.label %></span></a></li>
+          <% } %>
+        </ul>
+      </section>
+    <% } } %>
+  </nav>
+</aside>
+<button class="admin-drawer-backdrop" type="button" data-admin-drawer-backdrop hidden aria-label="Close Admin menu"></button>
+<nav class="admin-breadcrumbs" aria-label="Breadcrumb">
+  <% if (it.page.path !== "/admin/overview") { %><a class="admin-breadcrumbs__back" href="/admin/overview">Back to Overview</a><% } %>
+  <span class="admin-breadcrumbs__wide"><a href="/admin/overview">Admin</a><span aria-hidden="true">/</span><span aria-current="page"><%= it.page.title %></span></span>
+</nav>

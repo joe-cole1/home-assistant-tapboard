@@ -1,11 +1,56 @@
 import type { DatabaseExecutor } from "../../infrastructure/database/connection.ts";
 import type {
+  AdminKegPageSort,
+  AdminKegPageStatus,
+  AdminKegSummaryView,
   ActorType,
   KegDeletionImpact,
   KegMaintenanceRecord,
   KegTareHistoryRecord,
   PhysicalKeg,
 } from "./types.ts";
+
+export interface AdminKegPageRepositoryQuery {
+  readonly q: string;
+  readonly status: AdminKegPageStatus;
+  readonly sort: AdminKegPageSort;
+  readonly page: number;
+}
+
+function kegPageWhere(query: AdminKegPageRepositoryQuery): {
+  readonly sql: string;
+  readonly params: unknown[];
+} {
+  const clauses: string[] = [];
+  const params: unknown[] = [];
+  if (query.status !== "all") {
+    clauses.push("is_active = ?");
+    params.push(query.status === "active" ? 1 : 0);
+  }
+  if (query.q.length > 0) {
+    const escaped = query.q.replace(/[\\%_]/gu, (value) => `\\${value}`);
+    const pattern = `%${escaped}%`;
+    clauses.push(`(
+      LOWER(COALESCE(label, '')) LIKE LOWER(?) ESCAPE '\\'
+      OR CAST(keg_number AS TEXT) LIKE ? ESCAPE '\\'
+      OR LOWER(CASE WHEN is_active = 1 THEN 'active' ELSE 'inactive' END) LIKE LOWER(?) ESCAPE '\\'
+    )`);
+    params.push(pattern, pattern, pattern);
+  }
+  return { sql: clauses.length === 0 ? "" : `WHERE ${clauses.join(" AND ")}`, params };
+}
+
+function kegPageOrder(sort: AdminKegPageSort): string {
+  switch (sort) {
+    case "label":
+      return "LOWER(COALESCE(label, '')) ASC, keg_number ASC, id ASC";
+    case "updated":
+      return "updated_at DESC, keg_number ASC, id ASC";
+    case "number":
+    default:
+      return "keg_number ASC, id ASC";
+  }
+}
 
 interface KegRow {
   readonly id: string;
@@ -124,6 +169,23 @@ export function updateKeg(database: DatabaseExecutor, keg: PhysicalKeg): boolean
   return result.changes > 0;
 }
 
+export function updateKegLabelIfUpdatedAt(
+  database: DatabaseExecutor,
+  kegId: string,
+  label: string | null,
+  expectedUpdatedAt: string,
+  updatedAt: string,
+): boolean {
+  return (
+    database
+      .prepare<[string | null, string, string, string]>(
+        `UPDATE kegs SET label = ?, updated_at = ?
+         WHERE id = ? AND updated_at = ?`,
+      )
+      .run(label, updatedAt, kegId, expectedUpdatedAt).changes === 1
+  );
+}
+
 export function findKegById(database: DatabaseExecutor, id: string): PhysicalKeg | undefined {
   const row = database
     .prepare<[string], KegRow>(
@@ -176,6 +238,36 @@ export function listKegs(database: DatabaseExecutor, options: ListKegsOptions = 
     )
     .all();
 
+  return rows.map(mapKegRow);
+}
+
+export function countAdminKegPage(
+  database: DatabaseExecutor,
+  query: AdminKegPageRepositoryQuery,
+): number {
+  const where = kegPageWhere(query);
+  const row = database
+    .prepare<unknown[], CountRow>(`SELECT COUNT(*) AS count FROM kegs ${where.sql}`)
+    .get(...where.params);
+  return row?.count ?? 0;
+}
+
+/** Return one deterministic 25-row physical inventory page directly from SQLite. */
+export function listAdminKegPage(
+  database: DatabaseExecutor,
+  query: AdminKegPageRepositoryQuery,
+): AdminKegSummaryView[] {
+  const where = kegPageWhere(query);
+  const offset = (query.page - 1) * 25;
+  const rows = database
+    .prepare<unknown[], KegRow>(
+      `SELECT id, keg_number, label, capacity_ml, current_tare_g, is_active, created_at, updated_at
+       FROM kegs
+       ${where.sql}
+       ORDER BY ${kegPageOrder(query.sort)}
+       LIMIT ? OFFSET ?`,
+    )
+    .all(...where.params, 25, offset);
   return rows.map(mapKegRow);
 }
 

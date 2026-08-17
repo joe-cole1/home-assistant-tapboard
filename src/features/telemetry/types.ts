@@ -60,6 +60,7 @@ export interface TelemetrySourceRow {
   readonly current_machine_key_id: string;
   readonly created_at: string;
   readonly updated_at: string;
+  readonly disabled_at: string | null;
 }
 
 export interface TelemetrySourceWithKeyRow {
@@ -68,6 +69,7 @@ export interface TelemetrySourceWithKeyRow {
   readonly current_machine_key_id: string;
   readonly created_at: string;
   readonly updated_at: string;
+  readonly disabled_at: string | null;
   readonly current_machine_key_public_id: string;
   readonly current_machine_key_label: string;
   readonly current_machine_key_created_at: string;
@@ -153,6 +155,7 @@ export interface TelemetrySource {
   readonly currentMachineKeyId: string;
   readonly createdAt: string;
   readonly updatedAt: string;
+  readonly disabledAt: string | null;
 }
 
 export interface TelemetrySourceWithKeyDetails {
@@ -161,6 +164,7 @@ export interface TelemetrySourceWithKeyDetails {
   readonly currentMachineKeyId: string;
   readonly createdAt: string;
   readonly updatedAt: string;
+  readonly disabledAt: string | null;
   readonly currentMachineKey: {
     readonly id: string;
     readonly publicId: string;
@@ -168,6 +172,24 @@ export interface TelemetrySourceWithKeyDetails {
     readonly createdAt: string;
     readonly revokedAt: string | null;
   };
+}
+
+export type TelemetryAdminSourceState = "active" | "disabled";
+
+export interface TelemetryAdminSourcePageQuery {
+  readonly q?: unknown;
+  readonly state?: unknown;
+  readonly page?: unknown;
+}
+
+export interface TelemetryAdminSourcePage {
+  readonly items: readonly TelemetrySourceWithKeyDetails[];
+  readonly total: number;
+  readonly page: number;
+  readonly pageSize: number;
+  readonly pageCount: number;
+  readonly query: string;
+  readonly state: TelemetryAdminSourceState;
 }
 
 export interface TapTelemetryAuthority {

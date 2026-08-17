@@ -7,7 +7,7 @@ const LIVE_MYSTERY_SECRET = "LIVE_MYSTERY_SECRET_77";
 
 async function login(page: Page): Promise<void> {
   await page.goto("/admin");
-  await page.getByLabel("Admin PIN").fill("1234");
+  await page.getByRole("textbox", { name: "Admin PIN" }).fill("1234");
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/admin\/overview$/u);
 }
@@ -60,7 +60,12 @@ test("Brew Story SSR and JSON redact an active Mystery Tap without JavaScript", 
   expect(storyHtml).toContain("Mystery Tap");
   expect(storyHtml).not.toContain("Measured fixture beer");
   expect(storyHtml).not.toContain("Pale Ale");
-  expect(storyHtml).toContain("Fill Glass");
+  expect(storyHtml).toContain("← Back");
+  expect(storyHtml).toContain("Sensory profile");
+  expect(storyHtml).toContain("Recipe");
+  expect(storyHtml).not.toContain('id="story-fill"');
+  expect(storyHtml).not.toContain('id="story-history"');
+  expect(storyHtml).not.toContain('data-field="volume"');
 
   const storyJson = (await (
     await page.request.get(`/api/public/taps/${mystery.id}/story`)
@@ -85,9 +90,8 @@ test("Brew Story SSR and JSON redact an active Mystery Tap without JavaScript", 
 
   await page.goto("/");
   const normalCard = page.locator(`[data-tap-number="${normal.tapNumber}"]`);
-  const normalStoryLink = normalCard.locator('[data-field="story-link"]');
-  await expect(normalStoryLink).toHaveAttribute("href", normalStoryPath);
-  await normalStoryLink.click();
+  await expect(normalCard).toHaveAttribute("href", normalStoryPath);
+  await normalCard.click();
   await expect(page).toHaveURL(/\/taps\/[^/]+\/story$/u);
   await expect(page.getByRole("heading", { name: "Custom recipe" })).toBeVisible();
   await expect(page.getByText("Pale <malt>", { exact: false })).toBeVisible();
@@ -100,6 +104,11 @@ test("Brew Story SSR and JSON redact an active Mystery Tap without JavaScript", 
   expect(normalStoryHtml).toContain("safe &amp; measured");
   expect(normalStoryHtml).toContain("Mash &amp; hold");
   expect(normalStoryHtml).toContain("step &lt;note&gt;");
+  if (typeof normal.title !== "string") throw new Error("Expected the normal Tap title.");
+  expect(normalStoryHtml).toContain(`Tap ${normal.tapNumber} · ${normal.title}`);
+  expect(normalStoryHtml).not.toContain("Fixture Tap 1");
+  expect(normalStoryHtml).not.toContain('id="story-fill"');
+  expect(normalStoryHtml).not.toContain('id="story-history"');
   expect(normalStoryHtml).not.toContain("Pale <malt>");
   expect(normalStoryHtml).not.toContain("<safe-note>");
   await context.close();
@@ -107,11 +116,15 @@ test("Brew Story SSR and JSON redact an active Mystery Tap without JavaScript", 
 
 test("Brew Story follows shared and local display preferences", async ({ browser }) => {
   const context = await browser.newContext();
+  const admin = await context.newPage();
+  await login(admin);
   const page = await context.newPage();
   await page.goto("/");
   const normalCard = page.locator('[data-tap-number="1"]');
-  await normalCard.locator('[data-field="story-link"]').click();
+  await normalCard.click();
   await expect(page).toHaveURL(/\/taps\/[^/]+\/story$/u);
+  await expect(page.getByRole("heading", { name: "Current fill" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Fill history" })).toBeVisible();
 
   const volume = page.locator('[data-field="volume"]');
   const historyVolume = page.locator('[data-field="history-volume"]');
@@ -140,28 +153,158 @@ test("Brew Story follows shared and local display preferences", async ({ browser
   await expect(historyVolume.locator('[data-unit="us"]')).toBeHidden();
   await expect(temperature).toBeHidden();
 
-  const admin = await context.newPage();
-  await login(admin);
-  await admin.goto("/admin/display");
+  await admin.goto("/admin/display/shared");
   const sharedTemperature = admin.locator(
-    'form[action="/admin/display/shared"] select[name="showServingTemperature"]',
+    'form[action="/admin/display/shared"] input[name="showServingTemperature"]',
   );
-  await sharedTemperature.selectOption("true");
-  await admin.getByRole("button", { name: "Save shared defaults" }).click();
-  await expect(admin).toHaveURL(/\/admin\/display\?notice=/u);
+  await sharedTemperature.check();
+  await admin.getByRole("button", { name: "Apply shared defaults" }).click();
+  await expect(admin).toHaveURL(/\/admin\/display\/shared\?notice=/u);
   await expect(page.locator("html")).toHaveAttribute("data-show-serving-temperature", "true");
   await expect(temperature).toBeVisible();
   await expect(temperature.locator('[data-unit="metric"]')).toBeVisible();
   await expect(temperature.locator('[data-unit="us"]')).toBeHidden();
 
-  await admin.goto("/admin/display");
-  await sharedTemperature.selectOption("false");
-  await admin.getByRole("button", { name: "Save shared defaults" }).click();
-  await expect(admin).toHaveURL(/\/admin\/display\?notice=/u);
+  await admin.goto("/admin/display/shared");
+  await sharedTemperature.uncheck();
+  await admin.getByRole("button", { name: "Apply shared defaults" }).click();
+  await expect(admin).toHaveURL(/\/admin\/display\/shared\?notice=/u);
   await expect(page.locator("html")).toHaveAttribute("data-show-serving-temperature", "false");
   await expect(temperature).toBeHidden();
 
   await page.evaluate(() => localStorage.removeItem("tapboard.v2.display-preferences.v1"));
+  await admin.close();
+  await context.close();
+});
+
+test("Admin long-press previews a pour without mutating the public Fill state", async ({
+  browser,
+}) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.goto("/");
+  await expect(page.locator("[data-dashboard]")).toHaveAttribute(
+    "data-admin-pour-preview",
+    "false",
+  );
+
+  const admin = await context.newPage();
+  await login(admin);
+  await page.reload();
+  await expect(page.locator("[data-dashboard]")).toHaveAttribute("data-admin-pour-preview", "true");
+
+  const card = page.locator('[data-tap-number="1"]');
+  const graphic = card.locator(".tap-graphic");
+  const initialFill = await card.getAttribute("data-fill-percent");
+  const box = await graphic.boundingBox();
+  if (box === null) throw new Error("Expected a visible Fill Glass.");
+
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.waitForTimeout(700);
+  await expect(card).toHaveClass(/is-pour-preview/u);
+  await expect(card.locator("[data-pour-preview-status]")).toHaveText("Now pouring");
+  await expect(card.locator("[data-pour-preview-status]")).toBeVisible();
+  await page.mouse.up();
+
+  await expect(page).toHaveURL(/\/$/u);
+  await expect(card).toHaveAttribute("data-fill-percent", initialFill ?? "");
+  await expect(card).not.toHaveClass(/is-pour-preview/u, { timeout: 4_000 });
+
+  const nonStoryCard = page.locator("article.tap-card").first();
+  await expect(nonStoryCard).toBeVisible();
+  const nonStoryGraphic = nonStoryCard.locator(".tap-graphic");
+  const nonStoryInitialFill = await nonStoryCard.getAttribute("data-fill-percent");
+  const nonStoryBox = await nonStoryGraphic.boundingBox();
+  if (nonStoryBox === null) throw new Error("Expected a visible non-story Fill Glass.");
+  await page.mouse.move(
+    nonStoryBox.x + nonStoryBox.width / 2,
+    nonStoryBox.y + nonStoryBox.height / 2,
+  );
+  await page.mouse.down();
+  await page.waitForTimeout(700);
+  await expect(nonStoryCard).toHaveClass(/is-pour-preview/u);
+  await expect(nonStoryCard.locator("[data-pour-preview-status]")).toHaveAttribute(
+    "aria-live",
+    "polite",
+  );
+  await expect(nonStoryCard.locator("[data-pour-preview-status]")).toBeVisible();
+  await page.mouse.up();
+  expect(await nonStoryCard.getAttribute("data-fill-percent")).toBe(nonStoryInitialFill);
+  await expect(nonStoryCard).not.toHaveClass(/is-pour-preview/u, { timeout: 4_000 });
+  await admin.close();
+  await context.close();
+});
+
+test("authenticated article-card updates preserve pour-preview controls and do not mutate Fill state", async ({
+  browser,
+}) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  const admin = await context.newPage();
+  await page.goto("/");
+  await login(admin);
+  await page.reload();
+  await expect(page.locator("[data-dashboard]")).toHaveAttribute("data-admin-pour-preview", "true");
+
+  const article = page.locator("article.tap-card").first();
+  await expect(article).toBeVisible();
+  const tapId = await article.getAttribute("data-tap-id");
+  expect(tapId).toBeTruthy();
+  const initialFill = await article.getAttribute("data-fill-percent");
+  await expect(article).toHaveAttribute("data-admin-pour-preview", "true");
+  await expect(article).toHaveAttribute("tabindex", "0");
+  await expect(article).toHaveAttribute("aria-keyshortcuts", "Shift+Space");
+  await expect(article.locator("[data-pour-preview-status]")).toHaveAttribute(
+    "aria-live",
+    "polite",
+  );
+
+  await admin.goto("/admin/taps");
+  const adminCard = admin.locator(`article.tap-list-card[data-tap-id="${tapId}"]`);
+  await adminCard.getByRole("link", { name: "Open Tap detail" }).click();
+  await admin.getByText("Edit tap name", { exact: true }).click();
+  const nameForm = admin.locator('form.tap-safe-name-form[data-autosave="blur"]');
+  await expect(nameForm).toHaveAttribute("data-autosave-initialized", "true");
+  await admin.getByLabel("Tap name").fill("Dynamic article preview tap");
+  const publicTapRefresh = page.waitForRequest(
+    (request) =>
+      request.method() === "GET" &&
+      new URL(request.url()).pathname === `/api/public/dashboard/taps/${tapId}`,
+  );
+  await admin.getByRole("button", { name: "Save name" }).click();
+  await publicTapRefresh;
+  await expect(nameForm.locator("[data-autosave-status]")).toHaveText("Saved");
+  await expect(article.locator('[data-field="tap-name"]')).toHaveText("Empty Tap");
+  await expect(article).toHaveAttribute("data-admin-pour-preview", "true");
+  await expect(article).toHaveAttribute("tabindex", "0");
+  await expect(article).toHaveAttribute("aria-keyshortcuts", "Shift+Space");
+  await expect(article.locator("[data-pour-preview-status]")).toHaveAttribute(
+    "aria-live",
+    "polite",
+  );
+
+  let publicPostCount = 0;
+  page.on("request", (request) => {
+    if (request.method() === "POST") publicPostCount += 1;
+  });
+  await article.focus();
+  await page.keyboard.press("Shift+Space");
+  await expect(article).toHaveClass(/is-pour-preview/u);
+  await expect(article.locator("[data-pour-preview-status]")).toBeVisible();
+  expect(await article.getAttribute("data-fill-percent")).toBe(initialFill);
+
+  const graphic = article.locator(".tap-graphic");
+  const box = await graphic.boundingBox();
+  if (box === null) throw new Error("Expected a visible article-card Fill Glass.");
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.waitForTimeout(700);
+  await expect(article).toHaveClass(/is-pour-preview/u);
+  await page.mouse.up();
+  expect(await article.getAttribute("data-fill-percent")).toBe(initialFill);
+  expect(publicPostCount).toBe(0);
+  await expect(article).not.toHaveClass(/is-pour-preview/u, { timeout: 4_000 });
   await admin.close();
   await context.close();
 });
@@ -195,7 +338,9 @@ test("Brew Story ignores ordinary telemetry reloads but reconciles Mystery updat
   const storyPage = await context.newPage();
   await storyPage.goto("/");
   const normalCard = storyPage.locator('[data-tap-number="1"]');
-  await normalCard.locator('[data-field="story-link"]').click();
+  const normalTapId = await normalCard.getAttribute("data-tap-id");
+  expect(normalTapId).toBeTruthy();
+  await normalCard.click();
   await expect(storyPage).toHaveURL(/\/taps\/[^/]+\/story$/u);
   await expect(storyPage.locator("main")).toContainText(LIVE_MYSTERY_SECRET);
 
@@ -228,11 +373,12 @@ test("Brew Story ignores ordinary telemetry reloads but reconciles Mystery updat
   expect(navigations).toBe(0);
 
   await admin.goto("/admin/taps");
-  const normalAdminCard = admin.getByRole("heading", { name: /^Tap 1\s/u }).locator("..");
-  await normalAdminCard.getByText("Mystery Tap visibility").click();
-  await normalAdminCard.getByLabel("Enable Mystery Tap").check();
-  await normalAdminCard.getByRole("button", { name: "Save Mystery settings" }).click();
-  await expect(admin).toHaveURL(/\/admin\/taps\?notice=/u);
+  const normalAdminCard = admin.locator(`article.tap-list-card[data-tap-id="${normalTapId}"]`);
+  await normalAdminCard.getByRole("link", { name: "Open Tap detail" }).click();
+  await admin.getByText("Mystery Tap reveal fields", { exact: true }).click();
+  await admin.getByLabel("Enable Mystery Tap").check();
+  await admin.getByRole("button", { name: "Save Mystery settings" }).click();
+  await expect(admin).toHaveURL(new RegExp(`/admin/taps/${normalTapId}\\?notice=`));
 
   await expect(storyPage.getByRole("heading", { name: "Mystery Tap" })).toBeVisible();
   expect(navigations).toBeGreaterThan(0);
@@ -240,11 +386,12 @@ test("Brew Story ignores ordinary telemetry reloads but reconciles Mystery updat
   expect(redactedStory).not.toContain(LIVE_MYSTERY_SECRET);
 
   await admin.goto("/admin/taps");
-  const cleanupCard = admin.getByRole("heading", { name: /^Tap 1\s/u }).locator("..");
-  await cleanupCard.getByText("Mystery Tap visibility").click();
-  await cleanupCard.getByLabel("Enable Mystery Tap").uncheck();
-  await cleanupCard.getByRole("button", { name: "Save Mystery settings" }).click();
-  await expect(admin).toHaveURL(/\/admin\/taps\?notice=/u);
+  const cleanupCard = admin.locator(`article.tap-list-card[data-tap-id="${normalTapId}"]`);
+  await cleanupCard.getByRole("link", { name: "Open Tap detail" }).click();
+  await admin.getByText("Mystery Tap reveal fields", { exact: true }).click();
+  await admin.getByLabel("Enable Mystery Tap").uncheck();
+  await admin.getByRole("button", { name: "Save Mystery settings" }).click();
+  await expect(admin).toHaveURL(new RegExp(`/admin/taps/${normalTapId}\\?notice=`));
   await context.close();
 });
 
@@ -254,11 +401,10 @@ test("Custom recipe JSON editor round-trips losslessly without JavaScript", asyn
   await login(page);
   await page.goto("/admin/beverages");
 
-  const beverage = page
-    .locator("article.resource-card")
-    .filter({ hasText: "Measured fixture beer" });
-  await beverage.getByText("Custom recipe", { exact: true }).click();
-  const recipeField = beverage.locator('textarea[name="recipeJson"]');
+  const beverageRow = page.locator("tbody tr").filter({ hasText: "Measured fixture beer" });
+  await beverageRow.getByRole("link", { name: /Measured fixture beer/u }).click();
+  await page.getByText("Edit recipe data", { exact: true }).click();
+  const recipeField = page.locator('textarea[name="recipeJson"]');
   const before = await recipeField.inputValue();
   expect(before).toContain("|");
   expect(before).toContain("\n");
@@ -267,13 +413,9 @@ test("Custom recipe JSON editor round-trips losslessly without JavaScript", asyn
   expect(before).toContain("二");
   const beforeRecipe = JSON.parse(before) as unknown;
 
-  await beverage.getByRole("button", { name: "Save custom recipe" }).click();
-  await expect(page).toHaveURL(/\/admin\/beverages\?notice=/u);
-  const after = await page
-    .locator("article.resource-card")
-    .filter({ hasText: "Measured fixture beer" })
-    .locator('textarea[name="recipeJson"]')
-    .inputValue();
+  await page.getByRole("button", { name: "Save custom recipe" }).click();
+  await expect(page).toHaveURL(/\/admin\/beverages\/[^/?]+\?notice=/u);
+  const after = await page.locator('textarea[name="recipeJson"]').inputValue();
   expect(JSON.parse(after) as unknown).toEqual(beforeRecipe);
   await context.close();
 });
@@ -294,8 +436,6 @@ test("Mystery redaction, reveal, finite graphics, and stable roots", async ({ br
   await expect(storyPage.locator("main")).toContainText(LIVE_MYSTERY_SECRET);
   await expect(storyPage.locator("main")).toContainText("Measured fixture beer");
   await expect(storyPage.locator("main")).toContainText("Pale Ale");
-  const tapNumber = await mysteryCard.locator('[data-field="tap-number"]').textContent();
-  expect(tapNumber).toMatch(/^Tap \d+$/u);
   const graphic = page.locator(`[data-tap-id="${storyId}"] .tap-graphic`);
   await graphic.evaluate((node) => {
     (window as unknown as { savedGraphic?: Element }).savedGraphic = node;
@@ -327,11 +467,12 @@ test("Mystery redaction, reveal, finite graphics, and stable roots", async ({ br
   const admin = await context.newPage();
   await login(admin);
   await admin.goto("/admin/taps");
-  const normalAdminCard = admin.getByRole("heading", { name: /^Tap 1\s/u }).locator("..");
-  await normalAdminCard.getByText("Mystery Tap visibility").click();
-  await normalAdminCard.getByLabel("Enable Mystery Tap").check();
-  await normalAdminCard.getByRole("button", { name: "Save Mystery settings" }).click();
-  await expect(admin).toHaveURL(/\/admin\/taps\?notice=/u);
+  const normalAdminCard = admin.locator(`article.tap-list-card[data-tap-id="${normalTapId}"]`);
+  await normalAdminCard.getByRole("link", { name: "Open Tap detail" }).click();
+  await admin.getByText("Mystery Tap reveal fields", { exact: true }).click();
+  await admin.getByLabel("Enable Mystery Tap").check();
+  await admin.getByRole("button", { name: "Save Mystery settings" }).click();
+  await expect(admin).toHaveURL(new RegExp(`/admin/taps/${normalTapId}\\?notice=`));
   const findMysteryFrame = async (): Promise<string | null> =>
     page.evaluate(
       (tapId) =>
@@ -386,7 +527,7 @@ test("Mystery redaction, reveal, finite graphics, and stable roots", async ({ br
         .filter((attribute) => /^(aria-|title$|data-)/u.test(attribute.name))
         .map((attribute) => `${attribute.name}=${attribute.value}`),
     ),
-    storyLabel: node.querySelector('[data-field="story-link"]')?.getAttribute("aria-label") ?? null,
+    storyLabel: node.getAttribute("aria-label"),
     svgTitle: node.querySelector(".tap-graphic title")?.textContent ?? null,
   }));
   expect(redactedNormal.text).not.toContain("Measured fixture beer");
@@ -416,13 +557,13 @@ test("Mystery redaction, reveal, finite graphics, and stable roots", async ({ br
   );
   expect(await graphic.evaluate((node) => node.innerHTML.includes("<script"))).toBe(false);
 
-  const adminCard = admin
-    .getByRole("heading", { name: new RegExp(`^${tapNumber}\\s`, "u") })
-    .locator("..");
-  await adminCard.getByText("Mystery Tap visibility").click();
-  await adminCard.getByLabel("Style").check();
-  await adminCard.getByRole("button", { name: "Save Mystery settings" }).click();
-  await expect(admin).toHaveURL(/\/admin\/taps\?notice=/u);
+  await admin.goto("/admin/taps");
+  const adminCard = admin.locator(`article.tap-list-card[data-tap-id="${storyId}"]`);
+  await adminCard.getByRole("link", { name: "Open Tap detail" }).click();
+  await admin.getByText("Mystery Tap reveal fields", { exact: true }).click();
+  await admin.getByLabel("Style").check();
+  await admin.getByRole("button", { name: "Save Mystery settings" }).click();
+  await expect(admin).toHaveURL(new RegExp(`/admin/taps/${storyId}\\?notice=`));
   await expect
     .poll(async () => {
       const response = await page.request.get(`/api/public/taps/${storyId}/story`);
@@ -460,20 +601,35 @@ test("Fill Glass live updates use distinct v1 contours and preserve the root SVG
   const admin = await context.newPage();
   await login(admin);
   await admin.goto("/admin/beverages");
-  const measured = admin
-    .locator("article.resource-card")
-    .filter({ hasText: "Measured fixture beer" });
-  await measured.getByText("Edit custom beverage").click();
-  const picker = measured.locator(".fill-glass-picker");
+  const measuredRow = admin.locator("tbody tr").filter({ hasText: "Measured fixture beer" });
+  const beverageLink = measuredRow.getByRole("link", { name: /Measured fixture beer/u });
+  const beverageHref = await beverageLink.getAttribute("href");
+  expect(beverageHref).toMatch(/^\/admin\/beverages\/[^/]+$/u);
+  await beverageLink.click();
+  await admin.getByText("Edit presentation", { exact: true }).click();
+  const presentationForm = admin.locator('form[action$="/update"][data-autosave="blur"]');
+  await expect(presentationForm).toHaveAttribute("data-autosave-initialized", "true");
+  const picker = admin.locator(".fill-glass-picker");
   await picker.locator("summary").click();
-  await picker.locator('input[type="radio"][value="mug"]').check();
-  await measured.getByRole("button", { name: "Update Beverage" }).click();
-  await expect(admin).toHaveURL(/\/admin\/beverages\?notice=/u);
+  const mugRadio = picker.locator('input[type="radio"][value="mug"]');
+  await expect(mugRadio).not.toBeChecked();
+  const autosaveRequest = admin.waitForRequest(
+    (request) =>
+      request.method() === "POST" &&
+      new URL(request.url()).pathname === `${beverageHref}/update` &&
+      request.headers()["x-tapboard-enhancement"] === "autosave",
+  );
+  await mugRadio.check();
+  await autosaveRequest;
+  await expect(presentationForm.locator("[data-autosave-status]")).toHaveText("Saved");
   await expect(normalCard.locator(".tap-graphic")).toHaveAttribute("data-graphic-id", "mug");
   await expect(normalCard.locator(".tap-graphic .glass")).toHaveAttribute(
     "d",
     "M 48 50 H 112 A 8 8 0 0 1 120 58 V 212 A 8 8 0 0 1 112 220 H 48 A 8 8 0 0 1 40 212 V 58 A 8 8 0 0 1 48 50 Z",
   );
+  await expect(normalCard.locator(".beer-bubble")).toHaveCount(24);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(normalCard.locator(".beer-bubbles")).toHaveCSS("display", "none");
   expect(
     await page.evaluate(
       () =>

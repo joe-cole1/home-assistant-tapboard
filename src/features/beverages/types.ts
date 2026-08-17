@@ -240,6 +240,51 @@ export interface EffectiveBeveragePresentation {
   readonly manualDensityOverride: number | null;
 }
 
+/** Bounded, server-side query parameters for the authenticated beverage index. */
+export interface BeverageListQuery {
+  readonly q?: string;
+  readonly page?: number;
+}
+
+/**
+ * A repository-owned read model for the authenticated beverage index.
+ *
+ * It deliberately contains only effective presentation fields and usage
+ * counts. Provider payloads, fingerprints, source JSON, and persistence
+ * identifiers for child records never cross this boundary.
+ */
+export interface BeverageListRecord {
+  readonly beverage: Beverage;
+  readonly effectivePresentation: EffectiveBeveragePresentation;
+  readonly currentUsage: number;
+}
+
+export interface BeverageListPage {
+  readonly items: readonly BeverageListRecord[];
+  readonly total: number;
+  readonly page: number;
+  readonly pageSize: number;
+  readonly pageCount: number;
+  readonly query: string;
+}
+
+export interface BeverageUsage {
+  readonly current: number;
+  readonly total: number;
+}
+
+/** Small, bounded Admin projection for a Beverage's currently Filled Kegs. */
+export interface BeverageCurrentFill {
+  readonly id: string;
+  readonly kegId: string;
+  readonly kegNumber: number;
+  readonly kegLabel: string | null;
+  readonly fillDate: string;
+  readonly state: "available" | "on_deck" | "on_tap";
+  readonly tapId: string | null;
+  readonly tapNumber: number | null;
+}
+
 export type DensitySource = "manual_override" | "fg_derived" | "fallback_fg";
 
 export interface DensityResolution {
@@ -268,6 +313,15 @@ export interface BeverageDeletionImpact {
     readonly code: string;
     readonly count: number;
   }[];
+}
+
+export interface DeleteBeverageInput {
+  /** Exact, case-sensitive current effective name required for permanence. */
+  readonly confirmationName?: string;
+  /** Backward-compatible aliases accepted by older callers during rollout. */
+  readonly confirmName?: string;
+  readonly expectedName?: string;
+  readonly reason?: string | null;
 }
 
 export interface CreateCustomBeverageInput {

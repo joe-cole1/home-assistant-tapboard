@@ -1,12 +1,25 @@
 <% layout("/layouts/admin", { page: it.page }) %>
 <%~ include("/partials/admin-nav", { page: it.page, items: it.navItems || [] }) %>
 <main id="main-content">
-  <h1>Telemetry key created</h1>
-  <section class="notice" aria-labelledby="key-heading">
+  <header class="page-header">
+    <p class="eyebrow">Telemetry</p>
+    <h1><%= it.page.title %></h1>
+    <p>This is the only time Tapboard will display this machine key. Copy it to the source before leaving this page.</p>
+  </header>
+  <section class="admin-card one-time-secret" aria-labelledby="key-heading">
     <h2 id="key-heading"><%= it.source.name %></h2>
-    <p>Copy this key now. Tapboard will not show it again.</p>
-    <label for="machine-key">Machine key</label>
-    <input id="machine-key" value="<%= it.machineKey %>" readonly />
-    <p><a href="/admin/integrations">Return to Integrations</a></p>
+    <p class="warning"><strong>Store this key securely.</strong> It cannot be recovered after this page is closed.</p>
+    <p id="machine-key-label">Machine key</p>
+    <output id="machine-key" class="one-time-secret__value" aria-labelledby="machine-key-label"><%= it.machineKey %></output>
+    <h3>Send Tap 1 measurements</h3>
+    <p>Endpoint</p>
+    <p><code><%= it.endpointUrl %></code></p>
+    <p>Use the full machine key as the Bearer token. The example uses a valid <code>total_weight</code> measurement in grams.</p>
+    <pre><code>curl --fail-with-body --request POST "<%= it.endpointUrl %>" \
+  --header "Authorization: Bearer <%= it.machineKey %>" \
+  --header "Content-Type: application/json" \
+  --data '{"client_sample_id":"sample-001","measured_at":"2026-08-17T12:00:00Z","measurement":{"kind":"total_weight","value":10000,"unit":"g"},"temperature":{"value":4,"unit":"c"}}'</code></pre>
+    <p>To replace this key later, return to the source and rotate it. Rotation revokes the previous key immediately.</p>
+    <p><a class="button secondary button--small" href="<%= it.page.returnPath || "/admin/integrations/telemetry" %>">Return to Telemetry</a></p>
   </section>
 </main>

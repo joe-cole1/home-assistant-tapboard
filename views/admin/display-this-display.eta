@@ -1,0 +1,8 @@
+<% layout("/layouts/admin", { page: it.page }) %>
+<%~ include("/partials/admin-nav", { page: it.page, items: it.navItems || [] }) %>
+<main id="main-content" class="display-settings-page">
+  <header class="page-header"><p class="eyebrow"><a href="/admin/display">Display</a> / This display</p><h1>This display</h1><p>These choices are stored only in this browser. Inherit follows future shared-default changes.</p></header>
+  <%~ include("/partials/admin-messages", { page: it.page }) %>
+  <section class="admin-card" aria-labelledby="local-settings-heading"><h2 id="local-settings-heading">Local overrides</h2><form class="display-settings-form" data-display-preferences action="/admin/display/this-display" method="post"></form><button class="button button--secondary" type="button" data-reset-preferences>Reset to shared defaults</button><p data-display-preference-status role="status" aria-live="polite"></p><noscript><p class="warning">JavaScript is required to save browser-local overrides. The public display remains fully usable without JavaScript.</p></noscript></section>
+</main>
+<script type="module" src="/assets/js/admin-display.js"></script>

@@ -1,0 +1,14 @@
+<% layout("/layouts/admin", { page: it.page }) %>
+<%~ include("/partials/admin-nav", { page: it.page, items: it.navItems || [] }) %>
+<main id="main-content" class="admin-page">
+  <header class="page-header">
+    <p class="eyebrow">Admin / 404</p>
+    <h1>Page not found</h1>
+    <p>The Admin page you requested does not exist.</p>
+  </header>
+  <section class="admin-empty-state" aria-labelledby="admin-not-found-heading">
+    <h2 id="admin-not-found-heading">Nothing to show here</h2>
+    <p>Use the Admin navigation or return to the Overview.</p>
+    <p class="admin-action-row"><a class="button" href="/admin/overview">Back to Overview</a></p>
+  </section>
+</main>

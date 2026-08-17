@@ -13,7 +13,8 @@ if (root && tapId) {
         reload();
         return;
       }
-      if (!["tap.updated", "fill.updated"].includes(name)) return;
+      if (name === "fill.updated" && !root.dataset.ssePath?.includes("/api/admin/")) return;
+      if (name !== "tap.updated" && name !== "fill.updated") return;
       try {
         const data = JSON.parse(event.data);
         if (data && typeof data === "object" && data.tapId === tapId) reload();

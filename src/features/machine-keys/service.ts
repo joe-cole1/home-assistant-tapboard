@@ -47,6 +47,12 @@ export interface MachineKeyServiceOptions {
   readonly idFactory?: () => string;
 }
 
+export interface MachineKeyMutationOptions {
+  readonly now?: () => Date;
+  /** Internal owner services can emit their own domain Activity record. */
+  readonly suppressActivity?: boolean;
+}
+
 function timestamp(factory: (() => Date) | undefined): string {
   const value = factory?.() ?? new Date();
   if (!(value instanceof Date) || Number.isNaN(value.getTime()))
@@ -121,7 +127,7 @@ export class MachineKeyService {
 
   create(
     label: unknown,
-    options: { readonly now?: () => Date } = {},
+    options: MachineKeyMutationOptions = {},
   ): { readonly token: string; readonly descriptor: MachineKeyDescriptor } {
     const normalizedLabel = labelValue(label);
     const random = this.#options.randomBytes ?? nodeRandomBytes;
@@ -153,14 +159,16 @@ export class MachineKeyService {
     this.#database.withTransaction(() => {
       if (!insertMachineKeyRow(this.#database, row))
         throw new Error("Machine-key generation failed");
-      appendActivity(this.#database, {
-        category: "integration",
-        action: "api_key_created",
-        actorType: "system",
-        entityType: "machine_api_key",
-        entityId: row.id,
-        occurredAt: now,
-      });
+      if (options.suppressActivity !== true) {
+        appendActivity(this.#database, {
+          category: "integration",
+          action: "api_key_created",
+          actorType: "system",
+          entityType: "machine_api_key",
+          entityId: row.id,
+          occurredAt: now,
+        });
+      }
     });
     return { token, descriptor: descriptor(row) };
   }
@@ -168,7 +176,7 @@ export class MachineKeyService {
   rotate(
     id: string,
     label?: unknown,
-    options: { readonly now?: () => Date } = {},
+    options: MachineKeyMutationOptions = {},
   ): { readonly token: string; readonly descriptor: MachineKeyDescriptor } {
     const old = readMachineKeyRow(this.#database, id);
     if (old === undefined || old.revokedAt !== null) throw new Error("Machine-key rotation failed");
@@ -205,25 +213,27 @@ export class MachineKeyService {
         !insertMachineKeyRow(this.#database, replacement)
       )
         throw new Error("Machine-key rotation failed");
-      appendActivity(this.#database, {
-        category: "integration",
-        action: "api_key_rotated",
-        actorType: "system",
-        entityType: "machine_api_key",
-        entityId: replacement.id,
-        occurredAt: now,
-      });
+      if (options.suppressActivity !== true) {
+        appendActivity(this.#database, {
+          category: "integration",
+          action: "api_key_rotated",
+          actorType: "system",
+          entityType: "machine_api_key",
+          entityId: replacement.id,
+          occurredAt: now,
+        });
+      }
     });
     return { token, descriptor: descriptor(replacement) };
   }
 
-  revoke(id: string, options: { readonly now?: () => Date } = {}): boolean {
+  revoke(id: string, options: MachineKeyMutationOptions = {}): boolean {
     const now = timestamp(options.now ?? this.#options.now);
     return this.#database.withTransaction(() => {
       const row = readMachineKeyRow(this.#database, id);
       if (row === undefined || row.revokedAt !== null) return false;
       const revoked = revokeMachineKeyRow(this.#database, id, now);
-      if (revoked)
+      if (revoked && options.suppressActivity !== true)
         appendActivity(this.#database, {
           category: "integration",
           action: "api_key_revoked",

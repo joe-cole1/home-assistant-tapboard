@@ -1,6 +1,7 @@
 node_modules/
 data/
 backups/
+test-results/
 AGENTS.md
 
 # Frozen architecture records are reviewed as exact repository evidence.
