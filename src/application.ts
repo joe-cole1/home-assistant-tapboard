@@ -33,6 +33,7 @@ import { registerFillRoutes } from "./features/fills/routes.ts";
 import { createTapService } from "./features/taps/service.ts";
 import type {
   AssignmentClosedContext,
+  AssignmentMysteryChangedContext,
   AssignmentOpenedContext,
   TapAssignmentExtensionPort,
 } from "./features/taps/types.ts";
@@ -222,6 +223,16 @@ class FoundationApplication implements Application {
             database,
             context.assignmentId,
             context.occurredAt,
+          );
+        },
+        onAssignmentMysteryChanged: (
+          database: DatabaseExecutor,
+          context: AssignmentMysteryChangedContext,
+        ): void => {
+          rawTapWarsService.refreshPublicTitleFallback(
+            database,
+            context.tapId,
+            context.assignmentId,
           );
         },
         onTapCreated: (database: DatabaseExecutor, tapId: string, occurredAt: string): void => {

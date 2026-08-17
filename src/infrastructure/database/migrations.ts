@@ -3357,6 +3357,7 @@ export const TAP_WARS_SCHEMA_SQL = `
     beverage_id TEXT NOT NULL,
     tap_number INTEGER NOT NULL CHECK (tap_number >= 1),
     admin_beverage_title TEXT NOT NULL,
+    public_title_fallback TEXT NOT NULL CHECK (length(trim(public_title_fallback)) > 0),
     vote_count INTEGER NOT NULL DEFAULT 0 CHECK (vote_count >= 0),
     final_vote_count INTEGER,
     PRIMARY KEY (war_id, side),
@@ -3445,6 +3446,13 @@ function validateTapWarsSchema(database: DatabaseExecutor): void {
         { name: "beverage_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
         { name: "tap_number", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
         { name: "admin_beverage_title", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+        {
+          name: "public_title_fallback",
+          type: "TEXT",
+          notnull: 1,
+          dflt_value: null,
+          pk: 0,
+        },
         { name: "vote_count", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
         { name: "final_vote_count", type: "INTEGER", notnull: 0, dflt_value: null, pk: 0 },
       ]);

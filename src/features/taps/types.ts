@@ -193,6 +193,12 @@ export interface AssignmentClosedContext {
   readonly reason: "unassigned" | "moved" | "fill_ended";
 }
 
+export interface AssignmentMysteryChangedContext {
+  readonly assignmentId: string;
+  readonly tapId: string;
+  readonly occurredAt: string;
+}
+
 /** Transaction-local notification emitted after a Tap row is inserted. */
 export interface TapCreatedContext {
   readonly tapId: string;
@@ -208,6 +214,8 @@ export interface TapRetiredContext {
 export interface TapAssignmentExtensionPort {
   onAssignmentOpened(db: DatabaseExecutor, context: AssignmentOpenedContext): void;
   onAssignmentClosed(db: DatabaseExecutor, context: AssignmentClosedContext): void;
+  /** Transaction-local notification after an assignment's Mystery settings change. */
+  onAssignmentMysteryChanged?(db: DatabaseExecutor, context: AssignmentMysteryChangedContext): void;
   /** Optional for backwards-compatible extension ports that do not track Tap lifecycle. */
   onTapCreated?(
     db: DatabaseExecutor,

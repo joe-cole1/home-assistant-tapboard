@@ -4,6 +4,7 @@ import test from "node:test";
 import { openDatabase } from "../src/infrastructure/database/connection.ts";
 import { TapWarService, tapWarPercentages } from "../src/features/tap-wars/service.ts";
 import { requireSides } from "../src/features/tap-wars/validators.ts";
+import { createTapService } from "../src/features/taps/service.ts";
 import { ApplicationError } from "../src/shared/errors.ts";
 
 const at = "2026-08-17T12:00:00.000Z";
@@ -100,6 +101,10 @@ void test("start lists eligible participants, snapshots admin data, and rejects 
     assert.deepEqual(
       war.competitors.map((c) => c.adminBeverageTitle),
       ["Admin Beer 1", "Admin Beer 2"],
+    );
+    assert.deepEqual(
+      war.competitors.map((c) => c.publicTitleFallback),
+      ["Mystery Tap", "Mystery Tap"],
     );
     assert.throws(
       () => service.start([one.assignment, two.assignment]),
@@ -229,6 +234,114 @@ void test("pause hooks persist activity and pause state; re-enable does not resu
     database.prepare("UPDATE taps SET enabled=1 WHERE id=?").run(two.tap);
     assert.throws(() => service.resume(war.id), conflict("tap_war.cannot_resume"));
     assert.equal(service.stop(war.id).status, "completed");
+  } finally {
+    database.close();
+  }
+});
+
+void test("assignment loss preserves the last safe public title and frozen votes", () => {
+  let currentTitle: string | null = "House IPA";
+  const { database, service, add } = setup({ publicTitleResolver: () => currentTitle });
+  try {
+    const one = add(1),
+      two = add(2),
+      war = service.start([one.assignment, two.assignment]);
+    service.vote(war.id, 1);
+    database.withTransaction(() => {
+      service.pauseForAssignmentClose(database, one.assignment, at);
+      database
+        .prepare("UPDATE tap_assignment_lifecycles SET ended_at=? WHERE id=?")
+        .run(at, one.assignment);
+    });
+    currentTitle = null;
+
+    const stopped = service.stop(war.id);
+    assert.equal(stopped.completionPublicTitleSide1, "House IPA");
+    assert.deepEqual(
+      stopped.competitors.map((competitor) => competitor.finalVoteCount),
+      [1, 0],
+    );
+    assert.equal(stopped.competitors[0].publicTitleFallback, "House IPA");
+  } finally {
+    database.close();
+  }
+});
+
+void test("fallback refresh is limited to the current or still-published war", () => {
+  let currentTitle: string | null = "House IPA";
+  const { database, service, add } = setup({ publicTitleResolver: () => currentTitle });
+  try {
+    const one = add(1),
+      two = add(2),
+      war = service.start([one.assignment, two.assignment]);
+    const stopped = service.stop(war.id);
+    currentTitle = "Updated House IPA";
+    service.refreshPublicTitleFallback(database, one.tap, one.assignment);
+    assert.equal(service.getById(war.id)!.competitors[0].publicTitleFallback, "Updated House IPA");
+    assert.equal(stopped.completionPublicTitleSide1, "House IPA");
+
+    service.dismissPublicResult(war.id);
+    currentTitle = "Should Not Persist";
+    service.refreshPublicTitleFallback(database, one.tap, one.assignment);
+    assert.equal(service.getById(war.id)!.competitors[0].publicTitleFallback, "Updated House IPA");
+  } finally {
+    database.close();
+  }
+});
+
+void test("Mystery changes refresh the visible fallback in-transaction before assignment loss", () => {
+  let currentTitle: string | null = "House IPA";
+  const { database, service, add } = setup({ publicTitleResolver: () => currentTitle });
+  try {
+    const one = add(1),
+      two = add(2),
+      warService = service,
+      war = warService.start([one.assignment, two.assignment]);
+    let mysteryChangedCalls = 0;
+    const tapService = createTapService(database, {
+      now: () => new Date(at),
+      extensionPort: {
+        onAssignmentOpened: () => undefined,
+        onAssignmentClosed: (db, context) => {
+          warService.pauseForAssignmentClose(db, context.assignmentId, context.occurredAt);
+        },
+        onAssignmentMysteryChanged: (db, context) => {
+          mysteryChangedCalls += 1;
+          warService.refreshPublicTitleFallback(db, context.tapId, context.assignmentId);
+        },
+      },
+    });
+
+    currentTitle = "Mystery Tap";
+    const mysteryInput = {
+      enabled: true,
+      revealBeverageType: false,
+      revealStyle: false,
+      revealAbv: false,
+      revealIbu: false,
+      revealOg: false,
+      revealFg: false,
+      revealSrm: false,
+      revealDescription: false,
+      revealRecipe: false,
+      revealSensory: false,
+      revealHistory: false,
+    };
+    const changed = tapService.updateAssignmentMystery(one.tap, mysteryInput);
+    assert.equal(changed.changed, true);
+    assert.equal(mysteryChangedCalls, 1);
+    assert.equal(warService.getById(war.id)!.competitors[0].publicTitleFallback, "Mystery Tap");
+    assert.equal(tapService.updateAssignmentMystery(one.tap, mysteryInput).changed, false);
+    assert.equal(mysteryChangedCalls, 1);
+
+    tapService.unassign(one.tap);
+    currentTitle = null;
+    const stopped = warService.stop(war.id);
+    assert.equal(stopped.completionPublicTitleSide1, "Mystery Tap");
+    assert.deepEqual(
+      stopped.competitors.map((competitor) => competitor.finalVoteCount),
+      [0, 0],
+    );
   } finally {
     database.close();
   }

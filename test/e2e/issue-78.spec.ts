@@ -37,11 +37,13 @@ async function publicWar(page: Page): Promise<{
   readonly id: string;
   readonly side1: {
     readonly tapId: string;
+    readonly title: string;
     readonly voteCount: number;
     readonly isCardParticipant: boolean;
   };
   readonly side2: {
     readonly tapId: string;
+    readonly title: string;
     readonly voteCount: number;
     readonly isCardParticipant: boolean;
   };
@@ -57,11 +59,13 @@ async function publicWar(page: Page): Promise<{
     readonly id: string;
     readonly side1: {
       readonly tapId: string;
+      readonly title: string;
       readonly voteCount: number;
       readonly isCardParticipant: boolean;
     };
     readonly side2: {
       readonly tapId: string;
+      readonly title: string;
       readonly voteCount: number;
       readonly isCardParticipant: boolean;
     };
@@ -219,6 +223,7 @@ test("Tap Wars votes live-update stable cards, pause safely, and publish a froze
   await metadata.getByLabel("Public display").selectOption("false");
   await metadata.getByRole("button", { name: "Save Tap metadata" }).click();
   await expect.poll(async () => (await publicWar(page)).status).toBe("paused");
+  await expect.poll(async () => (await publicWar(page)).side1.title).toBe("Tap Wars Amber");
   await expect(page.locator("[data-tap-wars-vote]")).toHaveCount(0);
   const pausedVote = await page.request.post(votePath, {
     form: { side: "1" },
@@ -356,8 +361,23 @@ test("Tap Wars remains SSR-safe without JavaScript and does not leak Mystery ide
   await noJs.waitForURL(/\/#tap-wars$/u);
   await expect(noJs.locator("[data-tap-wars]")).toBeVisible();
   expect((await publicWar(noJs)).side1.voteCount).toBe(beforeNoJsVote + 1);
+  await admin.goto(`/admin/taps/${mysteryTap.id}`);
+  await admin.getByRole("button", { name: "Unassign current Fill" }).click();
+  await expect.poll(async () => (await publicWar(noJs)).status).toBe("paused");
+  const pausedMystery = await publicWar(noJs);
+  expect(pausedMystery.side1.title).toBe("Mystery Tap");
+  const pausedProjection = await (await noJs.request.get("/api/public/tap-wars")).text();
+  expect(pausedProjection).not.toContain(MYSTERY_SECRET);
+  await noJs.goto("/");
+  const pausedHtml = await noJs.locator("main").textContent();
+  expect(pausedHtml).toContain("Mystery Tap");
+  expect(pausedHtml).not.toContain(MYSTERY_SECRET);
+
   await admin.goto("/admin/tap-wars");
   await admin.getByRole("button", { name: "Stop Tap War" }).click();
+  const completedMystery = await publicWar(noJs);
+  expect(completedMystery.status).toBe("completed");
+  expect(completedMystery.side1.title).toBe("Mystery Tap");
   await noJs.goto("/");
   await expect(noJs.locator("[data-tap-wars]")).toContainText("Mystery Tap");
   const completedHtml = await noJs.locator("main").textContent();
@@ -401,6 +421,7 @@ test("a replacement assignment cannot inherit votes or resume the original compe
 
   const paused = await publicWar(page);
   expect(paused.status).toBe("paused");
+  expect(paused.side1.title).toBe("Tap Wars Amber");
   expect(paused.side1.voteCount).toBe(1);
   expect(paused.side1.isCardParticipant).toBe(false);
   await page.goto("/");
@@ -411,6 +432,10 @@ test("a replacement assignment cannot inherit votes or resume the original compe
   await admin.goto("/admin/tap-wars");
   await expect(admin.getByRole("button", { name: "Resume Tap War" })).toHaveCount(0);
   await admin.getByRole("button", { name: "Stop Tap War" }).click();
+  const completed = await publicWar(page);
+  expect(completed.status).toBe("completed");
+  expect(completed.side1.title).toBe("Tap Wars Amber");
+  expect(completed.side1.voteCount).toBe(1);
   await closeCurrentWar(admin);
   await context.close();
 });

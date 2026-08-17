@@ -16,6 +16,8 @@ export interface TapWarCompetitor {
   readonly beverageId: string;
   readonly tapNumber: number;
   readonly adminBeverageTitle: string;
+  /** Last known safe public title for the original assignment. */
+  readonly publicTitleFallback: string;
   readonly voteCount: number;
   readonly finalVoteCount: number | null;
   readonly eligibility: TapWarEligibility;
@@ -55,6 +57,11 @@ export interface TapWarLifecyclePort {
   pauseForAssignmentClose(database: DatabaseExecutor, assignmentId: string, at: string): void;
   pauseForTapUnavailable(database: DatabaseExecutor, tapId: string, at: string): void;
 }
+/**
+ * Application-composed authority for the current original assignment's safe
+ * public title. It returns null when the original is unavailable, replaced,
+ * disabled, retired, or otherwise not servable.
+ */
 export type PublicTitleResolver = (tapId: string, assignmentId: string) => string | null;
 export interface TapWarPercentages {
   readonly side1: number;

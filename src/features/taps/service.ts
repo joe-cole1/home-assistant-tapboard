@@ -53,6 +53,7 @@ import type {
   AdminTapView,
   AdminTapPage,
   AssignmentClosedContext,
+  AssignmentMysteryChangedContext,
   AssignmentOpenedContext,
   AssignmentOperationResult,
   FillAssignmentLifecyclePort,
@@ -73,6 +74,10 @@ import type {
 export class DefaultTapAssignmentExtensionPort implements TapAssignmentExtensionPort {
   onAssignmentOpened(_db: DatabaseExecutor, _context: AssignmentOpenedContext): void {}
   onAssignmentClosed(_db: DatabaseExecutor, _context: AssignmentClosedContext): void {}
+  onAssignmentMysteryChanged(
+    _db: DatabaseExecutor,
+    _context: AssignmentMysteryChangedContext,
+  ): void {}
   onTapCreated(_db: DatabaseExecutor, _tapId: string, _occurredAt: string): void {}
   onTapRetired(_db: DatabaseExecutor, _tapId: string, _occurredAt: string): void {}
   onTapBecameUnavailable(_db: DatabaseExecutor, _tapId: string, _occurredAt: string): void {}
@@ -496,6 +501,14 @@ export class TapService {
         upsertAssignmentMysteryConfig(this.#database, assignment.id, desired, nowIso);
       else deleteAssignmentMysteryConfig(this.#database, assignment.id);
       const config = desired;
+      assertSynchronousCompletion(
+        this.#extensionPort.onAssignmentMysteryChanged?.(this.#database, {
+          assignmentId: assignment.id,
+          tapId: validatedTapId,
+          occurredAt: nowIso,
+        }),
+        "Tap assignment extensions",
+      );
       appendActivity(this.#database, {
         category: "domain",
         action: "entity_changed",

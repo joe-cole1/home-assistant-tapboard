@@ -46,7 +46,7 @@ export class PublicTapWarsService {
     return {
       tapId: eligible.tapId,
       tapNumber: eligible.tapNumber,
-      title: this.#title(eligible.tapId, eligible.assignmentId),
+      title: this.#currentTitle(eligible.tapId, eligible.assignmentId),
     };
   }
 
@@ -103,7 +103,7 @@ export class PublicTapWarsService {
       side: competitor.side,
       tapId: competitor.tapId,
       tapNumber: competitor.tapNumber,
-      title: this.#title(competitor.tapId, competitor.assignmentId),
+      title: this.#title(competitor),
       isCardParticipant:
         competitor.eligibility.eligible &&
         this.#isCurrentAssignment(competitor.tapId, competitor.assignmentId),
@@ -116,7 +116,7 @@ export class PublicTapWarsService {
     };
   }
 
-  #title(tapId: string, assignmentId: string): string {
+  #currentTitle(tapId: string, assignmentId: string): string {
     try {
       const tap = this.#tapService.getTap(tapId);
       if (!tap.enabled || tap.isRetired || tap.activeAssignment?.id !== assignmentId)
@@ -126,6 +126,18 @@ export class PublicTapWarsService {
     } catch {
       return MYSTERY_TAP;
     }
+  }
+
+  #title(competitor: TapWar["competitors"][number]): string {
+    if (
+      competitor.eligibility.eligible &&
+      this.#isCurrentAssignment(competitor.tapId, competitor.assignmentId)
+    )
+      return this.#currentTitle(competitor.tapId, competitor.assignmentId);
+    return typeof competitor.publicTitleFallback === "string" &&
+      competitor.publicTitleFallback.trim().length > 0
+      ? competitor.publicTitleFallback
+      : MYSTERY_TAP;
   }
 
   #isCurrentAssignment(tapId: string, assignmentId: string): boolean {

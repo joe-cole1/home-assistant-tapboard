@@ -17,6 +17,7 @@ import {
   pauseActiveWar,
   publishedWar,
   resumePausedWar,
+  updateVisibleCompetitorPublicTitleFallback,
 } from "./repository.ts";
 import { requireSides, requireUuid } from "./validators.ts";
 import type {
@@ -156,7 +157,12 @@ export class TapWarService implements TapWarLifecyclePort {
       if (previouslyPublished !== undefined)
         this.#activity(this.#database, previouslyPublished.id, "dismissed", at, options);
       const id = this.#idFactory();
-      insertStartedWar(this.#database, { id, at, first, second });
+      insertStartedWar(this.#database, {
+        id,
+        at,
+        first: { ...first, publicTitleFallback: this.#title(first.tapId, first.assignmentId) },
+        second: { ...second, publicTitleFallback: this.#title(second.tapId, second.assignmentId) },
+      });
       this.#activity(this.#database, id, "started", at, options);
       return getWar(this.#database, id)!;
     });
@@ -217,8 +223,8 @@ export class TapWarService implements TapWarLifecyclePort {
           : first.voteCount > second.voteCount
             ? "side1"
             : "side2";
-      const publicFirst = this.#title(first.tapId, first.assignmentId),
-        publicSecond = this.#title(second.tapId, second.assignmentId);
+      const publicFirst = this.#title(first.tapId, first.assignmentId, first.publicTitleFallback),
+        publicSecond = this.#title(second.tapId, second.assignmentId, second.publicTitleFallback);
       if (
         !freezeWarVoteCount(this.#database, warId, 1, first.voteCount) ||
         !freezeWarVoteCount(this.#database, warId, 2, second.voteCount)
@@ -276,6 +282,15 @@ export class TapWarService implements TapWarLifecyclePort {
   pauseForTapUnavailable(database: DatabaseExecutor, tapId: string, at: string): void {
     this.#pauseFor(database, "tap_id", tapId, at);
   }
+  refreshPublicTitleFallback(
+    database: DatabaseExecutor,
+    tapId: string,
+    assignmentId: string,
+  ): void {
+    const title = this.#resolvedTitle(tapId, assignmentId);
+    if (title === null) return;
+    updateVisibleCompetitorPublicTitleFallback(database, { tapId, assignmentId, title });
+  }
   #pauseFor(
     database: DatabaseExecutor,
     column: "assignment_id" | "tap_id",
@@ -294,8 +309,17 @@ export class TapWarService implements TapWarLifecyclePort {
     const reason = column === "tap_id" ? "disabled" : "original_assignment_ended_or_replaced";
     this.#pause(database, war, at, reason);
   }
-  #title(tapId: string, assignmentId: string): string {
-    const resolved = this.#publicTitleResolver?.(tapId, assignmentId);
-    return typeof resolved === "string" && resolved.trim().length > 0 ? resolved : mysteryTap;
+  #resolvedTitle(tapId: string, assignmentId: string): string | null {
+    try {
+      const resolved = this.#publicTitleResolver?.(tapId, assignmentId);
+      return typeof resolved === "string" && resolved.trim().length > 0 ? resolved : null;
+    } catch {
+      return null;
+    }
+  }
+  #title(tapId: string, assignmentId: string, fallback = mysteryTap): string {
+    const resolved = this.#resolvedTitle(tapId, assignmentId);
+    if (resolved !== null) return resolved;
+    return typeof fallback === "string" && fallback.trim().length > 0 ? fallback : mysteryTap;
   }
 }

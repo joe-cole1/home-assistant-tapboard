@@ -10,7 +10,10 @@ const secondTapId = "00000000-0000-4000-8000-000000000002";
 const firstAssignmentId = "00000000-0000-4000-8000-000000000011";
 const secondAssignmentId = "00000000-0000-4000-8000-000000000012";
 
-function war(status: TapWar["status"] = "active"): TapWar {
+function war(
+  status: TapWar["status"] = "active",
+  firstPublicTitleFallback = "Saved Public Title",
+): TapWar {
   return {
     id: "00000000-0000-4000-8000-000000000078",
     status,
@@ -34,6 +37,7 @@ function war(status: TapWar["status"] = "active"): TapWar {
         beverageId: `${SECRET}-beverage`,
         tapNumber: 1,
         adminBeverageTitle: `${SECRET} real beverage`,
+        publicTitleFallback: firstPublicTitleFallback,
         voteCount: 7,
         finalVoteCount: status === "completed" ? 7 : null,
         eligibility: { eligible: true, reason: null },
@@ -46,6 +50,7 @@ function war(status: TapWar["status"] = "active"): TapWar {
         beverageId: "beverage-two",
         tapNumber: 2,
         adminBeverageTitle: "Admin title two",
+        publicTitleFallback: "Saved Public Title Two",
         voteCount: 3,
         finalVoteCount: status === "completed" ? 3 : null,
         eligibility: { eligible: true, reason: null },
@@ -54,15 +59,20 @@ function war(status: TapWar["status"] = "active"): TapWar {
   };
 }
 
-function projection(input: TapWar, firstTitle: string, assignmentCurrent = true) {
+function projection(
+  input: TapWar,
+  firstTitle: string,
+  assignmentCurrent = true,
+  options: { readonly enabled?: boolean; readonly retired?: boolean } = {},
+) {
   const tapWarsService = {
     getVisible: () => input,
     listEligibleParticipants: () => [],
   };
   const tapService = {
     getTap: (tapId: string) => ({
-      enabled: true,
-      isRetired: false,
+      enabled: tapId === firstTapId ? (options.enabled ?? true) : true,
+      isRetired: tapId === firstTapId ? (options.retired ?? false) : false,
       activeAssignment: {
         id:
           tapId === firstTapId
@@ -110,7 +120,22 @@ void test("completed public result uses current Mystery-safe identity while fina
   assert.deepEqual([revealed?.side1.voteCount, revealed?.side2.voteCount], [7, 3]);
 
   const replaced = projection(war("completed"), "Replacement Name", false);
-  assert.equal(replaced?.side1.title, "Mystery Tap");
+  assert.equal(replaced?.side1.title, "Saved Public Title");
   assert.equal(replaced?.side1.isCardParticipant, false);
   assert.equal(JSON.stringify(replaced).includes("Replacement Name"), false);
+});
+
+void test("disabled or retired original assignments use their stored fallback", () => {
+  const disabled = projection(war("paused"), "Replacement Name", true, { enabled: false });
+  assert.equal(disabled?.side1.title, "Saved Public Title");
+  const retired = projection(war("completed"), "Replacement Name", true, { retired: true });
+  assert.equal(retired?.side1.title, "Saved Public Title");
+  assert.equal(JSON.stringify(disabled).includes("Replacement Name"), false);
+  assert.equal(JSON.stringify(retired).includes("Replacement Name"), false);
+});
+
+void test("unavailable original falls back to Mystery without leaking a replacement candidate", () => {
+  const view = projection(war("paused", "Mystery Tap"), SECRET, false);
+  assert.equal(view?.side1.title, "Mystery Tap");
+  assert.equal(JSON.stringify(view).includes(SECRET), false);
 });

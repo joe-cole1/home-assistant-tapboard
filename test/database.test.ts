@@ -472,6 +472,15 @@ void test("a canonical v17 database upgrades additively to v18", (context) => {
         .all(),
       [{ name: "tap_war_competitors" }, { name: "tap_wars" }],
     );
+    assert.deepEqual(
+      upgraded
+        .prepare<[], { readonly name: string; readonly required: number }>(
+          "SELECT name, \"notnull\" AS required FROM pragma_table_info('tap_war_competitors')",
+        )
+        .all()
+        .find((column) => column.name === "public_title_fallback"),
+      { name: "public_title_fallback", required: 1 },
+    );
   } finally {
     upgraded.close();
   }

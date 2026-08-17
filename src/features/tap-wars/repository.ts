@@ -24,6 +24,7 @@ interface CompetitorRow {
   readonly beverageId: string;
   readonly tapNumber: number;
   readonly adminBeverageTitle: string;
+  readonly publicTitleFallback: string;
   readonly voteCount: number;
   readonly finalVoteCount: number | null;
 }
@@ -42,7 +43,7 @@ const eligibleSql = `SELECT a.id AS assignmentId, a.tap_id AS tapId, a.fill_id A
 const warColumns =
   "id, status, result, started_at AS startedAt, paused_at AS pausedAt, paused_reason AS pausedReason, completed_at AS completedAt, published_at AS publishedAt, dismissed_at AS dismissedAt, completion_public_title_side1 AS completionPublicTitleSide1, completion_public_title_side2 AS completionPublicTitleSide2, completion_admin_title_side1 AS completionAdminTitleSide1, completion_admin_title_side2 AS completionAdminTitleSide2";
 const competitorColumns =
-  "side, assignment_id AS assignmentId, tap_id AS tapId, fill_id AS fillId, beverage_id AS beverageId, tap_number AS tapNumber, admin_beverage_title AS adminBeverageTitle, vote_count AS voteCount, final_vote_count AS finalVoteCount";
+  "side, assignment_id AS assignmentId, tap_id AS tapId, fill_id AS fillId, beverage_id AS beverageId, tap_number AS tapNumber, admin_beverage_title AS adminBeverageTitle, public_title_fallback AS publicTitleFallback, vote_count AS voteCount, final_vote_count AS finalVoteCount";
 
 function getEligibility(
   database: DatabaseExecutor,
@@ -188,8 +189,8 @@ export function insertStartedWar(
   input: {
     readonly id: string;
     readonly at: string;
-    readonly first: EligibleParticipant;
-    readonly second: EligibleParticipant;
+    readonly first: EligibleParticipant & { readonly publicTitleFallback: string };
+    readonly second: EligibleParticipant & { readonly publicTitleFallback: string };
   },
 ): void {
   database
@@ -197,8 +198,10 @@ export function insertStartedWar(
       "INSERT INTO tap_wars (id, status, started_at, created_at, updated_at) VALUES (?, 'active', ?, ?, ?)",
     )
     .run(input.id, input.at, input.at, input.at);
-  const insert = database.prepare<[string, number, string, string, string, string, number, string]>(
-    "INSERT INTO tap_war_competitors (war_id, side, assignment_id, tap_id, fill_id, beverage_id, tap_number, admin_beverage_title) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+  const insert = database.prepare<
+    [string, number, string, string, string, string, number, string, string]
+  >(
+    "INSERT INTO tap_war_competitors (war_id, side, assignment_id, tap_id, fill_id, beverage_id, tap_number, admin_beverage_title, public_title_fallback) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
   );
   for (const [side, competitor] of [
     [1, input.first],
@@ -213,8 +216,47 @@ export function insertStartedWar(
       competitor.beverageId,
       competitor.tapNumber,
       competitor.adminBeverageTitle,
+      competitor.publicTitleFallback,
     );
   }
+}
+
+export function updateVisibleCompetitorPublicTitleFallback(
+  database: DatabaseExecutor,
+  input: {
+    readonly tapId: string;
+    readonly assignmentId: string;
+    readonly title: string;
+  },
+): boolean {
+  if (typeof input.title !== "string" || input.title.trim().length === 0) return false;
+  const visible = database
+    .prepare<[string, string], { readonly warId: string; readonly side: 1 | 2 }>(
+      `SELECT c.war_id AS warId, c.side
+       FROM tap_war_competitors c
+       JOIN tap_wars w ON w.id = c.war_id
+       WHERE c.tap_id = ?
+         AND c.assignment_id = ?
+         AND (
+           w.status IN ('active', 'paused')
+           OR (
+             w.status = 'completed'
+             AND w.published_at IS NOT NULL
+             AND w.dismissed_at IS NULL
+           )
+         )
+       ORDER BY CASE WHEN w.status IN ('active', 'paused') THEN 0 ELSE 1 END
+       LIMIT 1`,
+    )
+    .get(input.tapId, input.assignmentId);
+  if (visible === undefined) return false;
+  return (
+    database
+      .prepare<[string, string, number, string, string]>(
+        "UPDATE tap_war_competitors SET public_title_fallback = ? WHERE war_id = ? AND side = ? AND tap_id = ? AND assignment_id = ?",
+      )
+      .run(input.title, visible.warId, visible.side, input.tapId, input.assignmentId).changes === 1
+  );
 }
 
 export function incrementWarVote(database: DatabaseExecutor, warId: string, side: 1 | 2): boolean {
