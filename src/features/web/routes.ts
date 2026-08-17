@@ -28,6 +28,9 @@ import type { HealthService } from "../health/service.ts";
 import { kegDeletionConfirmationLabel, type KegService } from "../kegs/service.ts";
 import type { AdminKegPage } from "../kegs/types.ts";
 import type { LiveUpdateService } from "../live/service.ts";
+import type { PublicTapWarsService } from "../tap-wars/public.ts";
+import { tapWarPercentages, type TapWarService } from "../tap-wars/service.ts";
+import type { EligibilityReason, TapWar } from "../tap-wars/types.ts";
 import { searchAdminDestinations } from "./admin-search.ts";
 import type { PublicStoryService } from "../story/service.ts";
 import { buildSensoryRadar, VESSEL_IDS } from "../story/index.ts";
@@ -106,7 +109,7 @@ const ADMIN_NAV = [
     key: "tap-wars",
     label: "Tap Wars",
     href: "/admin/tap-wars",
-    group: "Future",
+    group: "Manage",
     mark: "W",
     activePaths: ["/admin/tap-wars"],
   },
@@ -178,6 +181,8 @@ export interface WebRouteDependencies {
   readonly detectorService: DetectorService;
   readonly healthService: HealthService;
   readonly liveUpdates: LiveUpdateService;
+  readonly tapWarsService: TapWarService;
+  readonly publicTapWarsService: PublicTapWarsService;
 }
 
 interface AdminContext {
@@ -1736,6 +1741,123 @@ function registerAdminNotFound(dependencies: WebRouteDependencies): void {
   });
 }
 
+function tapWarsErrorStatus(error: ApplicationError): number {
+  switch (error.category) {
+    case "validation":
+      return 400;
+    case "too_large":
+      return 413;
+    case "not_found":
+      return 404;
+    case "conflict":
+      return 409;
+    case "forbidden":
+      return 403;
+    case "unauthorized":
+      return 401;
+    case "unavailable":
+      return 503;
+    case "internal":
+      return 500;
+  }
+}
+
+function sendTapWarsVoteError(
+  dependencies: WebRouteDependencies,
+  response: ServerResponse,
+  error: unknown,
+): void {
+  if (isApplicationError(error)) {
+    sendJson(response, tapWarsErrorStatus(error), {
+      error: { code: error.code, message: error.clientMessage },
+      tapWars: dependencies.publicTapWarsService.getVisible(),
+    });
+    return;
+  }
+  sendJson(response, 500, {
+    error: { code: "internal.unexpected", message: "The vote could not be recorded." },
+    tapWars: dependencies.publicTapWarsService.getVisible(),
+  });
+}
+
+function tapWarUnavailabilityLabel(reason: EligibilityReason | null): string | null {
+  switch (reason) {
+    case "disabled":
+      return "This Tap is disabled.";
+    case "retired":
+      return "This Tap has been retired.";
+    case "original_assignment_ended_or_replaced":
+      return "The original Tap assignment ended or changed.";
+    case "fill_ended_or_missing":
+      return "The original filled keg ended or is unavailable.";
+    case null:
+      return null;
+  }
+}
+
+function adminTapWarView(war: TapWar | undefined): Readonly<Record<string, unknown>> | null {
+  if (war === undefined) return null;
+  const [first, second] = war.competitors;
+  const firstVotes = war.status === "completed" ? (first.finalVoteCount ?? 0) : first.voteCount;
+  const secondVotes = war.status === "completed" ? (second.finalVoteCount ?? 0) : second.voteCount;
+  const percentages = tapWarPercentages(firstVotes, secondVotes);
+  const totalVotes = firstVotes + secondVotes;
+  const leaderSide =
+    firstVotes === secondVotes ? null : firstVotes > secondVotes ? (1 as const) : (2 as const);
+  return {
+    id: war.id,
+    status: war.status,
+    result: war.result,
+    startedAt: war.startedAt,
+    pausedAt: war.pausedAt,
+    completedAt: war.completedAt,
+    publishedAt: war.publishedAt,
+    dismissedAt: war.dismissedAt,
+    totalVotes,
+    leaderSide: war.status === "completed" ? null : leaderSide,
+    isTie:
+      war.status === "completed" ? war.result === "tie" : totalVotes > 0 && leaderSide === null,
+    completionPublicTitleSide1: war.completionPublicTitleSide1,
+    completionPublicTitleSide2: war.completionPublicTitleSide2,
+    competitors: war.competitors.map((competitor) => ({
+      side: competitor.side,
+      assignmentId: competitor.assignmentId,
+      tapId: competitor.tapId,
+      tapNumber: competitor.tapNumber,
+      adminBeverageTitle: competitor.adminBeverageTitle,
+      voteCount:
+        war.status === "completed" ? (competitor.finalVoteCount ?? 0) : competitor.voteCount,
+      percentage:
+        competitor.side === 1 ? (percentages?.side1 ?? null) : (percentages?.side2 ?? null),
+      eligible: competitor.eligibility.eligible,
+      unavailableReason: tapWarUnavailabilityLabel(competitor.eligibility.reason),
+    })),
+  };
+}
+
+function adminTapWarsPageData(
+  dependencies: WebRouteDependencies,
+): Readonly<Record<string, unknown>> {
+  const rawCurrent = dependencies.tapWarsService.getCurrentUnfinished();
+  return {
+    current: adminTapWarView(rawCurrent),
+    published: adminTapWarView(dependencies.tapWarsService.getPublishedResult()),
+    publicVisible: dependencies.publicTapWarsService.getVisible(),
+    history: dependencies.tapWarsService
+      .listCompletedHistory()
+      .map((completed) => adminTapWarView(completed)!),
+    eligible: dependencies.tapWarsService.listEligibleParticipants().map((participant) => ({
+      assignmentId: participant.assignmentId,
+      tapId: participant.tapId,
+      tapNumber: participant.tapNumber,
+      preview: dependencies.publicTapWarsService.previewEligible(participant.assignmentId),
+    })),
+    canResume:
+      rawCurrent?.status === "paused" &&
+      rawCurrent.competitors.every((side) => side.eligibility.eligible),
+  };
+}
+
 function registerPublicRoutes(dependencies: WebRouteDependencies): void {
   dependencies.router.get("/", (request, response) => {
     const isAdmin = adminContext(request, dependencies.authService) !== undefined;
@@ -1795,6 +1917,50 @@ function registerPublicRoutes(dependencies: WebRouteDependencies): void {
   dependencies.router.get("/api/public/dashboard/on-deck", (_request, response) => {
     sendJson(response, 200, { ...dependencies.dashboardService.getOnDeck() });
   });
+  dependencies.router.get("/api/public/tap-wars", (_request, response) => {
+    sendJson(response, 200, { tapWars: dependencies.publicTapWarsService.getVisible() });
+  });
+  dependencies.router.post(
+    "/api/public/tap-wars/:warId/votes",
+    async (request, response, params) => {
+      const wantsJson = acceptsJson(oneRequestHeader(request.headers.accept));
+      try {
+        requireMutationOrigin(request.headers.origin, dependencies.canonicalOrigin);
+        const form = await readFormBody(request, { maxBytes: 256, maxFields: 1 });
+        if (
+          Object.keys(form).length !== 1 ||
+          !Object.hasOwn(form, "side") ||
+          (form.side !== "1" && form.side !== "2")
+        ) {
+          throw new ApplicationError({
+            category: "validation",
+            code: "tap_war.invalid_vote",
+            clientMessage: "Choose one valid Tap War side.",
+          });
+        }
+        dependencies.tapWarsService.vote(params.warId!, form.side === "1" ? 1 : 2);
+        if (wantsJson) {
+          sendJson(response, 200, { tapWars: dependencies.publicTapWarsService.getVisible() });
+          return;
+        }
+        redirect(response, "/#tap-wars");
+      } catch (error) {
+        if (isApplicationError(error) && error.code === "tap_war.ineligible") {
+          // vote() commits the pause before reporting this conflict, so it is a
+          // real state change rather than a rejected attempt.
+          dependencies.liveUpdates.publish({ name: "tap_wars.updated", target: "tap-wars" });
+        }
+        if (wantsJson) {
+          sendTapWarsVoteError(dependencies, response, error);
+          return;
+        }
+        const message = isApplicationError(error)
+          ? error.clientMessage
+          : "The vote could not be recorded.";
+        redirect(response, `${messageLocation("/", "error", message)}#tap-wars`);
+      }
+    },
+  );
   dependencies.router.get("/api/public/dashboard/taps/:tapId", (_request, response, params) => {
     const tap = dependencies.dashboardService.getTap(params.tapId!);
     if (tap === undefined) {
@@ -2806,6 +2972,9 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
       "/admin/tap-wars",
       "Tap Wars",
       "/admin/tap-wars",
+      {
+        tapWars: adminTapWarsPageData(dependencies),
+      },
     );
   });
   registerAdminGet(dependencies, "/admin/display", (request, response, context) => {
@@ -2892,6 +3061,15 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
       return;
     }
     dependencies.liveUpdates.connectAdmin(response, context.sessionToken);
+  });
+  dependencies.router.get("/api/admin/tap-wars", (request, response) => {
+    if (adminContext(request, dependencies.authService) === undefined) {
+      sendJson(response, 401, {
+        error: { code: "auth.unauthorized", message: "Authentication is required." },
+      });
+      return;
+    }
+    sendJson(response, 200, { ...adminTapWarsPageData(dependencies) });
   });
 }
 
@@ -3951,6 +4129,48 @@ function registerAdminMutations(dependencies: WebRouteDependencies): void {
       dependencies.telemetryService.disableSource(params.id!, actor(context));
     },
     "Telemetry source disabled and its current key revoked.",
+  );
+  registerAdminAction(
+    dependencies,
+    "/admin/tap-wars/start",
+    "/admin/tap-wars",
+    (form, context) => {
+      dependencies.tapWarsService.start(
+        {
+          competitor1AssignmentId: form.competitor1AssignmentId,
+          competitor2AssignmentId: form.competitor2AssignmentId,
+        },
+        actor(context),
+      );
+    },
+    "Tap War started.",
+  );
+  registerAdminAction(
+    dependencies,
+    "/admin/tap-wars/:id/resume",
+    "/admin/tap-wars",
+    (_form, context, params) => {
+      dependencies.tapWarsService.resume(params.id!, actor(context));
+    },
+    "Tap War resumed.",
+  );
+  registerAdminAction(
+    dependencies,
+    "/admin/tap-wars/:id/stop",
+    "/admin/tap-wars",
+    (_form, context, params) => {
+      dependencies.tapWarsService.stop(params.id!, actor(context));
+    },
+    "Tap War completed.",
+  );
+  registerAdminAction(
+    dependencies,
+    "/admin/tap-wars/:id/dismiss",
+    "/admin/tap-wars",
+    (_form, context, params) => {
+      dependencies.tapWarsService.dismissPublicResult(params.id!, actor(context));
+    },
+    "Tap War result dismissed.",
   );
 }
 

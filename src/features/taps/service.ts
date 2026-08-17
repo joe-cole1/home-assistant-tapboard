@@ -75,6 +75,7 @@ export class DefaultTapAssignmentExtensionPort implements TapAssignmentExtension
   onAssignmentClosed(_db: DatabaseExecutor, _context: AssignmentClosedContext): void {}
   onTapCreated(_db: DatabaseExecutor, _tapId: string, _occurredAt: string): void {}
   onTapRetired(_db: DatabaseExecutor, _tapId: string, _occurredAt: string): void {}
+  onTapBecameUnavailable(_db: DatabaseExecutor, _tapId: string, _occurredAt: string): void {}
 }
 
 export interface TapServiceOptions {
@@ -283,6 +284,13 @@ export class TapService {
       };
 
       updateTap(this.#database, updatedTap);
+
+      if (existing.enabled && !updatedTap.enabled) {
+        assertSynchronousCompletion(
+          this.#extensionPort.onTapBecameUnavailable?.(this.#database, existing.id, nowIso),
+          "Tap lifecycle extensions",
+        );
+      }
 
       appendActivity(this.#database, {
         category: "domain",

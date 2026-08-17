@@ -220,6 +220,8 @@ export interface TapAssignmentExtensionPort {
     tapId: TapRetiredContext["tapId"],
     occurredAt: TapRetiredContext["occurredAt"],
   ): void;
+  /** Transaction-local notification for an enabled Tap becoming unavailable. */
+  onTapBecameUnavailable?(db: DatabaseExecutor, tapId: string, occurredAt: string): void;
 }
 
 export interface AssignmentOperationResult {

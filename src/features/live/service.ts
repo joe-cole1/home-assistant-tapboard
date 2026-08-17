@@ -11,6 +11,7 @@ export const LIVE_EVENT_NAMES = [
   "ondeck.updated",
   "integration_status.updated",
   "display.updated",
+  "tap_wars.updated",
 ] as const;
 
 export type LiveEventName = (typeof LIVE_EVENT_NAMES)[number];
@@ -22,7 +23,8 @@ export type PublicLiveEvent =
     }
   | { readonly name: "ondeck.updated"; readonly target: "ondeck" }
   | { readonly name: "integration_status.updated"; readonly target: "header" }
-  | { readonly name: "display.updated"; readonly target: "display" | "cards" };
+  | { readonly name: "display.updated"; readonly target: "display" | "cards" }
+  | { readonly name: "tap_wars.updated"; readonly target: "tap-wars" };
 
 interface AdminSseContext extends SseClientContext {
   readonly isAdmin: true;

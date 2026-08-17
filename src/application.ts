@@ -54,6 +54,11 @@ import {
 } from "./features/display/palette.ts";
 import { createDashboardService } from "./features/dashboard/index.ts";
 import { createPublicStoryService } from "./features/story/index.ts";
+import {
+  createPublicTapWarsService,
+  TapWarService,
+  type PublicTapWarsService,
+} from "./features/tap-wars/index.ts";
 import { LiveUpdateService, observeCommittedCalls } from "./features/live/index.ts";
 import { registerWebRoutes } from "./features/web/index.ts";
 import { createLogger, type Logger } from "./shared/logging.ts";
@@ -166,6 +171,25 @@ class FoundationApplication implements Application {
         },
       });
       this.#healthService = healthService;
+      const storyServiceRef: { current?: ReturnType<typeof createPublicStoryService> } = {};
+      const rawTapWarsService = new TapWarService(this.#database, {
+        // Deliberately lazy: the lifecycle port is composed before both the
+        // tap and public-story services exist, while completion is later.
+        publicTitleResolver: (tapId, assignmentId) => {
+          try {
+            const tap = rawTapService.getTap(tapId);
+            if (!tap.enabled || tap.isRetired || tap.activeAssignment?.id !== assignmentId)
+              return null;
+            const title = storyServiceRef.current?.getCard(tapId)?.title;
+            return typeof title === "string" && title.trim().length > 0 ? title : null;
+          } catch {
+            return null;
+          }
+        },
+      });
+      const publishTapWars = (): void => {
+        liveUpdates.publish({ name: "tap_wars.updated", target: "tap-wars" });
+      };
 
       const publishAllTaps = (name: "tap.updated" | "fill.updated"): void => {
         for (const tap of rawTapService.listTaps()) {
@@ -194,12 +218,24 @@ class FoundationApplication implements Application {
         ): void => {
           rawDetectorService.onAssignmentClosed(database, context);
           healthService.onAssignmentClosed(database, context);
+          rawTapWarsService.pauseForAssignmentClose(
+            database,
+            context.assignmentId,
+            context.occurredAt,
+          );
         },
         onTapCreated: (database: DatabaseExecutor, tapId: string, occurredAt: string): void => {
           healthService.onTapCreated(database, tapId, occurredAt);
         },
         onTapRetired: (database: DatabaseExecutor, tapId: string, occurredAt: string): void => {
           healthService.onTapRetired(database, tapId, occurredAt);
+        },
+        onTapBecameUnavailable: (
+          database: DatabaseExecutor,
+          tapId: string,
+          occurredAt: string,
+        ): void => {
+          rawTapWarsService.pauseForTapUnavailable(database, tapId, occurredAt);
         },
       };
       const rawTapService = createTapService(this.#database, { extensionPort: tapExtensionPort });
@@ -219,7 +255,11 @@ class FoundationApplication implements Application {
       const kegService = observeCommittedCalls(rawKegService, {
         createKeg: () => publishAllTaps("fill.updated"),
         updateKeg: () => publishAllTaps("fill.updated"),
-        deleteKeg: () => publishAllTaps("fill.updated"),
+        deleteKeg: () => {
+          publishAllTaps("fill.updated");
+          rawTapWarsService.reconcileEligibility();
+          publishTapWars();
+        },
       });
       const rawBeverageService = createBeverageService(this.#database, {
         secretsService,
@@ -232,6 +272,7 @@ class FoundationApplication implements Application {
         onSyncCompleted: () => {
           liveUpdates.publish({ name: "integration_status.updated", target: "header" });
           publishAllTaps("fill.updated");
+          publishTapWars();
         },
       });
       this.#beverageService = rawBeverageService;
@@ -240,8 +281,12 @@ class FoundationApplication implements Application {
         linkBrewfatherCandidate: () => {
           liveUpdates.publish({ name: "integration_status.updated", target: "header" });
           publishAllTaps("fill.updated");
+          publishTapWars();
         },
-        updateCustomBeverage: () => publishAllTaps("fill.updated"),
+        updateCustomBeverage: () => {
+          publishAllTaps("fill.updated");
+          publishTapWars();
+        },
         autosaveCustomPresentation: (result, args) => {
           if (typeof args[1] !== "string") return;
           const beverage =
@@ -259,6 +304,7 @@ class FoundationApplication implements Application {
           )
             return;
           publishFillUpdatesForBeverage(args[0]);
+          publishTapWars();
         },
         updateSensoryOverrides: (result, args) => {
           const changed =
@@ -269,14 +315,20 @@ class FoundationApplication implements Application {
           if (!changed || typeof args[0] !== "string") return;
           publishFillUpdatesForBeverage(args[0]);
         },
-        updatePresentationOverrides: () => publishAllTaps("fill.updated"),
+        updatePresentationOverrides: () => {
+          publishAllTaps("fill.updated");
+          publishTapWars();
+        },
         unlinkBeverage: () => {
           liveUpdates.publish({ name: "integration_status.updated", target: "header" });
           publishAllTaps("fill.updated");
+          publishTapWars();
         },
         deleteBeverage: () => {
           liveUpdates.publish({ name: "integration_status.updated", target: "header" });
           publishAllTaps("fill.updated");
+          rawTapWarsService.reconcileEligibility();
+          publishTapWars();
         },
         configureBrewfatherAccount: () => {
           liveUpdates.publish({ name: "integration_status.updated", target: "header" });
@@ -287,7 +339,10 @@ class FoundationApplication implements Application {
       });
       const tapService = observeCommittedCalls(rawTapService, {
         createTap: () => publishAllTaps("tap.updated"),
-        updateTap: () => publishAllTaps("tap.updated"),
+        updateTap: () => {
+          publishAllTaps("tap.updated");
+          publishTapWars();
+        },
         updateAssignmentMystery: (result, args) => {
           const changed =
             typeof result === "object" &&
@@ -296,6 +351,7 @@ class FoundationApplication implements Application {
             result.changed === true;
           if (changed && typeof args[0] === "string") {
             liveUpdates.publish({ name: "tap.updated", tapId: args[0] });
+            publishTapWars();
           }
         },
         autosaveName: (result, args) => {
@@ -313,14 +369,25 @@ class FoundationApplication implements Application {
         assignFill: () => {
           publishAllTaps("tap.updated");
           liveUpdates.publish({ name: "ondeck.updated", target: "ondeck" });
+          publishTapWars();
         },
         unassign: () => {
           publishAllTaps("tap.updated");
           liveUpdates.publish({ name: "ondeck.updated", target: "ondeck" });
+          publishTapWars();
         },
-        moveFill: () => publishAllTaps("tap.updated"),
-        retireTap: () => publishAllTaps("tap.updated"),
-        deleteTap: () => publishAllTaps("tap.updated"),
+        moveFill: () => {
+          publishAllTaps("tap.updated");
+          publishTapWars();
+        },
+        retireTap: () => {
+          publishAllTaps("tap.updated");
+          publishTapWars();
+        },
+        deleteTap: () => {
+          publishAllTaps("tap.updated");
+          publishTapWars();
+        },
       });
       const rawFillService = createFillService(this.#database, {
         beverageService,
@@ -336,10 +403,14 @@ class FoundationApplication implements Application {
         kickFill: () => {
           liveUpdates.publish({ name: "ondeck.updated", target: "ondeck" });
           publishAllTaps("fill.updated");
+          rawTapWarsService.reconcileEligibility();
+          publishTapWars();
         },
         deleteFill: () => {
           liveUpdates.publish({ name: "ondeck.updated", target: "ondeck" });
           publishAllTaps("fill.updated");
+          rawTapWarsService.reconcileEligibility();
+          publishTapWars();
         },
       });
       const machineKeyService = createMachineKeyService(this.#database);
@@ -433,6 +504,19 @@ class FoundationApplication implements Application {
         healthService,
         displayService,
       });
+      storyServiceRef.current = storyService;
+      const publicTapWarsService: PublicTapWarsService = createPublicTapWarsService({
+        tapWarsService: rawTapWarsService,
+        tapService,
+        storyService,
+      });
+      const tapWarsService = observeCommittedCalls(rawTapWarsService, {
+        start: publishTapWars,
+        vote: publishTapWars,
+        resume: publishTapWars,
+        stop: publishTapWars,
+        dismissPublicResult: publishTapWars,
+      });
       const dashboardService = createDashboardService({
         displayService,
         tapService,
@@ -443,6 +527,7 @@ class FoundationApplication implements Application {
         healthService,
         telemetryService,
         storyService,
+        tapWarsService: publicTapWarsService,
       });
 
       const router = new Router(this.#logger);
@@ -482,6 +567,8 @@ class FoundationApplication implements Application {
         detectorService,
         healthService,
         liveUpdates,
+        tapWarsService,
+        publicTapWarsService,
       });
       // This route intentionally precedes the generic static-asset route. It
       // emits only validated, same-origin CSS so custom accents and selected
@@ -543,6 +630,7 @@ class FoundationApplication implements Application {
           { kind: "js", file: "admin-display.js", path: "js/admin-display.js" },
           { kind: "js", file: "admin-shell.js", path: "js/admin-shell.js" },
           { kind: "js", file: "admin-autosave.js", path: "js/admin-autosave.js" },
+          { kind: "js", file: "admin-tap-wars.js", path: "js/admin-tap-wars.js" },
           { kind: "font", file: "outfit-6c18d579.woff2", path: "fonts/outfit-6c18d579.woff2" },
           { kind: "font", file: "inter-3100e775.woff2", path: "fonts/inter-3100e775.woff2" },
           { kind: "font", file: "roboto-1404ca34.woff2", path: "fonts/roboto-1404ca34.woff2" },

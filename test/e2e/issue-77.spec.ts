@@ -211,7 +211,9 @@ test("Admin long-press previews a pour without mutating the public Fill state", 
   await expect(card).toHaveAttribute("data-fill-percent", initialFill ?? "");
   await expect(card).not.toHaveClass(/is-pour-preview/u, { timeout: 4_000 });
 
-  const nonStoryCard = page.locator("article.tap-card").first();
+  const nonStoryCard = page
+    .locator('article.tap-card:not(:has([data-field="story-link"]))')
+    .first();
   await expect(nonStoryCard).toBeVisible();
   const nonStoryGraphic = nonStoryCard.locator(".tap-graphic");
   const nonStoryInitialFill = await nonStoryCard.getAttribute("data-fill-percent");
@@ -247,7 +249,7 @@ test("authenticated article-card updates preserve pour-preview controls and do n
   await page.reload();
   await expect(page.locator("[data-dashboard]")).toHaveAttribute("data-admin-pour-preview", "true");
 
-  const article = page.locator("article.tap-card").first();
+  const article = page.locator('article.tap-card:not(:has([data-field="story-link"]))').first();
   await expect(article).toBeVisible();
   const tapId = await article.getAttribute("data-tap-id");
   expect(tapId).toBeTruthy();
@@ -327,7 +329,7 @@ test("Brew Story ignores ordinary telemetry reloads but reconciles Mystery updat
   const rotateResponse = await admin.request.post(
     `/api/admin/telemetry/sources/${source!.id}/rotate`,
     {
-      headers: { origin: "http://127.0.0.1:4176", "x-csrf-token": csrfToken },
+      headers: { origin: new URL(admin.url()).origin, "x-csrf-token": csrfToken },
       data: { label: "Issue 77 Story live fixture" },
     },
   );

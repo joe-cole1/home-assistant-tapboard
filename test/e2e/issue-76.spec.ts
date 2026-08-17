@@ -517,7 +517,7 @@ test("local display preferences are prepaint, strict, persistent, resettable, an
 }) => {
   const context = await browser.newContext();
   await context.addInitScript(() => {
-    if (location.origin === "http://127.0.0.1:4176") {
+    if (location.hostname === "127.0.0.1") {
       localStorage.setItem(
         "tapboard.v2.display-preferences.v1",
         JSON.stringify({

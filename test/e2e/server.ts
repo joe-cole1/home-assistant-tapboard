@@ -14,7 +14,10 @@ import { openDatabase } from "../../src/infrastructure/database/connection.ts";
 import { createLogger } from "../../src/shared/logging.ts";
 
 const databasePath = "/tmp/tapboard-issue-76-e2e.sqlite3";
-const origin = "http://127.0.0.1:4176";
+const port = Number.parseInt(process.env.TAPBOARD_E2E_PORT ?? "4176", 10);
+if (!Number.isSafeInteger(port) || port < 1 || port > 65_535)
+  throw new Error("TAPBOARD_E2E_PORT must be a valid TCP port.");
+const origin = `http://127.0.0.1:${port}`;
 const secretKey = Buffer.alloc(32, 7).toString("base64url");
 const LIVE_MYSTERY_SECRET = "LIVE_MYSTERY_SECRET_77";
 rmSync(databasePath, { force: true });
@@ -176,6 +179,34 @@ taps.updateAssignmentMystery(mysteryTap.id, {
   revealSensory: false,
   revealHistory: false,
 });
+// Stable, ordinary public competitors reserved for the Issue #78 Tap Wars E2E
+// lifecycle. Tap 1 and Tap 3 remain the Issue #77 measured/Mystery fixtures.
+for (const [tapNumber, kegNumber, name] of [
+  [4, 4, "Tap Wars Amber"],
+  [5, 5, "Tap Wars Lager"],
+] as const) {
+  const competitorBeverage = beverages.createCustomBeverage({
+    name,
+    beverageType: "beer",
+    style: "Fixture style",
+    abv: 5,
+    description: `Dedicated Tap Wars fixture for Tap ${tapNumber}.`,
+  });
+  const competitorKeg = kegs.createKeg({
+    kegNumber,
+    label: `Tap Wars keg ${tapNumber}`,
+    capacityMl: 19_000,
+    currentTareG: 4_200,
+  });
+  const competitorFill = fills.createFill({
+    beverageId: competitorBeverage.beverage.id,
+    kegId: competitorKeg.id,
+    fillDate: "2026-08-15",
+  });
+  const competitorTap = taps.listTaps().find((tap) => tap.tapNumber === tapNumber);
+  if (competitorTap === undefined) throw new Error(`Expected fixture Tap ${tapNumber}.`);
+  taps.assignFill(competitorTap.id, { fillId: competitorFill.id });
+}
 const measurementStart = Date.now();
 for (let index = 0; index < 5; index += 1) {
   telemetry.ingestSingle(source, 1, {
@@ -247,7 +278,7 @@ database.close();
 const application = createApplication({
   config: {
     host: "127.0.0.1",
-    port: 4176,
+    port,
     databasePath,
     shutdownGraceMs: 2_000,
     canonicalExternalOrigin: origin,

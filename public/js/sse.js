@@ -6,6 +6,7 @@ const EVENT_NAMES = [
   "ondeck.updated",
   "integration_status.updated",
   "display.updated",
+  "tap_wars.updated",
 ];
 
 export function connect(path, onEvent, onReconnect) {

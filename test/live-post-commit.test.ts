@@ -132,8 +132,18 @@ void test("public live events contain only the named dirty-target contract", () 
     writes.at(-1),
     'event: telemetry.updated\ndata: {"tapId":"00000000-0000-4000-8000-000000000001"}\n\n',
   );
+  live.publish({ name: "tap_wars.updated", target: "tap-wars" });
+  assert.equal(writes.at(-1), 'event: tap_wars.updated\ndata: {"target":"tap-wars"}\n\n');
   const serialized = writes.join("");
-  for (const forbidden of ["sourceId", "measurementId", "secret", "session", "rawPayload"])
+  for (const forbidden of [
+    "sourceId",
+    "measurementId",
+    "secret",
+    "session",
+    "rawPayload",
+    "voteCount",
+    "title",
+  ])
     assert.equal(serialized.includes(forbidden), false, forbidden);
   live.stop();
 });

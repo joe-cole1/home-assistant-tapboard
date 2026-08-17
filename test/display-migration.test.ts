@@ -54,7 +54,7 @@ void test("v17 migration identity and defaults are canonical", () => {
   const database = openDatabase(":memory:");
   try {
     assert.equal(database.pragma<number>("user_version", { simple: true }), CURRENT_SCHEMA_VERSION);
-    assert.equal(CURRENT_SCHEMA_VERSION, DISPLAY_FONT_SCHEMA_VERSION);
+    assert.equal(DISPLAY_FONT_SCHEMA_VERSION, 17);
     assert.equal(
       database
         .prepare<[], { readonly name: string }>(

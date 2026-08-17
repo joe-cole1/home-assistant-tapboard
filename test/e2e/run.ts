@@ -1,6 +1,9 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { get } from "node:http";
 
+const e2ePort = process.env.TAPBOARD_E2E_PORT ?? "4176";
+const e2eOrigin = `http://127.0.0.1:${e2ePort}`;
+
 const server = spawn(process.execPath, ["test/e2e/server.ts"], {
   stdio: ["ignore", "inherit", "inherit"],
 });
@@ -11,7 +14,7 @@ function delay(milliseconds: number): Promise<void> {
 
 async function ready(): Promise<boolean> {
   return new Promise((resolve) => {
-    const request = get("http://127.0.0.1:4176/healthz", (response) => {
+    const request = get(`${e2eOrigin}/healthz`, (response) => {
       response.resume();
       resolve(response.statusCode === 200);
     });
