@@ -74,6 +74,20 @@ async function publicWar(page: Page): Promise<{
   };
 }
 
+async function publicMainProjection(page: Page): Promise<{
+  readonly text: string;
+  readonly attributes: string;
+}> {
+  return page.locator("main").evaluate((node) => ({
+    text: node.textContent ?? "",
+    attributes: [node, ...node.querySelectorAll("*")]
+      .flatMap((element) =>
+        [...element.attributes].map((attribute) => `${attribute.name}=${attribute.value}`),
+      )
+      .join(" "),
+  }));
+}
+
 async function closeCurrentWar(page: Page): Promise<void> {
   await page.goto("/admin/tap-wars");
   const stop = page.getByRole("button", { name: "Stop Tap War" });
@@ -277,6 +291,87 @@ test("Tap Wars votes live-update stable cards, pause safely, and publish a froze
   await admin.getByRole("button", { name: "Dismiss public result" }).click();
   await expect(page.locator("[data-tap-wars]")).toBeHidden();
   await context.close();
+});
+
+test("Tap Wars resolves the exact disabled original title without leaking a replacement", async ({
+  browser,
+}) => {
+  const context = await browser.newContext();
+  const admin = await context.newPage();
+  const page = await context.newPage();
+  let tap4Id: string | undefined;
+
+  const setTapEnabled = async (tapId: string, enabled: boolean): Promise<void> => {
+    await admin.goto(`/admin/taps/${tapId}`);
+    await admin.getByText("Edit identity and serving metadata", { exact: true }).click();
+    const metadata = admin
+      .locator('form[action$="/update"]')
+      .filter({ has: admin.getByLabel("Public display") });
+    await metadata.getByLabel("Public display").selectOption(enabled ? "true" : "false");
+    await metadata.getByRole("button", { name: "Save Tap metadata" }).click();
+  };
+
+  const setMysteryEnabled = async (tapId: string, enabled: boolean): Promise<void> => {
+    await admin.goto(`/admin/taps/${tapId}`);
+    await admin.getByText("Mystery Tap reveal fields", { exact: true }).click();
+    await admin.getByLabel("Enable Mystery Tap").setChecked(enabled);
+    await admin.getByRole("button", { name: "Save Mystery settings" }).click();
+  };
+
+  try {
+    await login(admin);
+    await closeCurrentWar(admin);
+    await startWar(admin, 4, 5);
+    const started = await publicWar(page);
+    tap4Id = started.side1.tapId;
+
+    await setTapEnabled(tap4Id, false);
+    await expect.poll(async () => (await publicWar(page)).status).toBe("paused");
+    await page.goto("/");
+    await expect(page.locator(`[data-tap-id="${tap4Id}"]`)).toHaveCount(0);
+
+    await setMysteryEnabled(tap4Id, true);
+    await expect.poll(async () => (await publicWar(page)).side1.title).toBe("Mystery Tap");
+    const mysteryJson = await (await page.request.get("/api/public/tap-wars")).text();
+    expect(mysteryJson).not.toContain("Tap Wars Amber");
+    await page.goto("/");
+    const mysteryMain = await publicMainProjection(page);
+    expect(mysteryMain.text).not.toContain("Tap Wars Amber");
+    expect(mysteryMain.attributes).not.toContain("Tap Wars Amber");
+
+    await setMysteryEnabled(tap4Id, false);
+    await expect.poll(async () => (await publicWar(page)).side1.title).toBe("Tap Wars Amber");
+    await setMysteryEnabled(tap4Id, true);
+    await expect.poll(async () => (await publicWar(page)).side1.title).toBe("Mystery Tap");
+
+    await admin.goto("/admin/tap-wars");
+    await admin.getByRole("button", { name: "Stop Tap War" }).click();
+    await expect(admin.getByRole("heading", { name: "Published result" })).toBeVisible();
+    const completed = await publicWar(page);
+    expect(completed.status).toBe("completed");
+    expect(completed.side1.title).toBe("Mystery Tap");
+    await page.goto("/");
+    const completedMain = await publicMainProjection(page);
+    expect(completedMain.text).not.toContain("Tap Wars Amber");
+    expect(completedMain.attributes).not.toContain("Tap Wars Amber");
+    await expect(page.locator(`[data-tap-id="${tap4Id}"]`)).toHaveCount(0);
+    await expect(page.locator("[data-tap-wars]")).toContainText("Mystery Tap");
+  } finally {
+    if (tap4Id !== undefined) {
+      try {
+        await closeCurrentWar(admin);
+      } catch {
+        // Preserve the assertion failure while making a best-effort cleanup.
+      }
+      try {
+        await setTapEnabled(tap4Id, true);
+        await setMysteryEnabled(tap4Id, false);
+      } catch {
+        // Preserve the assertion failure while making a best-effort cleanup.
+      }
+    }
+    await context.close();
+  }
 });
 
 test("Tap Wars remains SSR-safe without JavaScript and does not leak Mystery identity", async ({

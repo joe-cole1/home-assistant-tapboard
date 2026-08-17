@@ -237,6 +237,36 @@ export class PublicStoryService {
     }
   }
 
+  /**
+   * Resolve only the safe title for one exact assignment.  This intentionally
+   * does not require the Tap to be enabled: Tap Wars may remain visible after
+   * an original competitor is disabled, while replacement assignments must
+   * never supply its title.
+   */
+  getTitleForAssignment(tapId: string, assignmentId: string): string | undefined {
+    try {
+      const tap = this.#dependencies.tapService.getTap(tapId);
+      const assignment = tap.activeAssignment;
+      if (tap.isRetired || assignment === null || assignment.id !== assignmentId) return undefined;
+
+      const mystery = this.#dependencies.tapService.getAssignmentMystery(tap.id);
+      const policy = mysteryVisibilityPolicy(mystery);
+      if (policy.title !== null) return policy.title;
+      return this.#dependencies.beverageService.getBeverage(assignment.beverageId)
+        .effectivePresentation.name;
+    } catch (error) {
+      if (
+        isApplicationError(error) &&
+        (error.category === "validation" ||
+          error.code === "tap.not_found" ||
+          error.code === "beverage.not_found")
+      ) {
+        return undefined;
+      }
+      throw error;
+    }
+  }
+
   listLegacyTaps(): readonly PublicTapView[] {
     return this.#dependencies.tapService
       .listTaps()

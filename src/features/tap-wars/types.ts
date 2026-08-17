@@ -59,8 +59,9 @@ export interface TapWarLifecyclePort {
 }
 /**
  * Application-composed authority for the current original assignment's safe
- * public title. It returns null when the original is unavailable, replaced,
- * disabled, retired, or otherwise not servable.
+ * public title. It may resolve a disabled Tap when the exact original
+ * assignment is still active; it returns null when that assignment is
+ * unavailable, replaced, retired, or otherwise not servable.
  */
 export type PublicTitleResolver = (tapId: string, assignmentId: string) => string | null;
 export interface TapWarPercentages {

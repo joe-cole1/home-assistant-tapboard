@@ -178,11 +178,7 @@ class FoundationApplication implements Application {
         // tap and public-story services exist, while completion is later.
         publicTitleResolver: (tapId, assignmentId) => {
           try {
-            const tap = rawTapService.getTap(tapId);
-            if (!tap.enabled || tap.isRetired || tap.activeAssignment?.id !== assignmentId)
-              return null;
-            const title = storyServiceRef.current?.getCard(tapId)?.title;
-            return typeof title === "string" && title.trim().length > 0 ? title : null;
+            return storyServiceRef.current?.getTitleForAssignment(tapId, assignmentId) ?? null;
           } catch {
             return null;
           }
