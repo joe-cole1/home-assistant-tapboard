@@ -54,7 +54,11 @@ import {
 import type { DetectorService } from "../telemetry/detector-service.ts";
 import { validateCompleteDetectorConfig } from "../telemetry/detector-validation.ts";
 import type { TelemetryService } from "../telemetry/service.ts";
-import { HEALTH_CHECK_IDS, type HealthConfigOverride } from "../health/types.ts";
+import {
+  HEALTH_CHECK_IDS,
+  type HealthCheckId,
+  type HealthConfigOverride,
+} from "../health/types.ts";
 
 const ADMIN_NAV = [
   {
@@ -158,6 +162,362 @@ function adminTimestampLabel(value: string | null | undefined): string {
   const hour = hour24 % 12 || 12;
   const minute = String(date.getUTCMinutes()).padStart(2, "0");
   return `${ADMIN_TIMESTAMP_MONTHS[date.getUTCMonth()]} ${date.getUTCDate()}, ${date.getUTCFullYear()}, ${hour}:${minute} ${hour24 < 12 ? "AM" : "PM"} UTC`;
+}
+
+interface AdminConfigFieldPresentation {
+  readonly label: string;
+  readonly help: string;
+  readonly unit?: string;
+}
+
+const DETECTOR_FIELD_PRESENTATION = {
+  candidateLossMl: {
+    label: "Candidate loss (mL)",
+    help: "Volume loss that starts a possible pour candidate.",
+    unit: "mL",
+    group: "detection-start",
+  },
+  candidateSamples: {
+    label: "Candidate samples (count)",
+    help: "Samples that must support a candidate before arbitration begins.",
+    unit: "samples",
+    group: "detection-start",
+  },
+  candidateSampleWindowMs: {
+    label: "Candidate sample window (ms)",
+    help: "Time window used to collect candidate samples.",
+    unit: "ms",
+    group: "detection-start",
+  },
+  candidateLookbackMs: {
+    label: "Candidate lookback (ms)",
+    help: "How far back the detector checks for the start of a loss.",
+    unit: "ms",
+    group: "detection-start",
+  },
+  arbitrationMs: {
+    label: "Arbitration window (ms)",
+    help: "Time allowed to confirm that the candidate is a real pour.",
+    unit: "ms",
+    group: "tap-arbitration",
+  },
+  arbitrationMinimumMl: {
+    label: "Arbitration minimum flow (mL)",
+    help: "Minimum flow needed before a candidate can win arbitration.",
+    unit: "mL",
+    group: "tap-arbitration",
+  },
+  arbitrationDominanceRatio: {
+    label: "Arbitration dominance ratio",
+    help: "How much stronger the winning signal must be than competing movement.",
+    unit: "ratio",
+    group: "tap-arbitration",
+  },
+  meaningfulFlowMl: {
+    label: "Meaningful flow (mL)",
+    help: "Flow amount treated as meaningful activity during a pour.",
+    unit: "mL",
+    group: "pour-completion",
+  },
+  quietPeriodMs: {
+    label: "Quiet period (ms)",
+    help: "Quiet time required before the pour can be considered complete.",
+    unit: "ms",
+    group: "pour-completion",
+  },
+  hardTimeoutMs: {
+    label: "Hard timeout (ms)",
+    help: "Maximum time a single pour candidate may remain open.",
+    unit: "ms",
+    group: "pour-completion",
+  },
+  minimumPourMl: {
+    label: "Minimum pour (mL)",
+    help: "Smallest completed pour recorded as a pour event.",
+    unit: "mL",
+    group: "pour-completion",
+  },
+  implausibleJumpMl: {
+    label: "Implausible jump (mL)",
+    help: "Volume jump large enough to require stability checks before acceptance.",
+    unit: "mL",
+    group: "pour-completion",
+  },
+  jumpStableSamples: {
+    label: "Jump stability samples (count)",
+    help: "Samples that must agree before a large jump is accepted.",
+    unit: "samples",
+    group: "stability-recovery",
+  },
+  jumpStableSpanMs: {
+    label: "Jump stability span (ms)",
+    help: "Time span over which large-jump samples must remain stable.",
+    unit: "ms",
+    group: "stability-recovery",
+  },
+  jumpBandMl: {
+    label: "Jump stability band (mL)",
+    help: "Allowed variation while confirming a large jump.",
+    unit: "mL",
+    group: "stability-recovery",
+  },
+  baselineSamples: {
+    label: "Baseline samples (count)",
+    help: "Samples used to establish a stable baseline around the Tap.",
+    unit: "samples",
+    group: "stability-recovery",
+  },
+  baselineSpanMs: {
+    label: "Baseline span (ms)",
+    help: "Time span used to establish the baseline.",
+    unit: "ms",
+    group: "stability-recovery",
+  },
+  baselineBandMl: {
+    label: "Baseline stability band (mL)",
+    help: "Allowed variation while establishing the baseline.",
+    unit: "mL",
+    group: "stability-recovery",
+  },
+  settledSamples: {
+    label: "Settled samples (count)",
+    help: "Samples used to confirm that the reading has settled after a pour.",
+    unit: "samples",
+    group: "stability-recovery",
+  },
+  settledSpanMs: {
+    label: "Settled span (ms)",
+    help: "Time span over which the post-pour reading must stay settled.",
+    unit: "ms",
+    group: "stability-recovery",
+  },
+  settledBandMl: {
+    label: "Settled stability band (mL)",
+    help: "Allowed variation for a reading to count as settled.",
+    unit: "mL",
+    group: "stability-recovery",
+  },
+  cooldownMs: {
+    label: "Cooldown (ms)",
+    help: "Quiet time after a completed pour before another event may start.",
+    unit: "ms",
+    group: "stability-recovery",
+  },
+  historyMs: {
+    label: "History window (ms)",
+    help: "How long recent samples remain available for recovery decisions.",
+    unit: "ms",
+    group: "stability-recovery",
+  },
+} as const satisfies Record<
+  (typeof DETECTOR_CONFIG_FIELDS)[number],
+  AdminConfigFieldPresentation & { readonly group: string }
+>;
+
+const DETECTOR_GROUPS = [
+  {
+    id: "detection-start",
+    title: "Detection start",
+    description: "These settings decide when measured volume loss becomes a pour candidate.",
+  },
+  {
+    id: "tap-arbitration",
+    title: "Tap arbitration",
+    description: "These settings confirm that the candidate belongs to this Tap and is meaningful.",
+  },
+  {
+    id: "pour-completion",
+    title: "Pour completion",
+    description: "These settings decide when a pour is recorded or safely timed out.",
+  },
+  {
+    id: "stability-recovery",
+    title: "Stability and recovery",
+    description: "These settings keep baselines stable and recover cleanly after noisy readings.",
+  },
+] as const;
+
+const HEALTH_SECTION_PRESENTATION: Record<
+  HealthCheckId,
+  {
+    readonly title: string;
+    readonly description: string;
+    readonly fields: Record<string, AdminConfigFieldPresentation>;
+  }
+> = {
+  low_keg: {
+    title: "Low keg level",
+    description: "Warn when the estimated remaining volume falls below these thresholds.",
+    fields: {
+      enabled: {
+        label: "Check enabled",
+        help: "Evaluate low-level thresholds for this Tap.",
+      },
+      thresholdPercent: {
+        label: "Warning threshold (%)",
+        help: "Warn when the remaining fill percentage is at or below this value.",
+        unit: "%",
+      },
+      criticalPercent: {
+        label: "Critical threshold (%)",
+        help: "Mark the Tap critical when the remaining fill percentage is at or below this value.",
+        unit: "%",
+      },
+      fixedThresholdMl: {
+        label: "Fixed volume threshold (mL)",
+        help: "Optional fixed-volume floor; zero keeps the percentage threshold as the floor.",
+        unit: "mL",
+      },
+      settlingMs: {
+        label: "Threshold settling time (ms)",
+        help: "How long the reading must remain below a threshold before it is reported.",
+        unit: "ms",
+      },
+    },
+  },
+  scale_availability: {
+    title: "Scale availability",
+    description: "Flag when the authoritative scale has not sent a fresh measurement.",
+    fields: {
+      enabled: {
+        label: "Check enabled",
+        help: "Evaluate freshness of the authoritative scale measurement.",
+      },
+      degradedAfterMs: {
+        label: "Degraded after (ms)",
+        help: "Mark the scale degraded after this much time without a fresh measurement.",
+        unit: "ms",
+      },
+      activeAfterMs: {
+        label: "Unavailable after (ms)",
+        help: "Mark the scale unavailable after this much time without a fresh measurement.",
+        unit: "ms",
+      },
+    },
+  },
+  suspected_leak: {
+    title: "Suspected leak",
+    description: "Look for unexplained volume loss outside the grace period around a pour.",
+    fields: {
+      enabled: {
+        label: "Check enabled",
+        help: "Evaluate unexplained volume loss for this Tap.",
+      },
+      lossThresholdMl: {
+        label: "Loss threshold (mL)",
+        help: "Minimum unexplained loss that can become a leak signal.",
+        unit: "mL",
+      },
+      windowMs: {
+        label: "Observation window (ms)",
+        help: "Time window in which unexplained loss is accumulated.",
+        unit: "ms",
+      },
+      pourGraceMs: {
+        label: "Pour grace period (ms)",
+        help: "Ignore expected movement for this long after a pour.",
+        unit: "ms",
+      },
+      settlingMs: {
+        label: "Baseline settling time (ms)",
+        help: "Wait this long for a stable baseline before evaluating loss.",
+        unit: "ms",
+      },
+      resetMovementMl: {
+        label: "Baseline reset movement (mL)",
+        help: "Movement at or above this amount resets the leak baseline.",
+        unit: "mL",
+      },
+      maxSamples: {
+        label: "Maximum samples (count)",
+        help: "Maximum number of leak samples retained in the evaluation window.",
+        unit: "samples",
+      },
+    },
+  },
+  serving_temperature: {
+    title: "Serving temperature",
+    description: "Check whether the latest serving temperature stays within the configured bands.",
+    fields: {
+      enabled: {
+        label: "Check enabled",
+        help: "Evaluate serving temperature for this Tap.",
+      },
+      normalMinC: {
+        label: "Normal minimum (°C)",
+        help: "Lower edge of the normal serving-temperature range.",
+        unit: "°C",
+      },
+      normalMaxC: {
+        label: "Normal maximum (°C)",
+        help: "Upper edge of the normal serving-temperature range.",
+        unit: "°C",
+      },
+      criticalMinC: {
+        label: "Critical minimum (°C)",
+        help: "Temperature at or below which the reading is critical.",
+        unit: "°C",
+      },
+      criticalMaxC: {
+        label: "Critical maximum (°C)",
+        help: "Temperature at or above which the reading is critical.",
+        unit: "°C",
+      },
+      durationMs: {
+        label: "Out-of-range duration (ms)",
+        help: "How long temperature must remain outside the normal range before reporting.",
+        unit: "ms",
+      },
+    },
+  },
+  line_cleaning_due: {
+    title: "Line cleaning",
+    description:
+      "Track when the Tap line should be cleaned and when the due state becomes critical.",
+    fields: {
+      enabled: {
+        label: "Check enabled",
+        help: "Evaluate line-cleaning age for this Tap.",
+      },
+      intervalDays: {
+        label: "Cleaning interval (days)",
+        help: "Number of days between expected line cleanings.",
+        unit: "days",
+      },
+      criticalGraceDays: {
+        label: "Critical grace period (days)",
+        help: "Additional days after the due date before cleaning becomes critical.",
+        unit: "days",
+      },
+    },
+  },
+};
+
+function formatAdminConfigValue(value: unknown, unit?: string): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return typeof value === "boolean" ? (value ? "enabled" : "disabled") : "—";
+  }
+  const formatted = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value);
+  if (unit !== "ms") return unit === undefined ? formatted : `${formatted} ${unit}`;
+  const seconds = value / 1000;
+  const secondsLabel = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(seconds);
+  return `${formatted} ms (${secondsLabel} s)`;
+}
+
+function healthCheckPresentation(checkId: string): {
+  readonly title: string;
+  readonly description: string;
+} {
+  const presentation = HEALTH_SECTION_PRESENTATION[checkId as HealthCheckId];
+  return presentation === undefined
+    ? { title: "Health check", description: "Current health evaluation for this Tap." }
+    : { title: presentation.title, description: presentation.description };
+}
+
+function humanizeAdminIdentifier(value: unknown, fallback = "Unknown"): string {
+  if (typeof value !== "string" || value.length === 0) return fallback;
+  const words = value.replaceAll(/[_-]+/gu, " ").trim();
+  return words.length === 0 ? fallback : words[0]!.toUpperCase() + words.slice(1);
 }
 
 function telemetryEndpointUrl(canonicalOrigin: string | undefined): string {
@@ -871,19 +1231,31 @@ function safeHealthOverview(healthService: HealthService, tapId: string): Record
   try {
     const overview = healthService.getAdminOverview(tapId) as unknown as Record<string, unknown>;
     const aggregate = overview.aggregate as Record<string, unknown> | undefined;
+    const state = typeof aggregate?.state === "string" ? aggregate.state : "unknown";
+    const severity = typeof aggregate?.severity === "string" ? aggregate.severity : "none";
     return {
-      state: typeof aggregate?.state === "string" ? aggregate.state : "unknown",
-      severity: typeof aggregate?.severity === "string" ? aggregate.severity : "none",
+      state,
+      stateLabel: humanizeAdminIdentifier(state),
+      severity,
+      severityLabel: humanizeAdminIdentifier(severity),
       activeIncidentCount:
         typeof overview.activeIncidentCount === "number" ? overview.activeIncidentCount : 0,
       checks: Array.isArray(overview.checks)
         ? overview.checks.map((check) => {
             const value = check as Record<string, unknown>;
+            const id = typeof value.checkId === "string" ? value.checkId : "unknown";
+            const state = typeof value.state === "string" ? value.state : "unknown";
+            const severity = typeof value.severity === "string" ? value.severity : "none";
+            const reason = typeof value.reason === "string" ? value.reason : null;
             return {
-              id: typeof value.checkId === "string" ? value.checkId : "unknown",
-              state: typeof value.state === "string" ? value.state : "unknown",
-              severity: typeof value.severity === "string" ? value.severity : "none",
-              reason: typeof value.reason === "string" ? value.reason : null,
+              id,
+              label: healthCheckPresentation(id).title,
+              state,
+              stateLabel: humanizeAdminIdentifier(state),
+              severity,
+              severityLabel: humanizeAdminIdentifier(severity),
+              reason,
+              reasonLabel: reason === null ? null : humanizeAdminIdentifier(reason),
             };
           })
         : [],
@@ -892,7 +1264,9 @@ function safeHealthOverview(healthService: HealthService, tapId: string): Record
   } catch {
     return {
       state: "unknown",
+      stateLabel: "Unknown",
       severity: "none",
+      severityLabel: "None",
       activeIncidentCount: 0,
       checks: [],
       lineCleaning: null,
@@ -2110,7 +2484,9 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
           tapName: item.name,
           href: `/admin/taps/${encodeURIComponent(item.tapId)}`,
           state: item.aggregate.state,
+          stateLabel: humanizeAdminIdentifier(item.aggregate.state),
           severity: item.aggregate.severity,
+          severityLabel: humanizeAdminIdentifier(item.aggregate.severity),
           checks: (item.checks ?? [])
             .filter(
               (check) =>
@@ -2120,9 +2496,13 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
             )
             .map((check) => ({
               id: check.checkId,
+              label: healthCheckPresentation(check.checkId).title,
               state: check.state,
+              stateLabel: humanizeAdminIdentifier(check.state),
               severity: check.severity,
+              severityLabel: humanizeAdminIdentifier(check.severity),
               reason: check.reason,
+              reasonLabel: check.reason === null ? null : humanizeAdminIdentifier(check.reason),
             })),
         })),
         kegRoom: {
@@ -2496,6 +2876,8 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
         state: fill.state,
         endedAt: fill.endedAt,
       }));
+      const currentFill = fillHistory.find((fill) => fill.state !== "ended") ?? null;
+      const recentFill = fillHistory[0] ?? null;
       return {
         id: keg.id,
         kegNumber: keg.kegNumber,
@@ -2504,7 +2886,14 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
         currentTareG: keg.currentTareG,
         isActive: keg.isActive,
         updatedAt: keg.updatedAt,
-        currentFill: fillHistory.find((fill) => fill.state !== "ended")?.beverageName ?? null,
+        currentFill: currentFill?.beverageName ?? null,
+        currentFillId: currentFill?.id ?? null,
+        currentFillRecord: currentFill,
+        recentFillRecord: recentFill,
+        fillHistorySummary:
+          fillHistory.length === 0
+            ? "No fills recorded"
+            : `${fillHistory.length} fill record${fillHistory.length === 1 ? "" : "s"} · ${recentFill?.beverageName ?? "History available"}`,
         fillHistory,
         tareHistory: (detailRecord.tareHistory ?? []).map((item) => ({
           previousTareG: item.previousTareG,
@@ -2714,6 +3103,17 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
             ? null
             : `Keg ${item.assignment.kegNumber}${item.assignment.kegLabel ? ` — ${item.assignment.kegLabel}` : ""}`,
         remaining: tapRemainingLabel(publicCard, item.assignment !== null),
+        healthLabel:
+          health.state === "healthy"
+            ? "Healthy"
+            : health.state === "degraded"
+              ? "Degraded"
+              : health.state === "not_configured"
+                ? "Not configured"
+                : health.state === "active"
+                  ? "Active"
+                  : "Unknown",
+        statusLabel: item.isRetired ? "Retired" : item.enabled ? "Enabled" : "Disabled",
         publicCard,
         health,
       };
@@ -2786,8 +3186,13 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
       const detectorEffective = mergeDetectorConfig(detectorGlobal.config, detectorOverride);
       detectorFields = DETECTOR_CONFIG_FIELDS.map((field) => ({
         name: field,
+        ...DETECTOR_FIELD_PRESENTATION[field],
         effective: detectorEffective[field],
         override: detectorOverride[field] ?? null,
+        effectiveLabel: formatAdminConfigValue(
+          detectorEffective[field],
+          DETECTOR_FIELD_PRESENTATION[field].unit,
+        ),
       }));
     } catch {
       detectorFields = [];
@@ -2811,6 +3216,7 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
       healthConfig === null
         ? []
         : HEALTH_CHECK_IDS.map((checkId) => {
+            const presentation = HEALTH_SECTION_PRESENTATION[checkId];
             const effective = healthConfig?.effective[checkId];
             const effectiveFields =
               effective !== null && typeof effective === "object"
@@ -2823,13 +3229,25 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
                 : new Map<string, unknown>();
             return {
               id: checkId,
+              title: presentation.title,
+              description: presentation.description,
               fields: effectiveFields.map(([field, value]) => ({
                 name: field,
+                ...(presentation.fields[field] ?? {
+                  label: "Setting",
+                  help: "Tap-specific health setting.",
+                }),
                 effective: value,
                 override: overrideFields.get(field) ?? null,
+                effectiveLabel: formatAdminConfigValue(value, presentation.fields[field]?.unit),
               })),
             };
           });
+
+    const detectorGroups = DETECTOR_GROUPS.map((group) => ({
+      ...group,
+      fields: detectorFields.filter((field) => field.group === group.id),
+    })).filter((group) => group.fields.length > 0);
 
     let tapCard: Record<string, unknown> | null = null;
     try {
@@ -2930,12 +3348,14 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
             name: tap.name,
             createdAt: tap.createdAt,
             updatedAt: tap.updatedAt,
+            updatedAtLabel: adminTimestampLabel(tap.updatedAt),
             confirmationLabel: tapDeletionConfirmationLabel(tap),
           },
           lifecycle: {
             enabled: tap.enabled,
             isRetired: tap.isRetired,
             firstUsedAt: tap.firstUsedAt,
+            firstUsedAtLabel: adminTimestampLabel(tap.firstUsedAt),
             retiredAt: tap.retiredAt,
           },
           configuration: {
@@ -2945,9 +3365,18 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
             lineDiameterMm: tap.lineDiameterMm,
             notes: tap.notes,
           },
-          assignment: { active: assignment, mystery },
+          assignment: {
+            active:
+              assignment === null
+                ? null
+                : {
+                    ...assignment,
+                    assignedAtLabel: adminTimestampLabel(assignment.assignedAt),
+                  },
+            mystery,
+          },
           telemetry: { authorityName, authoritySourceId, sources: telemetrySources },
-          detector: { fields: detectorFields },
+          detector: { fields: detectorFields, groups: detectorGroups },
           health: { overview: healthOverview, sections: healthSections },
           display: { tapCard },
           maintenance: { records: maintenance },

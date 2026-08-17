@@ -13,7 +13,7 @@
       <h2 id="tap-list-heading">Tap list</h2>
       <p class="muted"><%= it.pagination.total %> tap<%= it.pagination.total === 1 ? "" : "s" %></p>
     </div>
-    <a class="button primary" href="/admin/taps/new">Add Tap</a>
+    <a class="button primary button--small" href="/admin/taps/new">Add Tap</a>
   </section>
 
   <form class="admin-search" method="get" action="/admin/taps" role="search">
@@ -26,8 +26,8 @@
           <option value="<%= state %>"<% if (it.state === state) { %> selected<% } %>><%= state[0].toUpperCase() + state.slice(1) %></option>
         <% } %>
       </select>
-      <button type="submit">Filter</button>
-      <% if (it.query || it.state !== "all") { %><a class="button secondary" href="/admin/taps">Clear</a><% } %>
+      <button class="button--small" type="submit">Filter</button>
+      <% if (it.query || it.state !== "all") { %><a class="button secondary button--small" href="/admin/taps">Clear</a><% } %>
     </div>
   </form>
 
@@ -35,35 +35,32 @@
     <section class="empty-state admin-card" aria-labelledby="tap-empty-heading">
       <h2 id="tap-empty-heading"><%= it.query || it.state !== "all" ? "No matching Taps" : "No Taps are configured" %></h2>
       <p><%= it.query || it.state !== "all" ? "Try a different search or state filter." : "Create a Tap to establish a serving position." %></p>
-      <a class="button primary" href="/admin/taps/new"><%= it.query || it.state !== "all" ? "Add a Tap" : "Create the first Tap" %></a>
+      <a class="button primary button--small" href="/admin/taps/new"><%= it.query || it.state !== "all" ? "Add a Tap" : "Create the first Tap" %></a>
     </section>
   <% } else { %>
-    <div class="resource-list tap-list" aria-label="Taps">
-      <% for (const tap of it.taps) { %>
-        <article class="resource-card tap-list-card" data-tap-id="<%= tap.id %>">
-          <div class="tap-list-card__header">
-            <div>
-              <p class="eyebrow">Tap <%= tap.tapNumber %></p>
-              <h2><a href="/admin/taps/<%= tap.id %>"><% if (tap.name) { %><%= tap.name %><% } else { %>Unnamed Tap<% } %></a></h2>
-            </div>
-            <span class="status-badge status-badge--<%= tap.isRetired ? "retired" : tap.enabled ? "active" : "disabled" %>"><%= tap.isRetired ? "Retired" : tap.enabled ? "Enabled" : "Disabled" %></span>
-          </div>
-          <dl class="tap-list-card__summary">
-            <div><dt>Assignment</dt><dd><%= tap.assignmentLabel %><% if (tap.kegLabel) { %><span class="muted"> · <%= tap.kegLabel %></span><% } %></dd></div>
-            <div><dt>Remaining</dt><dd><%= tap.remaining %></dd></div>
-            <div><dt>Health</dt><dd><%= tap.health.state %><% if (tap.health.severity !== "none") { %> · <%= tap.health.severity %><% } %></dd></div>
-          </dl>
-          <div class="card-actions">
-            <a class="button secondary" href="/admin/taps/<%= tap.id %>">Open Tap detail</a>
-          </div>
-        </article>
-      <% } %>
+    <div class="table-scroll">
+      <table class="admin-table tap-list" aria-label="Taps">
+        <caption class="sr-only">Tap assignments and health</caption>
+        <thead><tr><th scope="col">Tap</th><th scope="col">Assignment</th><th scope="col">Remaining</th><th scope="col">Health</th><th scope="col">Status</th><th scope="col">Action</th></tr></thead>
+        <tbody>
+          <% for (const tap of it.taps) { %>
+            <tr data-tap-id="<%= tap.id %>">
+              <th scope="row"><a href="/admin/taps/<%= tap.id %>">Tap <%= tap.tapNumber %><% if (tap.name) { %> — <%= tap.name %><% } else { %> — Unnamed Tap<% } %></a></th>
+              <td><% if (tap.assignment) { %><a href="/admin/keg-room/fills/<%= tap.assignment.fillId %>"><%= tap.assignmentLabel %></a><% if (tap.assignment.kegId) { %><span class="muted"> · <a href="/admin/keg-room/kegs/<%= tap.assignment.kegId %>">Keg <%= tap.assignment.kegNumber %><% if (tap.assignment.kegLabel) { %> — <%= tap.assignment.kegLabel %><% } %></a></span><% } %><% } else { %>Unassigned<% } %></td>
+              <td><%= tap.remaining %></td>
+              <td><span class="status-badge status-badge--<%= tap.health.severity === "critical" ? "critical" : tap.health.severity === "warning" || tap.health.state === "degraded" ? "warning" : tap.health.state === "healthy" ? "healthy" : "muted" %>"><%= tap.healthLabel %><% if (tap.health.severity !== "none") { %> · <%= tap.health.severityLabel %><% } %></span></td>
+              <td><span class="status-badge status-badge--<%= tap.isRetired ? "retired" : tap.enabled ? "active" : "disabled" %>"><%= tap.statusLabel %></span></td>
+              <td><a class="button secondary button--small" href="/admin/taps/<%= tap.id %>">Open</a></td>
+            </tr>
+          <% } %>
+        </tbody>
+      </table>
     </div>
     <% if (it.pagination.pageCount > 1) { %>
       <nav class="pagination" aria-label="Tap pages">
-        <% if (it.pagination.previousHref) { %><a class="button secondary" href="<%= it.pagination.previousHref %>">Previous</a><% } %>
+        <% if (it.pagination.previousHref) { %><a class="button secondary button--small" href="<%= it.pagination.previousHref %>">Previous</a><% } %>
         <span>Page <%= it.pagination.page %> of <%= it.pagination.pageCount %></span>
-        <% if (it.pagination.nextHref) { %><a class="button secondary" href="<%= it.pagination.nextHref %>">Next</a><% } %>
+        <% if (it.pagination.nextHref) { %><a class="button secondary button--small" href="<%= it.pagination.nextHref %>">Next</a><% } %>
       </nav>
     <% } %>
   <% } %>

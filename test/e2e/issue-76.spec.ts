@@ -130,16 +130,79 @@ test("Admin login, navigation, and a normal HTTP mutation work without JavaScrip
   await expect(page.getByText("PRIVATE_BREWFATHER_USER")).toHaveCount(0);
   await expect(page.locator("body")).not.toContainText("tbk_");
   await page.goto("/admin/taps");
-  const firstTap = page
-    .locator(".resource-card")
-    .filter({ has: page.getByRole("heading", { name: /Tap 1/u }) });
-  await firstTap.getByRole("link", { name: "Open Tap detail" }).click();
+  const firstTap = page.locator("table.tap-list tbody tr").first();
+  await firstTap.getByRole("link", { name: "Open", exact: true }).click();
   await saveTapName(page, "Normal form Tap", { waitForAutosave: false });
   await expect(page.getByRole("heading", { name: /Normal form Tap/u })).toBeVisible();
   await page.getByRole("button", { name: "Log out" }).click();
   await expect(page).toHaveURL(/\/admin\/login\?notice=/u);
   await page.goto("/admin/overview");
   await expect(page).toHaveURL(/\/admin\/login$/u);
+  await context.close();
+});
+
+test("annotated Admin surfaces share compact tables, controls, and human labels", async ({
+  browser,
+}) => {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const page = await context.newPage();
+  await login(page);
+
+  const quickActions = await page.locator("#quick-actions-heading").boundingBox();
+  const healthSummary = await page.locator("#attention-heading").boundingBox();
+  expect(quickActions).not.toBeNull();
+  expect(healthSummary).not.toBeNull();
+  expect(quickActions!.y).toBeLessThan(healthSummary!.y);
+
+  await page.goto("/admin/keg-room");
+  expect(await page.locator("table.keg-room-table").count()).toBeGreaterThanOrEqual(2);
+  const referenceAction = page.getByRole("link", { name: "Assign to a Tap", exact: true }).first();
+  await expect(referenceAction).toBeVisible();
+  const referenceHeight = await referenceAction.evaluate(
+    (node) => node.getBoundingClientRect().height,
+  );
+
+  await page.goto("/admin/keg-room/kegs");
+  await expect(page.locator(".table-scroll > table.keg-inventory-table")).toBeVisible();
+  const inventoryAction = page.getByRole("link", { name: "Open", exact: true }).first();
+  await expect(inventoryAction).toBeVisible();
+  const inventoryHeight = await inventoryAction.evaluate(
+    (node) => node.getBoundingClientRect().height,
+  );
+  expect(Math.abs(referenceHeight - inventoryHeight)).toBeLessThanOrEqual(1);
+
+  await page.goto("/admin/taps");
+  const tapTable = page.locator(".table-scroll > table.tap-list");
+  await expect(tapTable).toBeVisible();
+  const assignedRow = tapTable.locator("tbody tr").filter({ hasText: "Tap 1" }).first();
+  await assignedRow.getByRole("link", { name: "Open", exact: true }).click();
+
+  const identityTable = page.locator(
+    'section[aria-labelledby="tap-identity-heading"] table.admin-detail-table',
+  );
+  await expect(identityTable.locator("tbody tr")).toHaveCount(1);
+  const assignmentSection = page.locator('section[aria-labelledby="assignment-heading"]');
+  await expect(assignmentSection.locator('a[href^="/admin/keg-room/fills/"]')).toBeVisible();
+  await expect(assignmentSection.locator('a[href^="/admin/keg-room/kegs/"]')).toBeVisible();
+
+  await page.getByText("Pour detector", { exact: true }).click();
+  await expect(page.getByText("Detection start", { exact: true })).toBeVisible();
+  await expect(page.getByText("Candidate loss (mL)", { exact: true })).toBeVisible();
+  await page.getByText("Health rules", { exact: true }).click();
+  await expect(page.getByRole("group", { name: "Low keg level" })).toBeVisible();
+  await expect(page.locator("main")).not.toContainText("candidateLossMl");
+  await expect(page.locator("main")).not.toContainText("low_keg");
+  await expect(page.locator("main")).not.toContainText("stale_measurement");
+  await expect(page.locator("main")).not.toContainText("scale_unavailable");
+  await expect(page.locator("main")).not.toContainText("check_disabled");
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(() => document.body.scrollWidth <= document.documentElement.clientWidth),
+  ).toBe(true);
+
+  await page.goto("/admin/tap-wars");
+  await expect(page.getByRole("button", { name: "Start Tap War" })).toBeVisible();
   await context.close();
 });
 
@@ -206,9 +269,9 @@ test("targeted updates preserve the graphic node and On Deck updates do not rebu
   const admin = await context.newPage();
   await login(admin);
   await admin.goto("/admin/taps");
-  const card = admin.locator(`article.tap-list-card[data-tap-id="${tap1Id!}"]`);
-  await expect(card).toHaveCount(1);
-  await card.getByRole("link", { name: "Open Tap detail" }).click();
+  const row = admin.locator(`tr[data-tap-id="${tap1Id!}"]`);
+  await expect(row).toHaveCount(1);
+  await row.getByRole("link", { name: "Open", exact: true }).click();
   const tapNameForm = await openTapNameForm(admin);
   const targetedRefresh = publicPage.waitForRequest((request) =>
     request.url().endsWith(`/api/public/dashboard/taps/${tap1Id}`),
@@ -237,13 +300,13 @@ test("targeted updates preserve the graphic node and On Deck updates do not rebu
     ),
   ).toBe(true);
   await admin.goto("/admin/keg-room");
-  const fillCard = admin.locator(".resource-card").filter({ hasText: "E2E Pale Ale" });
-  await expect(fillCard).toHaveCount(1);
-  const removeFromOnDeck = fillCard.getByRole("button", { name: "Remove from On Deck" });
+  const fillRow = admin.locator("tr[data-fill-id]").filter({ hasText: "E2E Pale Ale" });
+  await expect(fillRow).toHaveCount(1);
+  const removeFromOnDeck = fillRow.getByRole("button", { name: "Remove from On Deck" });
   if ((await removeFromOnDeck.count()) > 0) {
     await removeFromOnDeck.click();
   } else {
-    const fillId = await fillCard.getAttribute("data-fill-id");
+    const fillId = await fillRow.getAttribute("data-fill-id");
     expect(fillId).not.toBeNull();
     const csrfToken = await admin.locator('input[name="_csrf"]').first().inputValue();
     const response = await admin.request.post(

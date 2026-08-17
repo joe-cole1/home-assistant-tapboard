@@ -3,30 +3,38 @@
 <main id="main-content">
   <div class="page-header"><p class="eyebrow">Keg Room · Inventory</p><h1>Kegs</h1><p class="muted">Physical Kegs are the inventory layer behind each Filled Keg.</p></div>
   <%~ include("/partials/admin-messages", { page: it.page }) %>
-  <div class="page-actions"><a class="secondary" href="<%= it.roomHref %>">Filled Kegs</a><a class="primary" href="<%= it.newKegHref %>">Add a Keg</a></div>
+  <div class="page-actions"><a class="button secondary button--small" href="<%= it.roomHref %>">Filled Kegs</a><a class="button primary button--small" href="<%= it.newKegHref %>">Add a Keg</a></div>
   <section class="admin-card" aria-labelledby="physical-keg-filters">
     <div class="section-heading"><div><h2 id="physical-keg-filters">Physical inventory</h2><p class="muted"><%= it.pagination.total %> Keg<%= it.pagination.total === 1 ? "" : "s" %></p></div></div>
-    <form class="admin-form admin-form--inline" method="get" action="/admin/keg-room/kegs" role="search">
+    <form class="admin-form admin-form--inline keg-room-filter-form" method="get" action="/admin/keg-room/kegs" role="search">
       <label>Search <input type="search" name="q" value="<%= it.query.q %>" maxlength="80" placeholder="Keg number or label" /></label>
       <label>Show <select name="status"><option value="active"<% if (it.query.status === "active") { %> selected<% } %>>Active</option><option value="inactive"<% if (it.query.status === "inactive") { %> selected<% } %>>Inactive</option><option value="all"<% if (it.query.status === "all") { %> selected<% } %>>All</option></select></label>
       <label>Sort <select name="sort"><option value="number"<% if (it.query.sort === "number") { %> selected<% } %>>Keg number</option><option value="label"<% if (it.query.sort === "label") { %> selected<% } %>>Label</option><option value="updated"<% if (it.query.sort === "updated") { %> selected<% } %>>Recently updated</option></select></label>
-      <button class="secondary" type="submit">Apply</button>
+      <button class="secondary button--small" type="submit">Apply</button>
     </form>
   </section>
   <section class="admin-card" aria-labelledby="fill-history"><div class="section-heading"><div><h2 id="fill-history">Fill history</h2><p class="muted">Recent Filled Keg records remain visible from their physical inventory.</p></div></div>
     <% if (it.kegs.length === 0) { %><p class="muted">No physical Kegs are configured.</p><% } else { %>
-      <div class="resource-list keg-inventory-grid">
-      <% for (const keg of it.kegs) { %>
-        <article class="resource-card keg-inventory-card">
-          <div class="section-heading"><div><p class="eyebrow"><%= keg.isActive ? "Active" : "Inactive" %></p><h3><a href="/admin/keg-room/kegs/<%= keg.id %>">Keg <%= keg.kegNumber %><% if (keg.label) { %> — <%= keg.label %><% } %></a></h3></div><span class="status-badge"><%= keg.isActive ? "Ready" : "Inactive" %></span></div>
-          <p><%= keg.capacityMl %> mL · tare <%= keg.currentTareG %> g</p>
-          <p>Current Fill: <%= keg.currentFill || "None" %></p>
-          <% if (keg.fillHistory.length === 0) { %><p class="muted">No Filled Kegs recorded.</p><% } else { %><table><thead><tr><th scope="col">Beverage</th><th scope="col">Fill date</th><th scope="col">State</th><th scope="col">Ended</th></tr></thead><tbody><% for (const fill of keg.fillHistory) { %><tr><th scope="row"><a href="/admin/keg-room/fills/<%= fill.id %>"><%= fill.beverageName %></a></th><td><%= fill.fillDate %></td><td><%= fill.state %></td><td><%= fill.endedAt || "—" %></td></tr><% } %></tbody></table><% } %>
-          <details><summary>Advanced physical details</summary><p><%= keg.tareHistory.length %> tare correction(s); <%= keg.maintenanceHistory.length %> maintenance record(s).</p><a class="secondary" href="/admin/keg-room/kegs/<%= keg.id %>">Open Keg detail</a></details>
-        </article>
-      <% } %>
+      <div class="table-scroll">
+        <table class="admin-table keg-inventory-table">
+          <caption class="sr-only">Physical Keg inventory</caption>
+          <thead><tr><th scope="col">Physical Keg</th><th scope="col">Current fill</th><th scope="col">Capacity</th><th scope="col">Tare</th><th scope="col">Status</th><th scope="col">Fill history</th><th scope="col">Action</th></tr></thead>
+          <tbody>
+            <% for (const keg of it.kegs) { %>
+              <tr>
+                <th scope="row"><a href="/admin/keg-room/kegs/<%= keg.id %>">Keg <%= keg.kegNumber %><% if (keg.label) { %> — <%= keg.label %><% } %></a></th>
+                <td><% if (keg.currentFillRecord) { %><a href="/admin/keg-room/fills/<%= keg.currentFillRecord.id %>"><%= keg.currentFillRecord.beverageName %></a><% } else { %><span class="muted">None</span><% } %></td>
+                <td><%= keg.capacityMl %> mL</td>
+                <td><%= keg.currentTareG %> g</td>
+                <td><span class="status-badge status-badge--<%= keg.isActive ? "healthy" : "muted" %>"><%= keg.isActive ? "Ready" : "Inactive" %></span></td>
+                <td><% if (keg.recentFillRecord) { %><a href="/admin/keg-room/fills/<%= keg.recentFillRecord.id %>"><%= keg.fillHistory.length %> fill record<%= keg.fillHistory.length === 1 ? "" : "s" %></a><% } else { %><span class="muted">No fills recorded</span><% } %></td>
+                <td><a class="button secondary button--small" href="/admin/keg-room/kegs/<%= keg.id %>">Open</a></td>
+              </tr>
+            <% } %>
+          </tbody>
+        </table>
       </div>
     <% } %>
   </section>
-  <% if (it.pagination.previousHref || it.pagination.nextHref) { %><nav class="pagination" aria-label="Physical Keg pages"><% if (it.pagination.previousHref) { %><a href="<%= it.pagination.previousHref %>">Previous</a><% } %><span>Page <%= it.pagination.page %> of <%= it.pagination.pageCount %></span><% if (it.pagination.nextHref) { %><a href="<%= it.pagination.nextHref %>">Next</a><% } %></nav><% } %>
+  <% if (it.pagination.previousHref || it.pagination.nextHref) { %><nav class="pagination" aria-label="Physical Keg pages"><% if (it.pagination.previousHref) { %><a class="button secondary button--small" href="<%= it.pagination.previousHref %>">Previous</a><% } %><span>Page <%= it.pagination.page %> of <%= it.pagination.pageCount %></span><% if (it.pagination.nextHref) { %><a class="button secondary button--small" href="<%= it.pagination.nextHref %>">Next</a><% } %></nav><% } %>
 </main>
