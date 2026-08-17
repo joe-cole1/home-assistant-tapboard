@@ -10,6 +10,9 @@ const TAP_ID = "00000000-0000-4000-8000-000000000077";
 const BEVERAGE_ID = "00000000-0000-4000-8000-000000000078";
 const FILL_ID = "00000000-0000-4000-8000-000000000079";
 const ASSIGNMENT_ID = "secret-assignment-id";
+const REPLACEMENT_ASSIGNMENT_ID = "replacement-assignment-id";
+const REPLACEMENT_BEVERAGE_ID = "replacement-beverage-id";
+const REPLACEMENT_SENTINEL = "REPLACEMENT_SENTINEL";
 const SOURCE_ID = "secret-source-recipe-id";
 const FINGERPRINT = "secret-recipe-fingerprint";
 
@@ -77,6 +80,8 @@ function fixture(
     updatedAt: "2026-08-02T00:00:00.000Z",
   };
   let assignmentMystery = defaultMystery;
+  let getAssignmentMysteryCalls = 0;
+  let getBeverageCalls = 0;
   let getRecipeSnapshotsCalls = 0;
 
   const customRecipe = {
@@ -125,6 +130,40 @@ function fixture(
     recipeFingerprint: FINGERPRINT,
     createdAt: `2026-08-0${index + 1}T00:00:00.000Z`,
   }));
+  const beverageDetail = {
+    beverage: {
+      id: BEVERAGE_ID,
+      ownershipType: "custom",
+      createdAt: "2026-08-01",
+      updatedAt: "2026-08-02",
+    },
+    effectivePresentation: {
+      name: "Secret Beverage Name",
+      beverageType: "beer",
+      style: "Secret Style",
+      abv: 6.4,
+      ibu: 42,
+      og: 1.064,
+      fg: 1.012,
+      srm: 18,
+      displayColor: null,
+      description: "Secret Description",
+      fillGlass: null,
+      manualDensityOverride: null,
+    },
+    density: { source: "fg_derived", value: 1.01 },
+    customRecipe,
+    sensoryOverrides: {
+      beverageId: BEVERAGE_ID,
+      bitterness: 1.25,
+      sweetness: null,
+      body: null,
+      roast: null,
+      tartness: null,
+      alcohol: null,
+      updatedAt: "2026-08-02T00:00:00.000Z",
+    },
+  };
 
   const dependencies = {
     tapService: {
@@ -137,43 +176,26 @@ function fixture(
           clientMessage: "Tap id is invalid.",
         });
       },
-      getAssignmentMystery: () => assignmentMystery,
+      getAssignmentMystery: () => {
+        getAssignmentMysteryCalls += 1;
+        return assignmentMystery;
+      },
     },
     beverageService: {
-      getBeverage: () => ({
-        beverage: {
-          id: BEVERAGE_ID,
-          ownershipType: "custom",
-          createdAt: "2026-08-01",
-          updatedAt: "2026-08-02",
-        },
-        effectivePresentation: {
-          name: "Secret Beverage Name",
-          beverageType: "beer",
-          style: "Secret Style",
-          abv: 6.4,
-          ibu: 42,
-          og: 1.064,
-          fg: 1.012,
-          srm: 18,
-          displayColor: null,
-          description: "Secret Description",
-          fillGlass: null,
-          manualDensityOverride: null,
-        },
-        density: { source: "fg_derived", value: 1.01 },
-        customRecipe,
-        sensoryOverrides: {
-          beverageId: BEVERAGE_ID,
-          bitterness: 1.25,
-          sweetness: null,
-          body: null,
-          roast: null,
-          tartness: null,
-          alcohol: null,
-          updatedAt: "2026-08-02T00:00:00.000Z",
-        },
-      }),
+      getBeverage: (beverageId: string) => {
+        getBeverageCalls += 1;
+        if (beverageId === REPLACEMENT_BEVERAGE_ID) {
+          return {
+            ...beverageDetail,
+            beverage: { ...beverageDetail.beverage, id: REPLACEMENT_BEVERAGE_ID },
+            effectivePresentation: {
+              ...beverageDetail.effectivePresentation,
+              name: REPLACEMENT_SENTINEL,
+            },
+          };
+        }
+        return beverageDetail;
+      },
       getRecipeSnapshots: () => {
         getRecipeSnapshotsCalls += 1;
         return sourceSnapshots;
@@ -312,6 +334,8 @@ function fixture(
       tap = { ...tap, ...value };
     },
     getRecipeSnapshotsCalls: () => getRecipeSnapshotsCalls,
+    getAssignmentMysteryCalls: () => getAssignmentMysteryCalls,
+    getBeverageCalls: () => getBeverageCalls,
   };
 }
 
@@ -439,6 +463,44 @@ void test("Tap metric preferences intersect with Mystery redaction and fail clos
   assert.deepEqual(failed.service.getCard(TAP_ID)?.metrics, []);
 });
 
+void test("exact disabled assignment titles stay safe while cards remain unavailable", () => {
+  const { service, setMystery, setTap, getBeverageCalls } = fixture();
+  setTap({ enabled: false });
+  assert.equal(service.getCard(TAP_ID), undefined);
+
+  setMystery(mystery({ enabled: true }));
+  assert.equal(service.getTitleForAssignment(TAP_ID, ASSIGNMENT_ID), "Mystery Tap");
+  assert.equal(getBeverageCalls(), 0);
+  setMystery(defaultMystery);
+  assert.equal(service.getTitleForAssignment(TAP_ID, ASSIGNMENT_ID), "Secret Beverage Name");
+  assert.equal(getBeverageCalls(), 1);
+});
+
+void test("title resolution rejects assignment mismatches before reading Mystery or Beverage", () => {
+  const { service, setTap, getAssignmentMysteryCalls, getBeverageCalls } = fixture();
+  setTap({
+    activeAssignment: {
+      id: REPLACEMENT_ASSIGNMENT_ID,
+      fillId: "replacement-fill-id",
+      beverageId: REPLACEMENT_BEVERAGE_ID,
+      beverageName: REPLACEMENT_SENTINEL,
+      beverageType: "beer",
+      beverageStyle: null,
+      beverageAbv: null,
+      kegId: "replacement-keg-id",
+      kegNumber: 8,
+      kegLabel: null,
+      assignedAt: "2026-08-03T00:00:00.000Z",
+    },
+  });
+
+  const title = service.getTitleForAssignment(TAP_ID, ASSIGNMENT_ID);
+  assert.equal(title, undefined);
+  assert.notEqual(title, REPLACEMENT_SENTINEL);
+  assert.equal(getAssignmentMysteryCalls(), 0);
+  assert.equal(getBeverageCalls(), 0);
+});
+
 void test("each Mystery reveal controls only its allowlisted surface", () => {
   const { service, setMystery } = fixture();
   const cases: readonly [
@@ -476,6 +538,7 @@ void test("invalid, disabled, retired, and unassigned taps are safe", () => {
   const { service, setMystery, setTap } = fixture();
   assert.equal(service.getCard("not-a-uuid"), undefined);
   assert.equal(service.getStory("not-a-uuid"), undefined);
+  assert.equal(service.getTitleForAssignment("not-a-uuid", ASSIGNMENT_ID), undefined);
 
   setTap({ activeAssignment: null, isOccupied: false });
   setMystery(defaultMystery);
@@ -485,9 +548,11 @@ void test("invalid, disabled, retired, and unassigned taps are safe", () => {
   assert.equal(unassigned.tapName, "Secret Tap Name");
   assert.equal(unassigned.abv, null);
   assert.equal(service.getStory(TAP_ID), undefined);
+  assert.equal(service.getTitleForAssignment(TAP_ID, ASSIGNMENT_ID), undefined);
 
   setTap({ enabled: false });
   assert.equal(service.getCard(TAP_ID), undefined);
   setTap({ enabled: true, isRetired: true });
   assert.equal(service.getCard(TAP_ID), undefined);
+  assert.equal(service.getTitleForAssignment(TAP_ID, ASSIGNMENT_ID), undefined);
 });

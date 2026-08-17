@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import type { PublicDashboardView, PublicTapCardView } from "../src/features/dashboard/types.ts";
+import type { PublicTapWarView } from "../src/features/tap-wars/types.ts";
 import { createRenderer } from "../src/infrastructure/rendering/renderer.ts";
 
 const hostile = '<script>alert(1)</script>" onmouseover="alert(2)';
@@ -35,7 +36,7 @@ function tap(id: number, enabled = true): PublicTapCardView & { readonly enabled
   };
 }
 
-function dashboard(): PublicDashboardView {
+function dashboard(tapWars: PublicTapWarView | null = null): PublicDashboardView {
   return {
     sharedDisplay: {
       revision: 1,
@@ -57,7 +58,46 @@ function dashboard(): PublicDashboardView {
       (left, right) => left.tapNumber - right.tapNumber,
     ),
     onDeck: { items: [{ fillId: tap(9).id, name: hostile, style: "Porter" }] },
+    tapWars,
     ssePath: "/api/public/events",
+  };
+}
+
+function tapWar(status: PublicTapWarView["status"] = "active"): PublicTapWarView {
+  const completed = status === "completed";
+  return {
+    id: "00000000-0000-4000-8000-000000000078",
+    status,
+    startedAt: "2026-08-17T12:00:00.000Z",
+    completedAt: completed ? "2026-08-17T12:05:00.000Z" : null,
+    side1: {
+      side: 1,
+      tapId: tap(1).id,
+      tapNumber: 1,
+      title: "Mystery Tap",
+      isCardParticipant: true,
+      voteCount: 7,
+      percentage: 70,
+      meterLabel: "70% (7 votes)",
+    },
+    side2: {
+      side: 2,
+      tapId: tap(3).id,
+      tapNumber: 3,
+      title: "Public Porter",
+      isCardParticipant: true,
+      voteCount: 3,
+      percentage: 30,
+      meterLabel: "30% (3 votes)",
+    },
+    totalVotes: 10,
+    result: completed ? "side1" : null,
+    winnerSide: completed ? 1 : null,
+    leaderSide: completed ? null : 1,
+    isTie: false,
+    canVote: status === "active",
+    votePath: "/api/public/tap-wars/00000000-0000-4000-8000-000000000078/votes",
+    statusLabel: completed ? "Final result" : status === "paused" ? "Voting paused" : "Voting open",
   };
 }
 
@@ -107,6 +147,49 @@ void test("public dashboard DTO contains no privileged integration or telemetry 
   ]) {
     assert.equal(serialized.includes(forbidden), false, forbidden);
   }
+});
+
+void test("Tap Wars SSR augments cards in place with safe forms, a compact banner, and results dialog", () => {
+  const html = createRenderer().render("/public/dashboard", { ...dashboard(tapWar()) });
+  assert.ok(html.indexOf("data-tap-wars") < html.indexOf("data-tap-grid"));
+  assert.equal((html.match(/data-tap-wars-participant=/gu) ?? []).length, 2);
+  assert.equal((html.match(/data-tap-wars-vote(?:\s|>)/gu) ?? []).length, 2);
+  assert.match(html, /TAP WARS! Vote below/u);
+  assert.match(html, /Mystery Tap/u);
+  assert.match(html, /Public Porter/u);
+  assert.match(
+    html,
+    /aria-label="Vote split: Mystery Tap 70 percent; Public Porter 30 percent\."/u,
+  );
+
+  const banner = html.slice(
+    html.indexOf('<section class="tap-wars-banner"'),
+    html.indexOf("</section>", html.indexOf('<section class="tap-wars-banner"')),
+  );
+  assert.doesNotMatch(banner, /7 votes|3 votes|10 total/u);
+  assert.match(html, /<strong>7 votes<\/strong><span>70%<\/span>/u);
+
+  const firstCardStart = html.indexOf('data-tap-number="1"');
+  const firstCard = html.slice(firstCardStart, html.indexOf("</article>", firstCardStart));
+  assert.ok(
+    firstCard.indexOf('data-field="description"') <
+      firstCard.indexOf("data-tap-wars-card-controls"),
+  );
+  assert.ok(
+    firstCard.indexOf("data-tap-wars-card-controls") <
+      firstCard.indexOf('data-field="temperature"'),
+  );
+  assert.match(firstCard, /method="post"/u);
+  assert.match(firstCard, /name="side" value="1"/u);
+  assert.match(firstCard, />Vote for this tap<\/button>/u);
+  assert.doesNotMatch(firstCard, /assignment|beverage|fillId|admin/u);
+
+  const completed = createRenderer().render("/public/dashboard", {
+    ...dashboard(tapWar("completed")),
+  });
+  assert.match(completed, /TAP WARS WINNER — Mystery Tap!/u);
+  assert.doesNotMatch(completed, /data-tap-wars-participant=/u);
+  assert.doesNotMatch(completed, /data-tap-wars-vote(?:\s|>)/u);
 });
 
 void test("live Mystery patches refresh the SVG accessible name from the incoming public DTO", async () => {

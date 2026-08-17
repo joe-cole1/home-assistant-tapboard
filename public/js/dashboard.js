@@ -401,25 +401,60 @@ function isStoryCard(tap) {
   return typeof tap.storyPath === "string" && tap.storyPath.startsWith("/taps/");
 }
 
+function retagCard(card, tagName) {
+  const replacement = document.createElement(tagName);
+  for (const attribute of card.attributes)
+    replacement.setAttribute(attribute.name, attribute.value);
+  while (card.firstChild) replacement.append(card.firstChild);
+  card.replaceWith(replacement);
+  return replacement;
+}
+
+function promoteStoryCard(card) {
+  if (!card.matches("a.tap-card")) return card;
+  const href = card.getAttribute("href");
+  const article = retagCard(card, "article");
+  article.removeAttribute("href");
+  if (href) {
+    const storyLink = document.createElement("a");
+    storyLink.className = "tap-story-overlay";
+    storyLink.dataset.field = "story-link";
+    storyLink.href = href;
+    storyLink.setAttribute("aria-label", article.getAttribute("aria-label") || "Open Brew Story");
+    if (article.dataset.adminPourPreview === "true")
+      storyLink.setAttribute("aria-keyshortcuts", "Shift+Space");
+    article.append(storyLink);
+  }
+  return article;
+}
+
+function restoreStoryCard(card) {
+  if (!card.matches("article.tap-card")) return card;
+  const storyLink = card.querySelector('[data-field="story-link"]');
+  if (!storyLink) return card;
+  const href = storyLink.getAttribute("href");
+  storyLink.remove();
+  const anchor = retagCard(card, "a");
+  if (href) anchor.href = href;
+  return anchor;
+}
+
 function createCard(tap) {
   const story = isStoryCard(tap);
   const title = tap.title || tap.beverageName || "Empty Tap";
   const card = document.createElement(story ? "a" : "article");
   card.className = "tap-card";
+  if (story) card.href = tap.storyPath;
   card.dataset.tapId = String(tap.id);
   if (root?.dataset.adminPourPreview === "true") {
     card.dataset.adminPourPreview = "true";
-    card.setAttribute("aria-keyshortcuts", "Shift+Space");
+    if (!story) card.setAttribute("aria-keyshortcuts", "Shift+Space");
   }
   card.setAttribute(
     "aria-label",
     tap.accessibleLabel || (story ? `${title} story` : `Tap ${tap.tapNumber}, ${title}`),
   );
-  if (story) {
-    card.href = tap.storyPath;
-  } else {
-    card.tabIndex = 0;
-  }
+  if (!story) card.tabIndex = 0;
   const copy = document.createElement("div");
   copy.className = "tap-copy";
   const titleRow = document.createElement("div");
@@ -575,13 +610,15 @@ function patchTap(tap) {
   let card = grid.querySelector(`[data-tap-id="${CSS.escape(String(tap.id))}"]`);
   const link = isStoryCard(tap);
   const title = tap.title || tap.beverageName || "Empty Tap";
-  if (!card || (card.tagName === "A") !== link) {
+  if (!card) {
     const previous = card;
     card = createCard(tap);
     previous?.replaceWith(card);
     if (!previous) grid.append(card);
-  } else if (link && card.getAttribute("href") !== tap.storyPath) {
-    card.setAttribute("href", tap.storyPath);
+  }
+  if (!link && card.matches("a.tap-card")) {
+    card = retagCard(card, "article");
+    card.removeAttribute("href");
   }
   card.dataset.tapNumber = String(tap.tapNumber);
   card.dataset.health = ["healthy", "degraded", "unknown"].includes(tap.health)
@@ -605,12 +642,36 @@ function patchTap(tap) {
   card.dataset.waitingForMeasurement = tap.waitingForMeasurement === true ? "true" : "false";
   if (root?.dataset.adminPourPreview === "true") {
     card.dataset.adminPourPreview = "true";
-    card.setAttribute("aria-keyshortcuts", "Shift+Space");
+    if (!link) card.setAttribute("aria-keyshortcuts", "Shift+Space");
+    else card.removeAttribute("aria-keyshortcuts");
   } else {
     delete card.dataset.adminPourPreview;
     card.removeAttribute("aria-keyshortcuts");
   }
-  if (!link) card.tabIndex = 0;
+  let storyLink = card.querySelector('[data-field="story-link"]');
+  const linkedRoot = card.matches("a.tap-card");
+  if (link && linkedRoot) {
+    card.href = tap.storyPath;
+    storyLink?.remove();
+    storyLink = null;
+  } else if (link && !storyLink) {
+    storyLink = document.createElement("a");
+    storyLink.className = "tap-story-overlay";
+    storyLink.dataset.field = "story-link";
+    card.append(storyLink);
+  }
+  if (storyLink) {
+    if (link) {
+      storyLink.href = tap.storyPath;
+      storyLink.hidden = false;
+      storyLink.setAttribute("aria-label", tap.accessibleLabel || `${title} story`);
+      if (root?.dataset.adminPourPreview === "true")
+        storyLink.setAttribute("aria-keyshortcuts", "Shift+Space");
+      else storyLink.removeAttribute("aria-keyshortcuts");
+    } else storyLink.remove();
+  }
+  if (link) card.removeAttribute("tabindex");
+  else card.tabIndex = 0;
   text(card.querySelector('[data-field="tap-number"]'), tap.tapNumber);
   text(card.querySelector('[data-field="tap-name"]'), title);
   patchStyleLine(card, tap.metrics, tap.style);
@@ -676,8 +737,17 @@ function attachPourPreviewListeners() {
   grid.addEventListener(
     "pointerdown",
     (event) => {
-      const graphic = closestTarget(event.target, ".tap-graphic");
-      const card = closestTarget(graphic, "[data-tap-id]");
+      const card = closestTarget(event.target, "[data-tap-id]");
+      const graphic = card?.querySelector(".tap-graphic");
+      const bounds = graphic?.getBoundingClientRect();
+      if (
+        !bounds ||
+        event.clientX < bounds.left ||
+        event.clientX > bounds.right ||
+        event.clientY < bounds.top ||
+        event.clientY > bounds.bottom
+      )
+        return;
       if (!card || !adminPourEnabled(card)) return;
       pointer = { card, id: event.pointerId, x: event.clientX, y: event.clientY, fired: false };
       window.clearTimeout(hold);
@@ -719,7 +789,16 @@ function attachPourPreviewListeners() {
     true,
   );
   grid.addEventListener("contextmenu", (event) => {
-    if (closestTarget(event.target, ".tap-graphic")) event.preventDefault();
+    const card = closestTarget(event.target, "[data-tap-id]");
+    const bounds = card?.querySelector(".tap-graphic")?.getBoundingClientRect();
+    if (
+      bounds &&
+      event.clientX >= bounds.left &&
+      event.clientX <= bounds.right &&
+      event.clientY >= bounds.top &&
+      event.clientY <= bounds.bottom
+    )
+      event.preventDefault();
   });
   grid.addEventListener("keydown", (event) => {
     if (!event.shiftKey || event.code !== "Space") return;
@@ -933,6 +1012,7 @@ function reconcile(dashboard) {
   for (const card of grid.querySelectorAll("[data-tap-id]"))
     if (!present.has(card.dataset.tapId)) card.remove();
   patchOnDeck(dashboard.onDeck.items);
+  patchTapWars(dashboard.tapWars ?? null);
   updateRotation();
 }
 
@@ -1026,6 +1106,220 @@ function updateRotation() {
   }, 20_000);
 }
 
+function tapWarsHeadline(war) {
+  if (war.status === "active") return "TAP WARS! Vote below";
+  if (war.status === "paused") return "TAP WARS! Voting paused";
+  if (war.isTie) return "TAP WARS — IT'S A TIE!";
+  return `TAP WARS WINNER — ${war.winnerSide === 1 ? war.side1.title : war.side2.title}!`;
+}
+
+function tapWarsMeterLabel(war) {
+  if (war.totalVotes === 0) return `${war.side1.title} versus ${war.side2.title}. No votes yet.`;
+  return `Vote split: ${war.side1.title} ${war.side1.percentage} percent; ${war.side2.title} ${war.side2.percentage} percent.`;
+}
+
+function tapWarsResultLabel(war) {
+  if (war.totalVotes === 0)
+    return war.status === "completed" ? "Final result: Tie. Total votes: 0." : "No votes yet.";
+  if (war.status === "completed") {
+    if (war.isTie) return `Final result: Tie. Total votes: ${war.totalVotes}.`;
+    const winner = war.winnerSide === 1 ? war.side1.title : war.side2.title;
+    return `Final result: ${winner} wins. Total votes: ${war.totalVotes}.`;
+  }
+  if (war.isTie) return `Tie. Total votes: ${war.totalVotes}.`;
+  const leader = war.leaderSide === 1 ? war.side1.title : war.side2.title;
+  return `${leader} is currently leading. Total votes: ${war.totalVotes}.`;
+}
+
+function patchTapWarsMeter(meter, war, sideSelector) {
+  if (!meter) return;
+  const neutral = war.totalVotes === 0;
+  meter.classList.toggle("is-neutral", neutral);
+  meter.setAttribute("aria-label", tapWarsMeterLabel(war));
+  for (const side of [war.side1, war.side2]) {
+    const segment = meter.querySelector(`[${sideSelector}="${side.side}"]`);
+    if (segment) segment.style.width = `${neutral ? 0 : side.percentage}%`;
+  }
+}
+
+function createTapWarsCardControls(war, side) {
+  const controls = document.createElement("div");
+  controls.className = "tap-wars-card-controls";
+  controls.dataset.tapWarsCardControls = "";
+  controls.dataset.warId = war.id;
+  controls.dataset.warStatus = war.status;
+  controls.dataset.warSide = String(side.side);
+  const badge = document.createElement("span");
+  badge.className = "tap-wars-card-badge";
+  badge.dataset.tapWarsCardBadge = "";
+  text(badge, "Tap Wars");
+  controls.append(badge);
+  if (war.status === "active" && war.canVote) {
+    const form = document.createElement("form");
+    form.className = "tap-wars-vote-form";
+    form.dataset.tapWarsVote = "";
+    form.action = war.votePath;
+    form.method = "post";
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = "side";
+    input.value = String(side.side);
+    const button = document.createElement("button");
+    button.type = "submit";
+    text(button, "Vote for this tap");
+    const live = document.createElement("span");
+    live.className = "tap-wars-vote-feedback";
+    live.dataset.tapWarsVoteStatus = "";
+    live.setAttribute("aria-live", "polite");
+    live.setAttribute("aria-atomic", "true");
+    form.append(input, button, live);
+    controls.append(form);
+  } else {
+    const paused = document.createElement("p");
+    paused.className = "tap-wars-card-paused";
+    text(paused, "Voting paused");
+    controls.append(paused);
+  }
+  return controls;
+}
+
+function patchTapWarsCard(card, war, side) {
+  card.dataset.tapWarsParticipant = String(side.side);
+  const existing = card.querySelector("[data-tap-wars-card-controls]");
+  const sameControls =
+    existing?.dataset.warId === war.id &&
+    existing.dataset.warStatus === war.status &&
+    existing.dataset.warSide === String(side.side) &&
+    Boolean(existing.querySelector("[data-tap-wars-vote]")) ===
+      (war.status === "active" && war.canVote);
+  if (sameControls) {
+    const form = existing.querySelector("[data-tap-wars-vote]");
+    if (form) {
+      form.action = war.votePath;
+      const input = form.querySelector('input[name="side"]');
+      if (input) input.value = String(side.side);
+      text(form.querySelector('button[type="submit"]'), "Vote for this tap");
+    }
+    return;
+  }
+  existing?.remove();
+  const controls = createTapWarsCardControls(war, side);
+  const description = card.querySelector('[data-field="description"]');
+  if (description) description.after(controls);
+  else card.querySelector(".tap-copy")?.prepend(controls);
+}
+
+function patchTapWarsDialog(war) {
+  const results = document.querySelector("[data-tap-wars-dialog-results]");
+  text(document.querySelector("[data-tap-wars-dialog-status]"), tapWarsResultLabel(war));
+  if (results) {
+    results.replaceChildren(
+      ...[war.side1, war.side2].map((side) => {
+        const row = document.createElement("div");
+        row.dataset.tapWarsDialogSide = String(side.side);
+        const term = document.createElement("dt");
+        text(term, `Tap ${side.tapNumber} · ${side.title}`);
+        const detail = document.createElement("dd");
+        const votes = document.createElement("strong");
+        text(votes, `${side.voteCount} ${side.voteCount === 1 ? "vote" : "votes"}`);
+        const percentage = document.createElement("span");
+        text(percentage, side.percentage === null ? "—" : `${side.percentage}%`);
+        detail.append(votes, percentage);
+        row.append(term, detail);
+        return row;
+      }),
+    );
+  }
+  patchTapWarsMeter(
+    document.querySelector("[data-tap-wars-dialog-meter]"),
+    war,
+    "data-tap-wars-dialog-meter-side",
+  );
+}
+
+function patchTapWars(war) {
+  const banner = document.querySelector("[data-tap-wars]");
+  if (!banner) return;
+  const participantTapIds =
+    war && war.status !== "completed"
+      ? new Set(
+          [war.side1, war.side2]
+            .filter((side) => side.isCardParticipant !== false)
+            .map((side) => String(side.tapId)),
+        )
+      : new Set();
+  for (let card of grid.querySelectorAll("[data-tap-id]")) {
+    delete card.dataset.tapWarsParticipant;
+    if (!participantTapIds.has(String(card.dataset.tapId))) {
+      card.querySelector("[data-tap-wars-card-controls]")?.remove();
+      card = restoreStoryCard(card);
+    }
+  }
+  banner.hidden = !war;
+  if (!war) {
+    const dialog = document.querySelector("[data-tap-wars-dialog]");
+    if (dialog?.open) dialog.close();
+    return;
+  }
+  text(banner.querySelector("[data-tap-wars-status]"), tapWarsHeadline(war));
+  text(banner.querySelector("[data-tap-wars-message]"), war.statusLabel);
+  for (const side of [war.side1, war.side2]) {
+    text(banner.querySelector(`[data-tap-wars-side="${side.side}"]`), side.title);
+    text(
+      banner.querySelector(`[data-tap-wars-percent="${side.side}"]`),
+      side.percentage === null ? "—" : `${side.percentage}%`,
+    );
+    if (war.status === "completed") continue;
+    if (side.isCardParticipant === false) continue;
+    let card = grid.querySelector(`[data-tap-id="${CSS.escape(String(side.tapId))}"]`);
+    if (card) {
+      card = promoteStoryCard(card);
+      patchTapWarsCard(card, war, side);
+    }
+  }
+  patchTapWarsMeter(banner.querySelector("[data-tap-wars-meter]"), war, "data-tap-wars-meter-side");
+  patchTapWarsDialog(war);
+}
+
+function announceVote(element, message) {
+  text(element, "");
+  window.setTimeout(() => text(element, message), 0);
+}
+
+document.addEventListener("click", (event) => {
+  if (!event.target.closest("[data-tap-wars-results]")) return;
+  const dialog = document.querySelector("[data-tap-wars-dialog]");
+  if (dialog && !dialog.open) dialog.showModal();
+});
+
+document.addEventListener("submit", async (event) => {
+  const form = event.target.closest("[data-tap-wars-vote]");
+  if (!form) return;
+  event.preventDefault();
+  const live = form.querySelector("[data-tap-wars-vote-status]");
+  try {
+    const response = await fetch(form.action, {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        "content-type": "application/x-www-form-urlencoded; charset=utf-8",
+      },
+      body: new URLSearchParams(new FormData(form)).toString(),
+    });
+    let payload;
+    try {
+      payload = await response.json();
+    } catch {
+      payload = undefined;
+    }
+    announceVote(live, response.ok ? "Vote counted!" : "Vote could not be counted.");
+    const current = await json("/api/public/tap-wars");
+    patchTapWars(current?.tapWars ?? payload?.tapWars ?? null);
+  } catch {
+    announceVote(live, "Vote could not be counted.");
+  }
+});
+
 const queue = createDirtyQueue(refresh);
 const reconnectDirty = new Set();
 const RECONNECT_DIRTY_LIMIT = 64;
@@ -1066,6 +1360,10 @@ connect(
             if (card.dataset.tapId) queueDirty(card.dataset.tapId);
           }
         }
+      } else if (name === "tap_wars.updated") {
+        void json("/api/public/tap-wars")
+          .then((value) => patchTapWars(value?.tapWars ?? null))
+          .catch(() => undefined);
       } else queueDirty("header");
     } catch {
       // A malformed ephemeral event is ignored; reconnect remains authoritative.
@@ -1087,4 +1385,7 @@ document.addEventListener("focusout", updateRotation);
 attachOnDeckListeners();
 attachPourPreviewListeners();
 applyPreferences(readPreferences());
+void json("/api/public/tap-wars")
+  .then((value) => patchTapWars(value?.tapWars ?? null))
+  .catch(() => undefined);
 updateRotation();

@@ -277,7 +277,7 @@ void test(TEST_NAME, async (context) => {
   const tapsResponse = await fetch(`${base}/admin/taps`, { headers });
   assert.equal(tapsResponse.status, 200);
   const tapsHtml = await tapsResponse.text();
-  assert.match(tapsHtml, /Open Tap detail/);
+  assert.match(tapsHtml, new RegExp(`href="/admin/taps/${TAP_ID}"[^>]*>Open<`));
   assert.doesNotMatch(tapsHtml, /Public card/);
 
   const tapDetailResponse = await fetch(`${base}/admin/taps/${TAP_ID}`, { headers });

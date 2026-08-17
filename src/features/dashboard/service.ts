@@ -7,6 +7,7 @@ import { createPublicStoryService, type PublicStoryService } from "../story/serv
 import type { TapService } from "../taps/service.ts";
 import type { DetectorService } from "../telemetry/detector-service.ts";
 import type { TelemetryService } from "../telemetry/service.ts";
+import type { PublicTapWarsService } from "../tap-wars/public.ts";
 import type {
   PublicDashboardView,
   PublicDisplayDefaultsView,
@@ -26,6 +27,7 @@ export interface DashboardServiceDependencies {
   readonly telemetryService: TelemetryService;
   readonly storyService?: PublicStoryService;
   readonly publicStoryService?: PublicStoryService;
+  readonly tapWarsService?: PublicTapWarsService;
 }
 
 export class DashboardService {
@@ -116,6 +118,7 @@ export class DashboardService {
       header: this.getHeader(),
       taps: this.listTaps(),
       onDeck: this.getOnDeck(),
+      tapWars: this.#dependencies.tapWarsService?.getVisible() ?? null,
       ssePath: "/api/public/events",
     };
   }

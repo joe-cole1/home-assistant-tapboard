@@ -834,6 +834,101 @@ html[data-admin-accent="blue"] .admin-shell {
 .admin-table tbody tr:last-child td {
   border-bottom: 0;
 }
+.admin-detail-table {
+  min-width: 34rem;
+}
+.admin-detail-table th[scope="row"] {
+  font-weight: 750;
+}
+.tap-list {
+  min-width: 54rem;
+}
+.keg-inventory-table {
+  min-width: 48rem;
+}
+.keg-room-table {
+  min-width: 54rem;
+}
+.keg-room-table th,
+.keg-room-table td {
+  vertical-align: middle;
+}
+.keg-room-table__actions {
+  min-width: 12rem;
+}
+.keg-room-table__actions details {
+  margin: 0;
+}
+.keg-room-table__fill {
+  display: grid;
+  grid-template-columns: 4rem minmax(8rem, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 0.65rem;
+  align-items: center;
+}
+.keg-room-table__fill .beverage-list__name {
+  overflow-wrap: anywhere;
+}
+.keg-room-filter-form {
+  max-width: none;
+  grid-template-columns: minmax(14rem, 2fr) repeat(2, minmax(9rem, 1fr)) auto;
+  align-items: end;
+}
+.keg-room-filter-form > label {
+  min-width: 0;
+}
+@media (max-width: 48rem) {
+  .keg-room-filter-form {
+    grid-template-columns: 1fr;
+  }
+}
+.tap-list th,
+.tap-list td,
+.keg-inventory-table th,
+.keg-inventory-table td {
+  vertical-align: middle;
+}
+.tap-list td:last-child,
+.keg-inventory-table td:last-child {
+  white-space: nowrap;
+}
+.tap-assignment-actions {
+  align-items: end;
+}
+.tap-assignment-actions .inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.5rem;
+}
+.tap-assignment-actions .inline-form label {
+  display: grid;
+  gap: 0.35rem;
+}
+.config-groups {
+  display: grid;
+  gap: 1rem;
+}
+.admin-config-group {
+  min-width: 0;
+  margin: 0;
+  padding: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.admin-config-group legend {
+  padding-inline: 0.35rem;
+  font-weight: 750;
+}
+.admin-config-group > .muted {
+  margin-top: 0;
+}
+.config-field-help {
+  display: block;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
 .quick-actions ul,
 .jump-results {
   display: grid;
@@ -1221,9 +1316,6 @@ html[data-admin-accent="blue"] .admin-shell {
   border-color: color-mix(in srgb, var(--danger) 55%, var(--border));
 }
 
-.tap-list {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
-}
 .tap-list-card {
   min-width: 0;
 }
@@ -1668,6 +1760,173 @@ html[data-admin-accent="blue"] .admin-shell {
 @media (prefers-reduced-motion: reduce) {
   .switch-track,
   .switch-track::after {
+    transition: none;
+  }
+}
+
+/* Tap Wars is a contained Admin workflow: these selectors intentionally do
+   not alter the shared dashboard or the other management pages. */
+.tap-wars-current,
+.tap-wars-start,
+.tap-wars-published,
+.tap-wars-history {
+  display: grid;
+  gap: 1rem;
+}
+.tap-wars-current--active {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+}
+.tap-wars-current--paused {
+  border-color: color-mix(in srgb, #d97706 60%, var(--border));
+}
+.tap-wars-current__heading {
+  align-items: start;
+}
+.tap-wars-attention {
+  padding: 0.85rem 1rem;
+  border-inline-start: 0.3rem solid #d97706;
+  border-radius: calc(var(--radius) * 0.7);
+  background: color-mix(in srgb, #d97706 11%, var(--surface-raised));
+}
+.tap-wars-attention ul {
+  margin: 0.55rem 0 0;
+  padding-inline-start: 1.25rem;
+}
+.tap-wars-matchup,
+.tap-wars-result-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+.tap-wars-competitor,
+.tap-wars-result-grid article {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 0.75);
+  background: var(--surface-raised);
+}
+.tap-wars-competitor h3,
+.tap-wars-result-grid h3 {
+  margin: 0.15rem 0 0.4rem;
+  overflow-wrap: anywhere;
+}
+.tap-wars-public-title,
+.tap-wars-result-grid p {
+  margin: 0;
+  color: var(--muted);
+}
+.tap-wars-score {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin: 1rem 0 0.75rem;
+}
+.tap-wars-score div {
+  padding: 0.5rem;
+  border-radius: calc(var(--radius) * 0.55);
+  background: var(--surface);
+}
+.tap-wars-score dt {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.tap-wars-score dd {
+  margin: 0.1rem 0 0;
+  font-size: 1.35rem;
+  font-weight: 800;
+}
+.tap-wars-meter {
+  height: 0.55rem;
+  overflow: hidden;
+  border-radius: 99rem;
+  background: color-mix(in srgb, var(--muted) 18%, var(--surface));
+}
+.tap-wars-meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.2s ease;
+}
+.tap-wars-totals {
+  color: var(--muted);
+}
+.tap-wars-totals strong {
+  color: var(--text);
+  font-size: 1.2rem;
+}
+.tap-wars-start__form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+.tap-wars-start__form > label {
+  display: grid;
+  gap: 0.35rem;
+}
+.tap-wars-start__form select {
+  width: 100%;
+}
+.tap-wars-preview {
+  grid-column: 1 / -1;
+  min-height: 2.75rem;
+  padding: 0.7rem;
+  border: 1px dashed var(--border);
+  border-radius: calc(var(--radius) * 0.7);
+  background: var(--surface-raised);
+}
+.tap-wars-preview p {
+  margin: 0;
+  color: var(--muted);
+}
+.tap-wars-setup {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--warning) 45%, var(--border));
+  border-radius: calc(var(--radius) * 0.7);
+  background: color-mix(in srgb, var(--warning) 8%, var(--surface-raised));
+}
+.tap-wars-setup p {
+  margin: 0;
+  color: var(--muted);
+}
+.tap-wars-setup__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+.tap-wars-start__form--blocked select:disabled {
+  cursor: not-allowed;
+  opacity: 0.8;
+}
+.tap-wars-start__form button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.tap-wars-start__form button {
+  width: fit-content;
+}
+.tap-wars-history-table td > div + div {
+  margin-top: 0.55rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--border);
+}
+.tap-wars-history-table small {
+  color: var(--muted);
+}
+@media (max-width: 42rem) {
+  .tap-wars-matchup,
+  .tap-wars-result-grid,
+  .tap-wars-start__form {
+    grid-template-columns: 1fr;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tap-wars-meter span {
     transition: none;
   }
 }

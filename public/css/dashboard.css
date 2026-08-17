@@ -560,6 +560,266 @@ html[data-theme="light_minimal"] .tap-graphic .glass-detail[data-glass-contour="
 .tap-wars-slot[hidden] {
   display: none;
 }
+.tap-wars-banner {
+  display: grid;
+  grid-template-columns: auto minmax(18rem, 1fr) auto;
+  align-items: center;
+  gap: clamp(0.75rem, 1.5vw, 1.5rem);
+  margin-bottom: 1rem;
+  padding: 0.7rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 70%, var(--border));
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface-raised) 91%, var(--accent));
+  box-shadow: 0 0.35rem 1.2rem rgb(0 0 0 / 18%);
+}
+.tap-wars-banner__copy {
+  display: grid;
+  gap: 0.1rem;
+}
+.tap-wars-banner__copy strong {
+  color: var(--accent-readable);
+  font-size: 0.85rem;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+.tap-wars-banner__copy span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.tap-wars-banner__matchup {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(10rem, auto) minmax(7rem, 1fr) auto;
+  align-items: center;
+  gap: 0.8rem;
+}
+.tap-wars-banner__names {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+.tap-wars-banner__names b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tap-wars-banner__names span,
+.tap-wars-banner__percentages span {
+  color: var(--muted);
+}
+.tap-wars-banner__percentages {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  white-space: nowrap;
+}
+.tap-wars-banner em {
+  color: var(--accent-readable);
+  font-style: normal;
+  font-weight: 800;
+}
+.tap-wars-banner__results {
+  white-space: nowrap;
+}
+.tap-wars-meter {
+  display: flex;
+  min-width: 7rem;
+  height: 0.55rem;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--border) 75%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+  border-radius: 999px;
+}
+.tap-wars-meter i {
+  display: block;
+  height: 100%;
+  transition: width 160ms ease;
+}
+.tap-wars-meter i:first-child {
+  background: var(--accent);
+}
+.tap-wars-meter i:last-child {
+  background: var(--secondary);
+}
+.tap-wars-meter.is-neutral {
+  background: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--muted) 35%, transparent) 0 0.35rem,
+    transparent 0.35rem 0.7rem
+  );
+}
+.tap-card {
+  position: relative;
+}
+.tap-card[data-tap-wars-participant] {
+  border-color: color-mix(in srgb, var(--accent) 72%, var(--border));
+  box-shadow:
+    0 10px 25px -5px rgb(0 0 0 / 50%),
+    0 0 1rem color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.tap-wars-card-controls {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  justify-items: start;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+}
+.tap-wars-card-badge {
+  display: inline-flex;
+  padding: 0.16rem 0.45rem;
+  color: var(--accent-readable);
+  font-size: 0.7rem;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: 1px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.tap-wars-card-paused {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+.tap-wars-vote-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+}
+.tap-wars-vote-form button {
+  min-height: 2rem;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.78rem;
+}
+.tap-wars-vote-feedback {
+  color: var(--success);
+  font-size: 0.75rem;
+  font-weight: 750;
+}
+.tap-wars-vote-feedback:empty {
+  display: none;
+}
+.tap-story-overlay {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  border-radius: inherit;
+}
+.tap-card:has(.tap-story-overlay:focus-visible) {
+  outline: 3px solid var(--accent-strong);
+  outline-offset: 3px;
+}
+.tap-story-overlay:focus-visible {
+  outline: 0;
+}
+.tap-wars-dialog {
+  width: min(36rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
+  padding: clamp(1rem, 2vw, 1.5rem);
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 1.25);
+  box-shadow: var(--shadow);
+}
+.tap-wars-dialog::backdrop {
+  background: rgb(0 0 0 / 68%);
+  backdrop-filter: blur(2px);
+}
+.tap-wars-dialog__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.tap-wars-dialog__header h2,
+.tap-wars-dialog__header p {
+  margin: 0;
+}
+.tap-wars-dialog__status {
+  color: var(--muted);
+}
+.tap-wars-dialog__results {
+  display: grid;
+  gap: 0.65rem;
+  margin: 1rem 0;
+}
+.tap-wars-dialog__results > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+}
+.tap-wars-dialog__results dt {
+  min-width: 0;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+.tap-wars-dialog__results dd {
+  display: grid;
+  justify-items: end;
+  gap: 0.1rem;
+  margin: 0;
+}
+.tap-wars-dialog__results dd span {
+  color: var(--accent-readable);
+  font-weight: 850;
+}
+.tap-wars-dialog__meter {
+  width: 100%;
+  height: 0.75rem;
+  margin-top: 1rem;
+}
+@media (max-width: 64rem) {
+  .tap-wars-banner {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+  .tap-wars-banner__matchup {
+    grid-template-columns: 1fr auto;
+  }
+  .tap-wars-banner__names {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+}
+@media (max-width: 44rem) {
+  .tap-wars-banner {
+    grid-template-columns: 1fr auto;
+  }
+  .tap-wars-banner__matchup {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+@media (max-width: 30rem) {
+  .tap-wars-banner {
+    grid-template-columns: 1fr;
+  }
+  .tap-wars-banner__results {
+    justify-self: start;
+  }
+  .tap-wars-banner__matchup {
+    grid-template-columns: 1fr auto;
+  }
+  .tap-wars-banner__names {
+    white-space: normal;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tap-wars-meter i {
+    transition: none;
+  }
+}
 .story-page {
   max-width: 64rem;
   margin-inline: auto;

@@ -8,6 +8,12 @@
   </header>
   <%~ include("/partials/admin-messages", { page: it.page }) %>
 
+  <% const quickLinks = it.quickLinks || []; %>
+  <section aria-labelledby="quick-actions-heading" class="quick-actions">
+    <div class="section-heading"><div><p class="eyebrow">Shortcuts</p><h2 id="quick-actions-heading">Quick actions</h2></div></div>
+    <ul><% for (const item of quickLinks) { %><li><a class="quick-action" href="<%= item.href %>"><%= item.label %><span aria-hidden="true">→</span></a></li><% } %></ul>
+  </section>
+
   <section class="attention-panel" aria-labelledby="attention-heading">
     <div class="section-heading"><div><p class="eyebrow">Needs attention</p><h2 id="attention-heading">Health summary</h2></div></div>
     <% const attention = it.health.filter((item) => item.state === "degraded" || item.severity === "warning" || item.severity === "critical"); %>
@@ -16,7 +22,7 @@
     <% } else { %>
       <ul class="attention-list">
         <% for (const item of attention) { %>
-          <li><span class="status-badge status-badge--<%= item.severity === "critical" ? "critical" : item.state === "degraded" ? "degraded" : "warning" %>"><%= item.severity === "none" ? item.state : item.severity %></span><a href="<%= item.href %>"><strong>Tap <%= item.tapNumber ?? "unknown" %></strong><% if (item.tapName) { %> — <%= item.tapName %><% } %></a><% if (item.checks.length > 0) { %><span class="muted"> · <%= item.checks.map((check) => check.id.replaceAll("_", " ")).join(", ") %></span><% } %></li>
+          <li><span class="status-badge status-badge--<%= item.severity === "critical" ? "critical" : item.state === "degraded" ? "degraded" : "warning" %>"><%= item.severity === "none" ? item.stateLabel : item.severityLabel %></span><a href="<%= item.href %>"><strong>Tap <%= item.tapNumber ?? "unknown" %></strong><% if (item.tapName) { %> — <%= item.tapName %><% } %></a><% if (item.checks.length > 0) { %><span class="muted"> · <%= item.checks.map((check) => check.label).join(", ") %></span><% } %></li>
         <% } %>
       </ul>
     <% } %>
@@ -53,9 +59,4 @@
     <div class="metrics summary-link-grid"><% for (const item of it.metrics) { %><a class="summary-card summary-card--link" href="<%= metricHrefs[item.label] || "/admin/overview" %>"><span class="summary-card__label"><%= item.label %></span><strong class="summary-card__value"><%= item.value %></strong></a><% } %></div>
   </section>
 
-  <% const quickLinks = it.quickLinks || []; %>
-  <section aria-labelledby="quick-actions-heading" class="quick-actions">
-    <div class="section-heading"><div><p class="eyebrow">Shortcuts</p><h2 id="quick-actions-heading">Quick actions</h2></div></div>
-    <ul><% for (const item of quickLinks) { %><li><a class="quick-action" href="<%= item.href %>"><%= item.label %><span aria-hidden="true">→</span></a></li><% } %></ul>
-  </section>
 </main>

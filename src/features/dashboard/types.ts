@@ -7,6 +7,7 @@ import type {
   DisplayUnitSystem,
 } from "../display/types.ts";
 import type { VesselGeometryDescriptor } from "../story/types.ts";
+import type { PublicTapWarView } from "../tap-wars/types.ts";
 
 export interface PublicDisplayDefaultsView {
   readonly revision: number;
@@ -80,5 +81,7 @@ export interface PublicDashboardView {
   readonly header: PublicHeaderView;
   readonly taps: readonly PublicTapCardView[];
   readonly onDeck: PublicOnDeckView;
+  /** Present on application-produced dashboards; optional for legacy render fixtures. */
+  readonly tapWars?: PublicTapWarView | null;
   readonly ssePath: "/api/public/events";
 }

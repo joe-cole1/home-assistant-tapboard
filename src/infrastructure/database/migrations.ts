@@ -34,13 +34,15 @@ export const TELEMETRY_DISABLED_LIFECYCLE_SCHEMA_VERSION = 16;
 export const TELEMETRY_DISABLED_LIFECYCLE_MIGRATION_NAME = "telemetry-source-disabled-lifecycle";
 export const DISPLAY_FONT_SCHEMA_VERSION = 17;
 export const DISPLAY_FONT_MIGRATION_NAME = "display-font-allowlist";
+export const TAP_WARS_SCHEMA_VERSION = 18;
+export const TAP_WARS_MIGRATION_NAME = "tap-wars";
 
 // Compatibility aliases for callers that use the shorter domain names.
 export const DISPLAY_ACCENT_SCHEMA_VERSION = DISPLAY_CUSTOM_ACCENT_SCHEMA_VERSION;
 export const DISPLAY_ACCENT_MIGRATION_NAME = DISPLAY_CUSTOM_ACCENT_MIGRATION_NAME;
 export const TELEMETRY_SOURCE_DISABLED_SCHEMA_VERSION = TELEMETRY_DISABLED_LIFECYCLE_SCHEMA_VERSION;
 export const TELEMETRY_SOURCE_DISABLED_MIGRATION_NAME = TELEMETRY_DISABLED_LIFECYCLE_MIGRATION_NAME;
-export const CURRENT_SCHEMA_VERSION = DISPLAY_FONT_SCHEMA_VERSION;
+export const CURRENT_SCHEMA_VERSION = TAP_WARS_SCHEMA_VERSION;
 
 export interface MigrationDefinition {
   readonly version: number;
@@ -3319,6 +3321,154 @@ export const DISPLAY_FONT_MIGRATION: MigrationDefinition = {
   },
 };
 
+export const TAP_WARS_SCHEMA_SQL = `
+  CREATE TABLE tap_wars (
+    id TEXT PRIMARY KEY CHECK (length(CAST(id AS BLOB)) = 36),
+    status TEXT NOT NULL CHECK (status IN ('active', 'paused', 'completed')),
+    result TEXT CHECK (result IS NULL OR result IN ('side1', 'side2', 'tie')),
+    started_at TEXT NOT NULL,
+    paused_at TEXT,
+    paused_reason TEXT CHECK (paused_reason IS NULL OR paused_reason IN ('disabled', 'retired', 'original_assignment_ended_or_replaced', 'fill_ended_or_missing')),
+    completed_at TEXT,
+    published_at TEXT,
+    dismissed_at TEXT,
+    completion_public_title_side1 TEXT,
+    completion_public_title_side2 TEXT,
+    completion_admin_title_side1 TEXT,
+    completion_admin_title_side2 TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    CHECK ((status = 'completed') = (completed_at IS NOT NULL)),
+    CHECK ((status = 'paused') = (paused_at IS NOT NULL)),
+    CHECK ((status = 'paused') = (paused_reason IS NOT NULL)),
+    CHECK ((status = 'completed') = (result IS NOT NULL)),
+    CHECK (status <> 'completed' OR (completion_public_title_side1 IS NOT NULL AND completion_public_title_side2 IS NOT NULL AND completion_admin_title_side1 IS NOT NULL AND completion_admin_title_side2 IS NOT NULL)),
+    CHECK (published_at IS NULL OR status = 'completed'),
+    CHECK (dismissed_at IS NULL OR status = 'completed')
+  );
+  CREATE UNIQUE INDEX idx_tap_wars_one_unfinished ON tap_wars ((1)) WHERE status IN ('active', 'paused');
+  CREATE UNIQUE INDEX idx_tap_wars_one_published_completed ON tap_wars ((1)) WHERE status = 'completed' AND published_at IS NOT NULL AND dismissed_at IS NULL;
+  CREATE TABLE tap_war_competitors (
+    war_id TEXT NOT NULL REFERENCES tap_wars(id) ON DELETE RESTRICT,
+    side INTEGER NOT NULL CHECK (side IN (1, 2)),
+    assignment_id TEXT NOT NULL,
+    tap_id TEXT NOT NULL,
+    fill_id TEXT NOT NULL,
+    beverage_id TEXT NOT NULL,
+    tap_number INTEGER NOT NULL CHECK (tap_number >= 1),
+    admin_beverage_title TEXT NOT NULL,
+    public_title_fallback TEXT NOT NULL CHECK (length(trim(public_title_fallback)) > 0),
+    vote_count INTEGER NOT NULL DEFAULT 0 CHECK (vote_count >= 0),
+    final_vote_count INTEGER,
+    PRIMARY KEY (war_id, side),
+    CHECK (final_vote_count IS NULL OR final_vote_count >= 0)
+  );
+  CREATE TRIGGER trg_tap_wars_no_delete BEFORE DELETE ON tap_wars BEGIN SELECT RAISE(ABORT, 'tap war history cannot be deleted'); END;
+  CREATE TRIGGER trg_tap_war_competitors_no_delete BEFORE DELETE ON tap_war_competitors BEGIN SELECT RAISE(ABORT, 'tap war history cannot be deleted'); END;
+  CREATE TRIGGER trg_tap_war_competitors_identity_immutable BEFORE UPDATE ON tap_war_competitors
+  WHEN NEW.war_id <> OLD.war_id OR NEW.side <> OLD.side OR NEW.assignment_id <> OLD.assignment_id OR NEW.tap_id <> OLD.tap_id OR NEW.fill_id <> OLD.fill_id OR NEW.beverage_id <> OLD.beverage_id OR NEW.tap_number <> OLD.tap_number OR NEW.admin_beverage_title <> OLD.admin_beverage_title
+  BEGIN SELECT RAISE(ABORT, 'tap war competitor identity is immutable'); END;
+  CREATE TRIGGER trg_tap_war_votes_guard BEFORE UPDATE OF vote_count ON tap_war_competitors
+  WHEN NEW.vote_count <> OLD.vote_count + 1 OR (SELECT status FROM tap_wars WHERE id = OLD.war_id) <> 'active' OR OLD.final_vote_count IS NOT NULL
+  BEGIN SELECT RAISE(ABORT, 'tap war votes may only increment while active'); END;
+  CREATE TRIGGER trg_tap_war_final_votes_guard BEFORE UPDATE OF final_vote_count ON tap_war_competitors
+  WHEN OLD.final_vote_count IS NOT NULL OR NEW.final_vote_count IS NULL OR NEW.vote_count <> OLD.vote_count OR NEW.final_vote_count <> OLD.vote_count OR (SELECT status FROM tap_wars WHERE id = OLD.war_id) NOT IN ('active', 'paused')
+  BEGIN SELECT RAISE(ABORT, 'tap war final votes may only be frozen once'); END;
+  CREATE TRIGGER trg_tap_wars_completion_guard BEFORE UPDATE OF status ON tap_wars
+  WHEN OLD.status IN ('active', 'paused') AND NEW.status = 'completed' AND (
+    (SELECT count(*) FROM tap_war_competitors WHERE war_id = OLD.id) <> 2 OR
+    (SELECT count(*) FROM tap_war_competitors WHERE war_id = OLD.id AND final_vote_count = vote_count) <> 2 OR
+    NEW.result <> CASE WHEN (SELECT vote_count FROM tap_war_competitors WHERE war_id = OLD.id AND side = 1) = (SELECT vote_count FROM tap_war_competitors WHERE war_id = OLD.id AND side = 2) THEN 'tie' WHEN (SELECT vote_count FROM tap_war_competitors WHERE war_id = OLD.id AND side = 1) > (SELECT vote_count FROM tap_war_competitors WHERE war_id = OLD.id AND side = 2) THEN 'side1' ELSE 'side2' END
+  ) BEGIN SELECT RAISE(ABORT, 'tap war completion is inconsistent'); END;
+  CREATE TRIGGER trg_tap_wars_completed_immutable BEFORE UPDATE ON tap_wars
+  WHEN OLD.status = 'completed' AND (NEW.status <> OLD.status OR NEW.result <> OLD.result OR NEW.started_at <> OLD.started_at OR NEW.completed_at <> OLD.completed_at OR NEW.published_at <> OLD.published_at OR NEW.paused_at IS NOT OLD.paused_at OR NEW.paused_reason IS NOT OLD.paused_reason OR NEW.completion_public_title_side1 <> OLD.completion_public_title_side1 OR NEW.completion_public_title_side2 <> OLD.completion_public_title_side2 OR NEW.completion_admin_title_side1 <> OLD.completion_admin_title_side1 OR NEW.completion_admin_title_side2 <> OLD.completion_admin_title_side2 OR NEW.created_at <> OLD.created_at OR (OLD.dismissed_at IS NOT NULL AND NEW.dismissed_at IS NOT OLD.dismissed_at))
+  BEGIN SELECT RAISE(ABORT, 'completed tap war data is immutable'); END;
+`;
+
+const TAP_WARS_SCHEMA_OBJECTS = [
+  ...DISPLAY_FONT_LIFECYCLE_SCHEMA_OBJECTS,
+  ["table", "tap_wars"],
+  ["table", "tap_war_competitors"],
+  ["index", "idx_tap_wars_one_unfinished"],
+  ["index", "idx_tap_wars_one_published_completed"],
+  ["trigger", "trg_tap_wars_no_delete"],
+  ["trigger", "trg_tap_war_competitors_no_delete"],
+  ["trigger", "trg_tap_war_competitors_identity_immutable"],
+  ["trigger", "trg_tap_war_votes_guard"],
+  ["trigger", "trg_tap_war_final_votes_guard"],
+  ["trigger", "trg_tap_wars_completion_guard"],
+  ["trigger", "trg_tap_wars_completed_immutable"],
+] as const;
+
+function validateTapWarsSchema(database: DatabaseExecutor): void {
+  validateTelemetrySchemaDefinition(
+    database,
+    TAP_WARS_SCHEMA_OBJECTS,
+    `${FORENSIC_QC_SCHEMA_SQL}\n${TELEMETRY_EPOCHS_SCHEMA_SQL}\n${FORECASTING_SCHEMA_SQL}\n${HEALTH_MAINTENANCE_SCHEMA_SQL}\n${DISPLAY_SCHEMA_SQL}\n${BREW_STORY_SENSORY_MYSTERY_SCHEMA_SQL}\n${TAP_CARD_DISPLAY_SCHEMA_SQL}\n${DISPLAY_FONT_SCHEMA_SQL}\n${TELEMETRY_DISABLED_LIFECYCLE_SCHEMA_SQL}\n${TAP_WARS_SCHEMA_SQL}`,
+    TAP_WARS_SCHEMA_VERSION,
+    () => {
+      validateTelemetryDisabledLifecycleColumns(database);
+      expectColumns(database, "tap_wars", [
+        { name: "id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+        { name: "status", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+        { name: "result", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+        { name: "started_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+        { name: "paused_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+        { name: "paused_reason", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+        { name: "completed_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+        { name: "published_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+        { name: "dismissed_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+        {
+          name: "completion_public_title_side1",
+          type: "TEXT",
+          notnull: 0,
+          dflt_value: null,
+          pk: 0,
+        },
+        {
+          name: "completion_public_title_side2",
+          type: "TEXT",
+          notnull: 0,
+          dflt_value: null,
+          pk: 0,
+        },
+        { name: "completion_admin_title_side1", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+        { name: "completion_admin_title_side2", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+        { name: "created_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+        { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      ]);
+      expectColumns(database, "tap_war_competitors", [
+        { name: "war_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 1 },
+        { name: "side", type: "INTEGER", notnull: 1, dflt_value: null, pk: 2 },
+        { name: "assignment_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+        { name: "tap_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+        { name: "fill_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+        { name: "beverage_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+        { name: "tap_number", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+        { name: "admin_beverage_title", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+        {
+          name: "public_title_fallback",
+          type: "TEXT",
+          notnull: 1,
+          dflt_value: null,
+          pk: 0,
+        },
+        { name: "vote_count", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
+        { name: "final_vote_count", type: "INTEGER", notnull: 0, dflt_value: null, pk: 0 },
+      ]);
+    },
+  );
+}
+
+export const TAP_WARS_MIGRATION: MigrationDefinition = {
+  version: TAP_WARS_SCHEMA_VERSION,
+  name: TAP_WARS_MIGRATION_NAME,
+  apply(database) {
+    database.execute(TAP_WARS_SCHEMA_SQL);
+    return undefined;
+  },
+};
+
 /** Canonical production migration list. Keep this array identity stable. */
 export const MIGRATIONS: readonly MigrationDefinition[] = [
   FOUNDATION_MIGRATIONS[0]!,
@@ -3338,6 +3488,7 @@ export const MIGRATIONS: readonly MigrationDefinition[] = [
   DISPLAY_CUSTOM_ACCENT_MIGRATION,
   TELEMETRY_DISABLED_LIFECYCLE_MIGRATION,
   DISPLAY_FONT_MIGRATION,
+  TAP_WARS_MIGRATION,
 ];
 
 // Compatibility aliases for callers that prefer an explicit application name.
@@ -3476,6 +3627,8 @@ function validateCanonicalSchemaAtVersion(database: DatabaseExecutor, version: n
     validateTelemetryDisabledLifecycleSchema(database);
   } else if (version === DISPLAY_FONT_SCHEMA_VERSION) {
     validateDisplayFontLifecycleSchema(database);
+  } else if (version === TAP_WARS_SCHEMA_VERSION) {
+    validateTapWarsSchema(database);
   } else {
     throw incompatibleSchema("schema version is not a canonical Tapboard version");
   }
@@ -3516,7 +3669,12 @@ export function initializeSchema(
   }
   validateMigrationLedger(database, currentVersion, migrations);
 
-  if (isCanonicalMigrationPrefix(migrations) && currentVersion === DISPLAY_FONT_SCHEMA_VERSION) {
+  if (isCanonicalMigrationPrefix(migrations) && currentVersion === TAP_WARS_SCHEMA_VERSION) {
+    validateCanonicalSchemaAtVersion(database, currentVersion);
+  } else if (
+    isCanonicalMigrationPrefix(migrations) &&
+    currentVersion === DISPLAY_FONT_SCHEMA_VERSION
+  ) {
     validateFoundationLedgerStructure(database);
     validateDisplayFontLifecycleSchema(database);
   } else if (

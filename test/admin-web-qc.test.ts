@@ -291,6 +291,22 @@ let previewAssignment: unknown = null;
 let previewMysteryEnabled = false;
 let previewMysteryLookupThrows = false;
 
+function activePreviewAssignment(id: string) {
+  return {
+    id,
+    fillId: onTapFill.id,
+    beverageId: onTapFill.beverageId,
+    beverageName: onTapFill.beverageName,
+    beverageType: onTapFill.beverageType,
+    beverageStyle: onTapFill.beverageStyle,
+    beverageAbv: onTapFill.beverageAbv,
+    kegId: onTapFill.kegId,
+    kegNumber: onTapFill.kegNumber,
+    kegLabel: onTapFill.kegLabel,
+    assignedAt: "2026-08-02T12:30:00.000Z",
+  };
+}
+
 const keg = {
   id: KEG_ID,
   kegNumber: 7,
@@ -597,11 +613,23 @@ void test("admin web pages and mutations keep projections safe and PRG-protected
       listAdminOverview: () => [
         {
           tapId: TAP_ID,
-          aggregate: { state: "healthy", severity: "none" },
+          aggregate: { state: "degraded", severity: "warning" },
+          checks: [
+            { checkId: "low_keg", state: "degraded", severity: "warning", reason: "Low fill" },
+          ],
         },
       ],
       getAdminOverview: () => ({ aggregate: { state: "healthy", severity: "none" } }),
       getEffectiveConfig: () => ({ effective: DEFAULT_HEALTH_CONFIG, override: null }),
+    },
+    tapWarsService: {
+      getCurrentUnfinished: () => undefined,
+      getPublishedResult: () => undefined,
+      listCompletedHistory: () => [],
+      listEligibleParticipants: () => [],
+    },
+    publicTapWarsService: {
+      getVisible: () => null,
     },
     liveUpdates: {
       connectPublic: () => undefined,
@@ -637,6 +665,12 @@ void test("admin web pages and mutations keep projections safe and PRG-protected
   const overviewResponse = await fetch(`${base}/admin/overview`, { headers: getHeaders });
   assert.equal(overviewResponse.status, 200);
   const overviewHtml = await overviewResponse.text();
+  assert.ok(
+    overviewHtml.indexOf('id="quick-actions-heading"') <
+      overviewHtml.indexOf('id="attention-heading"'),
+  );
+  assert.match(overviewHtml, /Low keg level/);
+  assert.doesNotMatch(overviewHtml, />low_keg</u);
   assert.match(
     overviewHtml,
     /Retired QC Tap[\s\S]*?status-badge status-badge--muted">Retired<[\s\S]*?<td>Hidden<\/td>/u,
@@ -796,11 +830,21 @@ void test("admin web pages and mutations keep projections safe and PRG-protected
   assert.match(tapDetailHtml, /Telemetry authority/);
   assert.match(tapDetailHtml, /Mystery Tap reveal fields/);
   assert.match(tapDetailHtml, /Permanent deletion/);
+  assert.match(tapDetailHtml, /class="admin-table admin-detail-table"/);
+  assert.match(tapDetailHtml, /<th scope="col">First used<\/th>/);
+  assert.match(tapDetailHtml, /<td>Never<\/td>/);
+  assert.match(tapDetailHtml, /Aug 1, 2026, 12:00 AM UTC/);
+  assert.match(tapDetailHtml, /Detection start/);
+  assert.match(tapDetailHtml, /Candidate loss \(mL\)/);
+  assert.match(tapDetailHtml, /Low keg level/);
+  assert.match(tapDetailHtml, /Inherited: 23\.66 mL/);
+  assert.doesNotMatch(tapDetailHtml, />candidateLossMl</u);
+  assert.doesNotMatch(tapDetailHtml, />low_keg</u);
   assert.match(tapDetailHtml, /href="\/assets\/css\/dashboard\.css"/);
   assert.match(tapDetailHtml, /Available Ale/);
   assert.match(tapDetailHtml, /Queued Pilsner/);
 
-  previewAssignment = { id: "assignment-normal-qc" };
+  previewAssignment = activePreviewAssignment("assignment-normal-qc");
   previewMysteryEnabled = false;
   currentPublicPreview = normalMysteryNamedPreview;
   const normalNamedTapDetailResponse = await fetch(`${base}/admin/taps/${TAP_ID}`, {
@@ -810,8 +854,11 @@ void test("admin web pages and mutations keep projections safe and PRG-protected
   const normalNamedTapDetailHtml = await normalNamedTapDetailResponse.text();
   assert.match(normalNamedTapDetailHtml, /Normal-style-only/);
   assert.match(normalNamedTapDetailHtml, /normal beverage identity/);
+  assert.match(normalNamedTapDetailHtml, /href="\/admin\/keg-room\/fills\/fill-on-tap-qc"/);
+  assert.match(normalNamedTapDetailHtml, /href="\/admin\/keg-room\/kegs\/keg-qc"/);
+  assert.match(normalNamedTapDetailHtml, /Aug 2, 2026, 12:30 PM UTC/);
 
-  previewAssignment = { id: "assignment-mystery-qc" };
+  previewAssignment = activePreviewAssignment("assignment-mystery-qc");
   previewMysteryEnabled = true;
   currentPublicPreview = redactedMysteryPreview;
   const mysteryTapDetailResponse = await fetch(`${base}/admin/taps/${TAP_ID}`, {
@@ -850,7 +897,8 @@ void test("admin web pages and mutations keep projections safe and PRG-protected
   assert.match(kegRoomHtml, /action="\/admin\/fills\/fill-on-deck-qc\/move"/);
   assert.match(kegRoomHtml, /Move up/);
   assert.match(kegRoomHtml, /Move down/);
-  assert.match(kegRoomHtml, /class="resource-list keg-room-grid" data-reorder-list/);
+  assert.match(kegRoomHtml, /class="admin-table keg-room-table"/);
+  assert.match(kegRoomHtml, /<tbody data-reorder-list>/);
   assert.match(kegRoomHtml, /action="\/admin\/fills\/reorder-on-deck"/);
   assert.match(kegRoomHtml, /name="fillIds"/);
   const adminShellSource = await readFile(
@@ -943,8 +991,25 @@ void test("admin web pages and mutations keep projections safe and PRG-protected
 
   const kegHtml = await (await fetch(`${base}/admin/kegs`, { headers: getHeaders })).text();
   assert.match(kegHtml, /Fill history/);
-  assert.match(kegHtml, /Historical Lager/);
+  assert.match(kegHtml, /href="\/admin\/keg-room\/fills\/fill-qc">1 fill record<\/a>/);
+  assert.match(kegHtml, /class="admin-table keg-inventory-table"/);
+  assert.match(kegHtml, /href="\/admin\/keg-room\/kegs\/keg-qc"/);
+  assert.doesNotMatch(kegHtml, /class="resource-card keg-inventory-card"/);
   const tapHtml = await (await fetch(`${base}/admin/taps`, { headers: getHeaders })).text();
+  assert.match(tapHtml, /class="admin-table tap-list"/);
+  assert.match(tapHtml, /Tap 3 — QC Tap/);
+  assert.match(tapHtml, /Open/);
+  assert.doesNotMatch(tapHtml, /class="resource-card tap-list-card"/);
+  const tapWarsResponse = await fetch(`${base}/admin/tap-wars`, { headers: getHeaders });
+  assert.equal(tapWarsResponse.status, 200);
+  const tapWarsHtml = await tapWarsResponse.text();
+  assert.match(tapWarsHtml, /Start a Tap War/);
+  assert.match(tapWarsHtml, /data-tap-wars-start/);
+  assert.match(tapWarsHtml, /data-tap-wars-selector="1"[^>]*disabled/);
+  assert.match(tapWarsHtml, /data-tap-wars-selector="2"[^>]*disabled/);
+  assert.match(tapWarsHtml, /data-tap-wars-start-submit[^>]*disabled/);
+  assert.match(tapWarsHtml, /href="\/admin\/keg-room"/);
+  assert.match(tapWarsHtml, /href="\/admin\/taps"/);
   assert.doesNotMatch(tapHtml, /name="gasType"/);
   assert.doesNotMatch(tapHtml, /href="\/assets\/css\/dashboard\.css"/);
   assert.match(tapDetailHtml, /CO2 &amp; &lt;tag&gt;/);

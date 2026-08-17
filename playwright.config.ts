@@ -1,5 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const e2ePort = process.env.TAPBOARD_E2E_PORT ?? "4176";
+const e2eOrigin = `http://127.0.0.1:${e2ePort}`;
+
 export default defineConfig({
   testDir: "./test/e2e",
   testMatch: "*.spec.ts",
@@ -7,9 +10,10 @@ export default defineConfig({
   workers: 1,
   retries: 0,
   timeout: 30_000,
+  outputDir: process.env.TAPBOARD_E2E_OUTPUT_DIR ?? "test-results",
   expect: { timeout: 8_000 },
   use: {
-    baseURL: "http://127.0.0.1:4176",
+    baseURL: e2eOrigin,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     ...devices["Desktop Chrome"],
@@ -19,7 +23,7 @@ export default defineConfig({
     : {
         webServer: {
           command: "node test/e2e/server.ts",
-          url: "http://127.0.0.1:4176/healthz",
+          url: `${e2eOrigin}/healthz`,
           reuseExistingServer: false,
           timeout: 30_000,
         },

@@ -1,0 +1,36 @@
+<%
+  const war = it.tapWars;
+  const noVotes = !war || war.totalVotes === 0;
+  const percent = (side) => side.percentage === null ? "—" : side.percentage + "%";
+  const winner = war?.winnerSide === 1 ? war.side1 : war?.winnerSide === 2 ? war.side2 : null;
+  const leader = war?.leaderSide === 1 ? war.side1 : war?.leaderSide === 2 ? war.side2 : null;
+  const headline = !war ? "" : war.status === "active" ? "TAP WARS! Vote below" : war.status === "paused" ? "TAP WARS! Voting paused" : war.isTie ? "TAP WARS — IT'S A TIE!" : "TAP WARS WINNER — " + winner.title + "!";
+  const meterLabel = !war ? "" : noVotes ? war.side1.title + " versus " + war.side2.title + ". No votes yet." : "Vote split: " + war.side1.title + " " + war.side1.percentage + " percent; " + war.side2.title + " " + war.side2.percentage + " percent.";
+  const resultLabel = !war ? "" : noVotes ? (war.status === "completed" ? "Final result: Tie. Total votes: 0." : "No votes yet.") : war.status === "completed" ? (war.isTie ? "Final result: Tie." : "Final result: " + winner.title + " wins.") + " Total votes: " + war.totalVotes + "." : war.isTie ? "Tie. Total votes: " + war.totalVotes + "." : leader.title + " is currently leading. Total votes: " + war.totalVotes + ".";
+%>
+<section class="tap-wars-banner" id="tap-wars" data-tap-wars<% if (!war) { %> hidden<% } %> aria-labelledby="tap-wars-headline">
+  <div class="tap-wars-banner__copy">
+    <strong id="tap-wars-headline" data-tap-wars-status><%= headline %></strong>
+    <span data-tap-wars-message><%= war ? war.statusLabel : "" %></span>
+  </div>
+  <div class="tap-wars-banner__matchup">
+    <div class="tap-wars-banner__names"><b data-tap-wars-side="1"><%= war?.side1?.title || "" %></b><span aria-hidden="true">vs</span><b data-tap-wars-side="2"><%= war?.side2?.title || "" %></b></div>
+    <div class="tap-wars-meter<% if (noVotes) { %> is-neutral<% } %>" role="img" data-tap-wars-meter aria-label="<%= meterLabel %>">
+      <i data-tap-wars-meter-side="1" style="width:<%= noVotes ? 0 : war.side1.percentage %>%"></i>
+      <i data-tap-wars-meter-side="2" style="width:<%= noVotes ? 0 : war.side2.percentage %>%"></i>
+    </div>
+    <div class="tap-wars-banner__percentages" aria-hidden="true"><em data-tap-wars-percent="1"><%= war ? (noVotes ? "—" : percent(war.side1)) : "" %></em><span>–</span><em data-tap-wars-percent="2"><%= war ? (noVotes ? "—" : percent(war.side2)) : "" %></em></div>
+  </div>
+  <button type="button" class="secondary tap-wars-banner__results" data-tap-wars-results aria-haspopup="dialog">View results</button>
+</section>
+<dialog class="tap-wars-dialog" data-tap-wars-dialog aria-labelledby="tap-wars-dialog-title">
+  <div class="tap-wars-dialog__header"><div><p class="eyebrow">Tap Wars</p><h2 id="tap-wars-dialog-title">Results</h2></div><form method="dialog"><button class="secondary button--small" aria-label="Close Tap Wars results">Close</button></form></div>
+  <p class="tap-wars-dialog__status" data-tap-wars-dialog-status aria-live="polite"><%= resultLabel %></p>
+  <dl class="tap-wars-dialog__results" data-tap-wars-dialog-results>
+    <% if (war) { %><% for (const side of [war.side1, war.side2]) { %><div data-tap-wars-dialog-side="<%= side.side %>"><dt>Tap <%= side.tapNumber %> · <%= side.title %></dt><dd><strong><%= side.voteCount %> vote<%= side.voteCount === 1 ? "" : "s" %></strong><span><%= side.percentage === null ? "—" : side.percentage + "%" %></span></dd></div><% } %><% } %>
+  </dl>
+  <div class="tap-wars-meter tap-wars-dialog__meter<% if (noVotes) { %> is-neutral<% } %>" role="img" data-tap-wars-dialog-meter aria-label="<%= meterLabel %>">
+    <i data-tap-wars-dialog-meter-side="1" style="width:<%= noVotes ? 0 : war.side1.percentage %>%"></i>
+    <i data-tap-wars-dialog-meter-side="2" style="width:<%= noVotes ? 0 : war.side2.percentage %>%"></i>
+  </div>
+</dialog>
