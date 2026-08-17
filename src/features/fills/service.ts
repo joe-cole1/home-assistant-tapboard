@@ -1,5 +1,8 @@
 import { randomUUID } from "node:crypto";
-import type { DatabaseExecutor } from "../../infrastructure/database/connection.ts";
+import {
+  assertSynchronousCompletion,
+  type DatabaseExecutor,
+} from "../../infrastructure/database/connection.ts";
 import { ApplicationError } from "../../shared/errors.ts";
 import { appendActivity } from "../activity/operations.ts";
 import { appendDeletionAudit } from "../activity/deletion-audit.ts";
@@ -42,8 +45,10 @@ import type {
   CreateFillInput,
   Fill,
   FillActorOptions,
+  FillAssignmentClosedContext,
   FillAssignmentLifecyclePort,
   FillDeletionImpact,
+  FillEndedContext,
   FillSettings,
   KickFillResult,
   PublicOnDeckItem,
@@ -65,14 +70,21 @@ export class NullFillAssignmentLifecyclePort implements FillAssignmentLifecycleP
     return false;
   }
 
-  closeForFillEnd(_database: DatabaseExecutor, _fillId: string, _endedAt: string): void {
+  closeForFillEnd(
+    _database: DatabaseExecutor,
+    _fillId: string,
+    _endedAt: string,
+  ): FillAssignmentClosedContext | undefined {
     // No-op for #70
+    return undefined;
   }
 }
 
 export interface FillServiceOptions {
   readonly beverageService?: BeverageService;
   readonly assignmentPort?: FillAssignmentLifecyclePort;
+  /** Transaction-local notification after a fill is ended, before commit. */
+  readonly onFillEnded?: (database: DatabaseExecutor, context: FillEndedContext) => void;
   readonly now?: () => Date;
   readonly idFactory?: () => string;
   readonly fetchFn?: typeof fetch;
@@ -105,6 +117,7 @@ export class FillService {
   readonly #database: DatabaseExecutor;
   readonly #beverageService?: BeverageService | undefined;
   readonly #assignmentPort: FillAssignmentLifecyclePort;
+  readonly #onFillEnded?: FillServiceOptions["onFillEnded"];
   readonly #now: () => Date;
   readonly #idFactory: () => string;
   readonly #fetchFn?: typeof fetch | undefined;
@@ -114,6 +127,7 @@ export class FillService {
     this.#database = database;
     this.#beverageService = options.beverageService;
     this.#assignmentPort = options.assignmentPort ?? new NullFillAssignmentLifecyclePort();
+    this.#onFillEnded = options.onFillEnded;
     this.#now = options.now ?? (() => new Date());
     this.#idFactory = options.idFactory ?? randomUUID;
     this.#fetchFn = options.fetchFn;
@@ -599,11 +613,34 @@ export class FillService {
       beverageId = fill.beverageId;
       wasLastActiveFill = countActiveFillsByBeverageId(this.#database, beverageId) === 1;
 
-      // Close assignment through lifecycle port inside transaction
-      this.#assignmentPort.closeForFillEnd(this.#database, fill.id, nowIso);
+      // Close assignment through lifecycle port inside transaction. The
+      // returned context is retained so outbound fill.ended carries the
+      // exact assignment/tap identifiers that were just closed.
+      const closedAssignment = this.#assignmentPort.closeForFillEnd(
+        this.#database,
+        fill.id,
+        nowIso,
+      );
 
       // End fill (sets ended_at, end_reason, on_deck_order = NULL)
       endFill(this.#database, fill.id, nowIso, validated.reason ?? null, nowIso);
+
+      const fillEnded = this.#onFillEnded?.(this.#database, {
+        fillId: fill.id,
+        beverageId: fill.beverageId,
+        kegId: fill.kegId,
+        assignmentId:
+          closedAssignment !== undefined && typeof closedAssignment === "object"
+            ? closedAssignment.assignmentId
+            : null,
+        tapId:
+          closedAssignment !== undefined && typeof closedAssignment === "object"
+            ? closedAssignment.tapId
+            : null,
+        occurredAt: nowIso,
+        reason: "kicked",
+      });
+      assertSynchronousCompletion(fillEnded, "Fill end callback");
 
       appendActivity(this.#database, {
         category: "domain",
@@ -800,6 +837,29 @@ export class FillService {
       }
 
       const impact = this.getDeletionImpact(fillId);
+
+      const closedAssignment = this.#assignmentPort.closeForFillEnd(
+        this.#database,
+        fill.id,
+        nowIso,
+      );
+
+      const fillEnded = this.#onFillEnded?.(this.#database, {
+        fillId: fill.id,
+        beverageId: fill.beverageId,
+        kegId: fill.kegId,
+        assignmentId:
+          closedAssignment !== undefined && typeof closedAssignment === "object"
+            ? closedAssignment.assignmentId
+            : null,
+        tapId:
+          closedAssignment !== undefined && typeof closedAssignment === "object"
+            ? closedAssignment.tapId
+            : null,
+        occurredAt: nowIso,
+        reason: "deleted",
+      });
+      assertSynchronousCompletion(fillEnded, "Fill deletion callback");
 
       appendDeletionAudit(this.#database, {
         entityType: "fill",

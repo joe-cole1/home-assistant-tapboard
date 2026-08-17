@@ -27,5 +27,18 @@
       <dl class="integration-resource-card__summary"><div><dt>Active sources</dt><dd><%= it.telemetry.activeCount %></dd></div><div><dt>Disabled history</dt><dd><%= it.telemetry.disabledCount %></dd></div></dl>
       <a class="button secondary button--small" href="/admin/integrations/telemetry">Open Telemetry</a>
     </article>
+    <article class="admin-card integration-resource-card integration-resource-card--outbound">
+      <div class="integration-resource-card__header">
+        <div><p class="eyebrow">Delivery destinations</p><h2>Outbound</h2></div>
+        <span class="status-badge status-badge--<%= it.outbound && it.outbound.available ? (it.outbound.enabledCount > 0 ? "healthy" : "muted") : "muted" %>"><%= it.outbound && it.outbound.available ? `${it.outbound.enabledCount} enabled` : "Unavailable" %></span>
+      </div>
+      <% if (it.outbound && it.outbound.available) { %>
+        <p>Deliver safe Tapboard events to Home Assistant or an HTTP webhook.</p>
+        <dl class="integration-resource-card__summary"><div><dt>Destinations</dt><dd><%= it.outbound.count %></dd></div><div><dt>Required</dt><dd><%= it.outbound.requiredCount %></dd></div></dl>
+        <a class="button secondary button--small" href="/admin/integrations/outbound">Open outbound delivery</a>
+      <% } else { %>
+        <p>Outbound delivery is not wired into this application instance.</p>
+      <% } %>
+    </article>
   </section>
 </main>

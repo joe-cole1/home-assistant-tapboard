@@ -1,9 +1,11 @@
 # Tapboard v2 rebuild status
 
 - Architecture: **FROZEN**
-- Current phase: **Issue #77 Brew Story, sensory guidance, and Mystery Tap implemented locally; validation in progress, awaiting PR**
-- Current branch: `codex/issue-77-brew-story-sensory-mystery`
-- Current base: `0b2f13a9f2bd53e7481a3f71839ee30b91533eb1` (merged #76)
+- Current phase: **Issue #79 outbound Home Assistant/webhook delivery implemented on the current branch; final validation and acceptance status pending**
+- Current branch: `codex/issue-79-outbound-delivery`
+- Current base: `cc804476` (merged #78)
+- Current schema: **v19** (`outbound-destination-delivery`)
+- Validation: **No automated or CI result is claimed in this status snapshot**
 - Prebaseline: **333 passing tests** (prebaseline evidence, not a current validation result)
 - Frozen v1 source commit: `429cf07e451b64ca1713655a34ffa5ebd376efae`
 - ADR index: [`docs/adr/README.md`](../adr/README.md)
@@ -31,18 +33,18 @@
 - 16. [#80 — System and local operator functions](https://github.com/joe-cole1/home-assistant-tapboard/issues/80)
 - 17. [#81 — Deployment, documentation, and final acceptance](https://github.com/joe-cole1/home-assistant-tapboard/issues/81)
 
-The list preserves the frozen implementation sequence with #85's local development surface between #67 and #68. Issues #67, #85, and #68–#76 are merged; #77 is implemented on the current task branch and remains in validation before PR review. Issues #78–#81 remain out of scope.
+The list preserves the frozen implementation sequence with #85's local development surface between #67 and #68. Issues #67, #85, and #68–#78 are merged; #79 is delivered on the current implementation branch and remains in final validation/acceptance. Issues #80–#81 remain out of scope.
 
 ## Implemented in Foundation
 
 - Node 24 ESM runtime with native erasable TypeScript and `tsc --noEmit` checking;
 - explicit application composition, Node HTTP lifecycle, and exactly `GET /healthz` for local application/database readiness;
 - file-based Eta rendering with default escaping plus layout/partial proof templates;
-- one controlled `better-sqlite3` connection, foreign keys, transactional versioned migrations, exact version-13 schema validation, and resource closure;
+- one controlled `better-sqlite3` connection, foreign keys, transactional versioned migrations, exact version-19 schema validation, and resource closure;
 - shared typed errors, centralized HTTP error mapping, explicit validation, and structured redacting logging;
 - Foundation- and #67–#74-aware architecture guardrails and negative fixtures;
 - canonical external-origin/trusted-proxy/session configuration and stdin-only operator PIN/key maintenance commands;
-- security/session, Activity/deletion-audit, stable event, secret, machine-key, and bounded-outbox primitives introduced in schema version 2 and retained through current schema version 13;
+- security/session, Activity/deletion-audit, stable event, secret, machine-key, and bounded-outbox primitives introduced in schema version 2 and retained through current schema version 19;
 - #85's coherent development-only Docker image/Compose surface, loopback binding, healthcheck, named-volume persistence, and external-secret/operator workflow;
 - #68 Physical Kegs domain inventory, capacity and tare ownership, prospective append-only tare history, append-only maintenance timeline, synchronous telemetry correction hook seam, deletion impact and audit integration, and authenticated admin HTTP API;
 - #69 Custom and Brewfather-linked Beverages domain entity, custom profile/recipe tree, dynamic effective presentation resolution, 3-state presentation overrides, density resolution precedence, candidate cache, rate-limited Brewfather sync with persistent backoff, atomic unlinking, and bounded recipe snapshots;
@@ -54,11 +56,11 @@ The list preserves the frozen implementation sequence with #85's local developme
 - #76 authoritative Eta SSR for `/` and nine authenticated Admin pages, purpose-built public/Admin projections, progressive PRG forms, explicit safe static assets, a bounded public/Admin SSE hub with post-commit dirty notifications and authoritative reconnect reconciliation, stable Tap graphic nodes, typed shared display defaults, sparse validated browser-local overrides with pre-paint bootstrap and storage-event synchronization, responsive scroll/rotation modes, and a separate Playwright Chromium suite;
 - #77 read-only SSR Brew Story backed by local persisted state, one central public projection/redaction boundary across dashboard/legacy taps/Story HTML/JSON, assignment-owned default-hidden Mystery Tap reveal flags with exact allowlist and reset semantics, six-axis sensory guidance with per-axis manual → recipe prediction → style baseline → unavailable precedence, separate Custom versus read-only linked/detached/superseded recipe projections, a finite 17-ID Beverage-owned Fill Glass catalog with safe deterministic color/SRM fallback, no-JavaScript Story/Admin forms, stable SVG root identity, and post-commit dirty-ID-only live refresh;
 - #85 architecture guardrails that preserve banned canonical production paths and reject incomplete or unapproved top-level container variants;
-- explicit `not_queued_capacity` degradation semantics; no provider adapters, delivery workers, or browser feature pages;
+- explicit `not_queued_capacity` degradation semantics; #79 provider-neutral outbound destination profiles, immutable transport versions/subscriptions, bounded delivery workers, and Admin history controls;
 - canonical `npm run check` covering format, lint, types, architecture/reuse integrity, and `node:test`;
 - Node 24 CI running `npm ci`, the canonical gate, and changed-line whitespace validation.
 
-Schema version 9 adds persisted detector state, version 10 adds forecast settings/history indexes, and version 11 adds health and Tap maintenance. Schema version 12 (`ssr-dashboard-display-settings`) adds the typed singleton shared-display defaults with deterministic seed, SQL constraints, and revision. Schema version 13 (`brew-story-sensory-mystery`) adds assignment-owned typed Mystery reveal flags. Browser-local preferences, live clients/queues, rotation state, effective sensory values, and Story projections are never persisted.
+Schema version 9 adds persisted detector state, version 10 adds forecast settings/history indexes, and version 11 adds health and Tap maintenance. Schema version 12 (`ssr-dashboard-display-settings`) adds the typed singleton shared-display defaults with deterministic seed, SQL constraints, and revision. Schema version 13 (`brew-story-sensory-mystery`) adds assignment-owned typed Mystery reveal flags. Versions 14–18 extend Tap-card/display, telemetry-source, font, and Tap Wars contracts. Schema version 19 (`outbound-destination-delivery`) adds optional logical destination profiles, immutable transport configuration/subscription versions, and bounded delivery retry evidence. Browser-local preferences, live clients/queues, rotation state, effective sensory values, and Story projections are never persisted.
 
 ## Issue #73 implementation boundary
 
@@ -78,7 +80,7 @@ The health contract uses exactly `low_keg`, `scale_availability`, `suspected_lea
 
 Rebuildable current health state is separate from durable incidents and transitions. Acknowledgement records acknowledgement only and does not resolve or hide an incident. Cooldown suppresses repeated incident side effects for a bounded period, not health truth. Resolved incidents are retained for 365 days and pruned in deterministic batches of at most 100; open incidents, current state, and Tap `first_used_at` are never pruned. A durable incident and a line-maintenance record each atomically set Tap `first_used_at`.
 
-Tap line maintenance is append-only. The server derives resulting due dates, `line_cleaned` establishes the line-cleaning baseline only, and private notes are available only in Admin maintenance detail. Health evaluation runs after accepted telemetry (following detector processing), assignment, authority, correction, density, configuration, maintenance, and startup changes, plus one coalesced periodic sweep. Only meaningful changes create Activity. Authenticated Admin routes/projections cover overview, detail, configuration, per-Tap override, incidents, acknowledgement, cooldown, and maintenance. The safe targeted `HealthTargetedUpdate` DTO now feeds #76 dirty notifications without exposing evidence. There is no public health-detail API or outbound Home Assistant/webhook delivery worker (#79).
+Tap line maintenance is append-only. The server derives resulting due dates, `line_cleaned` establishes the line-cleaning baseline only, and private notes are available only in Admin maintenance detail. Health evaluation runs after accepted telemetry (following detector processing), assignment, authority, correction, density, configuration, maintenance, and startup changes, plus one coalesced periodic sweep. Only meaningful changes create Activity. Authenticated Admin routes/projections cover overview, detail, configuration, per-Tap override, incidents, acknowledgement, cooldown, and maintenance. The safe targeted `HealthTargetedUpdate` DTO now feeds #76 dirty notifications without exposing evidence. Public health remains aggregate-only; Issue #79 owns outbound Home Assistant/webhook delivery and its connectivity evidence.
 
 ## Issue #76 implementation boundary
 
@@ -86,17 +88,31 @@ Issue #76 established the stable generic Tap graphic node seam consumed by the I
 
 `/` is complete authoritative SSR: aggregate header/connectivity, every enabled nonretired Tap in ascending number order, a stable hidden Tap Wars slot, and the existing authoritative On Deck projection. Public JSON and SSE use explicit privacy DTOs and dirty identifiers only. Browser modules patch existing text/attributes/SVG geometry, insert or remove only changed cards, and fetch a dashboard-scoped authoritative projection after reconnect. The in-process public/Admin hubs bound clients, queued events, and queued bytes; coalesce dirty targets; respect write backpressure and drain; disconnect overflow; clean up listeners; and periodically revalidate Admin sessions. They do not provide durable replay.
 
-Authenticated Eta Admin pages cover Overview, Integrations, Beverages, Kegs, Fills, Taps, Tap Wars, Display, and System. Ordinary forms retain CSRF/Origin-protected POST→303 behavior without JavaScript. Tap Wars and complete System administration remain honest future seams; no #78–#80 domain behavior is fabricated.
+Authenticated Eta Admin pages cover Overview, Integrations, Beverages, Kegs, Fills, Taps, Tap Wars, Display, System, and #79 outbound destination/history controls. Ordinary forms retain CSRF/Origin-protected POST→303 behavior without JavaScript. Complete System administration remains the next local-operator seam; #78 Tap Wars and #79 outbound behavior are implemented rather than fabricated.
 
 Shared display defaults are typed, revisioned schema-v12 state. Sparse browser overrides use localStorage key `tapboard.v2.display-preferences.v1`, version 1, exact keys, safe enums, reset-to-inherit, and cross-tab storage events. An external synchronous bootstrap applies validated values before CSS; malformed/unavailable storage fails to shared defaults. Layout defaults to responsive scrolling, while optional automatic rotation retains all SSR cards in the DOM and respects focus, visibility, and reduced motion.
 
-## Issue #77 implementation boundary
+## Issue #77 implementation boundary (merged)
 
-The Issue #77 branch implements a read-only SSR Brew Story backed by local persisted Tapboard state. `PublicStoryService` is the single public projection/redaction boundary for the dashboard, legacy public taps, Story HTML/JSON, and targeted refreshes; redaction occurs before serialization/rendering. Public SSE continues to carry dirty Tap identifiers only. Story and Admin forms remain useful without JavaScript.
+The merged Issue #77 implementation provides a read-only SSR Brew Story backed by local persisted Tapboard state. `PublicStoryService` is the single public projection/redaction boundary for the dashboard, legacy public taps, Story HTML/JSON, and targeted refreshes; redaction occurs before serialization/rendering. Public SSE continues to carry dirty Tap identifiers only. Story and Admin forms remain useful without JavaScript.
 
 Mystery is stored on the active assignment in `tap_assignment_mystery`, defaults all eligible reveals to hidden, uses the exact title `Mystery Tap`, and always protects Beverage and custom Tap names. The typed reveal allowlist is `beverage_type`, `style`, `abv`, `ibu`, `og`, `fg`, `srm`, `description`, `recipe`, `sensory`, and `history`; Tap number, display color, Fill Glass, remaining/fill percentage, forecast/days/servings, and serving temperature are always visible. Unassign, move, and reassign transitions reset the new assignment's Mystery state.
 
-Sensory guidance exposes bitterness, sweetness, body, roast, tartness, and alcohol, resolving each axis independently as manual override, recipe prediction, style baseline, or unavailable. Effective sensory values are derived only. Custom recipe data is editable and separate from read-only linked, detached, and superseded source snapshots. Presentation uses a finite 17-ID Beverage-owned Fill Glass catalog with safe deterministic descriptors and display-color/SRM fallback; browser updates preserve the root `.tap-graphic` SVG node. Validation is in progress on this branch; final automated and browser counts are intentionally not recorded here yet.
+Sensory guidance exposes bitterness, sweetness, body, roast, tartness, and alcohol, resolving each axis independently as manual override, recipe prediction, style baseline, or unavailable. Effective sensory values are derived only. Custom recipe data is editable and separate from read-only linked, detached, and superseded source snapshots. Presentation uses a finite 17-ID Beverage-owned Fill Glass catalog with safe deterministic descriptors and display-color/SRM fallback; browser updates preserve the root `.tap-graphic` SVG node. Issue #77 is historical context; current validation status is tracked at the top of this file.
+
+## Issue #78 Tap Wars (merged)
+
+Issue #78 is merged into the current base `cc804476`. It owns assignment-scoped Tap Wars with anonymous atomic voting, explicit pause/resume/completion, Mystery-safe public projection, immutable Admin history, and a completed-result dismissal boundary. Its public projection and event seam remain separate from the #79 outbound destination workers.
+
+## Issue #79 outbound delivery implementation
+
+The current `codex/issue-79-outbound-delivery` branch delivers schema v19 and the provider-neutral outbound boundary. `src/features/outbound/` owns typed destination configuration, immutable endpoint versions, six-event subscriptions, logical secret slots, connectivity evidence, Admin destination/history behavior, and worker lifecycle. The generic outbox remains the transactional authority: leased/CAS claims provide at-least-once delivery, allow at most one unexpired claim per logical destination, and retain total-attempt evidence separately from the bounded retry cycle. Retryable failures back off from five seconds to a one-hour cap and become terminal after 24 hours of active failure or the cycle limit; permanent failures are terminal immediately. Required destinations degrade only after five minutes of continuous failure. Disable/re-enable pauses due and failure-window clocks while preserving history; Retry is terminal-only and Dismiss is final.
+
+Home Assistant uses one injected/native WebSocket per logical destination and sends `tapboard_event`, with explicit LAN HTTP allowed and no arbitrary service calls. Webhooks use the standard envelope or one bounded Discord-message format, with public-only DNS validation, mixed/unsafe-answer rejection, address pinning, no redirects, and bounded request/response/abort limits. Endpoint material is immutable-version-bound; Home Assistant tokens and webhook secret-header values are logical slots resolved at send time, so rotation/removal applies immediately to historical retries. No secret is returned by Admin or written to logs/history. Workers perform network I/O outside SQLite transactions. Final automated and CI validation remains pending; this document does not claim results.
+
+### MANUAL DEV TEST — Issue #79
+
+After updating to the Issue #79 revision, run the normal non-destructive rebuild (`docker compose -f compose.dev.yaml up -d --build --force-recreate`; never use `down --volumes` or delete `tapboard-dev_tapboard-data`). Verify `GET /healthz` returns `{"status":"ok","schemaVersion":19}`. Sign in to Admin and open outbound destination management. Confirm the defaults have all six registered event subscriptions selected and `Required` defaults to OFF; create one disposable Home Assistant destination and one disposable webhook destination, then inspect safe summaries and the Standard JSON and bounded Discord format choices. Confirm no secret is readable in the form response, destination page, history, logs, errors, or Activity. If available, exercise Home Assistant only against a safe disposable/LAN endpoint and verify `tapboard_event` without arbitrary service calls; use a disposable receiver for both webhook formats and verify redirects/private or mixed-DNS targets are rejected. Disable and re-enable a disposable destination and verify due/failure timing shifts while history remains. In delivery history, confirm Retry appears only for terminal rows and Dismiss is final. Inspect responsive behavior at approximately 800 px, 1280×720, 1920×1080, and 3840×2160. Do not delete or repurpose the persistent development volume.
 
 ## Post-merge operator handoff
 

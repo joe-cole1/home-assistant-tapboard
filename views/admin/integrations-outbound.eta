@@ -1,0 +1,46 @@
+<% layout("/layouts/admin", { page: it.page }) %>
+<%~ include("/partials/admin-nav", { page: it.page, items: it.navItems || [] }) %>
+<main id="main-content">
+  <header class="page-header">
+    <p class="eyebrow"><a href="/admin/integrations">Integrations</a> / Delivery destinations</p>
+    <h1>Outbound delivery</h1>
+    <p>Deliver selected Tapboard events to Home Assistant or an HTTP webhook. Credentials and endpoint values are never displayed.</p>
+  </header>
+  <%~ include("/partials/admin-messages", { page: it.page }) %>
+  <% if (!it.available) { %>
+    <section class="admin-card empty-state" aria-labelledby="outbound-unavailable-heading">
+      <h2 id="outbound-unavailable-heading">Outbound delivery is unavailable</h2>
+      <p>The application composition has not enabled the outbound service.</p>
+    </section>
+  <% } else { %>
+    <div class="section-heading outbound-list-heading">
+      <div><h2>Destinations</h2><p class="muted">Each destination keeps its own subscription and delivery history.</p></div>
+      <div class="card-actions">
+        <a class="button secondary button--small" href="/admin/integrations/outbound/new?transport=home_assistant">Add Home Assistant</a>
+        <a class="button primary button--small" href="/admin/integrations/outbound/new?transport=webhook">Add webhook</a>
+      </div>
+    </div>
+    <% if (it.destinations.length === 0) { %>
+      <section class="admin-card empty-state"><h2>No outbound destinations</h2><p>Create a destination to begin delivering events.</p></section>
+    <% } else { %>
+      <section class="outbound-destination-grid" aria-label="Outbound destinations">
+        <% for (const destination of it.destinations) { %>
+          <article class="admin-card outbound-destination-card">
+            <div class="integration-resource-card__header">
+              <div><p class="eyebrow"><%= destination.transportLabel %></p><h2><a href="/admin/integrations/outbound/<%= encodeURIComponent(destination.id) %>"><%= destination.label %></a></h2></div>
+              <span class="status-badge status-badge--<%= destination.enabled && !destination.retired ? destination.stateClass : "muted" %>"><%= destination.retired ? "Retired" : destination.enabled ? destination.stateLabel : "Disabled" %></span>
+            </div>
+            <dl class="outbound-summary">
+              <div><dt>Required</dt><dd><%= destination.required ? "Yes" : "No" %></dd></div>
+              <div><dt>Subscriptions</dt><dd><%= destination.subscriptions.length %> of 6</dd></div>
+              <div><dt>Version</dt><dd><%= destination.version ? destination.version.versionNumber : "—" %></dd></div>
+            </dl>
+            <% if (destination.disabledReason) { %><p class="status-line"><strong>Disabled:</strong> <%= destination.disabledReason %></p><% } %>
+            <% if (destination.failure) { %><p class="status-line"><strong>Last safe error:</strong> <code><%= destination.failure.code %></code> · <%= destination.failure.failureClass %></p><% } %>
+            <a class="button secondary button--small" href="/admin/integrations/outbound/<%= encodeURIComponent(destination.id) %>">Open destination</a>
+          </article>
+        <% } %>
+      </section>
+    <% } %>
+  <% } %>
+</main>

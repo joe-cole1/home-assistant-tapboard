@@ -125,6 +125,23 @@ export interface HealthServiceOptions {
     record: HealthMaintenanceRecordWithSession,
   ) => void;
   readonly onTargetedUpdate?: (update: HealthTargetedUpdateProjection) => void;
+  /** Transaction-local notification for semantic health state/severity changes. */
+  readonly onHealthTransition?: (
+    database: DatabaseExecutor,
+    context: {
+      readonly tapId: string;
+      readonly checkId: HealthCheckId;
+      readonly previousState: string | null;
+      readonly previousSeverity: string | null;
+      readonly current: {
+        readonly state: string;
+        readonly severity: string;
+        readonly evidence: unknown;
+        readonly reason: string | null;
+      };
+      readonly occurredAt: string;
+    },
+  ) => void;
 }
 
 export interface HealthEvaluationResult {
@@ -326,6 +343,7 @@ export class HealthService
   readonly #onIncidentOpened?: HealthServiceOptions["onIncidentOpened"];
   readonly #onMaintenanceRecorded?: HealthServiceOptions["onMaintenanceRecorded"];
   readonly #onTargetedUpdate?: HealthServiceOptions["onTargetedUpdate"];
+  readonly #onHealthTransition?: HealthServiceOptions["onHealthTransition"];
   #timer: NodeJS.Timeout | undefined;
   #sweepRunning = false;
   #sweepCursor: string | undefined;
@@ -344,6 +362,7 @@ export class HealthService
     this.#onIncidentOpened = options.onIncidentOpened;
     this.#onMaintenanceRecorded = options.onMaintenanceRecorded;
     this.#onTargetedUpdate = options.onTargetedUpdate;
+    this.#onHealthTransition = options.onHealthTransition;
   }
 
   getGlobalConfig(): HealthGlobalConfig {
@@ -621,6 +640,29 @@ export class HealthService
         evaluatedAtMs,
         updatedAt: iso(evaluatedAtMs),
       });
+      const semanticTransition =
+        previous !== undefined &&
+        (previous.state !== persisted.state || previous.severity !== persisted.severity);
+      if (
+        semanticTransition &&
+        persisted.state !== "not_configured" &&
+        this.#onHealthTransition !== undefined
+      ) {
+        const callback = this.#onHealthTransition(database, {
+          tapId: tap.id,
+          checkId,
+          previousState: previous.state,
+          previousSeverity: previous.severity,
+          current: {
+            state: persisted.state,
+            severity: persisted.severity,
+            evidence: persisted.evidence,
+            reason: persisted.reason,
+          },
+          occurredAt: iso(evaluatedAtMs),
+        });
+        assertSynchronousCompletion(callback, "Health transition callback");
+      }
       if (this.#stateChanged(previous, persisted)) changedCheckIds.push(checkId);
       if (checkId === "suspected_leak") {
         const bounded = evaluation.nextLeakSamples.slice(

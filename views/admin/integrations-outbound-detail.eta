@@ -1,0 +1,60 @@
+<% layout("/layouts/admin", { page: it.page }) %>
+<%~ include("/partials/admin-nav", { page: it.page, items: it.navItems || [] }) %>
+<main id="main-content">
+  <header class="page-header">
+    <p class="eyebrow"><a href="/admin/integrations">Integrations</a> / <a href="/admin/integrations/outbound">Outbound delivery</a></p>
+    <h1><%= it.destination.label %></h1>
+    <p><%= it.destination.transportLabel %> destination · configuration version <%= it.destination.version ? it.destination.version.versionNumber : "—" %>. Endpoint and credential values are never displayed.</p>
+  </header>
+  <%~ include("/partials/admin-messages", { page: it.page }) %>
+  <section class="admin-card outbound-detail-summary" aria-labelledby="outbound-status-heading">
+    <div class="section-heading"><div><h2 id="outbound-status-heading">Status</h2><p class="muted">Safe operational state and configuration metadata.</p></div><span class="status-badge status-badge--<%= it.destination.enabled && !it.destination.retired ? it.destination.stateClass : "muted" %>"><%= it.destination.retired ? "Retired" : it.destination.enabled ? it.destination.stateLabel : "Disabled" %></span></div>
+    <dl class="outbound-summary"><div><dt>Required</dt><dd><%= it.destination.required ? "Yes" : "No" %></dd></div><div><dt>Enabled</dt><dd><%= it.destination.enabled ? "Yes" : "No" %></dd></div><div><dt>Subscriptions</dt><dd><%= it.destination.subscriptions.length %> of 6</dd></div><div><dt>Version</dt><dd><%= it.destination.version ? it.destination.version.versionNumber : "—" %></dd></div><div><dt>Credential / endpoint</dt><dd><%= it.destination.config.credentialStateLabel %></dd></div><div><dt>Last confirmed success</dt><dd><%= it.destination.lastSuccessAtLabel %></dd></div></dl>
+    <% if (it.destination.disabledReason) { %><p class="status-line"><strong>Disabled:</strong> <%= it.destination.disabledReason %></p><% } %>
+    <% if (it.destination.failure) { %><p class="status-line"><strong>Last safe error:</strong> <code><%= it.destination.failure.code %></code> · <%= it.destination.failure.failureClass %> · <%= it.destination.failure.occurredAtLabel %></p><% } %>
+    <div class="card-actions">
+      <% if (!it.destination.retired && !it.destination.enabled) { %><form method="post" action="/admin/integrations/outbound/<%= encodeURIComponent(it.destination.id) %>/enable"><input type="hidden" name="_csrf" value="<%= it.page.csrfToken %>" /><button class="secondary button--small" type="submit">Enable</button></form><% } %>
+      <% if (!it.destination.retired && it.destination.enabled) { %><form method="post" action="/admin/integrations/outbound/<%= encodeURIComponent(it.destination.id) %>/disable"><input type="hidden" name="_csrf" value="<%= it.page.csrfToken %>" /><button class="secondary button--small" type="submit">Disable</button></form><% } %>
+      <% if (!it.destination.retired) { %><form method="post" action="/admin/integrations/outbound/<%= encodeURIComponent(it.destination.id) %>/required"><input type="hidden" name="_csrf" value="<%= it.page.csrfToken %>" /><input type="hidden" name="required" value="<%= it.destination.required ? "false" : "true" %>" /><button class="secondary button--small" type="submit"><%= it.destination.required ? "Make optional" : "Make required" %></button></form><% } %>
+      <% if (!it.destination.retired) { %><form method="post" action="/admin/integrations/outbound/<%= encodeURIComponent(it.destination.id) %>/retire"><input type="hidden" name="_csrf" value="<%= it.page.csrfToken %>" /><button class="danger button--small" type="submit">Retire destination</button></form><% } %>
+    </div>
+  </section>
+
+  <section class="admin-card" aria-labelledby="outbound-edit-heading">
+    <h2 id="outbound-edit-heading">Edit configuration</h2>
+    <p class="muted">Leave credential and endpoint fields blank to retain their stored values. Submitted secrets are write-only.</p>
+    <%~ include("/admin/integrations-outbound-form", { page: it.page, action: `/admin/integrations/outbound/${encodeURIComponent(it.destination.id)}/edit`, destination: it.destination, eventFields: it.eventFields, maxHeaderRows: it.maxHeaderRows }) %>
+  </section>
+
+  <% if (it.destination.transport === "home_assistant") { %>
+    <section class="admin-card" aria-labelledby="outbound-token-heading">
+      <h2 id="outbound-token-heading">Home Assistant token</h2>
+      <p class="muted">Replace or remove the token without displaying the current value.</p>
+      <div class="outbound-secret-actions">
+        <form class="admin-form admin-form--inline" method="post" action="/admin/integrations/outbound/<%= encodeURIComponent(it.destination.id) %>/token"><input type="hidden" name="_csrf" value="<%= it.page.csrfToken %>" /><label>Replacement token <input name="token" type="password" maxlength="4096" autocomplete="new-password" required /></label><button class="secondary button--small" type="submit">Replace token</button></form>
+        <% if (it.destination.config.endpointConfigured || it.destination.config.endpointAvailable) { %><form method="post" action="/admin/integrations/outbound/<%= encodeURIComponent(it.destination.id) %>/token/remove"><input type="hidden" name="_csrf" value="<%= it.page.csrfToken %>" /><button class="danger button--small" type="submit">Remove token</button></form><% } %>
+      </div>
+    </section>
+  <% } %>
+
+  <% if (it.destination.config.secretHeaders.length > 0) { %>
+    <section class="admin-card" aria-labelledby="outbound-header-secret-heading">
+      <h2 id="outbound-header-secret-heading">Secret header values</h2>
+      <p class="muted">Only the safe header name, slot, and configured status are shown.</p>
+      <div class="outbound-secret-list">
+        <% for (const header of it.destination.config.secretHeaders) { %>
+          <div class="outbound-secret-row"><span><strong><%= header.name %></strong><small>Slot <code><%= header.slot %></code> · <%= header.available ? "Configured" : header.configured ? "Configured but unavailable" : "Not configured" %></small></span><form class="admin-form admin-form--inline" method="post" action="/admin/integrations/outbound/<%= encodeURIComponent(it.destination.id) %>/header-secret"><input type="hidden" name="_csrf" value="<%= it.page.csrfToken %>" /><input type="hidden" name="slot" value="<%= header.slot %>" /><label class="sr-only" for="secret-replace-<%= header.slot %>">Replacement value for <%= header.name %></label><input id="secret-replace-<%= header.slot %>" name="secret" type="password" maxlength="1024" autocomplete="new-password" required /><button class="secondary button--small" type="submit">Replace</button></form><form method="post" action="/admin/integrations/outbound/<%= encodeURIComponent(it.destination.id) %>/header-secret/remove"><input type="hidden" name="_csrf" value="<%= it.page.csrfToken %>" /><input type="hidden" name="slot" value="<%= header.slot %>" /><button class="danger button--small" type="submit">Remove</button></form></div>
+        <% } %>
+      </div>
+    </section>
+  <% } %>
+
+  <section class="admin-card" aria-labelledby="outbound-history-heading">
+    <div class="section-heading"><div><h2 id="outbound-history-heading">Delivery history</h2><p class="muted">Showing at most 100 recent records. Event payloads and endpoint values are not retained in this view.</p></div></div>
+    <% if (it.history.length === 0) { %><p class="muted">No delivery history is available.</p><% } else { %>
+      <div class="outbound-table-wrap"><table class="admin-table outbound-history-table"><thead><tr><th scope="col">Event</th><th scope="col">Event ID</th><th scope="col">State</th><th scope="col">Attempts</th><th scope="col">Last error</th><th scope="col">Next attempt</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead><tbody>
+        <% for (const row of it.history) { %><tr><th scope="row"><%= row.eventType %></th><td><code title="<%= row.eventId %>"><%= row.eventId %></code></td><td><span class="status-badge status-badge--<%= row.state === "succeeded" ? "healthy" : row.state === "terminal" ? "degraded" : "muted" %>"><%= row.stateLabel %></span></td><td><%= row.attemptCount %></td><td><code><%= row.lastErrorCode || "—" %></code></td><td><span class="outbound-history-times"><small>Last: <%= row.lastAttemptAtLabel %></small><small>Next: <%= row.nextAttemptAtLabel %></small></span></td><td><div class="card-actions"><% if (row.canRetry) { %><form method="post" action="/admin/integrations/outbound/<%= encodeURIComponent(it.destination.id) %>/deliveries/<%= encodeURIComponent(row.id) %>/retry"><input type="hidden" name="_csrf" value="<%= it.page.csrfToken %>" /><button class="secondary button--small" type="submit">Retry</button></form><% } %><% if (row.canDismiss) { %><form method="post" action="/admin/integrations/outbound/<%= encodeURIComponent(it.destination.id) %>/deliveries/<%= encodeURIComponent(row.id) %>/dismiss"><input type="hidden" name="_csrf" value="<%= it.page.csrfToken %>" /><button class="danger button--small" type="submit">Dismiss</button></form><% } %></div></td></tr><% } %>
+      </tbody></table></div>
+    <% } %>
+  </section>
+</main>

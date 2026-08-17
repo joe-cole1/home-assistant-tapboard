@@ -29,8 +29,14 @@ import { registerKegRoutes } from "./features/kegs/routes.ts";
 import { createBeverageService, type BeverageService } from "./features/beverages/service.ts";
 import { registerBeverageRoutes } from "./features/beverages/routes.ts";
 import { createFillService } from "./features/fills/service.ts";
+import type {
+  FillAssignmentClosedContext,
+  FillAssignmentLifecyclePort,
+  FillEndedContext,
+} from "./features/fills/types.ts";
 import { registerFillRoutes } from "./features/fills/routes.ts";
 import { createTapService } from "./features/taps/service.ts";
+import { findActiveAssignmentByFillId } from "./features/taps/repository.ts";
 import type {
   AssignmentClosedContext,
   AssignmentMysteryChangedContext,
@@ -63,10 +69,108 @@ import {
 import { LiveUpdateService, observeCommittedCalls } from "./features/live/index.ts";
 import { registerWebRoutes } from "./features/web/index.ts";
 import { createLogger, type Logger } from "./shared/logging.ts";
+import { createEventEnvelope } from "./features/events/envelope.ts";
+import type { EventEnvelope, EventIdentifiers } from "./features/events/types.ts";
+import {
+  OutboundService,
+  OutboundWorker,
+  type OutboundTransportRouter,
+  type OutboundWorkerOptions,
+} from "./features/outbound/index.ts";
+import {
+  HomeAssistantConnectionManager,
+  type HomeAssistantDestination,
+} from "./features/outbound/transports/home-assistant.ts";
+import {
+  WebhookTransport,
+  type WebhookDestination,
+} from "./features/outbound/transports/webhook.ts";
+import type { PublicEventContextResolver } from "./features/outbound/transport-types.ts";
+import type { SecretsService } from "./features/secrets/service.ts";
 
 type ApplicationState = "new" | "starting" | "ready" | "stopping" | "stopped" | "failed";
 type DatabaseOpener = (path: string) => DatabaseConnection;
 type RendererFactory = (options?: CreateRendererOptions) => Renderer;
+
+export interface OutboundRuntimeFactoryOptions {
+  readonly database: DatabaseExecutor;
+  readonly secrets: SecretsService;
+  readonly outboundService: OutboundService;
+  readonly publicContextResolver: PublicEventContextResolver;
+  readonly transportRouter?: OutboundTransportRouter;
+  readonly onError?: (error: unknown) => void;
+}
+
+export interface OutboundRuntime {
+  readonly worker: Pick<OutboundWorker, "start" | "stop"> &
+    Partial<
+      Pick<
+        OutboundWorker,
+        "onDestinationEnabled" | "onDestinationDisabled" | "onDestinationCredentialsChanged"
+      >
+    >;
+  readonly start?: () => void;
+  readonly stop?: () => void;
+}
+
+type OutboundRuntimeFactory = (options: OutboundRuntimeFactoryOptions) => OutboundRuntime;
+
+function createDefaultOutboundRuntime(options: OutboundRuntimeFactoryOptions): OutboundRuntime {
+  const homeAssistant = new HomeAssistantConnectionManager();
+  const webhook = new WebhookTransport({
+    publicContextResolver: options.publicContextResolver,
+  });
+  const router: OutboundTransportRouter = options.transportRouter ?? {
+    send(input) {
+      if (input.destination.transport === "home_assistant") {
+        const config = input.version.config;
+        const destination: HomeAssistantDestination = {
+          destinationId: input.destination.id,
+          baseUrl: input.endpoint ?? (config.transport === "home_assistant" ? config.baseUrl : ""),
+          token: input.token ?? "",
+        };
+        return homeAssistant.sendEvent(destination, input.envelope);
+      }
+      const destination: WebhookDestination = {
+        endpoint: input.endpoint ?? "",
+        ...(input.headers === undefined ? {} : { headers: input.headers }),
+        payloadFormat: input.payloadFormat ?? "standard",
+        publicContextResolver: options.publicContextResolver,
+      };
+      return webhook.sendEvent(destination, input.envelope);
+    },
+    ensureHealthy(input) {
+      const config = input.version.config;
+      const destination: HomeAssistantDestination = {
+        destinationId: input.destination.id,
+        baseUrl: input.endpoint ?? (config.transport === "home_assistant" ? config.baseUrl : ""),
+        token: input.token ?? "",
+      };
+      return homeAssistant.ensureAuthenticated(destination);
+    },
+    closeDestination(destinationId) {
+      homeAssistant.closeDestination(destinationId);
+    },
+    stop() {
+      homeAssistant.stop();
+      webhook.stop();
+    },
+  };
+  const workerOptions: OutboundWorkerOptions = {
+    database: options.database,
+    transports: router,
+    secrets: options.secrets,
+    onStatusChanged: (database, context) =>
+      options.outboundService.integrationStatusChanged(database, context),
+    ...(options.onError === undefined ? {} : { onError: options.onError }),
+  };
+  const worker = new OutboundWorker(workerOptions);
+  return {
+    worker,
+    start: () => worker.start(),
+    stop: () => worker.stop(),
+  };
+}
 
 export interface HttpServerLifecycle {
   start(host: string, port: number): Promise<HttpServerAddress>;
@@ -82,6 +186,10 @@ export interface CreateApplicationOptions {
   readonly openDatabase?: DatabaseOpener;
   readonly createRenderer?: RendererFactory;
   readonly createHttpServer?: HttpServerFactory;
+  /** Inject a fake outbound runtime for deterministic tests/E2E. */
+  readonly createOutboundRuntime?: OutboundRuntimeFactory;
+  /** Inject only the transport router while retaining the real worker. */
+  readonly outboundTransportRouter?: OutboundTransportRouter;
 }
 
 export interface Application {
@@ -98,6 +206,8 @@ class FoundationApplication implements Application {
   readonly #openDatabase: DatabaseOpener;
   readonly #createRenderer: RendererFactory;
   readonly #createHttpServer: HttpServerFactory;
+  readonly #createOutboundRuntime: OutboundRuntimeFactory;
+  readonly #outboundTransportRouter: OutboundTransportRouter | undefined;
   #state: ApplicationState = "new";
   #database: DatabaseConnection | undefined;
   #renderer: Renderer | undefined;
@@ -105,6 +215,7 @@ class FoundationApplication implements Application {
   #beverageService: BeverageService | undefined;
   #detectorService: DetectorService | undefined;
   #healthService: HealthService | undefined;
+  #outboundRuntime: OutboundRuntime | undefined;
   #liveUpdates: LiveUpdateService | undefined;
   #address: HttpServerAddress | undefined;
   #starting: Promise<HttpServerAddress> | undefined;
@@ -118,6 +229,8 @@ class FoundationApplication implements Application {
     this.#createRenderer = options.createRenderer ?? createRenderer;
     this.#createHttpServer =
       options.createHttpServer ?? ((serverOptions) => new HttpServer(serverOptions));
+    this.#createOutboundRuntime = options.createOutboundRuntime ?? createDefaultOutboundRuntime;
+    this.#outboundTransportRouter = options.outboundTransportRouter;
   }
 
   start(): Promise<HttpServerAddress> {
@@ -161,18 +274,56 @@ class FoundationApplication implements Application {
       const secretsService = createSecretsService(this.#database, {
         ...(this.#config.secretKey ? { rootKey: this.#config.secretKey } : {}),
       });
+      const storyServiceRef: { current?: ReturnType<typeof createPublicStoryService> } = {};
+      const publicContextResolver: PublicEventContextResolver = (identifiers) => {
+        if (identifiers.tap_id === undefined || identifiers.tap_id === null) return undefined;
+        const card = storyServiceRef.current?.getCard(identifiers.tap_id);
+        if (card === undefined) return undefined;
+        return {
+          tapNumber: card.tapNumber,
+          ...(card.title === undefined ? {} : { title: card.title }),
+        };
+      };
+      const outboundService = new OutboundService(this.#database, {
+        secrets: secretsService,
+        lifecycle: {
+          onDisabled: (destinationId) =>
+            this.#outboundRuntime?.worker.onDestinationDisabled?.(destinationId),
+          onEnabled: (destinationId) =>
+            this.#outboundRuntime?.worker.onDestinationEnabled?.(destinationId),
+          onCredentialsChanged: (destinationId) =>
+            this.#outboundRuntime?.worker.onDestinationCredentialsChanged?.(destinationId),
+          onRetired: (destinationId) =>
+            this.#outboundRuntime?.worker.onDestinationDisabled?.(destinationId),
+        },
+      });
       const liveUpdates = new LiveUpdateService(authService);
       this.#liveUpdates = liveUpdates;
-      const rawDetectorService = new DetectorService(this.#database);
+      const rawDetectorService = new DetectorService(this.#database, {
+        onPourCompleted: (database, pour) => outboundService.pourCompleted(database, pour),
+      });
       this.#detectorService = rawDetectorService;
       const healthService = createHealthService(this.#database, {
         onError: () => this.#logger.error("Health maintenance failed"),
+        onHealthTransition: (database, context) =>
+          outboundService.healthTransitioned(database, {
+            tapId: context.tapId,
+            checkId: context.checkId,
+            previousState: context.previousState,
+            previousSeverity: context.previousSeverity,
+            current: {
+              state: context.current.state,
+              severity: context.current.severity,
+              evidence: context.current.evidence,
+              ...(context.current.reason === null ? {} : { reason: context.current.reason }),
+            },
+            occurredAt: context.occurredAt,
+          }),
         onTargetedUpdate: (update) => {
           liveUpdates.publish({ name: "health.updated", tapId: update.tapId });
         },
       });
       this.#healthService = healthService;
-      const storyServiceRef: { current?: ReturnType<typeof createPublicStoryService> } = {};
       const rawTapWarsService = new TapWarService(this.#database, {
         // Deliberately lazy: the lifecycle port is composed before both the
         // tap and public-story services exist, while completion is later.
@@ -208,6 +359,7 @@ class FoundationApplication implements Application {
         ): void => {
           rawDetectorService.onAssignmentOpened(database, context);
           healthService.onAssignmentOpened(database, context);
+          outboundService.assignmentOpened(database, context);
         },
         onAssignmentClosed: (
           database: DatabaseExecutor,
@@ -396,9 +548,59 @@ class FoundationApplication implements Application {
           publishTapWars();
         },
       });
+      const tapFillAssignmentPort = rawTapService.asFillAssignmentPort();
+      const fillAssignmentPort: FillAssignmentLifecyclePort = {
+        hasActiveAssignment: (fillId) => tapFillAssignmentPort.hasActiveAssignment(fillId),
+        closeForFillEnd: (database, fillId, endedAt): FillAssignmentClosedContext | undefined => {
+          // Capture before closing because the Tap adapter's legacy return
+          // shape is intentionally void-compatible during migration.
+          const active = findActiveAssignmentByFillId(database, fillId);
+          const closed = tapFillAssignmentPort.closeForFillEnd(database, fillId, endedAt);
+          if (active !== undefined) {
+            return {
+              assignmentId: active.id,
+              tapId: active.tapId,
+              fillId: active.fillId,
+              endedAt,
+            };
+          }
+          return typeof closed === "object" && closed !== null ? closed : undefined;
+        },
+      };
       const rawFillService = createFillService(this.#database, {
         beverageService,
-        assignmentPort: rawTapService.asFillAssignmentPort(),
+        assignmentPort: fillAssignmentPort,
+        onFillEnded: (database, context: FillEndedContext) => {
+          if (context.assignmentId !== null && context.tapId !== null) {
+            outboundService.assignmentClosed(
+              database,
+              {
+                assignmentId: context.assignmentId,
+                tapId: context.tapId,
+                fillId: context.fillId,
+                occurredAt: context.occurredAt,
+                reason: "fill_ended",
+              },
+              context.reason,
+            );
+            return;
+          }
+          const identifiers: EventIdentifiers = {
+            fill_id: context.fillId,
+            keg_id: context.kegId,
+            beverage_id: context.beverageId,
+          };
+          const event: EventEnvelope = createEventEnvelope(
+            {
+              event_type: "fill.ended",
+              identifiers,
+              data: { reason: context.reason },
+              occurred_at: context.occurredAt,
+            },
+            { now: () => new Date(context.occurredAt) },
+          );
+          outboundService.admit(database, event);
+        },
       });
       const fillService = observeCommittedCalls(rawFillService, {
         createFill: () => {
@@ -535,6 +737,17 @@ class FoundationApplication implements Application {
         telemetryService,
         storyService,
         tapWarsService: publicTapWarsService,
+        outboundService,
+      });
+      this.#outboundRuntime = this.#createOutboundRuntime({
+        database: this.#database,
+        secrets: secretsService,
+        outboundService,
+        publicContextResolver,
+        ...(this.#outboundTransportRouter === undefined
+          ? {}
+          : { transportRouter: this.#outboundTransportRouter }),
+        onError: () => this.#logger.error("Outbound worker failed"),
       });
 
       const router = new Router(this.#logger);
@@ -576,6 +789,7 @@ class FoundationApplication implements Application {
         liveUpdates,
         tapWarsService,
         publicTapWarsService,
+        outboundService,
       });
       // This route intentionally precedes the generic static-asset route. It
       // emits only validated, same-origin CSS so custom accents and selected
@@ -682,6 +896,10 @@ class FoundationApplication implements Application {
       healthService.startMaintenance();
       this.#address = address;
       this.#state = "ready";
+      if (this.#outboundRuntime !== undefined) {
+        if (this.#outboundRuntime.start !== undefined) this.#outboundRuntime.start();
+        else this.#outboundRuntime.worker.start();
+      }
       beverageService.startPeriodicSync();
       return address;
     } catch (error) {
@@ -707,6 +925,16 @@ class FoundationApplication implements Application {
 
   async #stop(): Promise<void> {
     let failure: unknown;
+    const outboundRuntime = this.#outboundRuntime;
+    this.#outboundRuntime = undefined;
+    try {
+      if (outboundRuntime !== undefined) {
+        if (outboundRuntime.stop !== undefined) outboundRuntime.stop();
+        else outboundRuntime.worker.stop();
+      }
+    } catch (error) {
+      failure = error;
+    }
     try {
       this.#liveUpdates?.stop();
       this.#liveUpdates = undefined;
@@ -771,6 +999,16 @@ class FoundationApplication implements Application {
   }
 
   async #closeResourcesAfterFailure(): Promise<void> {
+    const outboundRuntime = this.#outboundRuntime;
+    this.#outboundRuntime = undefined;
+    try {
+      if (outboundRuntime !== undefined) {
+        if (outboundRuntime.stop !== undefined) outboundRuntime.stop();
+        else outboundRuntime.worker.stop();
+      }
+    } catch (error) {
+      this.#logger.error("Outbound cleanup after startup failure failed", { error });
+    }
     try {
       this.#liveUpdates?.stop();
       this.#liveUpdates = undefined;

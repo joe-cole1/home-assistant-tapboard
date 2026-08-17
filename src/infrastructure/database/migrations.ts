@@ -36,13 +36,15 @@ export const DISPLAY_FONT_SCHEMA_VERSION = 17;
 export const DISPLAY_FONT_MIGRATION_NAME = "display-font-allowlist";
 export const TAP_WARS_SCHEMA_VERSION = 18;
 export const TAP_WARS_MIGRATION_NAME = "tap-wars";
+export const OUTBOUND_DESTINATIONS_SCHEMA_VERSION = 19;
+export const OUTBOUND_DESTINATIONS_MIGRATION_NAME = "outbound-destination-delivery";
 
 // Compatibility aliases for callers that use the shorter domain names.
 export const DISPLAY_ACCENT_SCHEMA_VERSION = DISPLAY_CUSTOM_ACCENT_SCHEMA_VERSION;
 export const DISPLAY_ACCENT_MIGRATION_NAME = DISPLAY_CUSTOM_ACCENT_MIGRATION_NAME;
 export const TELEMETRY_SOURCE_DISABLED_SCHEMA_VERSION = TELEMETRY_DISABLED_LIFECYCLE_SCHEMA_VERSION;
 export const TELEMETRY_SOURCE_DISABLED_MIGRATION_NAME = TELEMETRY_DISABLED_LIFECYCLE_MIGRATION_NAME;
-export const CURRENT_SCHEMA_VERSION = TAP_WARS_SCHEMA_VERSION;
+export const CURRENT_SCHEMA_VERSION = OUTBOUND_DESTINATIONS_SCHEMA_VERSION;
 
 export interface MigrationDefinition {
   readonly version: number;
@@ -3400,6 +3402,132 @@ const TAP_WARS_SCHEMA_OBJECTS = [
   ["trigger", "trg_tap_wars_completed_immutable"],
 ] as const;
 
+const OUTBOUND_DELIVERIES_V19_SCHEMA_SQL = `
+  CREATE TABLE outbound_deliveries (
+    id TEXT PRIMARY KEY,
+    event_id TEXT NOT NULL REFERENCES outbound_events(id) ON DELETE CASCADE,
+    destination_id TEXT NOT NULL REFERENCES outbound_destinations(id) ON DELETE RESTRICT,
+    destination_version_id TEXT NOT NULL REFERENCES outbound_destination_versions(id) ON DELETE RESTRICT,
+    state TEXT NOT NULL CHECK (state IN ('pending', 'leased', 'retry', 'terminal', 'succeeded', 'dismissed')),
+    attempt_count INTEGER NOT NULL CHECK (attempt_count >= 0),
+    cycle_attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (cycle_attempt_count BETWEEN 0 AND 1000),
+    next_attempt_at TEXT NOT NULL,
+    lease_owner TEXT CHECK (lease_owner IS NULL OR length(CAST(lease_owner AS BLOB)) BETWEEN 1 AND 255),
+    lease_expires_at TEXT,
+    revision INTEGER NOT NULL CHECK (revision >= 0),
+    last_error_code TEXT CHECK (last_error_code IS NULL OR length(last_error_code) BETWEEN 1 AND 120),
+    envelope_bytes INTEGER NOT NULL CHECK (envelope_bytes BETWEEN 1 AND 16384),
+    active_failure_started_at TEXT,
+    last_attempt_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    terminal_at TEXT,
+    UNIQUE (event_id, destination_id),
+    FOREIGN KEY (destination_version_id, destination_id)
+      REFERENCES outbound_destination_versions(id, destination_id) ON DELETE RESTRICT,
+    CHECK ((state IN ('terminal', 'succeeded', 'dismissed')) = (terminal_at IS NOT NULL)),
+    CHECK (state <> 'pending' OR (cycle_attempt_count = 0 AND active_failure_started_at IS NULL AND last_attempt_at IS NULL)),
+    CHECK ((state = 'leased') = (lease_owner IS NOT NULL AND lease_expires_at IS NOT NULL)),
+    CHECK ((state <> 'leased') = (lease_owner IS NULL AND lease_expires_at IS NULL))
+  );
+  CREATE INDEX idx_outbound_deliveries_due
+    ON outbound_deliveries(state, next_attempt_at);
+  CREATE INDEX idx_outbound_deliveries_destination_state
+    ON outbound_deliveries(destination_id, state);
+`;
+
+const OUTBOUND_DESTINATION_CONFIGS_SCHEMA_SQL = `
+  CREATE TABLE outbound_destination_configs (
+    version_id TEXT NOT NULL,
+    destination_id TEXT NOT NULL,
+    transport_kind TEXT NOT NULL CHECK (transport_kind IN ('ha', 'webhook')),
+    safe_summary TEXT NOT NULL CHECK (length(CAST(safe_summary AS BLOB)) BETWEEN 1 AND 1024),
+    config_json TEXT NOT NULL CHECK (
+      length(CAST(config_json AS BLOB)) BETWEEN 1 AND 16384
+      AND json_valid(config_json) = 1
+    ),
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (version_id, destination_id),
+    FOREIGN KEY (version_id, destination_id)
+      REFERENCES outbound_destination_versions(id, destination_id) ON DELETE CASCADE
+  );
+  CREATE INDEX idx_outbound_destination_configs_destination
+    ON outbound_destination_configs(destination_id, version_id);
+  CREATE TRIGGER trg_outbound_destination_configs_no_update
+  BEFORE UPDATE ON outbound_destination_configs
+  BEGIN
+    SELECT RAISE(ABORT, 'outbound destination configs are immutable');
+  END;
+`;
+
+const OUTBOUND_DESTINATION_PROFILES_SCHEMA_SQL = `
+  CREATE TABLE outbound_destination_profiles (
+    destination_id TEXT PRIMARY KEY REFERENCES outbound_destinations(id) ON DELETE CASCADE,
+    transport_kind TEXT NOT NULL CHECK (transport_kind IN ('ha', 'webhook')),
+    required INTEGER NOT NULL DEFAULT 0 CHECK (required IN (0, 1)),
+    current_version_id TEXT NOT NULL,
+    retired_at TEXT,
+    disabled_at TEXT,
+    disabled_reason TEXT CHECK (disabled_reason IS NULL OR length(disabled_reason) BETWEEN 1 AND 120),
+    connectivity_state TEXT NOT NULL DEFAULT 'unknown'
+      CHECK (connectivity_state IN ('unknown', 'healthy', 'failing', 'degraded', 'needs_attention', 'token_missing')),
+    failure_started_at TEXT,
+    last_failure_at TEXT,
+    last_failure_code TEXT CHECK (last_failure_code IS NULL OR length(last_failure_code) BETWEEN 1 AND 120),
+    last_success_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    revision INTEGER NOT NULL DEFAULT 0 CHECK (revision >= 0),
+    FOREIGN KEY (current_version_id, destination_id)
+      REFERENCES outbound_destination_configs(version_id, destination_id) ON DELETE RESTRICT
+  );
+  CREATE INDEX idx_outbound_destination_profiles_connectivity
+    ON outbound_destination_profiles(connectivity_state, required, disabled_at, retired_at);
+`;
+
+const OUTBOUND_DESTINATION_SUBSCRIPTIONS_SCHEMA_SQL = `
+  CREATE TABLE outbound_destination_subscriptions (
+    version_id TEXT NOT NULL,
+    destination_id TEXT NOT NULL,
+    event_type TEXT NOT NULL CHECK (event_type IN (
+      'fill.assigned',
+      'fill.ended',
+      'pour.completed',
+      'keg.low',
+      'health.transitioned',
+      'integration.status_changed'
+    )),
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (version_id, destination_id, event_type),
+    FOREIGN KEY (version_id, destination_id)
+      REFERENCES outbound_destination_configs(version_id, destination_id) ON DELETE CASCADE
+  );
+  CREATE INDEX idx_outbound_destination_subscriptions_event
+    ON outbound_destination_subscriptions(event_type, destination_id, version_id);
+  CREATE TRIGGER trg_outbound_destination_subscriptions_no_update
+  BEFORE UPDATE ON outbound_destination_subscriptions
+  BEGIN
+    SELECT RAISE(ABORT, 'outbound destination subscriptions are immutable');
+  END;
+`;
+
+const OUTBOUND_DESTINATIONS_SCHEMA_SQL = `${OUTBOUND_DELIVERIES_V19_SCHEMA_SQL}
+${OUTBOUND_DESTINATION_CONFIGS_SCHEMA_SQL}
+${OUTBOUND_DESTINATION_PROFILES_SCHEMA_SQL}
+${OUTBOUND_DESTINATION_SUBSCRIPTIONS_SCHEMA_SQL}`;
+
+const OUTBOUND_DESTINATIONS_SCHEMA_OBJECTS = [
+  ...TAP_WARS_SCHEMA_OBJECTS,
+  ["table", "outbound_destination_configs"],
+  ["table", "outbound_destination_profiles"],
+  ["table", "outbound_destination_subscriptions"],
+  ["index", "idx_outbound_destination_configs_destination"],
+  ["index", "idx_outbound_destination_profiles_connectivity"],
+  ["index", "idx_outbound_destination_subscriptions_event"],
+  ["trigger", "trg_outbound_destination_configs_no_update"],
+  ["trigger", "trg_outbound_destination_subscriptions_no_update"],
+] as const;
+
 function validateTapWarsSchema(database: DatabaseExecutor): void {
   validateTelemetrySchemaDefinition(
     database,
@@ -3460,11 +3588,101 @@ function validateTapWarsSchema(database: DatabaseExecutor): void {
   );
 }
 
+function validateOutboundDestinationsSchema(database: DatabaseExecutor): void {
+  validateTelemetrySchemaDefinition(
+    database,
+    OUTBOUND_DESTINATIONS_SCHEMA_OBJECTS,
+    `${FORENSIC_QC_SCHEMA_SQL}\n${TELEMETRY_EPOCHS_SCHEMA_SQL}\n${FORECASTING_SCHEMA_SQL}\n${HEALTH_MAINTENANCE_SCHEMA_SQL}\n${DISPLAY_SCHEMA_SQL}\n${BREW_STORY_SENSORY_MYSTERY_SCHEMA_SQL}\n${TAP_CARD_DISPLAY_SCHEMA_SQL}\n${DISPLAY_FONT_SCHEMA_SQL}\n${TELEMETRY_DISABLED_LIFECYCLE_SCHEMA_SQL}\n${TAP_WARS_SCHEMA_SQL}\n${OUTBOUND_DESTINATIONS_SCHEMA_SQL}`,
+    OUTBOUND_DESTINATIONS_SCHEMA_VERSION,
+    () => {
+      expectColumns(database, "outbound_deliveries", [
+        { name: "id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+        { name: "event_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+        { name: "destination_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+        { name: "destination_version_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+        { name: "state", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+        { name: "attempt_count", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+        { name: "cycle_attempt_count", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
+        { name: "next_attempt_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+        { name: "lease_owner", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+        { name: "lease_expires_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+        { name: "revision", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+        { name: "last_error_code", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+        { name: "envelope_bytes", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+        { name: "active_failure_started_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+        { name: "last_attempt_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+        { name: "created_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+        { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+        { name: "terminal_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+      ]);
+      expectColumns(database, "outbound_destination_configs", [
+        { name: "version_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 1 },
+        { name: "destination_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 2 },
+        { name: "transport_kind", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+        { name: "safe_summary", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+        { name: "config_json", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+        { name: "created_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      ]);
+      expectColumns(database, "outbound_destination_profiles", [
+        { name: "destination_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+        { name: "transport_kind", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+        { name: "required", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
+        { name: "current_version_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+        { name: "retired_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+        { name: "disabled_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+        { name: "disabled_reason", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+        { name: "connectivity_state", type: "TEXT", notnull: 1, dflt_value: "'unknown'", pk: 0 },
+        { name: "failure_started_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+        { name: "last_failure_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+        { name: "last_failure_code", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+        { name: "last_success_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+        { name: "created_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+        { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+        { name: "revision", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
+      ]);
+      expectColumns(database, "outbound_destination_subscriptions", [
+        { name: "version_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 1 },
+        { name: "destination_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 2 },
+        { name: "event_type", type: "TEXT", notnull: 1, dflt_value: null, pk: 3 },
+        { name: "created_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      ]);
+    },
+  );
+}
+
+const OUTBOUND_DESTINATIONS_MIGRATION_SQL = `
+  DROP INDEX idx_outbound_deliveries_due;
+  DROP INDEX idx_outbound_deliveries_destination_state;
+  ALTER TABLE outbound_deliveries RENAME TO outbound_deliveries_v18;
+  ${OUTBOUND_DESTINATIONS_SCHEMA_SQL}
+  INSERT INTO outbound_deliveries (
+    id, event_id, destination_id, destination_version_id, state, attempt_count,
+    cycle_attempt_count, next_attempt_at, lease_owner, lease_expires_at, revision,
+    last_error_code, envelope_bytes, active_failure_started_at, last_attempt_at,
+    created_at, updated_at, terminal_at
+  )
+  SELECT
+    id, event_id, destination_id, destination_version_id, state, attempt_count,
+    attempt_count, next_attempt_at, lease_owner, lease_expires_at, revision,
+    last_error_code, envelope_bytes, NULL, NULL, created_at, updated_at, terminal_at
+  FROM outbound_deliveries_v18;
+  DROP TABLE outbound_deliveries_v18;
+`;
+
 export const TAP_WARS_MIGRATION: MigrationDefinition = {
   version: TAP_WARS_SCHEMA_VERSION,
   name: TAP_WARS_MIGRATION_NAME,
   apply(database) {
     database.execute(TAP_WARS_SCHEMA_SQL);
+    return undefined;
+  },
+};
+
+export const OUTBOUND_DESTINATIONS_MIGRATION: MigrationDefinition = {
+  version: OUTBOUND_DESTINATIONS_SCHEMA_VERSION,
+  name: OUTBOUND_DESTINATIONS_MIGRATION_NAME,
+  apply(database) {
+    database.execute(OUTBOUND_DESTINATIONS_MIGRATION_SQL);
     return undefined;
   },
 };
@@ -3489,6 +3707,7 @@ export const MIGRATIONS: readonly MigrationDefinition[] = [
   TELEMETRY_DISABLED_LIFECYCLE_MIGRATION,
   DISPLAY_FONT_MIGRATION,
   TAP_WARS_MIGRATION,
+  OUTBOUND_DESTINATIONS_MIGRATION,
 ];
 
 // Compatibility aliases for callers that prefer an explicit application name.
@@ -3523,7 +3742,9 @@ function applyMigration(
       validateCanonical &&
       (migration.version === DISPLAY_CUSTOM_ACCENT_SCHEMA_VERSION ||
         migration.version === TELEMETRY_DISABLED_LIFECYCLE_SCHEMA_VERSION ||
-        migration.version === DISPLAY_FONT_SCHEMA_VERSION)
+        migration.version === DISPLAY_FONT_SCHEMA_VERSION ||
+        migration.version === TAP_WARS_SCHEMA_VERSION ||
+        migration.version === OUTBOUND_DESTINATIONS_SCHEMA_VERSION)
     ) {
       validateCanonicalSchemaAtVersion(database, migration.version);
     }
@@ -3629,6 +3850,8 @@ function validateCanonicalSchemaAtVersion(database: DatabaseExecutor, version: n
     validateDisplayFontLifecycleSchema(database);
   } else if (version === TAP_WARS_SCHEMA_VERSION) {
     validateTapWarsSchema(database);
+  } else if (version === OUTBOUND_DESTINATIONS_SCHEMA_VERSION) {
+    validateOutboundDestinationsSchema(database);
   } else {
     throw incompatibleSchema("schema version is not a canonical Tapboard version");
   }
@@ -3669,7 +3892,12 @@ export function initializeSchema(
   }
   validateMigrationLedger(database, currentVersion, migrations);
 
-  if (isCanonicalMigrationPrefix(migrations) && currentVersion === TAP_WARS_SCHEMA_VERSION) {
+  if (
+    isCanonicalMigrationPrefix(migrations) &&
+    currentVersion === OUTBOUND_DESTINATIONS_SCHEMA_VERSION
+  ) {
+    validateCanonicalSchemaAtVersion(database, currentVersion);
+  } else if (isCanonicalMigrationPrefix(migrations) && currentVersion === TAP_WARS_SCHEMA_VERSION) {
     validateCanonicalSchemaAtVersion(database, currentVersion);
   } else if (
     isCanonicalMigrationPrefix(migrations) &&

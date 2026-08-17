@@ -21,7 +21,33 @@ export interface FillSettings {
 
 export interface FillAssignmentLifecyclePort {
   hasActiveAssignment(fillId: string): boolean;
-  closeForFillEnd(database: DatabaseExecutor, fillId: string, endedAt: string): void;
+  /**
+   * Close the active assignment, if any, and return its canonical identifiers.
+   * The void branch keeps older TapService adapters source-compatible while
+   * callers migrate to the richer transaction-local context.
+   */
+  closeForFillEnd(
+    database: DatabaseExecutor,
+    fillId: string,
+    endedAt: string,
+  ): FillAssignmentClosedContext | void;
+}
+
+export interface FillAssignmentClosedContext {
+  readonly assignmentId: string;
+  readonly tapId: string;
+  readonly fillId: string;
+  readonly endedAt: string;
+}
+
+export interface FillEndedContext {
+  readonly fillId: string;
+  readonly beverageId: string;
+  readonly kegId: string;
+  readonly assignmentId: string | null;
+  readonly tapId: string | null;
+  readonly occurredAt: string;
+  readonly reason: "kicked" | "deleted";
 }
 
 export interface AdminFillView {

@@ -1,6 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 
-import type { DatabaseExecutor } from "../../infrastructure/database/connection.ts";
+import {
+  assertSynchronousCompletion,
+  type DatabaseExecutor,
+} from "../../infrastructure/database/connection.ts";
 import { ApplicationError } from "../../shared/errors.ts";
 import { appendActivity } from "../activity/operations.ts";
 import { resolveBeverageDensity } from "../beverages/density.ts";
@@ -20,6 +23,7 @@ import type {
   AssignmentOpenedContext,
   TapAssignmentExtensionPort,
 } from "../taps/types.ts";
+import type { CompletedPourEventContext } from "../outbound/types.ts";
 import {
   DETECTOR_CONFIG_FIELDS,
   detectorConfigsEqual,
@@ -87,6 +91,8 @@ import {
 export interface DetectorServiceOptions {
   readonly idFactory?: () => string;
   readonly now?: () => Date;
+  /** Transaction-local notification for each newly persisted completed pour. */
+  readonly onPourCompleted?: (database: DatabaseExecutor, pour: CompletedPourEventContext) => void;
 }
 
 export interface DetectorMaintenanceOptions {
@@ -244,12 +250,14 @@ export class DetectorService
   readonly #database: DatabaseExecutor;
   readonly #ids: () => string;
   readonly #now: () => Date;
+  readonly #onPourCompleted?: DetectorServiceOptions["onPourCompleted"];
   #maintenanceTimer: NodeJS.Timeout | undefined;
 
   constructor(database: DatabaseExecutor, options: DetectorServiceOptions = {}) {
     this.#database = database;
     this.#ids = options.idFactory ?? randomUUID;
     this.#now = options.now ?? (() => new Date());
+    this.#onPourCompleted = options.onPourCompleted;
   }
 
   onAssignmentOpened(database: DatabaseExecutor, context: AssignmentOpenedContext): void {
@@ -961,6 +969,19 @@ export class DetectorService
             },
             { idFactory: this.#ids },
           );
+        if (result.created) {
+          const callback = this.#onPourCompleted?.(database, {
+            id: result.pour.id,
+            effectKey: result.pour.effectKey,
+            fillId: result.pour.fillId,
+            tapId: result.pour.tapId,
+            assignmentId: result.pour.assignmentId,
+            epochId: result.pour.epochId,
+            canonicalVolumeMl: result.pour.canonicalVolumeMl,
+            completedAt: result.pour.completedAt,
+          });
+          assertSynchronousCompletion(callback, "Pour completion callback");
+        }
       }
     }
   }

@@ -17,6 +17,9 @@ const DEFAULT_DESTINATION_ROWS = 2_000;
 const DEFAULT_DESTINATION_BYTES = 16 * 1024 * 1024;
 const MAX_ENVELOPE_BYTES = 16_384;
 const MAX_ERROR_BYTES = 120;
+export const MAX_CYCLE_ATTEMPTS = 1_000;
+export const ACTIVE_FAILURE_WINDOW_MS = 24 * 60 * 60 * 1_000;
+const MAX_RETRY_BACKOFF_MS = 3_600_000;
 
 export interface OutboundDestinationDescriptor {
   readonly id: string;
@@ -104,6 +107,9 @@ export interface DeliveryClaim {
   readonly destinationVersionId: string;
   readonly state: "leased";
   readonly attemptCount: number;
+  readonly cycleAttemptCount: number;
+  readonly activeFailureStartedAt: string | null;
+  readonly lastAttemptAt: string | null;
   readonly revision: number;
   readonly leaseOwner: string;
   readonly leaseExpiresAt: string;
@@ -115,7 +121,7 @@ export interface DeliveryResultInput {
   readonly deliveryId: string;
   readonly owner: string;
   readonly revision: number;
-  readonly outcome: "success" | "retry" | "failure";
+  readonly outcome: "success" | "retry" | "failure" | "permanent";
   readonly errorCode?: string;
   readonly now?: Date | string;
 }
@@ -913,53 +919,115 @@ export function claimDue(
   validateLease(owner, ttlMs, limit);
   const timestamp = canonicalTime(now, () => new Date());
   const expires = new Date(Date.parse(timestamp) + ttlMs).toISOString();
+  const failureCutoff = new Date(Date.parse(timestamp) - ACTIVE_FAILURE_WINDOW_MS).toISOString();
   return database.withTransaction(() => {
     const exhausted = database
-      .prepare<[string, number], { readonly id: string; readonly revision: number }>(
-        `SELECT id, revision FROM outbound_deliveries
-         WHERE state = 'leased' AND attempt_count >= 8 AND lease_expires_at <= ?
-         ORDER BY lease_expires_at ASC, id ASC LIMIT ?`,
+      .prepare<
+        [string, number, number, string, string, number],
+        {
+          readonly id: string;
+          readonly revision: number;
+          readonly cycle_attempt_count: number;
+          readonly active_failure_started_at: string | null;
+        }
+      >(
+        `SELECT d.id, d.revision, d.cycle_attempt_count, d.active_failure_started_at
+         FROM outbound_deliveries d
+         JOIN outbound_destinations destination ON destination.id = d.destination_id
+         WHERE destination.enabled = 1 AND (
+              (d.state = 'leased' AND d.lease_expires_at <= ? AND d.cycle_attempt_count >= ?)
+              OR (d.state = 'retry' AND d.cycle_attempt_count >= ?)
+              OR (
+                d.active_failure_started_at IS NOT NULL
+                AND d.active_failure_started_at <= ?
+                AND (d.state = 'retry' OR (d.state = 'leased' AND d.lease_expires_at <= ?))
+              )
+            )
+         ORDER BY coalesce(d.lease_expires_at, d.next_attempt_at) ASC, d.id ASC LIMIT ?`,
       )
-      .all(timestamp, limit);
+      .all(timestamp, MAX_CYCLE_ATTEMPTS, MAX_CYCLE_ATTEMPTS, failureCutoff, timestamp, limit);
     for (const row of exhausted) {
+      const timedOut =
+        row.active_failure_started_at !== null && row.active_failure_started_at <= failureCutoff;
+      const errorCode = timedOut
+        ? "active_failure_timeout"
+        : row.cycle_attempt_count >= MAX_CYCLE_ATTEMPTS
+          ? "cycle_attempt_limit"
+          : "active_failure_timeout";
       database
-        .prepare<[string, string, string, number, string]>(
+        .prepare<[string, string, string, string, number, string]>(
           `UPDATE outbound_deliveries
            SET state = 'terminal', lease_owner = NULL, lease_expires_at = NULL,
-               terminal_at = ?, last_error_code = 'lease_expired_max_attempts',
+               terminal_at = ?, last_error_code = ?,
                updated_at = ?, revision = revision + 1
-           WHERE id = ? AND revision = ? AND state = 'leased'
-             AND attempt_count >= 8 AND lease_expires_at <= ?`,
+           WHERE id = ? AND revision = ?
+             AND (state = 'retry' OR (state = 'leased' AND lease_expires_at <= ?))`,
         )
-        .run(timestamp, timestamp, row.id, row.revision, timestamp);
+        .run(timestamp, errorCode, timestamp, row.id, row.revision, timestamp);
     }
     const rows = database
       .prepare<
-        [string, string, number],
+        [number, string, string, string, number],
         {
           readonly id: string;
           readonly event_id: string;
           readonly destination_id: string;
           readonly destination_version_id: string;
           readonly attempt_count: number;
+          readonly cycle_attempt_count: number;
           readonly revision: number;
           readonly envelope_json: string;
+          readonly active_failure_started_at: string | null;
+          readonly last_attempt_at: string | null;
         }
       >(
-        `SELECT d.id, d.event_id, d.destination_id, d.destination_version_id, d.attempt_count, d.revision, e.envelope_json
-       FROM outbound_deliveries d JOIN outbound_events e ON e.id = d.event_id
-       WHERE d.attempt_count < 8 AND ((d.state IN ('pending', 'retry') AND d.next_attempt_at <= ?) OR (d.state = 'leased' AND d.lease_expires_at <= ?))
-       ORDER BY d.next_attempt_at ASC, d.id ASC LIMIT ?`,
+        `WITH candidates AS (
+          SELECT d.id, d.event_id, d.destination_id, d.destination_version_id,
+                 d.attempt_count, d.cycle_attempt_count, d.revision,
+                 d.active_failure_started_at, d.last_attempt_at, e.envelope_json,
+                 CASE WHEN d.state = 'leased' THEN d.lease_expires_at ELSE d.next_attempt_at END AS due_at,
+                 row_number() OVER (
+                   PARTITION BY d.destination_id
+                   ORDER BY CASE WHEN d.state = 'leased' THEN d.lease_expires_at ELSE d.next_attempt_at END ASC, d.id ASC
+                 ) AS destination_rank
+          FROM outbound_deliveries d
+          JOIN outbound_events e ON e.id = d.event_id
+          JOIN outbound_destinations destination ON destination.id = d.destination_id
+          WHERE destination.enabled = 1
+            AND d.cycle_attempt_count < ?
+            AND (
+              (d.state IN ('pending', 'retry') AND d.next_attempt_at <= ?)
+              OR (d.state = 'leased' AND d.lease_expires_at <= ?)
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM outbound_deliveries active
+              WHERE active.destination_id = d.destination_id
+                AND active.state = 'leased'
+                AND active.lease_expires_at > ?
+                AND active.id <> d.id
+            )
+        )
+        SELECT id, event_id, destination_id, destination_version_id, attempt_count,
+               cycle_attempt_count, revision, envelope_json, active_failure_started_at, last_attempt_at
+        FROM candidates
+        WHERE destination_rank = 1
+        ORDER BY due_at ASC, id ASC
+        LIMIT ?`,
       )
-      .all(timestamp, timestamp, limit);
+      .all(MAX_CYCLE_ATTEMPTS, timestamp, timestamp, timestamp, limit);
     const result: DeliveryClaim[] = [];
     for (const row of rows) {
       const changed = database
-        .prepare<[string, string, string, string, number, string]>(
-          `UPDATE outbound_deliveries SET state = 'leased', attempt_count = attempt_count + 1, revision = revision + 1, lease_owner = ?, lease_expires_at = ?, updated_at = ?
-         WHERE id = ? AND revision = ? AND (state IN ('pending', 'retry') OR (state = 'leased' AND lease_expires_at <= ?))`,
+        .prepare<[string, string, string, string, string, number, string]>(
+          `UPDATE outbound_deliveries
+           SET state = 'leased', attempt_count = attempt_count + 1,
+               cycle_attempt_count = cycle_attempt_count + 1,
+               revision = revision + 1, lease_owner = ?, lease_expires_at = ?,
+               last_attempt_at = ?, updated_at = ?
+           WHERE id = ? AND revision = ?
+             AND (state IN ('pending', 'retry') OR (state = 'leased' AND lease_expires_at <= ?))`,
         )
-        .run(owner, expires, timestamp, row.id, row.revision, timestamp);
+        .run(owner, expires, timestamp, timestamp, row.id, row.revision, timestamp);
       if (changed.changes !== 1) continue;
       const parsed: unknown = JSON.parse(row.envelope_json);
       const envelope = parsed as EventEnvelope;
@@ -973,6 +1041,9 @@ export function claimDue(
         destinationVersionId: row.destination_version_id,
         state: "leased",
         attemptCount: row.attempt_count + 1,
+        cycleAttemptCount: row.cycle_attempt_count + 1,
+        activeFailureStartedAt: row.active_failure_started_at,
+        lastAttemptAt: timestamp,
         revision: row.revision + 1,
         leaseOwner: owner,
         leaseExpiresAt: expires,
@@ -991,16 +1062,28 @@ export function applyDeliveryResult(
   if (!UUID.test(input.deliveryId)) throw invalid("deliveryId", "must be a canonical UUID");
   boundedText(input.owner, "owner", 120);
   positiveInteger(input.revision, "revision");
-  if (input.outcome !== "success" && input.outcome !== "retry" && input.outcome !== "failure") {
+  if (
+    input.outcome !== "success" &&
+    input.outcome !== "retry" &&
+    input.outcome !== "failure" &&
+    input.outcome !== "permanent"
+  ) {
     throw invalid("outcome", "is unsupported");
   }
   const timestamp = canonicalTime(input.now, () => new Date());
+  const failureCutoff = new Date(Date.parse(timestamp) - ACTIVE_FAILURE_WINDOW_MS).toISOString();
   return database.withTransaction(() => {
     const row = database
       .prepare<
         [string],
-        { readonly attempt_count: number; readonly lease_expires_at: string | null }
-      >("SELECT attempt_count, lease_expires_at FROM outbound_deliveries WHERE id = ?")
+        {
+          readonly cycle_attempt_count: number;
+          readonly lease_expires_at: string | null;
+          readonly active_failure_started_at: string | null;
+        }
+      >(
+        "SELECT cycle_attempt_count, lease_expires_at, active_failure_started_at FROM outbound_deliveries WHERE id = ?",
+      )
       .get(input.deliveryId);
     if (row === undefined || row.lease_expires_at === null || row.lease_expires_at <= timestamp)
       return false;
@@ -1016,20 +1099,24 @@ export function applyDeliveryResult(
       );
     }
     const errorCode = boundedText(
-      input.errorCode ?? "delivery_failed",
+      input.errorCode ?? (input.outcome === "permanent" ? "delivery_permanent" : "delivery_failed"),
       "errorCode",
       MAX_ERROR_BYTES,
     );
-    if (row.attempt_count >= 8) {
+    const activeFailureStartedAt = row.active_failure_started_at ?? timestamp;
+    const cycleExhausted = row.cycle_attempt_count >= MAX_CYCLE_ATTEMPTS;
+    const failureTimedOut = activeFailureStartedAt <= failureCutoff;
+    if (input.outcome === "permanent" || cycleExhausted || failureTimedOut) {
       return (
         database
-          .prepare<[string, string, string, string, string, number, string]>(
-            `UPDATE outbound_deliveries SET state = 'terminal', lease_owner = NULL, lease_expires_at = NULL, terminal_at = ?, last_error_code = ?, updated_at = ?, revision = revision + 1
+          .prepare<[string, string, string, string, string, string, number, string]>(
+            `UPDATE outbound_deliveries SET state = 'terminal', lease_owner = NULL, lease_expires_at = NULL, terminal_at = ?, last_error_code = ?, active_failure_started_at = ?, updated_at = ?, revision = revision + 1
          WHERE id = ? AND state = 'leased' AND lease_owner = ? AND revision = ? AND lease_expires_at > ?`,
           )
           .run(
             timestamp,
             errorCode,
+            activeFailureStartedAt,
             timestamp,
             input.deliveryId,
             input.owner,
@@ -1038,16 +1125,27 @@ export function applyDeliveryResult(
           ).changes === 1
       );
     }
-    const backoff = Math.min(3_600_000, 5_000 * 2 ** Math.max(0, row.attempt_count - 1));
+    const backoff = Math.min(
+      MAX_RETRY_BACKOFF_MS,
+      5_000 * 2 ** Math.max(0, row.cycle_attempt_count - 1),
+    );
     const next = new Date(Date.parse(timestamp) + backoff).toISOString();
     return (
       database
-        .prepare<[string, string, string, string, string, number, string]>(
-          `UPDATE outbound_deliveries SET state = 'retry', next_attempt_at = ?, lease_owner = NULL, lease_expires_at = NULL, last_error_code = ?, updated_at = ?, revision = revision + 1
+        .prepare<[string, string, string, string, string, string, number, string]>(
+          `UPDATE outbound_deliveries SET state = 'retry', next_attempt_at = ?, lease_owner = NULL, lease_expires_at = NULL, active_failure_started_at = ?, last_error_code = ?, updated_at = ?, revision = revision + 1
        WHERE id = ? AND state = 'leased' AND lease_owner = ? AND revision = ? AND lease_expires_at > ?`,
         )
-        .run(next, errorCode, timestamp, input.deliveryId, input.owner, input.revision, timestamp)
-        .changes === 1
+        .run(
+          next,
+          activeFailureStartedAt,
+          errorCode,
+          timestamp,
+          input.deliveryId,
+          input.owner,
+          input.revision,
+          timestamp,
+        ).changes === 1
     );
   });
 }
@@ -1064,8 +1162,10 @@ export function retryDelivery(
   return (
     database
       .prepare<[string, string, string]>(
-        `UPDATE outbound_deliveries SET state = 'retry', attempt_count = 0, lease_owner = NULL, lease_expires_at = NULL, terminal_at = NULL, next_attempt_at = ?, revision = revision + 1, updated_at = ?
-     WHERE id = ? AND state IN ('terminal', 'dismissed')`,
+        `UPDATE outbound_deliveries SET state = 'retry', cycle_attempt_count = 0,
+         active_failure_started_at = NULL, lease_owner = NULL, lease_expires_at = NULL,
+         terminal_at = NULL, next_attempt_at = ?, revision = revision + 1, updated_at = ?
+     WHERE id = ? AND state = 'terminal'`,
       )
       .run(timestamp, timestamp, deliveryId).changes === 1
   );
@@ -1093,7 +1193,7 @@ export function dismissDelivery(
 export function listDeliveries(database: DatabaseExecutor): readonly Record<string, unknown>[] {
   return database
     .prepare(
-      "SELECT id, event_id, destination_id, destination_version_id, state, attempt_count, next_attempt_at, lease_owner, lease_expires_at, revision, last_error_code, envelope_bytes, created_at, updated_at, terminal_at FROM outbound_deliveries ORDER BY created_at, id",
+      "SELECT id, event_id, destination_id, destination_version_id, state, attempt_count, cycle_attempt_count, next_attempt_at, lease_owner, lease_expires_at, revision, last_error_code, envelope_bytes, active_failure_started_at, last_attempt_at, created_at, updated_at, terminal_at FROM outbound_deliveries ORDER BY created_at, id",
     )
     .all() as Record<string, unknown>[];
 }
