@@ -238,6 +238,52 @@ void test("graceful shutdown closes HTTP before the database", async (context) =
   assert.deepEqual(events, ["http", "database"]);
 });
 
+void test("outbound runtime starts after readiness and stops before HTTP/database", async (context) => {
+  const events: string[] = [];
+  const application = createApplication({
+    config: appConfig(makeDatabasePath(context)),
+    logger: quietLogger,
+    createOutboundRuntime: () => {
+      const worker = {
+        start: () => events.push("worker.start"),
+        stop: () => events.push("worker.stop"),
+      };
+      return {
+        worker,
+        start: () => {
+          events.push("runtime.start");
+          worker.start();
+        },
+        stop: () => {
+          events.push("runtime.stop");
+          worker.stop();
+        },
+      };
+    },
+    createHttpServer: () => ({
+      start() {
+        events.push("http.start");
+        return Promise.resolve({ address: "127.0.0.1", family: "IPv4", port: 12345 });
+      },
+      stop() {
+        events.push("http.stop");
+        return Promise.resolve();
+      },
+    }),
+  });
+
+  await application.start();
+  await application.stop();
+  assert.deepEqual(events, [
+    "http.start",
+    "runtime.start",
+    "worker.start",
+    "runtime.stop",
+    "worker.stop",
+    "http.stop",
+  ]);
+});
+
 void test("a bind failure rejects startup and closes the database", async (context) => {
   const occupiedServer = createNetServer();
   context.after(() => closeNetServer(occupiedServer));

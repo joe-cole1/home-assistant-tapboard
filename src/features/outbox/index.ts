@@ -1,5 +1,6 @@
 export {
   applyDeliveryResult,
+  ACTIVE_FAILURE_WINDOW_MS,
   claimDue,
   completeDelivery,
   createDestination,
@@ -13,6 +14,7 @@ export {
   listDeliveries,
   listOverflowIncidents,
   manualRetry,
+  MAX_CYCLE_ATTEMPTS,
   mutateAndAdmit,
   readDestination,
   recoverCapacity,

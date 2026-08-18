@@ -112,7 +112,7 @@ function readTransactionValues(database: DatabaseConnection): string[] {
     .map((row) => row.value);
 }
 
-void test("a clean file database bootstraps the canonical v18 migration ledger", (context) => {
+void test("a clean file database bootstraps the canonical v19 migration ledger", (context) => {
   const path = makeDatabasePath(context);
   const database = openDatabase(path);
 
@@ -150,6 +150,9 @@ void test("a clean file database bootstraps the canonical v18 migration ledger",
         { type: "index", name: "idx_keg_tare_history_keg_recorded" },
         { type: "index", name: "idx_outbound_deliveries_destination_state" },
         { type: "index", name: "idx_outbound_deliveries_due" },
+        { type: "index", name: "idx_outbound_destination_configs_destination" },
+        { type: "index", name: "idx_outbound_destination_profiles_connectivity" },
+        { type: "index", name: "idx_outbound_destination_subscriptions_event" },
         { type: "index", name: "idx_outbound_events_created_at" },
         { type: "index", name: "idx_outbound_events_type_coalescing" },
         { type: "index", name: "idx_pours_epoch_completed" },
@@ -218,6 +221,9 @@ void test("a clean file database bootstraps the canonical v18 migration ledger",
         { type: "table", name: "login_throttle" },
         { type: "table", name: "machine_api_keys" },
         { type: "table", name: "outbound_deliveries" },
+        { type: "table", name: "outbound_destination_configs" },
+        { type: "table", name: "outbound_destination_profiles" },
+        { type: "table", name: "outbound_destination_subscriptions" },
         { type: "table", name: "outbound_destination_versions" },
         { type: "table", name: "outbound_destinations" },
         { type: "table", name: "outbound_events" },
@@ -249,6 +255,8 @@ void test("a clean file database bootstraps the canonical v18 migration ledger",
         { type: "trigger", name: "trg_health_incident_transitions_no_update" },
         { type: "trigger", name: "trg_keg_maintenance_records_no_update" },
         { type: "trigger", name: "trg_keg_tare_history_no_update" },
+        { type: "trigger", name: "trg_outbound_destination_configs_no_update" },
+        { type: "trigger", name: "trg_outbound_destination_subscriptions_no_update" },
         { type: "trigger", name: "trg_outbound_destination_versions_no_update" },
         { type: "trigger", name: "trg_outbox_overflow_incidents_no_delete" },
         { type: "trigger", name: "trg_outbox_overflow_incidents_no_insert" },
@@ -286,7 +294,7 @@ void test("a clean file database bootstraps the canonical v18 migration ledger",
         "SELECT version, name, applied_at FROM schema_migrations ORDER BY version",
       )
       .all();
-    assert.equal(ledger.length, 18);
+    assert.equal(ledger.length, 19);
     assert.equal(ledger[0]?.version, FOUNDATION_SCHEMA_VERSION);
     assert.equal(ledger[0]?.name, FOUNDATION_INITIAL_MIGRATION_NAME);
     assert.equal(ledger[1]?.version, 2);
@@ -323,6 +331,8 @@ void test("a clean file database bootstraps the canonical v18 migration ledger",
     assert.equal(ledger[16]?.name, "display-font-allowlist");
     assert.equal(ledger[17]?.version, 18);
     assert.equal(ledger[17]?.name, "tap-wars");
+    assert.equal(ledger[18]?.version, 19);
+    assert.equal(ledger[18]?.name, "outbound-destination-delivery");
     assert.match(ledger[0]?.applied_at ?? "", /^\d{4}-\d{2}-\d{2}T/);
   } finally {
     database.close();
@@ -340,20 +350,20 @@ void test("an in-memory database bootstraps the same canonical schema", () => {
           "SELECT type, name FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%'",
         )
         .all().length,
-      151,
+      159,
     );
     assert.equal(
       database
         .prepare<[], { readonly count: number }>("SELECT count(*) AS count FROM schema_migrations")
         .get()?.count,
-      18,
+      19,
     );
   } finally {
     database.close();
   }
 });
 
-void test("v12 upgrades to v18 without altering existing lifecycle rows", (context) => {
+void test("v12 upgrades to v19 without altering existing lifecycle rows", (context) => {
   const path = makeDatabasePath(context);
   const v12 = openDatabase(path, { migrations: MIGRATIONS.slice(0, 12) });
   const occurredAt = "2026-01-01T00:00:00.000Z";
@@ -399,7 +409,7 @@ void test("v12 upgrades to v18 without altering existing lifecycle rows", (conte
   }
   const upgraded = openDatabase(path);
   try {
-    assert.equal(upgraded.pragma<number>("user_version", { simple: true }), 18);
+    assert.equal(upgraded.pragma<number>("user_version", { simple: true }), 19);
     assert.deepEqual(
       upgraded
         .prepare<
@@ -441,7 +451,7 @@ void test("v12 upgrades to v18 without altering existing lifecycle rows", (conte
   }
 });
 
-void test("a canonical v17 database upgrades additively to v18", (context) => {
+void test("a canonical v17 database upgrades additively to v19", (context) => {
   const path = makeDatabasePath(context);
   const v17 = openDatabase(path, { migrations: MIGRATIONS.slice(0, 17) });
   try {
@@ -457,12 +467,12 @@ void test("a canonical v17 database upgrades additively to v18", (context) => {
   }
   const upgraded = openDatabase(path);
   try {
-    assert.equal(upgraded.pragma<number>("user_version", { simple: true }), 18);
+    assert.equal(upgraded.pragma<number>("user_version", { simple: true }), 19);
     assert.equal(
       upgraded
         .prepare<[], { readonly count: number }>("SELECT count(*) AS count FROM schema_migrations")
         .get()?.count,
-      18,
+      19,
     );
     assert.deepEqual(
       upgraded
@@ -483,6 +493,148 @@ void test("a canonical v17 database upgrades additively to v18", (context) => {
     );
   } finally {
     upgraded.close();
+  }
+});
+
+void test("a zero-attempt v18 manual-retry row upgrades additively to v19", (context) => {
+  const path = makeDatabasePath(context);
+  const v18 = openDatabase(path, { migrations: MIGRATIONS.slice(0, 18) });
+  const destinationId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const versionId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  const eventId = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+  const deliveryId = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+  const timestamp = "2026-01-01T00:00:00.000Z";
+  try {
+    v18
+      .prepare<[string, string, string, string]>(
+        "INSERT INTO outbound_destinations (id, label, enabled, created_at, updated_at) VALUES (?, ?, 1, ?, ?)",
+      )
+      .run(destinationId, "legacy", timestamp, timestamp);
+    v18
+      .prepare<[string, string, number, string]>(
+        "INSERT INTO outbound_destination_versions (id, destination_id, version_number, created_at) VALUES (?, ?, ?, ?)",
+      )
+      .run(versionId, destinationId, 1, timestamp);
+    v18
+      .prepare<[string, number, string, string, number, string]>(
+        `INSERT INTO outbound_events
+         (id, event_type, schema_version, occurred_at, envelope_json, envelope_bytes, coalescing_key, created_at)
+         VALUES (?, 'fill.assigned', ?, ?, ?, ?, NULL, ?)`,
+      )
+      .run(eventId, 1, timestamp, '{"event_type":"fill.assigned"}', 30, timestamp);
+    v18
+      .prepare<
+        [string, string, string, string, number, string, number, string, number, string, string]
+      >(
+        `INSERT INTO outbound_deliveries
+         (id, event_id, destination_id, destination_version_id, state, attempt_count,
+          next_attempt_at, lease_owner, lease_expires_at, revision, last_error_code,
+          envelope_bytes, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'retry', ?, ?, NULL, NULL, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        deliveryId,
+        eventId,
+        destinationId,
+        versionId,
+        0,
+        timestamp,
+        2,
+        "legacy_failure",
+        31,
+        timestamp,
+        timestamp,
+      );
+  } finally {
+    v18.close();
+  }
+
+  const upgraded = openDatabase(path);
+  try {
+    assert.equal(upgraded.pragma<number>("user_version", { simple: true }), 19);
+    assert.deepEqual(
+      upgraded
+        .prepare<
+          [string],
+          {
+            readonly state: string;
+            readonly attempt_count: number;
+            readonly cycle_attempt_count: number;
+            readonly last_error_code: string;
+          }
+        >(
+          "SELECT state, attempt_count, cycle_attempt_count, last_error_code FROM outbound_deliveries WHERE id = ?",
+        )
+        .get(deliveryId),
+      {
+        state: "retry",
+        attempt_count: 0,
+        cycle_attempt_count: 0,
+        last_error_code: "legacy_failure",
+      },
+    );
+    assert.equal(
+      upgraded
+        .prepare<[], { readonly count: number }>(
+          "SELECT count(*) AS count FROM outbound_destination_profiles",
+        )
+        .get()?.count,
+      0,
+    );
+  } finally {
+    upgraded.close();
+  }
+});
+
+void test("v19 outbound destination constraints preserve immutable configuration boundaries", () => {
+  const database = openDatabase(":memory:");
+  try {
+    database.execute(`
+      INSERT INTO outbound_destinations (id, label, enabled, created_at, updated_at)
+      VALUES ('destination-1', 'Destination', 1, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+      INSERT INTO outbound_destination_versions (id, destination_id, version_number, created_at)
+      VALUES ('version-1', 'destination-1', 1, '2026-01-01T00:00:00.000Z');
+      INSERT INTO outbound_destination_configs
+        (version_id, destination_id, transport_kind, safe_summary, config_json, created_at)
+      VALUES ('version-1', 'destination-1', 'webhook', 'safe', '{"endpoint":"https://example.test"}', '2026-01-01T00:00:00.000Z');
+      INSERT INTO outbound_destination_profiles
+        (destination_id, transport_kind, required, current_version_id, created_at, updated_at)
+      VALUES ('destination-1', 'webhook', 1, 'version-1', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+    `);
+    assert.throws(
+      () =>
+        database
+          .prepare<[string]>("UPDATE outbound_destination_configs SET safe_summary = ?")
+          .run("changed"),
+      /immutable/,
+    );
+    assert.throws(
+      () =>
+        database
+          .prepare<[string, string, string, string]>(
+            "INSERT INTO outbound_destination_subscriptions (version_id, destination_id, event_type, created_at) VALUES (?, ?, ?, ?)",
+          )
+          .run("version-1", "destination-1", "unknown.event", "2026-01-01T00:00:00.000Z"),
+      /CHECK constraint/,
+    );
+    assert.throws(
+      () =>
+        database
+          .prepare<[string, string, string, string, string, string]>(
+            "INSERT INTO outbound_destination_configs (version_id, destination_id, transport_kind, safe_summary, config_json, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+          )
+          .run(
+            "version-2",
+            "destination-1",
+            "webhook",
+            "safe",
+            "not-json",
+            "2026-01-01T00:00:00.000Z",
+          ),
+      /CHECK constraint/,
+    );
+  } finally {
+    database.close();
   }
 });
 
@@ -581,7 +733,7 @@ void test("v2 outbound delivery lease fields reject one-sided stale values", () 
   }
 });
 
-void test("an exact v1 database upgrades to v18 with all ledger entries", (context) => {
+void test("an exact v1 database upgrades to v19 with all ledger entries", (context) => {
   const path = makeDatabasePath(context);
   openDatabase(path, { migrations: FOUNDATION_MIGRATIONS }).close();
   const database = openDatabase(path, { migrations: MIGRATIONS });
@@ -612,6 +764,7 @@ void test("an exact v1 database upgrades to v18 with all ledger entries", (conte
         { version: 16, name: "telemetry-source-disabled-lifecycle" },
         { version: 17, name: "display-font-allowlist" },
         { version: 18, name: "tap-wars" },
+        { version: 19, name: "outbound-destination-delivery" },
       ],
     );
   } finally {
@@ -619,7 +772,7 @@ void test("an exact v1 database upgrades to v18 with all ledger entries", (conte
   }
 });
 
-void test("the pre-QC telemetry v7 schema upgrades to v18 without replacing persisted settings", (context) => {
+void test("the pre-QC telemetry v7 schema upgrades to v19 without replacing persisted settings", (context) => {
   const path = makeDatabasePath(context);
   const v7 = openDatabase(path, { migrations: MIGRATIONS.slice(0, 7) });
   v7.execute("UPDATE telemetry_settings SET max_batch_size = 50 WHERE id = 1");
@@ -627,7 +780,7 @@ void test("the pre-QC telemetry v7 schema upgrades to v18 without replacing pers
 
   const upgraded = openDatabase(path);
   try {
-    assert.equal(upgraded.pragma<number>("user_version", { simple: true }), 18);
+    assert.equal(upgraded.pragma<number>("user_version", { simple: true }), 19);
     assert.equal(
       upgraded
         .prepare<[], { readonly max_batch_size: number }>(
@@ -648,14 +801,14 @@ void test("the pre-QC telemetry v7 schema upgrades to v18 without replacing pers
       upgraded
         .prepare<[], { readonly count: number }>("SELECT count(*) AS count FROM schema_migrations")
         .get()?.count,
-      18,
+      19,
     );
   } finally {
     upgraded.close();
   }
 });
 
-void test("a canonical v8 database validates before upgrading once to v18", (context) => {
+void test("a canonical v8 database validates before upgrading once to v19", (context) => {
   const path = makeDatabasePath(context);
   const v8 = openDatabase(path, { migrations: MIGRATIONS.slice(0, 8) });
   v8.execute("UPDATE telemetry_settings SET max_batch_size = 50 WHERE id = 1");
@@ -663,7 +816,7 @@ void test("a canonical v8 database validates before upgrading once to v18", (con
 
   const upgraded = openDatabase(path);
   try {
-    assert.equal(upgraded.pragma<number>("user_version", { simple: true }), 18);
+    assert.equal(upgraded.pragma<number>("user_version", { simple: true }), 19);
     assert.equal(
       upgraded
         .prepare<[], { readonly max_batch_size: number }>(
@@ -719,13 +872,13 @@ void test("a corrupt canonical v8 database is rejected before migration 9 can mu
   });
 });
 
-void test("a canonical v9 database validates before upgrading once to v18", (context) => {
+void test("a canonical v9 database validates before upgrading once to v19", (context) => {
   const path = makeDatabasePath(context);
   openDatabase(path, { migrations: MIGRATIONS.slice(0, 9) }).close();
 
   const upgraded = openDatabase(path);
   try {
-    assert.equal(upgraded.pragma<number>("user_version", { simple: true }), 18);
+    assert.equal(upgraded.pragma<number>("user_version", { simple: true }), 19);
     assert.deepEqual(
       upgraded
         .prepare<[], { readonly serving_size_ml: number }>(
@@ -747,7 +900,7 @@ void test("a canonical v9 database validates before upgrading once to v18", (con
   }
 });
 
-void test("v10 to v18 seeds typed health defaults and one state row per Tap", (context) => {
+void test("v10 to v19 seeds typed health defaults and one state row per Tap", (context) => {
   const path = makeDatabasePath(context);
   const firstTapId = "11111111-1111-4111-8111-111111111111";
   const secondTapId = "22222222-2222-4222-8222-222222222222";
@@ -762,7 +915,7 @@ void test("v10 to v18 seeds typed health defaults and one state row per Tap", (c
 
   const upgraded = openDatabase(path);
   try {
-    assert.equal(upgraded.pragma<number>("user_version", { simple: true }), 18);
+    assert.equal(upgraded.pragma<number>("user_version", { simple: true }), 19);
     assert.deepEqual(
       upgraded
         .prepare(
@@ -1117,7 +1270,7 @@ void test("v11 validation rejects a tampered DDL definition on reopen", (context
   );
 });
 
-void test("a current v18 database reopens idempotently", (context) => {
+void test("a current v19 database reopens idempotently", (context) => {
   const path = makeDatabasePath(context);
   openDatabase(path).close();
 
@@ -1127,14 +1280,14 @@ void test("a current v18 database reopens idempotently", (context) => {
       reopened
         .prepare<[], { readonly count: number }>("SELECT count(*) AS count FROM schema_migrations")
         .get()?.count,
-      18,
+      19,
     );
   } finally {
     reopened.close();
   }
 });
 
-void test("a clean version 0 database upgrades through the canonical v18 schema", (context) => {
+void test("a clean version 0 database upgrades through the canonical v19 schema", (context) => {
   const path = makeDatabasePath(context);
   withFixture(path, (database) => assert.equal(readUserVersion(database), 0));
 
@@ -1142,7 +1295,7 @@ void test("a clean version 0 database upgrades through the canonical v18 schema"
 
   withFixture(path, (database) => {
     assert.equal(readUserVersion(database), CURRENT_SCHEMA_VERSION);
-    assert.equal(readSchemaObjects(database).length, 151);
+    assert.equal(readSchemaObjects(database).length, 159);
   });
 });
 
@@ -1178,12 +1331,12 @@ void test("migration definitions must be contiguous with nonempty unique names",
 
 void test("an unsupported future schema is rejected without mutation", (context) => {
   const path = makeDatabasePath(context);
-  withFixture(path, (database) => database.exec("PRAGMA user_version = 19"));
+  withFixture(path, (database) => database.exec("PRAGMA user_version = 20"));
 
   assert.throws(() => openDatabase(path), /schema version is newer/);
 
   withFixture(path, (database) => {
-    assert.equal(readUserVersion(database), 19);
+    assert.equal(readUserVersion(database), 20);
     assert.deepEqual(readSchemaObjects(database), []);
   });
 });

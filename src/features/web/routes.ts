@@ -35,6 +35,19 @@ import { searchAdminDestinations } from "./admin-search.ts";
 import type { PublicStoryService } from "../story/service.ts";
 import { buildSensoryRadar, VESSEL_IDS } from "../story/index.ts";
 import { getVesselDescriptor } from "../story/vessels.ts";
+import type { EventType } from "../events/types.ts";
+import type { OutboundService } from "../outbound/service.ts";
+import {
+  validateHeaderSecretValue,
+  validateHomeAssistantToken,
+} from "../outbound/outbound-validation.ts";
+import type {
+  CreateOutboundDestinationInput,
+  EditOutboundDestinationInput,
+  OutboundDeliveryHistoryItem,
+  OutboundDestination,
+  OutboundHeader,
+} from "../outbound/types.ts";
 import {
   BEVERAGE_SENSORY_CANONICAL_MAX,
   BEVERAGE_SENSORY_CANONICAL_MIN,
@@ -543,6 +556,8 @@ export interface WebRouteDependencies {
   readonly liveUpdates: LiveUpdateService;
   readonly tapWarsService: TapWarService;
   readonly publicTapWarsService: PublicTapWarsService;
+  /** Optional until the application composition wires Issue 79 outbound UI. */
+  readonly outboundService?: OutboundService;
 }
 
 interface AdminContext {
@@ -718,6 +733,350 @@ function invalidForm(message: string, field?: string): never {
     clientMessage: message,
     ...(field === undefined ? {} : { details: { field, reason: "invalid" } }),
   });
+}
+
+const OUTBOUND_EVENT_FIELDS = [
+  { eventType: "fill.assigned", name: "subscription_fill_assigned", label: "Fill assigned" },
+  { eventType: "fill.ended", name: "subscription_fill_ended", label: "Fill ended" },
+  { eventType: "pour.completed", name: "subscription_pour_completed", label: "Pour completed" },
+  { eventType: "keg.low", name: "subscription_keg_low", label: "Keg low" },
+  {
+    eventType: "health.transitioned",
+    name: "subscription_health_transitioned",
+    label: "Health transitioned",
+  },
+  {
+    eventType: "integration.status_changed",
+    name: "subscription_integration_status_changed",
+    label: "Integration status changed",
+  },
+] as const satisfies readonly {
+  readonly eventType: EventType;
+  readonly name: string;
+  readonly label: string;
+}[];
+
+const OUTBOUND_MAX_HEADER_ROWS = 8;
+
+interface OutboundHeaderSecretValue {
+  readonly name: string;
+  readonly value: string;
+}
+
+interface ParsedOutboundForm {
+  readonly label: string;
+  readonly transport: "home_assistant" | "webhook";
+  readonly required: boolean;
+  readonly enabled: boolean;
+  readonly subscriptions: readonly EventType[];
+  readonly staticHeaders: readonly OutboundHeader[];
+  readonly secretHeaders: readonly { readonly name: string; readonly slot?: string }[];
+  readonly secretValues: readonly OutboundHeaderSecretValue[];
+  readonly token?: string;
+  readonly baseUrl?: string;
+  readonly webhookUrl?: string;
+  readonly payloadFormat?: "standard" | "discord";
+}
+
+function requireOutboundService(dependencies: WebRouteDependencies): OutboundService {
+  const service = dependencies.outboundService;
+  if (service === undefined) {
+    throw new ApplicationError({
+      category: "unavailable",
+      code: "outbound.unavailable",
+      clientMessage: "Outbound integrations are not available in this application.",
+    });
+  }
+  return service;
+}
+
+function outboundDestinationOrNotFound(
+  service: OutboundService,
+  destinationId: string,
+): OutboundDestination {
+  const destination = service.get(destinationId);
+  if (destination === undefined) {
+    throw new ApplicationError({
+      category: "not_found",
+      code: "outbound.destination_not_found",
+      clientMessage: "Outbound destination not found.",
+    });
+  }
+  return destination;
+}
+
+function outboundShortId(value: string): string {
+  return value.length > 12 ? `${value.slice(0, 8)}…${value.slice(-3)}` : value;
+}
+
+function outboundStateLabel(value: string): string {
+  return humanizeAdminIdentifier(value, "Unknown");
+}
+
+function outboundStateClass(value: string): "healthy" | "degraded" | "muted" {
+  if (value === "healthy") return "healthy";
+  if (value === "failing" || value === "degraded" || value === "needs_attention") return "degraded";
+  return "muted";
+}
+
+function outboundConfigPresentation(destination: OutboundDestination): Record<string, unknown> {
+  const version = destination.currentVersion;
+  const config = version?.config;
+  if (config === undefined) {
+    return {
+      available: false,
+      transportLabel: humanizeAdminIdentifier(destination.transport),
+      staticHeaders: [],
+      secretHeaders: [],
+    };
+  }
+  const isHa = config.transport === "home_assistant";
+  const configured = isHa ? config.authConfigured : config.endpointConfigured;
+  const available = isHa ? config.authAvailable : config.endpointAvailable;
+  return {
+    available: true,
+    transportLabel: isHa ? "Home Assistant" : "Webhook",
+    payloadFormat: isHa ? null : config.payloadFormat,
+    endpointConfigured: isHa ? config.authConfigured : config.endpointConfigured,
+    endpointAvailable: isHa ? config.authAvailable : config.endpointAvailable,
+    credentialStateLabel: available
+      ? "Configured"
+      : configured
+        ? "Configured but unavailable"
+        : isHa
+          ? "Token not configured"
+          : "Endpoint not configured",
+    staticHeaders: config.staticHeaders.map((header) => ({ name: header.name })),
+    secretHeaders: config.secretHeaders.map((header) => ({
+      name: header.name,
+      slot: header.slot,
+      configured: header.configured,
+      available: header.available === true,
+    })),
+  };
+}
+
+function outboundDestinationPresentation(
+  destination: OutboundDestination,
+): Record<string, unknown> {
+  const version = destination.currentVersion;
+  return {
+    id: destination.id,
+    label: destination.label,
+    transport: destination.transport,
+    transportLabel: destination.transport === "home_assistant" ? "Home Assistant" : "Webhook",
+    subscriptions: destination.subscriptions,
+    required: destination.required,
+    enabled: destination.enabled,
+    retired: destination.retiredAt !== null,
+    state: destination.state,
+    stateLabel: outboundStateLabel(destination.state),
+    stateClass: outboundStateClass(destination.state),
+    disabledReason:
+      destination.disabledReason === null ? null : outboundStateLabel(destination.disabledReason),
+    failure:
+      destination.failure === null
+        ? null
+        : {
+            code: destination.failure.code,
+            failureClass: outboundStateLabel(destination.failure.failureClass),
+            occurredAt: destination.failure.occurredAt,
+            occurredAtLabel: adminTimestampLabel(destination.failure.occurredAt),
+          },
+    lastSuccessAt: destination.lastSuccessAt,
+    lastSuccessAtLabel:
+      destination.lastSuccessAt === null
+        ? "No confirmed success"
+        : adminTimestampLabel(destination.lastSuccessAt),
+    version:
+      version === null
+        ? null
+        : {
+            id: version.id,
+            versionNumber: version.versionNumber,
+            createdAt: version.createdAt,
+            createdAtLabel: adminTimestampLabel(version.createdAt),
+          },
+    config: outboundConfigPresentation(destination),
+  };
+}
+
+function outboundHistoryPresentation(
+  rows: readonly OutboundDeliveryHistoryItem[],
+  mutable = true,
+): readonly Record<string, unknown>[] {
+  return rows.slice(0, 100).map((row) => ({
+    id: row.id,
+    shortId: outboundShortId(row.id),
+    eventId: outboundShortId(row.eventId),
+    eventType:
+      OUTBOUND_EVENT_FIELDS.find((field) => field.eventType === row.eventType)?.label ??
+      row.eventType,
+    state: row.state,
+    stateLabel: outboundStateLabel(row.state),
+    attemptCount: row.attemptCount,
+    lastErrorCode: row.lastErrorCode,
+    lastAttemptAt: row.lastAttemptAt,
+    lastAttemptAtLabel:
+      row.lastAttemptAt === null ? "Not attempted" : adminTimestampLabel(row.lastAttemptAt),
+    nextAttemptAt: row.nextAttemptAt,
+    nextAttemptAtLabel: adminTimestampLabel(row.nextAttemptAt),
+    canRetry: mutable && row.state === "terminal",
+    canDismiss: mutable && row.state === "terminal",
+  }));
+}
+
+function outboundSubscriptionsFromForm(
+  form: Readonly<Record<string, string>>,
+): readonly EventType[] {
+  return OUTBOUND_EVENT_FIELDS.filter((field) => form[field.name] === "on").map(
+    (field) => field.eventType,
+  );
+}
+
+function outboundStaticHeadersFromForm(
+  form: Readonly<Record<string, string>>,
+): readonly OutboundHeader[] {
+  const rows: OutboundHeader[] = [];
+  for (let index = 0; index < OUTBOUND_MAX_HEADER_ROWS; index += 1) {
+    const name = (form[`static_header_${index}_name`] ?? "").trim();
+    const value = form[`static_header_${index}_value`] ?? "";
+    if (name === "" && value.trim() === "") continue;
+    rows.push({ name, value });
+  }
+  return rows;
+}
+
+function outboundSecretHeadersFromForm(form: Readonly<Record<string, string>>): {
+  readonly headers: readonly { readonly name: string; readonly slot?: string }[];
+  readonly values: readonly OutboundHeaderSecretValue[];
+} {
+  const headers: { name: string; slot?: string }[] = [];
+  const values: OutboundHeaderSecretValue[] = [];
+  for (let index = 0; index < OUTBOUND_MAX_HEADER_ROWS; index += 1) {
+    const name = (form[`secret_header_${index}_name`] ?? "").trim();
+    const slot = (form[`secret_header_${index}_slot`] ?? "").trim();
+    const value = form[`secret_header_${index}_value`] ?? "";
+    if (name === "" && slot === "" && value.trim() === "") continue;
+    headers.push({ name, ...(slot === "" ? {} : { slot }) });
+    if (value !== "") values.push({ name, value: validateHeaderSecretValue(value) });
+  }
+  return { headers, values };
+}
+
+function parseOutboundForm(
+  form: Readonly<Record<string, string>>,
+  mode: "create" | "edit",
+): ParsedOutboundForm {
+  const transport =
+    form.transport === "webhook"
+      ? "webhook"
+      : form.transport === "home_assistant" || form.transport === "ha"
+        ? "home_assistant"
+        : invalidForm("Choose an outbound transport.", "transport");
+  const label = form.label ?? "";
+  const required = form.required === "on";
+  const enabled = form.enabled === "on";
+  const subscriptions = outboundSubscriptionsFromForm(form);
+  const staticHeaders = outboundStaticHeadersFromForm(form);
+  const secretRows = outboundSecretHeadersFromForm(form);
+  const result: ParsedOutboundForm = {
+    label,
+    transport,
+    required,
+    enabled,
+    subscriptions,
+    staticHeaders,
+    secretHeaders: secretRows.headers,
+    secretValues: secretRows.values,
+  };
+  if (transport === "home_assistant") {
+    const baseUrl = (form.baseUrl ?? "").trim();
+    if (mode === "create" && baseUrl === "")
+      invalidForm("Home Assistant base URL is required.", "baseUrl");
+    return {
+      ...result,
+      ...(baseUrl === "" ? {} : { baseUrl }),
+      ...(form.token === undefined || form.token === ""
+        ? {}
+        : { token: validateHomeAssistantToken(form.token) }),
+    };
+  }
+  const webhookUrl = (form.webhookUrl ?? "").trim();
+  if (mode === "create" && webhookUrl === "")
+    invalidForm("Webhook endpoint is required.", "webhookUrl");
+  const payloadFormat =
+    form.payloadFormat === undefined || form.payloadFormat === "standard"
+      ? "standard"
+      : form.payloadFormat === "discord"
+        ? "discord"
+        : invalidForm("Payload format is invalid.", "payloadFormat");
+  return {
+    ...result,
+    ...(webhookUrl === "" ? {} : { webhookUrl }),
+    payloadFormat,
+  };
+}
+
+function mergeOutboundStaticHeaders(
+  submitted: readonly OutboundHeader[],
+  existing: readonly OutboundHeader[] | undefined,
+  form: Readonly<Record<string, string>>,
+): readonly OutboundHeader[] {
+  const hasRows = Object.keys(form).some((key) => key.startsWith("static_header_"));
+  if (!hasRows && existing !== undefined) return existing;
+  return submitted.map((header) => {
+    if (header.value !== "" || existing === undefined) return header;
+    const match = existing.find(
+      (candidate) => candidate.name.toLowerCase() === header.name.toLowerCase(),
+    );
+    return match === undefined ? header : match;
+  });
+}
+
+function outboundCreateInput(parsed: ParsedOutboundForm): CreateOutboundDestinationInput {
+  return {
+    label: parsed.label,
+    transport: parsed.transport,
+    required: parsed.required,
+    enabled: parsed.enabled,
+    subscriptions: parsed.subscriptions,
+    staticHeaders: parsed.staticHeaders,
+    secretHeaders: parsed.secretHeaders,
+    ...(parsed.token === undefined ? {} : { secret: parsed.token }),
+    ...(parsed.baseUrl === undefined ? {} : { baseUrl: parsed.baseUrl }),
+    ...(parsed.webhookUrl === undefined ? {} : { webhookUrl: parsed.webhookUrl }),
+    ...(parsed.payloadFormat === undefined ? {} : { payloadFormat: parsed.payloadFormat }),
+  };
+}
+
+function outboundEditInput(
+  parsed: ParsedOutboundForm,
+  existing: OutboundDestination,
+  form: Readonly<Record<string, string>>,
+): EditOutboundDestinationInput {
+  const existingConfig = existing.currentVersion?.config;
+  const staticHeaders = mergeOutboundStaticHeaders(
+    parsed.staticHeaders,
+    existingConfig?.staticHeaders,
+    form,
+  );
+  const hasSecretRows = Object.keys(form).some((key) => key.startsWith("secret_header_"));
+  const secretHeaders =
+    !hasSecretRows && existingConfig !== undefined
+      ? existingConfig.secretHeaders.map((header) => ({ name: header.name, slot: header.slot }))
+      : parsed.secretHeaders;
+  return {
+    label: parsed.label,
+    transport: parsed.transport,
+    required: parsed.required,
+    subscriptions: parsed.subscriptions,
+    staticHeaders,
+    secretHeaders,
+    ...(parsed.baseUrl === undefined ? {} : { baseUrl: parsed.baseUrl }),
+    ...(parsed.webhookUrl === undefined ? {} : { webhookUrl: parsed.webhookUrl }),
+    ...(parsed.payloadFormat === undefined ? {} : { payloadFormat: parsed.payloadFormat }),
+  };
 }
 
 function recipeFromForm(
@@ -2552,6 +2911,7 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
   registerAdminGet(dependencies, "/admin/integrations", (request, response, context) => {
     const brewfather = dependencies.beverageService.getBrewfatherStatus();
     const sources = dependencies.telemetryService.listSources();
+    const outboundItems = dependencies.outboundService?.listPage() ?? [];
     renderAdmin(
       dependencies,
       response,
@@ -2572,9 +2932,89 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
           linkedBeverages: brewfather.totalLinkedBeverages,
           candidates: brewfather.totalCandidates,
         },
+        outbound: {
+          available: dependencies.outboundService !== undefined,
+          count: outboundItems.filter((item) => item.retiredAt === null).length,
+          enabledCount: outboundItems.filter((item) => item.retiredAt === null && item.enabled)
+            .length,
+          requiredCount: outboundItems.filter((item) => item.retiredAt === null && item.required)
+            .length,
+        },
       },
     );
   });
+
+  registerAdminGet(dependencies, "/admin/integrations/outbound", (request, response, context) => {
+    const destinations = dependencies.outboundService?.listPage() ?? [];
+    renderAdmin(
+      dependencies,
+      response,
+      request,
+      context,
+      "/admin/integrations-outbound",
+      "Outbound delivery",
+      "/admin/integrations/outbound",
+      {
+        available: dependencies.outboundService !== undefined,
+        destinations: destinations.map((destination) =>
+          outboundDestinationPresentation(destination),
+        ),
+      },
+    );
+  });
+
+  registerAdminGet(
+    dependencies,
+    "/admin/integrations/outbound/new",
+    (request, response, context) => {
+      const requested = requestUrl(request).searchParams.get("transport");
+      const transport = requested === "webhook" ? "webhook" : "home_assistant";
+      renderAdmin(
+        dependencies,
+        response,
+        request,
+        context,
+        "/admin/integrations-outbound-new",
+        "New outbound destination",
+        "/admin/integrations/outbound/new",
+        {
+          available: dependencies.outboundService !== undefined,
+          transport,
+          eventFields: OUTBOUND_EVENT_FIELDS,
+          maxHeaderRows: OUTBOUND_MAX_HEADER_ROWS,
+        },
+      );
+    },
+  );
+
+  registerAdminGet(
+    dependencies,
+    "/admin/integrations/outbound/:id",
+    (request, response, context, params) => {
+      const service = requireOutboundService(dependencies);
+      const destination = outboundDestinationOrNotFound(service, params.id ?? "");
+      const history = outboundHistoryPresentation(
+        service.listDeliveries(destination.id, 100),
+        destination.retiredAt === null,
+      );
+      renderAdmin(
+        dependencies,
+        response,
+        request,
+        context,
+        "/admin/integrations-outbound-detail",
+        destination.label,
+        `/admin/integrations/outbound/${encodeURIComponent(destination.id)}`,
+        {
+          available: true,
+          destination: outboundDestinationPresentation(destination),
+          history,
+          eventFields: OUTBOUND_EVENT_FIELDS,
+          maxHeaderRows: OUTBOUND_MAX_HEADER_ROWS,
+        },
+      );
+    },
+  );
 
   registerAdminGet(dependencies, "/admin/integrations/brewfather", (request, response, context) => {
     const brewfather = dependencies.beverageService.getBrewfatherStatus();
@@ -3535,6 +3975,191 @@ function isTapNameOnlyForm(form: Readonly<Record<string, string>>): boolean {
 }
 
 function registerAdminMutations(dependencies: WebRouteDependencies): void {
+  registerAdminAction(
+    dependencies,
+    "/admin/integrations/outbound/create",
+    "/admin/integrations/outbound",
+    (form) => {
+      const service = requireOutboundService(dependencies);
+      const parsed = parseOutboundForm(form, "create");
+      service.createConfigured({
+        ...outboundCreateInput(parsed),
+        headerSecrets: parsed.secretValues,
+      });
+    },
+    "Outbound destination created.",
+    { maxBytes: 16_384, maxFields: 100 },
+  );
+
+  registerAdminAction(
+    dependencies,
+    "/admin/integrations/outbound/:id/edit",
+    (params) => `/admin/integrations/outbound/${encodeURIComponent(params.id ?? "")}`,
+    (form, _context, params) => {
+      const service = requireOutboundService(dependencies);
+      const destination = outboundDestinationOrNotFound(service, params.id ?? "");
+      const parsed = parseOutboundForm(form, "edit");
+      service.updateConfigured(destination.id, {
+        ...outboundEditInput(parsed, destination, form),
+        enabled: parsed.enabled,
+        headerSecrets: parsed.secretValues,
+        ...(parsed.token === undefined || parsed.transport !== "home_assistant"
+          ? {}
+          : { token: parsed.token }),
+      });
+    },
+    "Outbound destination updated.",
+    { maxBytes: 16_384, maxFields: 100 },
+  );
+
+  registerAdminAction(
+    dependencies,
+    "/admin/integrations/outbound/:id/enable",
+    (params) => `/admin/integrations/outbound/${encodeURIComponent(params.id ?? "")}`,
+    (_form, _context, params) => {
+      requireOutboundService(dependencies).enable(params.id ?? "");
+    },
+    "Outbound destination enabled.",
+  );
+
+  registerAdminAction(
+    dependencies,
+    "/admin/integrations/outbound/:id/disable",
+    (params) => `/admin/integrations/outbound/${encodeURIComponent(params.id ?? "")}`,
+    (_form, _context, params) => {
+      requireOutboundService(dependencies).disable(params.id ?? "");
+    },
+    "Outbound destination disabled.",
+  );
+
+  registerAdminAction(
+    dependencies,
+    "/admin/integrations/outbound/:id/required",
+    (params) => `/admin/integrations/outbound/${encodeURIComponent(params.id ?? "")}`,
+    (form, _context, params) => {
+      requireOutboundService(dependencies).setRequired(
+        params.id ?? "",
+        form.required === "true" || form.required === "on",
+      );
+    },
+    "Required-delivery setting updated.",
+  );
+
+  registerAdminAction(
+    dependencies,
+    "/admin/integrations/outbound/:id/token",
+    (params) => `/admin/integrations/outbound/${encodeURIComponent(params.id ?? "")}`,
+    (form, _context, params) => {
+      const token = form.token ?? "";
+      if (token === "") invalidForm("A replacement Home Assistant token is required.", "token");
+      requireOutboundService(dependencies).setToken(params.id ?? "", token);
+    },
+    "Home Assistant token replaced.",
+    { maxBytes: 16_384, maxFields: 20 },
+  );
+
+  registerAdminAction(
+    dependencies,
+    "/admin/integrations/outbound/:id/token/remove",
+    (params) => `/admin/integrations/outbound/${encodeURIComponent(params.id ?? "")}`,
+    (_form, _context, params) => {
+      requireOutboundService(dependencies).removeToken(params.id ?? "");
+    },
+    "Home Assistant token removed and delivery disabled.",
+  );
+
+  registerAdminAction(
+    dependencies,
+    "/admin/integrations/outbound/:id/header-secret",
+    (params) => `/admin/integrations/outbound/${encodeURIComponent(params.id ?? "")}`,
+    (form, _context, params) => {
+      const slot = (form.slot ?? "").trim();
+      const secret = form.secret ?? "";
+      if (slot === "" || secret === "") invalidForm("A header secret replacement is required.");
+      requireOutboundService(dependencies).setHeaderSecret(params.id ?? "", slot, secret);
+    },
+    "Header secret replaced.",
+    { maxBytes: 16_384, maxFields: 20 },
+  );
+
+  registerAdminAction(
+    dependencies,
+    "/admin/integrations/outbound/:id/header-secret/remove",
+    (params) => `/admin/integrations/outbound/${encodeURIComponent(params.id ?? "")}`,
+    (form, _context, params) => {
+      const slot = (form.slot ?? "").trim();
+      if (slot === "") invalidForm("A header secret slot is required.");
+      requireOutboundService(dependencies).removeHeaderSecret(params.id ?? "", slot);
+    },
+    "Header secret removed and delivery disabled.",
+  );
+
+  registerAdminAction(
+    dependencies,
+    "/admin/integrations/outbound/:id/retire",
+    "/admin/integrations/outbound",
+    (_form, _context, params) => {
+      requireOutboundService(dependencies).retire(params.id ?? "");
+    },
+    "Outbound destination retired.",
+  );
+
+  registerAdminAction(
+    dependencies,
+    "/admin/integrations/outbound/:id/deliveries/:deliveryId/retry",
+    (params) => `/admin/integrations/outbound/${encodeURIComponent(params.id ?? "")}`,
+    (_form, _context, params) => {
+      const service = requireOutboundService(dependencies);
+      const destination = outboundDestinationOrNotFound(service, params.id ?? "");
+      const delivery = service
+        .listDeliveries(destination.id, 100)
+        .find((item) => item.id === params.deliveryId);
+      if (delivery === undefined) {
+        throw new ApplicationError({
+          category: "not_found",
+          code: "outbound.delivery_not_found",
+          clientMessage: "Delivery history item not found.",
+        });
+      }
+      if (!service.retryDelivery(destination.id, delivery.id)) {
+        throw new ApplicationError({
+          category: "conflict",
+          code: "outbound.delivery_not_retryable",
+          clientMessage: "That delivery is no longer waiting for retry.",
+        });
+      }
+    },
+    "Delivery scheduled for retry.",
+  );
+
+  registerAdminAction(
+    dependencies,
+    "/admin/integrations/outbound/:id/deliveries/:deliveryId/dismiss",
+    (params) => `/admin/integrations/outbound/${encodeURIComponent(params.id ?? "")}`,
+    (_form, _context, params) => {
+      const service = requireOutboundService(dependencies);
+      const destination = outboundDestinationOrNotFound(service, params.id ?? "");
+      const delivery = service
+        .listDeliveries(destination.id, 100)
+        .find((item) => item.id === params.deliveryId);
+      if (delivery === undefined) {
+        throw new ApplicationError({
+          category: "not_found",
+          code: "outbound.delivery_not_found",
+          clientMessage: "Delivery history item not found.",
+        });
+      }
+      if (!service.dismissDelivery(destination.id, delivery.id)) {
+        throw new ApplicationError({
+          category: "conflict",
+          code: "outbound.delivery_not_dismissible",
+          clientMessage: "That delivery is no longer open for dismissal.",
+        });
+      }
+    },
+    "Delivery dismissed.",
+  );
+
   registerAdminAction(
     dependencies,
     "/admin/display/shared",

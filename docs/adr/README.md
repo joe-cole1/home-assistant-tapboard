@@ -8,5 +8,6 @@ These records restate decisions that were already approved and frozen. They do n
 - [ADR-0004](0004-canonical-telemetry-and-pour-detection.md) — canonical telemetry, epochs, idempotency, and pour detection
 - [ADR-0005](0005-integrations-events-and-bounded-outbox.md) — integration boundaries, events, and bounded outbox delivery
 - [ADR-0006](0006-security-authentication-and-degraded-operation.md) — authentication, CSRF, API keys, encrypted secrets, and degraded operation
+- [ADR-0007](0007-outbound-delivery-workers-and-discord-webhook-format.md) — outbound workers, immutable destination versions, bounded webhook formats, and delivery failure semantics
 
 The authoritative product and architecture sources remain the documents under [`docs/rebuild`](../rebuild/).

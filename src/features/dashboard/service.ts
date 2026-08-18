@@ -8,6 +8,7 @@ import type { TapService } from "../taps/service.ts";
 import type { DetectorService } from "../telemetry/detector-service.ts";
 import type { TelemetryService } from "../telemetry/service.ts";
 import type { PublicTapWarsService } from "../tap-wars/public.ts";
+import type { OutboundService } from "../outbound/service.ts";
 import type {
   PublicDashboardView,
   PublicDisplayDefaultsView,
@@ -28,6 +29,7 @@ export interface DashboardServiceDependencies {
   readonly storyService?: PublicStoryService;
   readonly publicStoryService?: PublicStoryService;
   readonly tapWarsService?: PublicTapWarsService;
+  readonly outboundService?: OutboundService;
 }
 
 export class DashboardService {
@@ -85,6 +87,19 @@ export class DashboardService {
       }
     } catch {
       degraded = true;
+    }
+
+    // Only required outbound destinations contribute to the aggregate
+    // connectivity badge. Optional destinations remain visible in their own
+    // admin projections without making the public header degraded.
+    try {
+      if (this.#dependencies.outboundService?.connectivity().state === "degraded") {
+        degraded = true;
+      }
+    } catch {
+      // An unavailable optional integration projection must not make the
+      // dashboard claim a transport failure; the admin view remains the
+      // source of detail.
     }
 
     return {

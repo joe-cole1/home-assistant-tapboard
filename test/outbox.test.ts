@@ -84,6 +84,41 @@ function intentFor(index: number) {
   } as const;
 }
 
+function addIndexedDestination(
+  database: DatabaseConnection,
+  index: number,
+  enabled = true,
+): { destinationId: string; versionId: string } {
+  const destination = destinationId(index);
+  const version = versionId(index);
+  createDestination(
+    database,
+    { id: destination, label: `Destination ${index}`, enabled },
+    { now: () => new Date(NOW) },
+  );
+  createDestinationVersion(
+    database,
+    { id: version, destinationId: destination, versionNumber: 1 },
+    { now: () => new Date(NOW) },
+  );
+  return { destinationId: destination, versionId: version };
+}
+
+function indexedIntent(eventIndex: number, targetIndex: number) {
+  return {
+    event: {
+      event_type: "integration.status_changed",
+      event_id: eventId(eventIndex),
+      occurred_at: NOW,
+      coalescing_key: `integration_${eventIndex}`,
+      data: { integration_type: "ha", state: "degraded", reason_code: "timeout" },
+    },
+    targets: [
+      { destinationId: destinationId(targetIndex), destinationVersionId: versionId(targetIndex) },
+    ],
+  } as const;
+}
+
 void test("creates typed destinations and immutable versions", () => {
   const { database } = setup();
   try {
@@ -347,6 +382,61 @@ void test("coalescing replaces only an unattempted supersedable event", () => {
   }
 });
 
+void test("claimDue leases at most one due delivery per destination while allowing cross-destination work", () => {
+  const { database } = setup();
+  try {
+    const first = addIndexedDestination(database, 1);
+    const second = addIndexedDestination(database, 2);
+    mutateAndAdmit(database, () => undefined, indexedIntent(1, 1), {
+      now: () => new Date(NOW),
+    });
+    mutateAndAdmit(database, () => undefined, indexedIntent(2, 1), {
+      now: () => new Date(NOW),
+    });
+    mutateAndAdmit(database, () => undefined, indexedIntent(3, 2), {
+      now: () => new Date(NOW),
+    });
+
+    const claims = claimDue(database, "worker", NOW, 5_000, 10);
+    assert.equal(claims.length, 2);
+    assert.deepEqual(
+      new Set(claims.map((claim) => claim.destinationId)),
+      new Set([first.destinationId, second.destinationId]),
+    );
+    assert.deepEqual(claimDue(database, "worker-2", NOW, 5_000, 10), []);
+  } finally {
+    database.close();
+  }
+});
+
+void test("claimDue ignores disabled destinations and does not let a later row block an earlier row", () => {
+  const { database } = setup();
+  try {
+    const indexed = addIndexedDestination(database, 4);
+    mutateAndAdmit(database, () => undefined, indexedIntent(4, 4), {
+      now: () => new Date(NOW),
+    });
+    mutateAndAdmit(database, () => undefined, indexedIntent(5, 4), {
+      now: () => new Date(NOW),
+    });
+    const later = "2026-08-13T13:00:00.000Z";
+    database
+      .prepare<[string, string]>(
+        "UPDATE outbound_deliveries SET next_attempt_at = ? WHERE event_id = ?",
+      )
+      .run(later, eventId(4));
+    assert.equal(setDestinationEnabled(database, indexed.destinationId, false, NOW).enabled, false);
+    assert.deepEqual(claimDue(database, "worker", NOW, 5_000, 10), []);
+
+    assert.equal(setDestinationEnabled(database, indexed.destinationId, true, NOW).enabled, true);
+    const [claim] = claimDue(database, "worker", NOW, 5_000, 10);
+    assert.ok(claim);
+    assert.equal(claim.eventId, eventId(5));
+  } finally {
+    database.close();
+  }
+});
+
 void test("claim, CAS success, retry, terminal, manual retry, and dismiss", () => {
   const { database } = setup();
   try {
@@ -432,7 +522,7 @@ void test("expired leases are reclaimed and stale workers cannot complete", () =
   }
 });
 
-void test("an expired eighth lease becomes terminal instead of remaining stuck", () => {
+void test("an expired cycle-limit lease becomes terminal instead of remaining stuck", () => {
   const { database } = setup();
   try {
     mutateAndAdmit(database, () => undefined, intent(), { now: () => new Date(NOW) });
@@ -460,18 +550,23 @@ void test("an expired eighth lease becomes terminal instead of remaining stuck",
         ?.next_attempt_at as string;
     }
     assert.ok(finalClaim);
+    database
+      .prepare<[number, string]>(
+        "UPDATE outbound_deliveries SET cycle_attempt_count = ? WHERE id = ?",
+      )
+      .run(1000, finalClaim.deliveryId);
     const afterExpiry = new Date(Date.parse(finalClaim.leaseExpiresAt) + 1).toISOString();
     assert.deepEqual(claimDue(database, "replacement-worker", afterExpiry, 1_000, 1), []);
     const row = listDeliveries(database).find((item) => item.id === finalClaim.deliveryId);
     assert.equal(row?.state, "terminal");
     assert.equal(row?.attempt_count, 8);
-    assert.equal(row?.last_error_code, "lease_expired_max_attempts");
+    assert.equal(row?.last_error_code, "cycle_attempt_limit");
   } finally {
     database.close();
   }
 });
 
-void test("eighth failed attempt becomes terminal and supports dismiss/manual retry", () => {
+void test("cycle-limit failure becomes terminal and manual retry preserves total attempts", () => {
   const { database } = setup();
   try {
     mutateAndAdmit(database, () => undefined, intent(), { now: () => new Date(NOW) });
@@ -481,6 +576,13 @@ void test("eighth failed attempt becomes terminal and supports dismiss/manual re
       const [claim] = claimDue(database, "worker", due, 1_000, 1);
       assert.ok(claim);
       deliveryId = claim.deliveryId;
+      if (attempt === 8) {
+        database
+          .prepare<[number, string]>(
+            "UPDATE outbound_deliveries SET cycle_attempt_count = ? WHERE id = ?",
+          )
+          .run(1000, deliveryId);
+      }
       assert.equal(
         applyDeliveryResult(database, {
           deliveryId,
@@ -500,9 +602,78 @@ void test("eighth failed attempt becomes terminal and supports dismiss/manual re
         assert.equal(row?.state, "terminal");
       }
     }
-    assert.equal(dismissDelivery(database, deliveryId, due), true);
     assert.equal(manualRetry(database, deliveryId, due), true);
-    assert.equal(listDeliveries(database).find((item) => item.id === deliveryId)?.attempt_count, 0);
+    const retried = listDeliveries(database).find((item) => item.id === deliveryId);
+    assert.equal(retried?.attempt_count, 8);
+    assert.equal(retried?.cycle_attempt_count, 0);
+    const [terminalClaim] = claimDue(database, "worker", due, 1_000, 1);
+    assert.ok(terminalClaim);
+    assert.equal(
+      applyDeliveryResult(database, {
+        deliveryId,
+        owner: "worker",
+        revision: terminalClaim.revision,
+        outcome: "permanent",
+        errorCode: "operator_terminal",
+        now: due,
+      }),
+      true,
+    );
+    assert.equal(dismissDelivery(database, deliveryId, due), true);
+    assert.equal(manualRetry(database, deliveryId, due), false);
+  } finally {
+    database.close();
+  }
+});
+
+void test("an active retry window becomes terminal at 24 hours", () => {
+  const { database } = setup();
+  try {
+    mutateAndAdmit(database, () => undefined, intent(), { now: () => new Date(NOW) });
+    const [claim] = claimDue(database, "worker", NOW, 1_000, 1);
+    assert.ok(claim);
+    assert.equal(
+      applyDeliveryResult(database, {
+        deliveryId: claim.deliveryId,
+        owner: "worker",
+        revision: claim.revision,
+        outcome: "retry",
+        errorCode: "timeout",
+        now: NOW,
+      }),
+      true,
+    );
+    const timeoutAt = "2026-08-14T12:00:00.000Z";
+    assert.deepEqual(claimDue(database, "worker-2", timeoutAt, 1_000, 1), []);
+    const row = listDeliveries(database).find((item) => item.id === claim.deliveryId);
+    assert.equal(row?.state, "terminal");
+    assert.equal(row?.last_error_code, "active_failure_timeout");
+  } finally {
+    database.close();
+  }
+});
+
+void test("disabled destinations do not terminalize while the active failure clock is paused", () => {
+  const { database } = setup();
+  try {
+    mutateAndAdmit(database, () => undefined, intent(), { now: () => new Date(NOW) });
+    const [claim] = claimDue(database, "worker", NOW, 1_000, 1);
+    assert.ok(claim);
+    assert.equal(
+      applyDeliveryResult(database, {
+        deliveryId: claim.deliveryId,
+        owner: "worker",
+        revision: claim.revision,
+        outcome: "retry",
+        errorCode: "timeout",
+        now: NOW,
+      }),
+      true,
+    );
+    setDestinationEnabled(database, claim.destinationId, false, NOW);
+    assert.deepEqual(claimDue(database, "worker-2", "2026-08-15T12:00:00.000Z", 1_000, 1), []);
+    const paused = listDeliveries(database).find((item) => item.id === claim.deliveryId);
+    assert.equal(paused?.state, "retry");
   } finally {
     database.close();
   }

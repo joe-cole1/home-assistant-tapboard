@@ -1,0 +1,77 @@
+<% const editing = it.destination !== undefined && it.destination !== null; %>
+<% const selectedTransport = editing ? it.destination.transport : it.transport; %>
+<% const config = editing ? (it.destination.config || {}) : {}; %>
+<% const subscriptions = editing ? (it.destination.subscriptions || []) : []; %>
+<% const staticHeaders = config.staticHeaders || []; %>
+<% const secretHeaders = config.secretHeaders || []; %>
+<form class="admin-form outbound-form" action="<%= it.action %>" method="post">
+  <input type="hidden" name="_csrf" value="<%= it.page.csrfToken %>" />
+  <input type="hidden" name="transport" value="<%= selectedTransport %>" />
+  <div class="outbound-form-grid">
+    <label>Friendly name <input name="label" maxlength="120" required value="<%= editing ? it.destination.label : "" %>" autocomplete="off" /></label>
+    <label class="outbound-check-field"><input type="checkbox" name="required" value="on"<% if (editing && it.destination.required) { %> checked<% } %> /> Required destination <small>When enabled, delivery health contributes to the required integration status.</small></label>
+    <label class="outbound-check-field"><input type="checkbox" name="enabled" value="on"<% if (!editing || it.destination.enabled) { %> checked<% } %> /> Enabled <small>Disable while configuring a destination to prevent delivery attempts.</small></label>
+  </div>
+
+  <fieldset class="outbound-fieldset">
+    <legend>Subscriptions</legend>
+    <p class="muted">All six event types are selected by default for a new destination.</p>
+    <div class="outbound-subscription-groups">
+      <% for (const group of [{ label: "Serving", fields: it.eventFields.slice(0, 3) }, { label: "Alerts", fields: it.eventFields.slice(3, 5) }, { label: "System", fields: it.eventFields.slice(5) }]) { %>
+        <section class="outbound-subscription-group" aria-label="<%= group.label %>">
+          <h3><%= group.label %></h3>
+          <div class="outbound-subscription-grid">
+            <% for (const field of group.fields) { %>
+              <label class="outbound-check-field"><input type="checkbox" name="<%= field.name %>" value="on"<% if ((!editing) || subscriptions.includes(field.eventType)) { %> checked<% } %> /> <%= field.label %></label>
+            <% } %>
+          </div>
+        </section>
+      <% } %>
+    </div>
+  </fieldset>
+
+  <% if (selectedTransport === "home_assistant") { %>
+    <fieldset class="outbound-fieldset">
+      <legend>Home Assistant</legend>
+      <p class="muted">Use an <code>http://</code> or <code>https://</code> Home Assistant base URL. The token is write-only.</p>
+      <label>Base URL <input name="baseUrl" type="url" maxlength="2048" placeholder="<%= editing ? "Enter to replace; leave blank to retain current value" : "http://homeassistant.lan:8123" %>"<% if (!editing) { %> required<% } %> autocomplete="off" /></label>
+      <label>Token <input name="token" type="password" maxlength="4096" placeholder="<%= editing ? "Leave blank to retain current token" : "Paste token" %>" autocomplete="new-password" /></label>
+    </fieldset>
+  <% } else { %>
+    <fieldset class="outbound-fieldset">
+      <legend>Webhook</legend>
+      <p class="muted">Only public HTTP(S) endpoints are eligible for delivery. Redirects are not followed.</p>
+      <label>Endpoint <input name="webhookUrl" type="url" maxlength="2048" placeholder="<%= editing ? "Enter to replace; leave blank to retain current endpoint" : "https://example.invalid/events" %>"<% if (!editing) { %> required<% } %> autocomplete="off" /></label>
+      <label>Payload format <select name="payloadFormat"><option value="standard"<% if (!editing || config.payloadFormat === "standard") { %> selected<% } %>>Standard Tapboard JSON</option><option value="discord"<% if (editing && config.payloadFormat === "discord") { %> selected<% } %>>Discord webhook JSON</option></select></label>
+    </fieldset>
+  <% } %>
+
+  <fieldset class="outbound-fieldset">
+    <legend>Static headers</legend>
+    <p class="muted">Header values are retained when an existing row is left blank. Unsafe hop-by-hop headers are rejected.</p>
+    <div class="outbound-header-grid outbound-header-grid--static">
+      <% for (let index = 0; index < (it.maxHeaderRows || 8); index += 1) { const header = staticHeaders[index]; %>
+        <label>Header name <input name="static_header_<%= index %>_name" maxlength="64" value="<%= header ? header.name : "" %>" autocomplete="off" /></label>
+        <label>Header value <input name="static_header_<%= index %>_value" maxlength="1024" value="" autocomplete="off" /></label>
+      <% } %>
+    </div>
+  </fieldset>
+
+  <fieldset class="outbound-fieldset">
+    <legend>Secret headers</legend>
+    <p class="muted">Names and slots are safe metadata. Existing secret values are never rendered; enter a value only to replace it.</p>
+    <div class="outbound-header-grid outbound-header-grid--secret">
+      <% for (let index = 0; index < (it.maxHeaderRows || 8); index += 1) { const header = secretHeaders[index]; %>
+        <label>Header name <input name="secret_header_<%= index %>_name" maxlength="64" value="<%= header ? header.name : "" %>" autocomplete="off" /></label>
+        <label>Secret slot <input name="secret_header_<%= index %>_slot" maxlength="32" value="<%= header ? header.slot : "" %>" autocomplete="off" /></label>
+        <label>Replace value <input name="secret_header_<%= index %>_value" type="password" maxlength="1024" value="" autocomplete="new-password" /></label>
+        <span class="outbound-secret-state"><%= header ? (header.available ? "Configured" : header.configured ? "Configured but unavailable" : "Not configured") : "New row" %></span>
+      <% } %>
+    </div>
+  </fieldset>
+
+  <div class="form-actions">
+    <button class="primary" type="submit"><%= editing ? "Save outbound destination" : "Create outbound destination" %></button>
+    <a class="button secondary" href="<%= editing ? `/admin/integrations/outbound/${encodeURIComponent(it.destination.id)}` : "/admin/integrations/outbound" %>">Cancel</a>
+  </div>
+</form>
