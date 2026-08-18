@@ -71,6 +71,15 @@ test("Issue 79 outbound Admin forms are SSR-safe, disabled by default in setup, 
   expect(detailHtml).not.toContain(TOKEN_SENTINEL);
   await expect(page.getByRole("heading", { name: "Delivery history" })).toBeVisible();
 
+  await page.getByRole("button", { name: "Retire destination" }).click();
+  await expect(page).toHaveURL(/\/admin\/integrations\/outbound\?notice=/u);
+  await page.getByRole("link", { name: "Issue 79 disabled Discord webhook" }).click();
+  await expect(page.getByText("permanent read-only history")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Edit configuration" })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: /Enable|Disable|Make required|Replace|Remove/u }),
+  ).toHaveCount(0);
+
   for (const width of [390, 800, 1280, 1920]) {
     await page.setViewportSize({ width, height: 900 });
     await assertNoHorizontalOverflow(page);

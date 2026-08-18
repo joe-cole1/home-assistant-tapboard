@@ -67,9 +67,11 @@ class FakeSocket implements WebSocketLike {
 class FakeScheduler {
   #next = 1;
   readonly #timers = new Map<number, () => void>();
-  schedule = (handler: () => void): number => {
+  readonly delays: number[] = [];
+  schedule = (handler: () => void, timeoutMs: number): number => {
     const id = this.#next++;
     this.#timers.set(id, handler);
+    this.delays.push(timeoutMs);
     return id;
   };
   cancel = (id: unknown): void => {
@@ -80,6 +82,12 @@ class FakeScheduler {
       this.#timers.delete(id);
       handler();
     }
+  }
+  runNext(): void {
+    const next = this.#timers.entries().next();
+    if (next.done === true) throw new Error("No scheduled timer");
+    this.#timers.delete(next.value[0]);
+    next.value[1]();
   }
   get size(): number {
     return this.#timers.size;
@@ -112,13 +120,14 @@ function numberField(object: Record<string, unknown>, field: string): number {
 async function authenticated(
   manager: HomeAssistantConnectionManager,
   sockets: readonly FakeSocket[],
+  input: HomeAssistantDestination = destination(),
 ): Promise<FakeSocket> {
-  const result = manager.ensureAuthenticated(destination());
+  const result = manager.ensureAuthenticated(input);
   const socket = sockets.at(-1);
   assert.ok(socket);
   socket.open();
   socket.message({ type: "auth_required", ha_version: "2026.8" });
-  assert.deepEqual(parseObject(socket.sent[0]!), { type: "auth", access_token: "secret-token" });
+  assert.deepEqual(parseObject(socket.sent[0]!), { type: "auth", access_token: input.token });
   socket.message({ type: "auth_ok", ha_version: "2026.8" });
   assert.deepEqual(await result, { outcome: "success" });
   return socket;
@@ -140,9 +149,89 @@ void test("HA URL normalization accepts LAN HTTP and derives websocket endpoint"
   }
 });
 
+void test("HA connection-state evidence reports idle loss and recovery without secrets", async () => {
+  const sockets: FakeSocket[] = [];
+  const scheduler = new FakeScheduler();
+  const states: unknown[] = [];
+  const manager = new HomeAssistantConnectionManager({
+    webSocketFactory: () => {
+      const socket = new FakeSocket();
+      sockets.push(socket);
+      return socket;
+    },
+    schedule: scheduler.schedule,
+    cancel: scheduler.cancel,
+    onConnectionStateChanged: (event) => states.push(event),
+  });
+
+  const first = await authenticated(
+    manager,
+    sockets,
+    destination({ destinationVersionId: "version-1", bindingGeneration: "generation-1" }),
+  );
+  first.close();
+  assert.equal(scheduler.size, 1);
+  assert.deepEqual(states, [
+    {
+      destinationId: "ha-main",
+      destinationVersionId: "version-1",
+      bindingGeneration: "generation-1",
+      result: { outcome: "success" },
+    },
+    {
+      destinationId: "ha-main",
+      destinationVersionId: "version-1",
+      bindingGeneration: "generation-1",
+      result: { outcome: "retryable_failure", errorCode: "ha_socket_closed" },
+    },
+  ]);
+  assert.doesNotMatch(JSON.stringify(states), /secret-token|ha\.example/iu);
+
+  scheduler.runNext();
+  const second = sockets.at(-1)!;
+  second.open();
+  second.message({ type: "auth_required" });
+  second.message({ type: "auth_ok" });
+  await Promise.resolve();
+  assert.deepEqual((states as readonly Record<string, unknown>[]).at(-1), {
+    destinationId: "ha-main",
+    destinationVersionId: "version-1",
+    bindingGeneration: "generation-1",
+    result: { outcome: "success" },
+  });
+  manager.stop();
+});
+
+void test("HA reconnect retries indefinitely with capped exponential cadence", async () => {
+  const scheduler = new FakeScheduler();
+  let factoryCalls = 0;
+  const manager = new HomeAssistantConnectionManager({
+    webSocketFactory: () => {
+      factoryCalls += 1;
+      throw new Error("private provider detail");
+    },
+    reconnectDelayMs: 10,
+    maxReconnectDelayMs: 40,
+    schedule: scheduler.schedule,
+    cancel: scheduler.cancel,
+  });
+
+  assert.deepEqual(await manager.ensureAuthenticated(destination()), {
+    outcome: "retryable_failure",
+    errorCode: "ha_connect_failed",
+  });
+  for (let attempt = 0; attempt < 8; attempt += 1) scheduler.runNext();
+  assert.equal(factoryCalls, 9);
+  assert.deepEqual(scheduler.delays, [10, 20, 40, 40, 40, 40, 40, 40, 40]);
+  assert.equal(scheduler.size, 1);
+  manager.stop();
+  assert.equal(scheduler.size, 0);
+});
+
 void test("HA manager authenticates once per logical destination and switches bindings", async () => {
   const sockets: FakeSocket[] = [];
   const scheduler = new FakeScheduler();
+  const states: unknown[] = [];
   const manager = new HomeAssistantConnectionManager({
     webSocketFactory: (url) => {
       assert.equal(url, "ws://ha.example:8123/api/websocket");
@@ -152,6 +241,7 @@ void test("HA manager authenticates once per logical destination and switches bi
     },
     schedule: scheduler.schedule,
     cancel: scheduler.cancel,
+    onConnectionStateChanged: (event) => states.push(event),
   });
 
   const first = await authenticated(manager, sockets);
@@ -169,11 +259,50 @@ void test("HA manager authenticates once per logical destination and switches bi
   second.message({ type: "auth_ok" });
   assert.deepEqual(await changed, { outcome: "success" });
   assert.equal(first.closed, true);
+  assert.equal(JSON.stringify(states).includes("secret-token"), false);
 
   manager.closeDestination("ha-main");
+  assert.equal(scheduler.size, 0);
   manager.closeDestination("ha-main");
   manager.stop();
   manager.stop();
+});
+
+void test("HA intentional binding switches, closes, and stop never emit failure evidence", async () => {
+  const sockets: FakeSocket[] = [];
+  const scheduler = new FakeScheduler();
+  const states: unknown[] = [];
+  const manager = new HomeAssistantConnectionManager({
+    webSocketFactory: () => {
+      const socket = new FakeSocket();
+      sockets.push(socket);
+      return socket;
+    },
+    schedule: scheduler.schedule,
+    cancel: scheduler.cancel,
+    onConnectionStateChanged: (event) => states.push(event),
+  });
+
+  const first = await authenticated(manager, sockets, destination({ token: "old-token" }));
+  const switched = manager.ensureAuthenticated(destination({ token: "new-token" }));
+  const second = sockets.at(-1)!;
+  assert.notEqual(second, first);
+  assert.equal(first.closed, true);
+  second.open();
+  second.message({ type: "auth_required" });
+  assert.deepEqual(parseObject(second.sent[0]!), { type: "auth", access_token: "new-token" });
+  second.message({ type: "auth_ok" });
+  assert.deepEqual(await switched, { outcome: "success" });
+  const beforeClose = states.length;
+
+  manager.closeDestination("ha-main");
+  assert.equal(scheduler.size, 0);
+  first.emit("error", { reason: "stale old socket" });
+  second.emit("close", { reason: "intentional close" });
+  assert.equal(states.length, beforeClose);
+  manager.stop();
+  assert.equal(states.length, beforeClose);
+  assert.doesNotMatch(JSON.stringify(states), /old-token|new-token|ha\.example/iu);
 });
 
 void test("HA fire_event accepts only its matching successful result", async () => {
@@ -231,7 +360,6 @@ void test("HA disconnect before ACK is retryable and retry keeps the canonical e
     },
     schedule: scheduler.schedule,
     cancel: scheduler.cancel,
-    maxReconnectAttempts: 1,
   });
   const firstSocket = await authenticated(manager, sockets);
   const firstAttempt = manager.sendEvent(destination(), EVENT);
@@ -246,6 +374,7 @@ void test("HA disconnect before ACK is retryable and retry keeps the canonical e
   assert.equal(scheduler.size, 1, "only one bounded reconnect timer should be scheduled");
 
   const retry = manager.sendEvent(destination(), EVENT);
+  assert.equal(scheduler.size, 0, "an explicit send cancels the stale reconnect timer");
   const secondSocket = sockets.at(-1)!;
   assert.notEqual(secondSocket, firstSocket);
   secondSocket.open();
@@ -263,6 +392,7 @@ void test("HA disconnect before ACK is retryable and retry keeps the canonical e
 void test("HA auth invalid, close, and request timeout are sanitized and retryable/permanent", async () => {
   const sockets: FakeSocket[] = [];
   const scheduler = new FakeScheduler();
+  const states: unknown[] = [];
   const manager = new HomeAssistantConnectionManager({
     webSocketFactory: () => {
       const socket = new FakeSocket();
@@ -272,7 +402,7 @@ void test("HA auth invalid, close, and request timeout are sanitized and retryab
     schedule: scheduler.schedule,
     cancel: scheduler.cancel,
     requestTimeoutMs: 10,
-    maxReconnectAttempts: 0,
+    onConnectionStateChanged: (event) => states.push(event),
   });
   const auth = manager.ensureAuthenticated(destination());
   const socket = sockets[0]!;
@@ -282,6 +412,13 @@ void test("HA auth invalid, close, and request timeout are sanitized and retryab
   const authResult = await auth;
   assert.deepEqual(authResult, { outcome: "permanent_failure", errorCode: "ha_auth_invalid" });
   assert.equal(JSON.stringify(authResult).includes("secret-token"), false);
+  assert.deepEqual(states, [
+    {
+      destinationId: "ha-main",
+      result: { outcome: "permanent_failure", errorCode: "ha_auth_invalid" },
+    },
+  ]);
+  assert.doesNotMatch(JSON.stringify(states), /secret-token|ha\.example/iu);
   manager.stop();
 
   const timeoutManager = new HomeAssistantConnectionManager({
@@ -293,7 +430,6 @@ void test("HA auth invalid, close, and request timeout are sanitized and retryab
     schedule: scheduler.schedule,
     cancel: scheduler.cancel,
     requestTimeoutMs: 10,
-    maxReconnectAttempts: 0,
   });
   const ready = timeoutManager.ensureAuthenticated(destination({ destinationId: "other" }));
   const timeoutSocket = sockets.at(-1)!;

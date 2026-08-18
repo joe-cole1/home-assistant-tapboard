@@ -11,6 +11,7 @@ import type {
   AssignmentClosedEventContext,
   AssignmentOpenedEventContext,
   CompletedPourEventContext,
+  CreateConfiguredOutboundDestinationInput,
   CreateOutboundDestinationInput,
   EditOutboundDestinationInput,
   HealthTransitionEventContext,
@@ -22,8 +23,10 @@ import type {
   OutboundDestinationListItem,
   OutboundDestinationPatch,
   OutboundEventInput,
+  OutboundHeaderSecretReplacement,
   OutboundSecretStore,
   OutboundServiceOptions,
+  UpdateConfiguredOutboundDestinationInput,
 } from "./types.ts";
 import {
   HA_TOKEN_SLOT,
@@ -43,6 +46,7 @@ import {
 } from "./outbound-validation.ts";
 import {
   admitOutboxIntent,
+  deliveryBelongsToDestination,
   insertDestinationBase,
   insertVersionConfig,
   listDeliveryHistory,
@@ -67,6 +71,10 @@ import {
   updateDestinationLabelRequired,
   type OutboundSecretDescriptorLike,
 } from "./repository.ts";
+import {
+  dismissDelivery as dismissOutboxDelivery,
+  retryDelivery as retryOutboxDelivery,
+} from "../outbox/repository.ts";
 
 const DEFAULT_NOW = (): Date => new Date();
 
@@ -117,6 +125,23 @@ function secretAvailable(
 function requireSecretStore(secrets: OutboundSecretStore | undefined): OutboundSecretStore {
   if (secrets === undefined) throw new Error("Outbound secret storage is unavailable");
   return secrets;
+}
+
+function normalizedHeaderReplacements(
+  values: readonly OutboundHeaderSecretReplacement[] | undefined,
+): ReadonlyMap<string, string> {
+  const result = new Map<string, string>();
+  for (const item of values ?? []) {
+    if (typeof item !== "object" || item === null) {
+      throw new TypeError("Invalid outbound header secret replacement");
+    }
+    const name = item.name.trim().toLowerCase();
+    if (name.length === 0 || result.has(name)) {
+      throw new TypeError("Invalid outbound header secret replacement name");
+    }
+    result.set(name, validateHeaderSecretValue(item.value));
+  }
+  return result;
 }
 
 function appendOutboundActivity(
@@ -236,6 +261,7 @@ export class OutboundService implements OutboundAdmissionPort {
   readonly #options: OutboundServiceOptions;
   readonly #now: () => Date;
   readonly #ids: () => string;
+  #lifecycleSuppression = 0;
 
   constructor(database: DatabaseExecutor, options: OutboundServiceOptions = {}) {
     this.#database = database;
@@ -252,7 +278,11 @@ export class OutboundService implements OutboundAdmissionPort {
     const normalized = normalizeCreateInput(input);
     const now = iso(this.#now);
     const destinationId = canonicalId(input.id, this.#ids);
-    return this.#database.withTransaction(() => {
+    const missingToken =
+      normalized.transport === "home_assistant" && normalized.secret === undefined;
+    const missingHeaderSecret = normalized.config.secretHeaders.length > 0;
+    const enabled = normalized.enabled && !missingToken && !missingHeaderSecret;
+    const result = this.#database.withTransaction(() => {
       const activeCount = listDestinationProfiles(this.#database).filter(
         (row) => row.retired_at === null,
       ).length;
@@ -261,7 +291,7 @@ export class OutboundService implements OutboundAdmissionPort {
       insertDestinationBase(this.#database, {
         id: destinationId,
         label: normalized.label,
-        enabled: normalized.enabled,
+        enabled,
         required: normalized.required,
         transport: normalized.transport,
         now,
@@ -276,16 +306,69 @@ export class OutboundService implements OutboundAdmissionPort {
         required: normalized.required,
       });
       this.#storeInitialSecret(destinationId, normalized.config, normalized.secret, now);
-      if (!normalized.enabled)
-        setEnabledState(this.#database, destinationId, false, now, "created_disabled");
+      if (!enabled) {
+        const reason = missingToken
+          ? "token_missing"
+          : missingHeaderSecret
+            ? "secret_missing"
+            : "created_disabled";
+        setEnabledState(this.#database, destinationId, false, now, reason);
+        if (missingToken) markTokenMissing(this.#database, destinationId, now);
+      }
       appendOutboundActivity(this.#database, "configuration_changed", destinationId, now, {
         change: "created",
         transport: normalized.config.transportKind,
         required: normalized.required,
-        enabled: normalized.enabled,
+        enabled,
       });
       return this.#requireDestination(destinationId);
     });
+    if (result.enabled && result.transport === "home_assistant") {
+      this.#emitLifecycle("enabled", destinationId);
+    }
+    return result;
+  }
+
+  /** Apply one complete Admin create submission atomically, including write-only headers. */
+  createConfigured(input: CreateConfiguredOutboundDestinationInput): OutboundDestination {
+    const { headerSecrets, ...destinationInput } = input;
+    const normalized = normalizeCreateInput(destinationInput);
+    const replacements = normalizedHeaderReplacements(headerSecrets);
+    const valuesBySlot = this.#resolveReplacementSlots(
+      normalized.config.secretHeaders,
+      replacements,
+    );
+    this.#assertHeaderTotal(
+      normalized.config.staticHeaders,
+      normalized.config.secretHeaders,
+      valuesBySlot,
+    );
+    const requestedEnabled = normalized.enabled;
+    const canEnable =
+      (normalized.transport !== "home_assistant" || normalized.secret !== undefined) &&
+      normalized.config.secretHeaders.every((header) => valuesBySlot.has(header.slot));
+
+    return this.#withDeferredLifecycle(
+      () =>
+        this.#database.withTransaction(() => {
+          const created = this.create({
+            ...destinationInput,
+            enabled: requestedEnabled && canEnable,
+          });
+          for (const [slot, value] of valuesBySlot) {
+            this.setHeaderSecret(created.id, slot, value);
+          }
+          if (requestedEnabled && canEnable && !created.enabled) {
+            this.enable(created.id);
+          }
+          return this.#requireDestination(created.id);
+        }),
+      (created) => {
+        if (created.enabled && created.transport === "home_assistant") {
+          this.#emitLifecycle("enabled", created.id);
+        }
+      },
+    );
   }
 
   createDestination(input: CreateOutboundDestinationInput): OutboundDestination {
@@ -296,8 +379,11 @@ export class OutboundService implements OutboundAdmissionPort {
     const id = validateDestinationId(destinationId, "destinationId");
     const now = iso(this.#now);
     let removedSecretSlot = false;
+    let versioned = false;
+    let previousTransport: OutboundDestination["transport"] | undefined;
     const result = this.#database.withTransaction(() => {
-      const current = this.#requireDestination(id);
+      const current = this.#requireMutableDestination(id);
+      previousTransport = current.transport;
       const currentVersion = current.currentVersion;
       if (currentVersion === null) throw new Error("Outbound destination configuration is missing");
       const currentConfig = currentVersion.config;
@@ -364,6 +450,7 @@ export class OutboundService implements OutboundAdmissionPort {
         }
       }
       this.#assertHistoricalSecretSlots(id, config.secretHeaders);
+      versioned = true;
       updateDestinationLabelRequired(this.#database, id, label, required, now);
       const versionId = this.#ids();
       insertVersionConfig(this.#database, {
@@ -389,7 +476,14 @@ export class OutboundService implements OutboundAdmissionPort {
       });
       return this.#requireDestination(id);
     });
-    if (removedSecretSlot) this.#options.lifecycle?.onDisabled?.(id);
+    if (
+      removedSecretSlot ||
+      (previousTransport === "home_assistant" && result.transport !== "home_assistant")
+    ) {
+      this.#emitLifecycle("disabled", id);
+    } else if (versioned && result.enabled && result.transport === "home_assistant") {
+      this.#emitLifecycle("credentials_changed", id);
+    }
     return result;
   }
 
@@ -397,11 +491,138 @@ export class OutboundService implements OutboundAdmissionPort {
     return this.edit(destinationId, input);
   }
 
+  /** Apply one complete Admin edit submission atomically, including secrets and enabled state. */
+  updateConfigured(
+    destinationId: string,
+    input: UpdateConfiguredOutboundDestinationInput,
+  ): OutboundDestination {
+    const id = validateDestinationId(destinationId, "destinationId");
+    if (typeof input.enabled !== "boolean") throw new TypeError("enabled must be boolean");
+    const { enabled, token, headerSecrets, ...editInput } = input;
+    const before = this.#requireMutableDestination(id);
+    const currentVersion = before.currentVersion;
+    if (currentVersion === null) throw new Error("Outbound destination configuration is missing");
+    const currentConfig = currentVersion.config;
+    const transport =
+      editInput.transport === undefined
+        ? before.transport
+        : validateOutboundTransport(editInput.transport);
+    let endpoint: string | undefined;
+    if (transport === "webhook") {
+      endpoint =
+        editInput.webhookUrl === undefined
+          ? currentConfig.transport === "webhook" && currentConfig.endpointConfigured
+            ? this.#revealSecret(currentVersion.id, WEBHOOK_ENDPOINT_SLOT)
+            : undefined
+          : parseOutboundUrl(editInput.webhookUrl, "webhookUrl").url;
+    }
+    const config = normalizeDestinationConfig({
+      transport,
+      ...(editInput.baseUrl !== undefined
+        ? { baseUrl: editInput.baseUrl }
+        : currentConfig.transport === "home_assistant"
+          ? { baseUrl: currentConfig.baseUrl }
+          : {}),
+      ...(editInput.webhookUrl !== undefined
+        ? { webhookUrl: editInput.webhookUrl }
+        : endpoint === undefined
+          ? {}
+          : { webhookUrl: endpoint }),
+      ...(editInput.payloadFormat !== undefined
+        ? { payloadFormat: editInput.payloadFormat }
+        : currentConfig.transport === "webhook"
+          ? { payloadFormat: currentConfig.payloadFormat }
+          : {}),
+      staticHeaders: editInput.staticHeaders ?? currentConfig.staticHeaders,
+      secretHeaders:
+        editInput.secretHeaders ??
+        currentConfig.secretHeaders.map((header) => ({ name: header.name, slot: header.slot })),
+    });
+    for (const header of config.secretHeaders) {
+      const previous = currentConfig.secretHeaders.find(
+        (candidate) => candidate.slot === header.slot,
+      );
+      if (previous !== undefined && previous.name.toLowerCase() !== header.name.toLowerCase()) {
+        throw new Error("A secret header slot cannot be reused for another header");
+      }
+    }
+    this.#assertHistoricalSecretSlots(id, config.secretHeaders);
+    validateSubscriptions(editInput.subscriptions ?? before.subscriptions);
+    const replacements = normalizedHeaderReplacements(headerSecrets);
+    const replacementValues = this.#resolveReplacementSlots(config.secretHeaders, replacements);
+    const finalHeaderValues = new Map(replacementValues);
+    for (const header of config.secretHeaders) {
+      if (finalHeaderValues.has(header.slot)) continue;
+      if (secretAvailable(this.#options.secrets, id, header.slot)) {
+        finalHeaderValues.set(header.slot, this.#revealSecret(id, header.slot));
+      }
+    }
+    this.#assertHeaderTotal(config.staticHeaders, config.secretHeaders, finalHeaderValues);
+    const submittedToken = token === undefined ? undefined : validateHomeAssistantToken(token);
+    const finalTokenAvailable =
+      submittedToken !== undefined ||
+      (transport === "home_assistant" && secretAvailable(this.#options.secrets, id, HA_TOKEN_SLOT));
+    if (token !== undefined && transport !== "home_assistant") {
+      throw new Error("Only Home Assistant destinations have tokens");
+    }
+    if (enabled) {
+      if (transport === "home_assistant" && !finalTokenAvailable) {
+        throw new Error("Home Assistant token is required before enabling");
+      }
+      if (transport === "webhook" && endpoint === undefined) {
+        throw new Error("Webhook endpoint is required before enabling");
+      }
+      if (config.secretHeaders.some((header) => !finalHeaderValues.has(header.slot))) {
+        throw new Error("Every configured secret header requires a value before enabling");
+      }
+      const finalSlots = new Set(config.secretHeaders.map((header) => header.slot));
+      const unavailableHistoricalSlot = listUnfinishedSecretSlots(this.#database, id).find(
+        (slot) =>
+          (currentConfig.secretHeaders.some((header) => header.slot === slot) &&
+            !finalSlots.has(slot)) ||
+          (!replacementValues.has(slot) && !secretAvailable(this.#options.secrets, id, slot)),
+      );
+      if (unavailableHistoricalSlot !== undefined) {
+        throw new Error("Pending delivery requires a removed secret header value");
+      }
+    }
+
+    return this.#withDeferredLifecycle(
+      () =>
+        this.#database.withTransaction(() => {
+          this.edit(id, editInput);
+          if (submittedToken !== undefined) this.setToken(id, submittedToken);
+          const updatedConfig = this.#requireDestination(id).currentVersion?.config;
+          if (updatedConfig === undefined)
+            throw new Error("Outbound destination configuration is missing");
+          for (const [slot, value] of replacementValues) {
+            if (!updatedConfig.secretHeaders.some((header) => header.slot === slot)) {
+              throw new Error("Header secret slot is not configured");
+            }
+            this.setHeaderSecret(id, slot, value);
+          }
+          const current = this.#requireDestination(id);
+          if (current.enabled !== enabled) this.setEnabled(id, enabled);
+          return this.#requireDestination(id);
+        }),
+      (updated) => {
+        if (updated.enabled && updated.transport === "home_assistant") {
+          this.#emitLifecycle("credentials_changed", id);
+        } else if (before.transport === "home_assistant" || !updated.enabled) {
+          this.#emitLifecycle("disabled", id);
+        }
+      },
+    );
+  }
+
   patch(destinationId: string, input: OutboundDestinationPatch): OutboundDestination {
-    const metadata: EditOutboundDestinationInput = input;
-    const result = this.edit(destinationId, metadata);
-    if (input.enabled === undefined) return result;
-    return input.enabled ? this.enable(destinationId) : this.disable(destinationId);
+    const current = this.#requireMutableDestination(
+      validateDestinationId(destinationId, "destinationId"),
+    );
+    return this.updateConfigured(destinationId, {
+      ...input,
+      enabled: input.enabled ?? current.enabled,
+    });
   }
 
   setRequired(destinationId: string, required: boolean): OutboundDestination {
@@ -409,7 +630,7 @@ export class OutboundService implements OutboundAdmissionPort {
     const id = validateDestinationId(destinationId, "destinationId");
     const now = iso(this.#now);
     return this.#database.withTransaction(() => {
-      this.#requireDestination(id);
+      this.#requireMutableDestination(id);
       updateDestinationLabelRequired(
         this.#database,
         id,
@@ -441,7 +662,7 @@ export class OutboundService implements OutboundAdmissionPort {
     const id = validateDestinationId(destinationId, "destinationId");
     const now = iso(this.#now);
     const result = this.#database.withTransaction(() => {
-      const before = this.#requireDestination(id);
+      const before = this.#requireMutableDestination(id);
       setRetired(this.#database, id, now);
       this.#revokeSecrets(id);
       appendOutboundActivity(this.#database, "configuration_changed", id, now, {
@@ -458,7 +679,7 @@ export class OutboundService implements OutboundAdmissionPort {
       });
       return after;
     });
-    this.#options.lifecycle?.onRetired?.(id);
+    this.#emitLifecycle("retired", id);
     return result;
   }
 
@@ -471,7 +692,7 @@ export class OutboundService implements OutboundAdmissionPort {
     const token = validateHomeAssistantToken(plaintext);
     const now = iso(this.#now);
     const result = this.#database.withTransaction(() => {
-      const destination = this.#requireDestination(id);
+      const destination = this.#requireMutableDestination(id);
       if (destination.transport !== "home_assistant")
         throw new Error("Only Home Assistant destinations have tokens");
       requireSecretStore(this.#options.secrets).upsert("outbound", id, HA_TOKEN_SLOT, token, {
@@ -483,7 +704,7 @@ export class OutboundService implements OutboundAdmissionPort {
       });
       return this.#requireDestination(id);
     });
-    this.#options.lifecycle?.onCredentialsChanged?.(id);
+    this.#emitLifecycle("credentials_changed", id);
     return result;
   }
 
@@ -491,7 +712,7 @@ export class OutboundService implements OutboundAdmissionPort {
     const id = validateDestinationId(destinationId, "destinationId");
     const now = iso(this.#now);
     const result = this.#database.withTransaction(() => {
-      const destination = this.#requireDestination(id);
+      const destination = this.#requireMutableDestination(id);
       if (destination.transport !== "home_assistant")
         throw new Error("Only Home Assistant destinations have tokens");
       requireSecretStore(this.#options.secrets).remove("outbound", id, HA_TOKEN_SLOT, {
@@ -513,7 +734,7 @@ export class OutboundService implements OutboundAdmissionPort {
       });
       return after;
     });
-    this.#options.lifecycle?.onDisabled?.(id);
+    this.#emitLifecycle("disabled", id);
     return result;
   }
 
@@ -522,7 +743,7 @@ export class OutboundService implements OutboundAdmissionPort {
     const secretValue = validateHeaderSecretValue(plaintext);
     const now = iso(this.#now);
     return this.#database.withTransaction(() => {
-      const destination = this.#requireDestination(id);
+      const destination = this.#requireMutableDestination(id);
       const versionId = destination.currentVersion?.id;
       if (versionId === undefined) throw new Error("Outbound destination configuration is missing");
       const currentVersion = destination.currentVersion;
@@ -564,7 +785,7 @@ export class OutboundService implements OutboundAdmissionPort {
     const id = validateDestinationId(destinationId, "destinationId");
     const now = iso(this.#now);
     const result = this.#database.withTransaction(() => {
-      const destination = this.#requireDestination(id);
+      const destination = this.#requireMutableDestination(id);
       const versionId = destination.currentVersion?.id;
       if (versionId === undefined) throw new Error("Outbound destination configuration is missing");
       const currentVersion = destination.currentVersion;
@@ -589,7 +810,7 @@ export class OutboundService implements OutboundAdmissionPort {
       });
       return after;
     });
-    this.#options.lifecycle?.onDisabled?.(id);
+    this.#emitLifecycle("disabled", id);
     return result;
   }
 
@@ -626,6 +847,26 @@ export class OutboundService implements OutboundAdmissionPort {
     return listDeliveryHistory(this.#database, destinationId, limit);
   }
 
+  retryDelivery(destinationId: string, deliveryId: string): boolean {
+    const id = validateDestinationId(destinationId, "destinationId");
+    const now = clock(this.#now);
+    return this.#database.withTransaction(() => {
+      this.#requireMutableDestination(id);
+      this.#requireOwnedDelivery(id, deliveryId);
+      return retryOutboxDelivery(this.#database, deliveryId, now);
+    });
+  }
+
+  dismissDelivery(destinationId: string, deliveryId: string): boolean {
+    const id = validateDestinationId(destinationId, "destinationId");
+    const now = clock(this.#now);
+    return this.#database.withTransaction(() => {
+      this.#requireMutableDestination(id);
+      this.#requireOwnedDelivery(id, deliveryId);
+      return dismissOutboxDelivery(this.#database, deliveryId, now);
+    });
+  }
+
   connectivity(): ReturnType<typeof projectConnectivity> {
     const missing = this.list()
       .filter(
@@ -647,6 +888,7 @@ export class OutboundService implements OutboundAdmissionPort {
     const id = validateDestinationId(destinationId, "destinationId");
     const now = iso(this.#now);
     return this.#database.withTransaction(() => {
+      this.#requireMutableDestination(id);
       recordFailureRow(this.#database, id, errorCode, failureClass, now);
       const safeCode = /^[a-z0-9][a-z0-9_.:-]{0,119}$/u.test(errorCode)
         ? errorCode
@@ -663,6 +905,7 @@ export class OutboundService implements OutboundAdmissionPort {
     const id = validateDestinationId(destinationId, "destinationId");
     const now = iso(this.#now);
     return this.#database.withTransaction(() => {
+      this.#requireMutableDestination(id);
       recordSuccessRow(this.#database, id, now);
       appendOutboundActivity(this.#database, "status_recovered", id, now);
       return this.get(id);
@@ -835,9 +1078,7 @@ export class OutboundService implements OutboundAdmissionPort {
     const id = validateDestinationId(destinationId, "destinationId");
     const now = iso(this.#now);
     const result = this.#database.withTransaction(() => {
-      const current = this.#requireDestination(id);
-      if (current.retiredAt !== null)
-        throw new Error("Retired outbound destinations cannot be enabled");
+      const current = this.#requireMutableDestination(id);
       if (enabled) {
         if (
           current.transport === "home_assistant" &&
@@ -892,8 +1133,7 @@ export class OutboundService implements OutboundAdmissionPort {
       });
       return after;
     });
-    if (enabled) this.#options.lifecycle?.onEnabled?.(id);
-    else this.#options.lifecycle?.onDisabled?.(id);
+    this.#emitLifecycle(enabled ? "enabled" : "disabled", id);
     return result;
   }
 
@@ -901,6 +1141,83 @@ export class OutboundService implements OutboundAdmissionPort {
     const result = this.get(destinationId);
     if (result === undefined) throw new Error("Outbound destination was not found");
     return result;
+  }
+
+  #requireMutableDestination(destinationId: string): OutboundDestination {
+    const result = this.#requireDestination(destinationId);
+    if (result.retiredAt !== null) {
+      throw new Error("Retired outbound destinations are read-only");
+    }
+    return result;
+  }
+
+  #requireOwnedDelivery(destinationId: string, deliveryId: string): void {
+    if (
+      !deliveryBelongsToDestination(
+        this.#database,
+        destinationId,
+        validateDestinationId(deliveryId, "deliveryId"),
+      )
+    ) {
+      throw new Error("Outbound delivery was not found");
+    }
+  }
+
+  #resolveReplacementSlots(
+    headers: readonly { readonly name: string; readonly slot: string }[],
+    replacements: ReadonlyMap<string, string>,
+  ): ReadonlyMap<string, string> {
+    const result = new Map<string, string>();
+    for (const [name, value] of replacements) {
+      const header = headers.find((candidate) => candidate.name.toLowerCase() === name);
+      if (header === undefined) throw new Error("The submitted secret header is not configured");
+      result.set(header.slot, value);
+    }
+    return result;
+  }
+
+  #assertHeaderTotal(
+    staticHeaders: readonly { readonly name: string; readonly value: string }[],
+    secretHeaders: readonly { readonly name: string; readonly slot: string }[],
+    secretValues: ReadonlyMap<string, string>,
+  ): void {
+    const configured = [
+      ...staticHeaders,
+      ...secretHeaders.flatMap((header) => {
+        const value = secretValues.get(header.slot);
+        return value === undefined ? [] : [{ name: header.name, value }];
+      }),
+    ];
+    if (configuredHeaderBytes(configured) > MAX_HEADER_TOTAL_BYTES) {
+      throw new TypeError("Configured outbound headers exceed 4096 total bytes");
+    }
+  }
+
+  #withDeferredLifecycle<Result>(
+    work: () => Result,
+    afterCommit: (result: Result) => void,
+  ): Result {
+    this.#lifecycleSuppression += 1;
+    let result: Result;
+    try {
+      result = work();
+    } finally {
+      this.#lifecycleSuppression -= 1;
+    }
+    afterCommit(result);
+    return result;
+  }
+
+  #emitLifecycle(
+    action: "enabled" | "disabled" | "credentials_changed" | "retired",
+    destinationId: string,
+  ): void {
+    if (this.#lifecycleSuppression > 0) return;
+    if (action === "enabled") this.#options.lifecycle?.onEnabled?.(destinationId);
+    else if (action === "disabled") this.#options.lifecycle?.onDisabled?.(destinationId);
+    else if (action === "credentials_changed")
+      this.#options.lifecycle?.onCredentialsChanged?.(destinationId);
+    else this.#options.lifecycle?.onRetired?.(destinationId);
   }
 
   #storeInitialSecret(

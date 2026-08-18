@@ -41,7 +41,6 @@ import {
   validateHeaderSecretValue,
   validateHomeAssistantToken,
 } from "../outbound/outbound-validation.ts";
-import { dismissDelivery, retryDelivery } from "../outbox/repository.ts";
 import type {
   CreateOutboundDestinationInput,
   EditOutboundDestinationInput,
@@ -904,6 +903,7 @@ function outboundDestinationPresentation(
 
 function outboundHistoryPresentation(
   rows: readonly OutboundDeliveryHistoryItem[],
+  mutable = true,
 ): readonly Record<string, unknown>[] {
   return rows.slice(0, 100).map((row) => ({
     id: row.id,
@@ -921,8 +921,8 @@ function outboundHistoryPresentation(
       row.lastAttemptAt === null ? "Not attempted" : adminTimestampLabel(row.lastAttemptAt),
     nextAttemptAt: row.nextAttemptAt,
     nextAttemptAtLabel: adminTimestampLabel(row.nextAttemptAt),
-    canRetry: row.state === "terminal",
-    canDismiss: row.state === "terminal",
+    canRetry: mutable && row.state === "terminal",
+    canDismiss: mutable && row.state === "terminal",
   }));
 }
 
@@ -1032,24 +1032,6 @@ function mergeOutboundStaticHeaders(
     );
     return match === undefined ? header : match;
   });
-}
-
-function applyOutboundHeaderSecrets(
-  service: OutboundService,
-  destinationId: string,
-  values: readonly OutboundHeaderSecretValue[],
-): void {
-  if (values.length === 0) return;
-  const destination = outboundDestinationOrNotFound(service, destinationId);
-  const config = destination.currentVersion?.config;
-  if (config === undefined) invalidForm("Outbound configuration is unavailable.");
-  for (const value of values) {
-    const header = config.secretHeaders.find(
-      (candidate) => candidate.name.toLowerCase() === value.name.toLowerCase(),
-    );
-    if (header === undefined) invalidForm("The submitted secret header is not configured.");
-    service.setHeaderSecret(destinationId, header.slot, value.value);
-  }
 }
 
 function outboundCreateInput(parsed: ParsedOutboundForm): CreateOutboundDestinationInput {
@@ -3011,7 +2993,10 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
     (request, response, context, params) => {
       const service = requireOutboundService(dependencies);
       const destination = outboundDestinationOrNotFound(service, params.id ?? "");
-      const history = outboundHistoryPresentation(service.listDeliveries(destination.id, 100));
+      const history = outboundHistoryPresentation(
+        service.listDeliveries(destination.id, 100),
+        destination.retiredAt === null,
+      );
       renderAdmin(
         dependencies,
         response,
@@ -3997,8 +3982,10 @@ function registerAdminMutations(dependencies: WebRouteDependencies): void {
     (form) => {
       const service = requireOutboundService(dependencies);
       const parsed = parseOutboundForm(form, "create");
-      const created = service.create(outboundCreateInput(parsed));
-      applyOutboundHeaderSecrets(service, created.id, parsed.secretValues);
+      service.createConfigured({
+        ...outboundCreateInput(parsed),
+        headerSecrets: parsed.secretValues,
+      });
     },
     "Outbound destination created.",
     { maxBytes: 16_384, maxFields: 100 },
@@ -4012,15 +3999,14 @@ function registerAdminMutations(dependencies: WebRouteDependencies): void {
       const service = requireOutboundService(dependencies);
       const destination = outboundDestinationOrNotFound(service, params.id ?? "");
       const parsed = parseOutboundForm(form, "edit");
-      service.edit(destination.id, outboundEditInput(parsed, destination, form));
-      if (parsed.token !== undefined && parsed.transport === "home_assistant") {
-        service.setToken(destination.id, parsed.token);
-      }
-      applyOutboundHeaderSecrets(service, destination.id, parsed.secretValues);
-      const updated = service.get(destination.id);
-      if (updated !== undefined && updated.enabled !== parsed.enabled) {
-        service.setEnabled(destination.id, parsed.enabled);
-      }
+      service.updateConfigured(destination.id, {
+        ...outboundEditInput(parsed, destination, form),
+        enabled: parsed.enabled,
+        headerSecrets: parsed.secretValues,
+        ...(parsed.token === undefined || parsed.transport !== "home_assistant"
+          ? {}
+          : { token: parsed.token }),
+      });
     },
     "Outbound destination updated.",
     { maxBytes: 16_384, maxFields: 100 },
@@ -4135,7 +4121,7 @@ function registerAdminMutations(dependencies: WebRouteDependencies): void {
           clientMessage: "Delivery history item not found.",
         });
       }
-      if (!retryDelivery(service.database, delivery.id)) {
+      if (!service.retryDelivery(destination.id, delivery.id)) {
         throw new ApplicationError({
           category: "conflict",
           code: "outbound.delivery_not_retryable",
@@ -4163,7 +4149,7 @@ function registerAdminMutations(dependencies: WebRouteDependencies): void {
           clientMessage: "Delivery history item not found.",
         });
       }
-      if (!dismissDelivery(service.database, delivery.id)) {
+      if (!service.dismissDelivery(destination.id, delivery.id)) {
         throw new ApplicationError({
           category: "conflict",
           code: "outbound.delivery_not_dismissible",

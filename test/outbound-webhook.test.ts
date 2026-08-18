@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { Agent, createServer, request as nativeHttpRequest } from "node:http";
+import { connect as netConnect } from "node:net";
 import test from "node:test";
 
 import type { RequestOptions } from "node:http";
@@ -224,6 +226,10 @@ void test("webhook pins the approved DNS address and owns content type", async (
     assert.equal(error, null);
     assert.equal(address, "93.184.216.34");
   });
+  request.options.lookup!("example.com", { all: true }, (error, address) => {
+    assert.equal(error, null);
+    assert.deepEqual(address, [{ address: "93.184.216.34", family: 4 }]);
+  });
   const headers = request.options.headers as Record<string, unknown> | undefined;
   assert.equal(headers?.["content-type"], "application/json; charset=utf-8");
   assert.equal(headers?.authorization, "Bearer secret");
@@ -234,6 +240,113 @@ void test("webhook pins the approved DNS address and owns content type", async (
   socket.emit("connect");
   request.response.emit("end");
   assert.deepEqual(await pending, { outcome: "success", status: 204 });
+});
+
+void test("webhook pins a real Node 24 HTTP/TCP dial without changing the logical host", async () => {
+  let receivedHost: string | undefined;
+  let receivedPath: string | undefined;
+  let receivedBody = "";
+  const server = createServer((request, response) => {
+    const chunks: Buffer[] = [];
+    request.on("data", (chunk: unknown) => {
+      if (typeof chunk === "string") chunks.push(Buffer.from(chunk, "utf8"));
+      else if (chunk instanceof Uint8Array) chunks.push(Buffer.from(chunk));
+    });
+    request.on("end", () => {
+      receivedHost = request.headers.host;
+      receivedPath = request.url;
+      receivedBody = Buffer.concat(chunks).toString("utf8");
+      response.writeHead(204);
+      response.end();
+    });
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    const onError = (error: Error): void => reject(error);
+    server.once("error", onError);
+    server.listen(0, "127.0.0.1", () => {
+      server.off("error", onError);
+      resolve();
+    });
+  });
+
+  const address = server.address();
+  assert.ok(address !== null && typeof address !== "string");
+  const localPort = address.port;
+  let selectedAddress: string | undefined;
+  let selectedFamily: number | undefined;
+  let lookupFamily: number | string | undefined;
+  let lookupWasAll = false;
+  const agent = new Agent({ keepAlive: false });
+  agent.createConnection = (connectionOptions, _oncreate) => {
+    const requestOptions = connectionOptions as typeof connectionOptions & {
+      readonly autoSelectFamily?: boolean;
+    };
+    const productionLookup = requestOptions.lookup;
+    assert.ok(productionLookup);
+    return netConnect({
+      host: requestOptions.host ?? "example.test",
+      port: localPort,
+      ...(requestOptions.family === undefined ? {} : { family: requestOptions.family }),
+      autoSelectFamily: requestOptions.autoSelectFamily ?? false,
+      lookup: (hostname, options, callback) => {
+        lookupFamily = options.family;
+        lookupWasAll = options.all === true;
+        productionLookup(hostname, options, (error, addressValue, family) => {
+          if (error !== null) {
+            callback(error, addressValue, family);
+            return;
+          }
+          if (options.all === true) {
+            const first = Array.isArray(addressValue) ? addressValue[0] : undefined;
+            selectedAddress = first?.address;
+            selectedFamily = first?.family;
+            callback(null, [{ address: "127.0.0.1", family: 4 }]);
+            return;
+          }
+          if (typeof addressValue !== "string") {
+            lookupWasAll = true;
+            callback(null, "127.0.0.1", 4);
+            return;
+          }
+          selectedAddress = addressValue;
+          selectedFamily = family;
+          callback(null, "127.0.0.1", 4);
+        });
+      },
+    });
+  };
+
+  try {
+    const transport = new WebhookTransport({
+      dnsLookup: () => Promise.resolve([{ address: "93.184.216.34", family: 4 }]),
+      httpRequest: (options, onResponse) =>
+        nativeHttpRequest({ ...options, agent }, (response) => onResponse(response)),
+      overallTimeoutMs: 1_000,
+      connectTimeoutMs: 500,
+      responseTimeoutMs: 500,
+    });
+    const result = await transport.sendEvent(
+      { url: "http://example.test/hook?source=tapboard" },
+      EVENT,
+    );
+
+    assert.deepEqual(result, { outcome: "success", status: 204 });
+    assert.equal(selectedAddress, "93.184.216.34");
+    assert.equal(selectedFamily, 4);
+    assert.equal(lookupFamily, 4);
+    assert.equal(lookupWasAll, false);
+    assert.equal(receivedHost, "example.test");
+    assert.equal(receivedPath, "/hook?source=tapboard");
+    assert.deepEqual(parseObject(receivedBody), EVENT);
+  } finally {
+    agent.destroy();
+    if (server.listening) {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error === undefined ? resolve() : reject(error)));
+      });
+    }
+  }
 });
 
 void test("mixed DNS answers fail closed and each attempt resolves again", async () => {

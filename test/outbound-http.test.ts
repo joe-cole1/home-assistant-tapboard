@@ -122,24 +122,44 @@ function buildDependencies(): {
       },
     ],
     database,
-    create: (input: unknown) => {
+    createConfigured: (input: unknown) => {
       const record = input as LooseRecord;
       calls.creates.push(record);
       if (typeof input === "object" && input !== null && "secret" in input) {
         const secret = record.secret;
         if (typeof secret === "string") calls.tokens.push(secret);
       }
+      const headerSecrets = record.headerSecrets;
+      if (Array.isArray(headerSecrets)) {
+        for (const item of headerSecrets) {
+          if (typeof item === "object" && item !== null) {
+            const value = (item as LooseRecord).value;
+            if (typeof value === "string") calls.headerSecrets.push(value);
+          }
+        }
+      }
       current = { ...current, enabled: record.enabled === true };
       return current;
     },
-    edit: (_id: string, input: unknown) => {
+    updateConfigured: (_id: string, input: unknown) => {
       const record = input as LooseRecord;
       calls.edits.push(record);
+      if (typeof record.token === "string") calls.tokens.push(record.token);
+      if (Array.isArray(record.headerSecrets)) {
+        for (const item of record.headerSecrets) {
+          if (typeof item === "object" && item !== null) {
+            const value = (item as LooseRecord).value;
+            if (typeof value === "string") calls.headerSecrets.push(value);
+          }
+        }
+      }
+      calls.enabled.push(record.enabled === true);
       current = {
         ...current,
         label: record.label ?? current.label,
         required: record.required ?? current.required,
         subscriptions: record.subscriptions ?? current.subscriptions,
+        enabled: record.enabled === true,
       };
       return current;
     },
@@ -184,6 +204,8 @@ function buildDependencies(): {
       current = { ...current, retiredAt: "2026-08-17T13:00:00.000Z", enabled: false };
       return current;
     },
+    retryDelivery: () => true,
+    dismissDelivery: () => true,
   };
   const session = {
     id: SESSION_ID,
@@ -430,6 +452,25 @@ void test("outbound Admin HTTP surface protects mutations and redacts endpoints/
   assert.equal(calls.removedTokens, 1);
   assert.deepEqual(calls.removedHeaders, ["x-secret"]);
   assert.equal(calls.retired, 1);
+
+  const retiredDetail = await request(base, `/admin/integrations/outbound/${DESTINATION_ID}`);
+  assert.equal(retiredDetail.status, 200);
+  const retiredHtml = await retiredDetail.text();
+  assert.match(retiredHtml, /permanent read-only history/u);
+  for (const mutation of [
+    "/edit",
+    "/enable",
+    "/disable",
+    "/required",
+    "/token",
+    "/header-secret",
+    "/retire",
+    "/retry",
+    "/dismiss",
+  ]) {
+    assert.equal(retiredHtml.includes(`${DESTINATION_ID}${mutation}`), false, mutation);
+  }
+  assert.doesNotMatch(retiredHtml, /Save outbound destination|Replacement token/u);
 
   const webhookCreate = await request(base, "/admin/integrations/outbound/create", {
     method: "POST",

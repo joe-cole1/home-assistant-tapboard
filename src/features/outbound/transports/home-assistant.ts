@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { canonicalizeJson } from "../../../shared/canonical-json.ts";
 import { formatStandardEvent } from "./formatters.ts";
 import {
@@ -11,9 +13,11 @@ const WEBSOCKET_OPEN = 1;
 const DEFAULT_AUTH_TIMEOUT_MS = 10_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
 const DEFAULT_RECONNECT_DELAY_MS = 1_000;
-const DEFAULT_MAX_RECONNECT_ATTEMPTS = 3;
+const DEFAULT_MAX_RECONNECT_DELAY_MS = 60_000;
 const DEFAULT_MAX_PENDING_REQUESTS = 64;
 const MAX_DESTINATION_ID_BYTES = 256;
+const MAX_DESTINATION_VERSION_ID_BYTES = 256;
+const MAX_BINDING_GENERATION_BYTES = 256;
 const MAX_TOKEN_BYTES = 16_384;
 const MAX_FRAME_BYTES = 32_768;
 
@@ -46,9 +50,13 @@ export const nativeWebSocketFactory: WebSocketFactory = (url) => {
 export interface HomeAssistantDestination {
   readonly destinationId?: string;
   readonly id?: string;
+  /** Immutable delivery-bound version metadata for connection-state evidence. */
+  readonly destinationVersionId?: string;
   readonly baseUrl?: string;
   readonly url?: string;
   readonly token: string;
+  /** Explicit logical binding generation supplied by the caller. */
+  readonly bindingGeneration?: string | number | null;
   /** Changes when a secret is replaced, even when the URL is unchanged. */
   readonly tokenGeneration?: string | number | null;
   /** Alias accepted by callers that version credentials explicitly. */
@@ -63,18 +71,32 @@ export interface HomeAssistantTransportOptions {
   readonly authTimeoutMs?: number;
   readonly requestTimeoutMs?: number;
   readonly reconnectDelayMs?: number;
-  readonly maxReconnectAttempts?: number;
+  readonly maxReconnectDelayMs?: number;
   readonly maxPendingRequests?: number;
   readonly schedule?: Schedule;
   readonly cancel?: Cancel;
+  readonly onConnectionStateChanged?: HomeAssistantConnectionStateListener;
 }
+
+/** Sanitized evidence emitted by the HA connection manager. */
+export interface HomeAssistantConnectionStateEvent {
+  readonly destinationId: string;
+  readonly destinationVersionId?: string;
+  readonly bindingGeneration?: string;
+  readonly result: TransportAttemptResult;
+}
+
+export type HomeAssistantConnectionStateListener = (
+  event: HomeAssistantConnectionStateEvent,
+) => void;
 
 interface BoundDestination {
   readonly destinationId: string;
+  readonly destinationVersionId?: string;
   readonly baseUrl: string;
   readonly wsUrl: string;
   readonly token: string;
-  readonly tokenGeneration: string;
+  readonly bindingGeneration?: string;
   readonly bindingKey: string;
 }
 
@@ -98,6 +120,7 @@ interface Connection {
   authTimer: TimerHandle | undefined;
   reconnectTimer: TimerHandle | undefined;
   reconnectAttempts: number;
+  reconnectExponent: number;
   closed: boolean;
   onOpen: (event: WebSocketEventLike) => void;
   onMessage: (event: WebSocketEventLike) => void;
@@ -152,6 +175,28 @@ function token(value: unknown): string {
     throw new TypeError("Home Assistant token is invalid");
   }
   return value;
+}
+
+function optionalMetadata(value: unknown, field: string, maxBytes: number): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string" || value.length === 0) {
+    throw new TypeError(`Home Assistant ${field} is invalid`);
+  }
+  if (Buffer.byteLength(value, "utf8") > maxBytes || /[\u0000-\u001f\u007f]/u.test(value)) {
+    throw new TypeError(`Home Assistant ${field} is invalid`);
+  }
+  return value;
+}
+
+function bindingGeneration(value: unknown): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value === "number" && !Number.isFinite(value)) {
+    throw new TypeError("Home Assistant binding generation is invalid");
+  }
+  if (typeof value !== "string" && typeof value !== "number") {
+    throw new TypeError("Home Assistant binding generation is invalid");
+  }
+  return optionalMetadata(String(value), "binding generation", MAX_BINDING_GENERATION_BYTES);
 }
 
 function urlInput(destination: HomeAssistantDestination): string {
@@ -250,21 +295,42 @@ function resultFromError(error: unknown): TransportAttemptResult {
     : failureResult("retryable_failure", "ha_connection_failed");
 }
 
+function sanitizeResult(result: TransportAttemptResult): TransportAttemptResult {
+  return result.outcome === "success"
+    ? successResult(result.status)
+    : failureResult(result.outcome, result.errorCode, result.status);
+}
+
+function credentialFingerprint(secret: string): string {
+  return createHash("sha256").update(secret, "utf8").digest("hex");
+}
+
 function resolveDestination(input: HomeAssistantDestination): BoundDestination {
   const destinationId = identity(input.destinationId ?? input.id);
+  const destinationVersionId = optionalMetadata(
+    input.destinationVersionId,
+    "destination version ID",
+    MAX_DESTINATION_VERSION_ID_BYTES,
+  );
   const baseUrl = normalizeHomeAssistantBaseUrl(urlInput(input));
   const wsUrl = deriveHomeAssistantWebSocketUrl(baseUrl);
   const secret = token(input.token);
-  const generation = String(input.tokenGeneration ?? input.tokenVersion ?? "");
+  const generation = bindingGeneration(
+    input.bindingGeneration ?? input.tokenGeneration ?? input.tokenVersion,
+  );
+  const normalizedGeneration = generation ?? "";
   return {
     destinationId,
+    ...(destinationVersionId === undefined ? {} : { destinationVersionId }),
     baseUrl,
     wsUrl,
     token: secret,
-    tokenGeneration: generation,
+    ...(generation === undefined ? {} : { bindingGeneration: generation }),
     // Historical destination versions intentionally do not create separate
     // sockets.  Only an actual endpoint or credential binding change does.
-    bindingKey: `${wsUrl}\u0000${generation}\u0000${secret}`,
+    // Keep the token out of the in-memory binding identifier; the token is
+    // retained only on the bound destination because authentication requires it.
+    bindingKey: `${wsUrl}\u0000${normalizedGeneration}\u0000${credentialFingerprint(secret)}`,
   };
 }
 
@@ -273,10 +339,11 @@ export class HomeAssistantConnectionManager {
   readonly #authTimeoutMs: number;
   readonly #requestTimeoutMs: number;
   readonly #reconnectDelayMs: number;
-  readonly #maxReconnectAttempts: number;
+  readonly #maxReconnectDelayMs: number;
   readonly #maxPendingRequests: number;
   readonly #schedule: Schedule;
   readonly #cancel: Cancel;
+  readonly #onConnectionStateChanged: HomeAssistantConnectionStateListener | undefined;
   readonly #connections = new Map<string, Connection>();
   #stopped = false;
 
@@ -286,10 +353,9 @@ export class HomeAssistantConnectionManager {
     this.#authTimeoutMs = boundedDuration(options.authTimeoutMs, DEFAULT_AUTH_TIMEOUT_MS);
     this.#requestTimeoutMs = boundedDuration(options.requestTimeoutMs, DEFAULT_REQUEST_TIMEOUT_MS);
     this.#reconnectDelayMs = boundedDuration(options.reconnectDelayMs, DEFAULT_RECONNECT_DELAY_MS);
-    this.#maxReconnectAttempts = boundedCount(
-      options.maxReconnectAttempts,
-      DEFAULT_MAX_RECONNECT_ATTEMPTS,
-      10,
+    this.#maxReconnectDelayMs = boundedDuration(
+      options.maxReconnectDelayMs,
+      DEFAULT_MAX_RECONNECT_DELAY_MS,
     );
     this.#maxPendingRequests = boundedCount(
       options.maxPendingRequests,
@@ -298,6 +364,7 @@ export class HomeAssistantConnectionManager {
     );
     this.#schedule = options.schedule ?? ((handler, timeoutMs) => setTimeout(handler, timeoutMs));
     this.#cancel = options.cancel ?? ((handle) => clearTimeout(handle));
+    this.#onConnectionStateChanged = options.onConnectionStateChanged;
   }
 
   async sendEvent(
@@ -397,6 +464,7 @@ export class HomeAssistantConnectionManager {
     connection.authTimer = undefined;
     connection.reconnectTimer = undefined;
     connection.reconnectAttempts = 0;
+    connection.reconnectExponent = 0;
     connection.closed = false;
     connection.onOpen = (event) => this.#onOpen(connection, event);
     connection.onMessage = (event) => this.#onMessage(connection, event);
@@ -411,31 +479,42 @@ export class HomeAssistantConnectionManager {
       if (connection !== undefined) this.#closeConnection(connection, "ha_destination_changed");
       connection = this.#createConnection(destination);
       this.#connections.set(destination.destinationId, connection);
+    } else {
+      // Version metadata may advance without changing endpoint or credentials.
+      // Keep the physical socket while ensuring later health evidence is bound
+      // to the current immutable destination version.
+      connection.destination = destination;
     }
     return connection;
   }
 
   #ensureReady(connection: Connection): Promise<void> {
+    this.#clearReconnectTimer(connection);
     if (connection.phase === "ready" && connection.socket !== undefined) return Promise.resolve();
     if (connection.invalidAuth) return Promise.reject(permanent("ha_auth_invalid"));
     if (connection.connectPromise !== undefined) return connection.connectPromise;
 
     connection.phase = "connecting";
-    connection.connectPromise = new Promise<void>((resolve, reject) => {
-      connection.connectResolve = resolve;
-      connection.connectReject = reject;
-      let socket: WebSocketLike;
-      try {
-        socket = this.#webSocketFactory(connection.destination.wsUrl);
-      } catch {
-        this.#finishConnectFailure(connection, failure("ha_connect_failed"));
-        return;
-      }
+    let resolveConnect!: () => void;
+    let rejectConnect!: (error: ConnectionFailure) => void;
+    const connectPromise = new Promise<void>((resolve, reject) => {
+      resolveConnect = resolve;
+      rejectConnect = reject;
+    });
+    connection.connectPromise = connectPromise;
+    connection.connectResolve = resolveConnect;
+    connection.connectReject = rejectConnect;
+
+    let socket: WebSocketLike;
+    try {
+      socket = this.#webSocketFactory(connection.destination.wsUrl);
       connection.socket = socket;
       this.#listen(connection, socket);
       if (socket.readyState === WEBSOCKET_OPEN) this.#onOpen(connection, {});
-    });
-    return connection.connectPromise;
+    } catch {
+      this.#onSocketFailure(connection, "ha_connect_failed");
+    }
+    return connectPromise;
   }
 
   #listen(connection: Connection, socket: WebSocketLike): void {
@@ -485,7 +564,10 @@ export class HomeAssistantConnectionManager {
       this.#clearAuthTimer(connection);
       connection.phase = "ready";
       connection.reconnectAttempts = 0;
+      connection.reconnectExponent = 0;
+      this.#clearReconnectTimer(connection);
       this.#finishConnectSuccess(connection);
+      this.#emitState(connection, successResult());
       return;
     }
 
@@ -495,6 +577,7 @@ export class HomeAssistantConnectionManager {
       this.#clearAuthTimer(connection);
       this.#finishConnectFailure(connection, permanent("ha_auth_invalid"));
       this.#rejectPending(connection, failureResult("permanent_failure", "ha_auth_invalid"));
+      this.#emitState(connection, failureResult("permanent_failure", "ha_auth_invalid"));
       this.#closeSocket(connection);
       return;
     }
@@ -512,13 +595,47 @@ export class HomeAssistantConnectionManager {
 
   #onSocketFailure(connection: Connection, errorCode: string): void {
     if (connection.closed || connection.invalidAuth) return;
+    if (
+      connection.socket === undefined &&
+      connection.phase === "idle" &&
+      connection.connectPromise === undefined
+    ) {
+      return;
+    }
     const hadSocket = connection.socket !== undefined;
     this.#clearAuthTimer(connection);
     connection.phase = "idle";
     this.#finishConnectFailure(connection, failure(errorCode));
     this.#rejectPending(connection, failureResult("retryable_failure", errorCode));
+    this.#emitState(connection, failureResult("retryable_failure", errorCode));
     if (hadSocket) this.#closeSocket(connection);
     this.#scheduleReconnect(connection);
+  }
+
+  #emitState(connection: Connection, result: TransportAttemptResult): void {
+    if (
+      this.#stopped ||
+      connection.closed ||
+      this.#connections.get(connection.destination.destinationId) !== connection
+    ) {
+      return;
+    }
+    const destination = connection.destination;
+    const event: HomeAssistantConnectionStateEvent = {
+      destinationId: destination.destinationId,
+      ...(destination.destinationVersionId === undefined
+        ? {}
+        : { destinationVersionId: destination.destinationVersionId }),
+      ...(destination.bindingGeneration === undefined
+        ? {}
+        : { bindingGeneration: destination.bindingGeneration }),
+      result: sanitizeResult(result),
+    };
+    try {
+      this.#onConnectionStateChanged?.(event);
+    } catch {
+      // Connection evidence must not change transport control flow.
+    }
   }
 
   #finishConnectSuccess(connection: Connection): void {
@@ -549,6 +666,11 @@ export class HomeAssistantConnectionManager {
   #clearAuthTimer(connection: Connection): void {
     if (connection.authTimer !== undefined) this.#cancel(connection.authTimer);
     connection.authTimer = undefined;
+  }
+
+  #clearReconnectTimer(connection: Connection): void {
+    if (connection.reconnectTimer !== undefined) this.#cancel(connection.reconnectTimer);
+    connection.reconnectTimer = undefined;
   }
 
   #allocateRequestId(connection: Connection): number | undefined {
@@ -626,19 +748,28 @@ export class HomeAssistantConnectionManager {
       this.#stopped ||
       connection.closed ||
       connection.invalidAuth ||
+      this.#connections.get(connection.destination.destinationId) !== connection ||
       connection.reconnectTimer !== undefined ||
-      connection.reconnectAttempts >= this.#maxReconnectAttempts
+      connection.phase === "ready"
     ) {
       return;
     }
     connection.reconnectAttempts += 1;
+    connection.reconnectExponent = Math.min(connection.reconnectExponent + 1, 31);
     const delay = Math.min(
-      this.#reconnectDelayMs * 2 ** Math.max(0, connection.reconnectAttempts - 1),
-      60_000,
+      this.#reconnectDelayMs * 2 ** Math.max(0, connection.reconnectExponent - 1),
+      this.#maxReconnectDelayMs,
     );
+    const destinationId = connection.destination.destinationId;
     connection.reconnectTimer = this.#schedule(() => {
       connection.reconnectTimer = undefined;
-      if (connection.closed || connection.invalidAuth || this.#stopped) return;
+      if (
+        connection.closed ||
+        connection.invalidAuth ||
+        this.#stopped ||
+        this.#connections.get(destinationId) !== connection
+      )
+        return;
       void this.#ensureReady(connection).catch(() => this.#scheduleReconnect(connection));
     }, delay);
   }
@@ -660,8 +791,7 @@ export class HomeAssistantConnectionManager {
     connection.closed = true;
     connection.phase = "closed";
     this.#clearAuthTimer(connection);
-    if (connection.reconnectTimer !== undefined) this.#cancel(connection.reconnectTimer);
-    connection.reconnectTimer = undefined;
+    this.#clearReconnectTimer(connection);
     this.#finishConnectFailure(connection, failure(errorCode));
     this.#rejectPending(connection, failureResult("retryable_failure", errorCode));
     this.#closeSocket(connection);

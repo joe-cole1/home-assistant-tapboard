@@ -137,6 +137,23 @@ export interface EditOutboundDestinationInput {
   readonly secretHeaders?: readonly { readonly name: string; readonly slot?: string }[];
 }
 
+export interface OutboundHeaderSecretReplacement {
+  readonly name: string;
+  readonly value: string;
+}
+
+/** One complete Admin create submission, including write-only secret values. */
+export interface CreateConfiguredOutboundDestinationInput extends CreateOutboundDestinationInput {
+  readonly headerSecrets?: readonly OutboundHeaderSecretReplacement[];
+}
+
+/** One complete Admin edit submission, including final enabled state and write-only secrets. */
+export interface UpdateConfiguredOutboundDestinationInput extends EditOutboundDestinationInput {
+  readonly enabled: boolean;
+  readonly token?: string;
+  readonly headerSecrets?: readonly OutboundHeaderSecretReplacement[];
+}
+
 export interface OutboundDestinationPatch {
   readonly label?: string;
   readonly required?: boolean;

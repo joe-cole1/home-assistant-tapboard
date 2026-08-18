@@ -28,6 +28,7 @@ import type {
 } from "./types.ts";
 import { HA_TOKEN_SLOT, WEBHOOK_ENDPOINT_SLOT } from "./outbound-validation.ts";
 import { boundedErrorCode, type TransportAttemptResult } from "./transport-types.ts";
+import type { HomeAssistantConnectionStateEvent } from "./transports/home-assistant.ts";
 
 const DEFAULT_OWNER = "outbound-worker";
 const DEFAULT_LEASE_TTL_MS = 30_000;
@@ -156,19 +157,17 @@ export class OutboundWorker {
     this.#polling = true;
     try {
       const current = now(this.#clock);
+      const availableCapacity = this.#concurrency - this.#inFlightDestinations.size;
+      if (availableCapacity < 1) return 0;
       const claims = claimDue(
         this.#database,
         this.#owner,
         current.toISOString(),
         this.#leaseTtlMs,
-        this.#concurrency * 2,
+        availableCapacity,
       );
       const tasks: Promise<void>[] = [];
       for (const claim of claims) {
-        if (tasks.length >= this.#concurrency) {
-          releaseClaim(this.#database, claim, current.toISOString());
-          continue;
-        }
         if (this.#inFlightDestinations.has(claim.destinationId)) {
           releaseClaim(this.#database, claim, current.toISOString());
           continue;
@@ -207,6 +206,34 @@ export class OutboundWorker {
     this.onDestinationDisabled(destinationId);
   }
 
+  /** Durable evidence from the current persistent HA connection binding. */
+  onHomeAssistantConnectionState(event: HomeAssistantConnectionStateEvent): void {
+    this.#database.withTransaction(() => {
+      const timestamp = now(this.#clock).toISOString();
+      const destination = listDestinations(this.#database, {
+        secrets: descriptors(this.#secrets),
+        now: new Date(timestamp),
+      }).find((item) => item.id === event.destinationId);
+      if (
+        destination === undefined ||
+        !destination.enabled ||
+        destination.retiredAt !== null ||
+        destination.transport !== "home_assistant" ||
+        destination.currentVersion === null ||
+        destination.currentVersion.id !== event.destinationVersionId
+      ) {
+        return;
+      }
+      const profileRevision = readDestinationProfile(
+        this.#database,
+        event.destinationId,
+      )?.profile_revision;
+      if (profileRevision === undefined) return;
+      const normalized = normalizeResult(event.result);
+      this.#recordTransportStatus(event.destinationId, normalized, timestamp, profileRevision);
+    });
+  }
+
   async #processClaim(claim: DeliveryClaim): Promise<void> {
     const timestamp = now(this.#clock).toISOString();
     const config = readClaimConfiguration(this.#database, claim, descriptors(this.#secrets));
@@ -239,6 +266,7 @@ export class OutboundWorker {
         setEnabledState(this.#database, claim.destinationId, false, timestamp, "secret_missing");
       }
       releaseClaim(this.#database, claim, timestamp);
+      this.#transports.closeDestination?.(claim.destinationId);
       return;
     }
 
@@ -274,6 +302,13 @@ export class OutboundWorker {
         config.profileRevision,
       );
     });
+    if (
+      !this.#stopRequested &&
+      config.destination.transport === "home_assistant" &&
+      config.version.id !== config.destination.currentVersion?.id
+    ) {
+      await this.#probeHomeAssistant(claim.destinationId);
+    }
   }
 
   #transportInput(
@@ -367,6 +402,7 @@ export class OutboundWorker {
       const timestamp = now(this.#clock).toISOString();
       markTokenMissing(this.#database, destinationId, timestamp);
       setEnabledState(this.#database, destinationId, false, timestamp, "token_missing");
+      this.#transports.closeDestination?.(destinationId);
       return;
     }
     let result: TransportAttemptResult | OutboundTransportOutcome;

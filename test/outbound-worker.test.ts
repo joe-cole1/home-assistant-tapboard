@@ -13,6 +13,8 @@ import type { OutboundTransportRouter } from "../src/features/outbound/types.ts"
 
 const NOW = "2026-08-17T12:00:00.000Z";
 const DESTINATION = "11111111-1111-4111-8111-111111111111";
+const DESTINATION_TWO = "11111111-1111-4111-8111-111111111112";
+const DESTINATION_THREE = "11111111-1111-4111-8111-111111111113";
 const FILL = "44444444-4444-4444-8444-444444444444";
 const TAP = "55555555-5555-4555-8555-555555555555";
 const ROOT_KEY = Buffer.alloc(32, 8).toString("base64url");
@@ -35,10 +37,11 @@ function setup(): {
 } {
   const database = openDatabase(":memory:");
   const secrets = createSecretsService(database, { rootKey: ROOT_KEY });
+  let sequence = 0;
   const service = createOutboundService(database, {
     secrets,
     now: () => new Date(NOW),
-    idFactory: () => "22222222-2222-4222-8222-222222222222",
+    idFactory: () => `22222222-2222-4222-8222-${(sequence++ + 1).toString(16).padStart(12, "0")}`,
   });
   service.create({
     id: DESTINATION,
@@ -147,6 +150,88 @@ void test("worker performs transport work after admission and keeps local truth 
         .map((row) => row.event_type),
       ["integration.status_changed", "pour.completed"],
     );
+  } finally {
+    database.close();
+  }
+});
+
+void test("worker claims only available capacity without consuming untouched delivery attempts", async () => {
+  const { database, service, secrets } = setup();
+  const eventId = "33333333-3333-4333-8333-333333333341";
+  const sent: string[] = [];
+  const deliveryRows = (): Array<{
+    readonly destination_id: string;
+    readonly state: string;
+    readonly attempt_count: number;
+    readonly cycle_attempt_count: number;
+    readonly last_attempt_at: string | null;
+  }> =>
+    database
+      .prepare<
+        [string],
+        {
+          readonly destination_id: string;
+          readonly state: string;
+          readonly attempt_count: number;
+          readonly cycle_attempt_count: number;
+          readonly last_attempt_at: string | null;
+        }
+      >(
+        `SELECT destination_id, state, attempt_count, cycle_attempt_count, last_attempt_at
+         FROM outbound_deliveries
+         WHERE event_id = ?
+         ORDER BY destination_id`,
+      )
+      .all(eventId);
+  try {
+    service.create({
+      id: DESTINATION_TWO,
+      label: "Worker hook two",
+      transport: "webhook",
+      webhookUrl: "https://example-two.test/hook",
+    });
+    service.create({
+      id: DESTINATION_THREE,
+      label: "Worker hook three",
+      transport: "webhook",
+      webhookUrl: "https://example-three.test/hook",
+    });
+    assert.equal(service.admit(database, event(eventId)).status, "queued");
+    const worker = createOutboundWorker({
+      database,
+      transports: {
+        send: (input) => {
+          sent.push(input.destination.id);
+          return { outcome: "success" };
+        },
+      },
+      secrets,
+      owner: "test-worker",
+      concurrency: 1,
+      clock: { now: () => new Date(NOW) },
+    });
+
+    assert.equal(await worker.pollOnce(), 1);
+    assert.equal(sent.length, 1);
+    const untouched = deliveryRows().filter((row) => !sent.includes(row.destination_id));
+    assert.equal(untouched.length, 2);
+    for (const row of untouched) {
+      assert.deepEqual(row, {
+        destination_id: row.destination_id,
+        state: "pending",
+        attempt_count: 0,
+        cycle_attempt_count: 0,
+        last_attempt_at: null,
+      });
+    }
+
+    assert.equal(await worker.pollOnce(), 1);
+    assert.equal(await worker.pollOnce(), 1);
+    assert.deepEqual(
+      deliveryRows().map((row) => row.state),
+      ["succeeded", "succeeded", "succeeded"],
+    );
+    assert.equal(new Set(sent).size, 3);
   } finally {
     database.close();
   }
@@ -276,6 +361,127 @@ void test("completion samples time after the write lock and rejects an expired l
   }
 });
 
+void test("enabled HA creation connects after commit while the worker is running", async () => {
+  const database = openDatabase(":memory:");
+  const secrets = createSecretsService(database, { rootKey: ROOT_KEY });
+  let authenticated = 0;
+  let transactionDepth = 0;
+  const tracked: DatabaseExecutor = {
+    execute: (sql) => database.execute(sql),
+    prepare: <Bindings extends unknown[] = unknown[], Row = unknown>(sql: string) =>
+      database.prepare<Bindings, Row>(sql),
+    pragma: <Result = unknown>(statement: string, options?: { readonly simple?: boolean }) =>
+      database.pragma<Result>(statement, options),
+    withTransaction<Result>(work: () => Result extends PromiseLike<unknown> ? never : Result) {
+      transactionDepth += 1;
+      try {
+        return database.withTransaction(work);
+      } finally {
+        transactionDepth -= 1;
+      }
+    },
+  };
+  const worker = createOutboundWorker({
+    database: tracked,
+    secrets,
+    transports: {
+      send: () => ({ outcome: "success" }),
+      ensureHealthy: () => {
+        assert.equal(transactionDepth, 0, "HA connection began inside the create transaction");
+        authenticated += 1;
+        return { outcome: "success" };
+      },
+    },
+    clock: {
+      now: () => new Date(NOW),
+      setInterval: () => 1,
+      clearInterval: () => undefined,
+    },
+  });
+  const service = createOutboundService(tracked, {
+    secrets,
+    now: () => new Date(NOW),
+    idFactory: () => "22222222-2222-4222-8222-000000000099",
+    lifecycle: { onEnabled: (destinationId) => worker.onDestinationEnabled(destinationId) },
+  });
+  try {
+    worker.start();
+    await Promise.resolve();
+    assert.equal(authenticated, 0);
+    service.createConfigured({
+      id: DESTINATION,
+      label: "Runtime HA",
+      transport: "home_assistant",
+      baseUrl: "http://192.168.1.35:8123",
+      secret: "runtime-token",
+    });
+    await Promise.resolve();
+    assert.equal(authenticated, 1);
+    assert.equal(service.get(DESTINATION)?.state, "healthy");
+  } finally {
+    worker.stop();
+    database.close();
+  }
+});
+
+void test("persistent HA connection evidence drives sustained Required degradation and recovery", () => {
+  const database = openDatabase(":memory:");
+  const secrets = createSecretsService(database, { rootKey: ROOT_KEY });
+  let current = new Date(NOW);
+  let sequence = 100;
+  const service = createOutboundService(database, {
+    secrets,
+    now: () => new Date(current),
+    idFactory: () => `22222222-2222-4222-8222-${(sequence++).toString(16).padStart(12, "0")}`,
+  });
+  try {
+    const created = service.create({
+      id: DESTINATION,
+      label: "Required HA",
+      transport: "home_assistant",
+      baseUrl: "http://192.168.1.35:8123",
+      secret: "required-token",
+      required: true,
+    });
+    const worker = createOutboundWorker({
+      database,
+      secrets,
+      transports: { send: () => ({ outcome: "success" }) },
+      clock: { now: () => new Date(current) },
+    });
+    const evidence = (result: {
+      readonly outcome: "success" | "retryable_failure";
+      readonly errorCode?: string;
+    }) =>
+      worker.onHomeAssistantConnectionState({
+        destinationId: DESTINATION,
+        destinationVersionId: created.currentVersion!.id,
+        result,
+      });
+
+    evidence({ outcome: "success" });
+    assert.equal(service.get(DESTINATION)?.state, "healthy");
+    evidence({ outcome: "retryable_failure", errorCode: "ha_socket_closed" });
+    assert.equal(service.get(DESTINATION)?.failure?.code, "ha_socket_closed");
+    current = new Date("2026-08-17T12:04:59.000Z");
+    assert.equal(service.connectivity().state, "healthy");
+    current = new Date("2026-08-17T12:05:00.000Z");
+    assert.equal(service.connectivity().state, "degraded");
+    evidence({ outcome: "success" });
+    assert.equal(service.get(DESTINATION)?.state, "healthy");
+    assert.equal(service.connectivity().state, "healthy");
+
+    worker.onHomeAssistantConnectionState({
+      destinationId: DESTINATION,
+      destinationVersionId: "22222222-2222-4222-8222-000000000000",
+      result: { outcome: "retryable_failure", errorCode: "stale_socket" },
+    });
+    assert.equal(service.get(DESTINATION)?.state, "healthy");
+  } finally {
+    database.close();
+  }
+});
+
 void test("start and stop are idempotent and stop closes the injected router", async () => {
   const { database } = setup();
   let scheduled = 0;
@@ -397,6 +603,7 @@ void test("historical delivery keeps v1 endpoint while logical header rotation a
     });
     const slot = v1.currentVersion!.config.secretHeaders[0]!.slot;
     service.setHeaderSecret(DESTINATION, slot, "Bearer old");
+    service.enable(DESTINATION);
     service.admit(database, event("33333333-3333-4333-8333-333333333336"));
 
     const v2 = service.edit(DESTINATION, {
@@ -418,10 +625,17 @@ void test("historical delivery keeps v1 endpoint while logical header rotation a
       owner: "test-worker",
       clock: { now: () => new Date(NOW) },
     });
-    await worker.pollOnce();
-    assert.equal(sent[0]?.version.id, v1.currentVersion!.id);
-    assert.equal(sent[0]?.endpoint, "https://old.example.test/hook");
-    assert.equal(sent[0]?.headers?.Authorization, "Bearer rotated");
+    for (
+      let poll = 0;
+      poll < 3 && !sent.some((input) => input.envelope.event_id.endsWith("336"));
+      poll += 1
+    ) {
+      await worker.pollOnce();
+    }
+    const historical = sent.find((input) => input.envelope.event_id.endsWith("336"));
+    assert.equal(historical?.version.id, v1.currentVersion!.id);
+    assert.equal(historical?.endpoint, "https://old.example.test/hook");
+    assert.equal(historical?.headers?.Authorization, "Bearer rotated");
 
     assert.deepEqual(service.admit(database, event("33333333-3333-4333-8333-333333333337")), {
       status: "no_targets",
@@ -434,10 +648,17 @@ void test("historical delivery keeps v1 endpoint while logical header rotation a
       identifiers: { tap_id: TAP, fill_id: FILL },
       data: { assignment_id: "66666666-6666-4666-8666-666666666666" },
     });
-    await worker.pollOnce();
-    assert.equal(sent[1]?.version.id, v2.currentVersion!.id);
-    assert.equal(sent[1]?.endpoint, "https://new.example.test/hook");
-    assert.equal(sent[1]?.headers?.Authorization, "Bearer rotated");
+    for (
+      let poll = 0;
+      poll < 3 && !sent.some((input) => input.envelope.event_id.endsWith("338"));
+      poll += 1
+    ) {
+      await worker.pollOnce();
+    }
+    const current = sent.find((input) => input.envelope.event_id.endsWith("338"));
+    assert.equal(current?.version.id, v2.currentVersion!.id);
+    assert.equal(current?.endpoint, "https://new.example.test/hook");
+    assert.equal(current?.headers?.Authorization, "Bearer rotated");
   } finally {
     database.close();
   }

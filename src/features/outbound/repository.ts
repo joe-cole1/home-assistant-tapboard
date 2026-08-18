@@ -1021,6 +1021,20 @@ export function listDeliveryHistory(
     }));
 }
 
+export function deliveryBelongsToDestination(
+  database: DatabaseExecutor,
+  destinationId: string,
+  deliveryId: string,
+): boolean {
+  return (
+    database
+      .prepare<[string, string], { readonly id: string }>(
+        "SELECT id FROM outbound_deliveries WHERE id = ? AND destination_id = ?",
+      )
+      .get(id(deliveryId, "deliveryId"), id(destinationId, "destinationId")) !== undefined
+  );
+}
+
 export function readClaimConfiguration(
   database: DatabaseExecutor,
   claim: DeliveryClaim,

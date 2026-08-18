@@ -20,6 +20,7 @@
     </div>
   </section>
 
+  <% if (!it.destination.retired) { %>
   <section class="admin-card" aria-labelledby="outbound-edit-heading">
     <h2 id="outbound-edit-heading">Edit configuration</h2>
     <p class="muted">Leave credential and endpoint fields blank to retain their stored values. Submitted secrets are write-only.</p>
@@ -46,6 +47,12 @@
           <div class="outbound-secret-row"><span><strong><%= header.name %></strong><small>Slot <code><%= header.slot %></code> · <%= header.available ? "Configured" : header.configured ? "Configured but unavailable" : "Not configured" %></small></span><form class="admin-form admin-form--inline" method="post" action="/admin/integrations/outbound/<%= encodeURIComponent(it.destination.id) %>/header-secret"><input type="hidden" name="_csrf" value="<%= it.page.csrfToken %>" /><input type="hidden" name="slot" value="<%= header.slot %>" /><label class="sr-only" for="secret-replace-<%= header.slot %>">Replacement value for <%= header.name %></label><input id="secret-replace-<%= header.slot %>" name="secret" type="password" maxlength="1024" autocomplete="new-password" required /><button class="secondary button--small" type="submit">Replace</button></form><form method="post" action="/admin/integrations/outbound/<%= encodeURIComponent(it.destination.id) %>/header-secret/remove"><input type="hidden" name="_csrf" value="<%= it.page.csrfToken %>" /><input type="hidden" name="slot" value="<%= header.slot %>" /><button class="danger button--small" type="submit">Remove</button></form></div>
         <% } %>
       </div>
+    </section>
+  <% } %>
+  <% } else { %>
+    <section class="admin-card" aria-labelledby="outbound-retired-heading">
+      <h2 id="outbound-retired-heading">Retired configuration</h2>
+      <p class="muted">This destination is permanent read-only history. Configuration and credential actions are no longer available.</p>
     </section>
   <% } %>
 

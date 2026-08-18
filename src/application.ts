@@ -106,7 +106,10 @@ export interface OutboundRuntime {
     Partial<
       Pick<
         OutboundWorker,
-        "onDestinationEnabled" | "onDestinationDisabled" | "onDestinationCredentialsChanged"
+        | "onDestinationEnabled"
+        | "onDestinationDisabled"
+        | "onDestinationCredentialsChanged"
+        | "onHomeAssistantConnectionState"
       >
     >;
   readonly start?: () => void;
@@ -116,7 +119,10 @@ export interface OutboundRuntime {
 type OutboundRuntimeFactory = (options: OutboundRuntimeFactoryOptions) => OutboundRuntime;
 
 function createDefaultOutboundRuntime(options: OutboundRuntimeFactoryOptions): OutboundRuntime {
-  const homeAssistant = new HomeAssistantConnectionManager();
+  const workerRef: { current?: OutboundWorker } = {};
+  const homeAssistant = new HomeAssistantConnectionManager({
+    onConnectionStateChanged: (event) => workerRef.current?.onHomeAssistantConnectionState(event),
+  });
   const webhook = new WebhookTransport({
     publicContextResolver: options.publicContextResolver,
   });
@@ -126,6 +132,7 @@ function createDefaultOutboundRuntime(options: OutboundRuntimeFactoryOptions): O
         const config = input.version.config;
         const destination: HomeAssistantDestination = {
           destinationId: input.destination.id,
+          destinationVersionId: input.version.id,
           baseUrl: input.endpoint ?? (config.transport === "home_assistant" ? config.baseUrl : ""),
           token: input.token ?? "",
         };
@@ -143,6 +150,7 @@ function createDefaultOutboundRuntime(options: OutboundRuntimeFactoryOptions): O
       const config = input.version.config;
       const destination: HomeAssistantDestination = {
         destinationId: input.destination.id,
+        destinationVersionId: input.version.id,
         baseUrl: input.endpoint ?? (config.transport === "home_assistant" ? config.baseUrl : ""),
         token: input.token ?? "",
       };
@@ -165,6 +173,7 @@ function createDefaultOutboundRuntime(options: OutboundRuntimeFactoryOptions): O
     ...(options.onError === undefined ? {} : { onError: options.onError }),
   };
   const worker = new OutboundWorker(workerOptions);
+  workerRef.current = worker;
   return {
     worker,
     start: () => worker.start(),

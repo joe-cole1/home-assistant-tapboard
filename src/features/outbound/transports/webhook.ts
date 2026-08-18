@@ -59,6 +59,11 @@ export type WebhookRequestFactory = (
   onResponse: (response: WebhookResponseLike) => void,
 ) => WebhookRequestLike;
 
+type WebhookRequestOptions = HttpRequestOptions & {
+  readonly autoSelectFamily: false;
+  readonly servername?: string;
+};
+
 export interface WebhookDestination {
   readonly url?: string;
   readonly endpoint?: string;
@@ -488,12 +493,17 @@ export class WebhookTransport {
     }
     const approved = addresses[0]!;
 
-    const requestOptions: HttpRequestOptions = {
+    const requestOptions: WebhookRequestOptions = {
       protocol: url.protocol,
       hostname: networkHostname(url),
       ...(url.port.length === 0 ? {} : { port: Number(url.port) }),
       path: `${url.pathname}${url.search}`,
       method: "POST",
+      family: approved.family,
+      // Node 24 enables network-family autoselection by default.  The lookup
+      // closure below is deliberately pinned to one already-approved address;
+      // do not let net.connect reinterpret it as a multi-address lookup.
+      autoSelectFamily: false,
       // Do not reuse a socket that was opened for a prior DNS answer.  Each
       // attempt must dial through the freshly validated lookup closure.
       agent: false,
@@ -503,13 +513,16 @@ export class WebhookTransport {
         "content-type": "application/json; charset=utf-8",
         "user-agent": this.#userAgent,
       },
-      lookup: (_hostname, _options, callback) => callback(null, approved.address, approved.family),
+      lookup: (_hostname, options, callback) => {
+        if (options.all) {
+          callback(null, [{ address: approved.address, family: approved.family }]);
+          return;
+        }
+        callback(null, approved.address, approved.family);
+      },
       signal: controller.signal,
+      ...(url.protocol === "https:" ? { servername: networkHostname(url) } : {}),
     };
-    if (url.protocol === "https:") {
-      (requestOptions as HttpRequestOptions & { servername?: string }).servername =
-        networkHostname(url);
-    }
 
     return this.#requestBody(url, requestOptions, body, controller);
   }
