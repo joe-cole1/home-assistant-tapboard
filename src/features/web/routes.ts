@@ -33,6 +33,7 @@ import { tapWarPercentages, type TapWarService } from "../tap-wars/service.ts";
 import type { EligibilityReason, TapWar } from "../tap-wars/types.ts";
 import { searchAdminDestinations } from "./admin-search.ts";
 import type { PublicStoryService } from "../story/service.ts";
+import type { PublicTapCardMetricSettings } from "../story/service.ts";
 import { buildSensoryRadar, VESSEL_IDS } from "../story/index.ts";
 import { getVesselDescriptor } from "../story/vessels.ts";
 import type { EventType } from "../events/types.ts";
@@ -146,6 +147,22 @@ function adminNavItems(): readonly (typeof ADMIN_NAV)[number][] {
 
 function volume(ml: number, unit: string): string {
   return unit === "metric" ? `${(ml / 1000).toFixed(1)} L` : `${(ml / 3785.411784).toFixed(1)} gal`;
+}
+
+function capacityLabel(ml: number, unit: string): string {
+  return volume(ml, unit);
+}
+
+function tareLabel(grams: number, unit: string): string {
+  if (unit === "metric") return `${(grams / 1000).toFixed(2)} kg`;
+  const totalOunces = Math.max(0, Math.round(grams / 28.349523125));
+  const pounds = Math.floor(totalOunces / 16);
+  const ounces = totalOunces % 16;
+  return `${pounds} lb ${ounces} oz`;
+}
+
+function isActionableHealth(state: string, severity: string): boolean {
+  return state === "active" || severity === "warning" || severity === "critical";
 }
 
 function temperature(c: number, unit: string): string {
@@ -1586,6 +1603,92 @@ function safeDashboardTap(
   }
 }
 
+const ALL_TAP_CARD_METRICS: PublicTapCardMetricSettings = Object.freeze({
+  showAbv: true,
+  showIbu: true,
+  showOg: true,
+  showFg: true,
+  showSrm: true,
+});
+
+function safeDashboardTapPreview(
+  dashboardService: DashboardService,
+  tapId: string,
+  settings?: PublicTapCardMetricSettings,
+): PublicTapCardView | null {
+  const candidate = dashboardService as DashboardService & {
+    readonly getTapPreview?: (
+      id: string,
+      metricSettings: PublicTapCardMetricSettings,
+    ) => PublicTapCardView | undefined;
+  };
+  if (settings !== undefined && typeof candidate.getTapPreview === "function") {
+    try {
+      const card = candidate.getTapPreview(tapId, settings);
+      return card === undefined ? null : card;
+    } catch {
+      return null;
+    }
+  }
+  return safeDashboardTap(dashboardService, tapId);
+}
+
+function previewMetricCatalog(card: PublicTapCardView | null): Readonly<Record<string, string>> {
+  if (card === null) return {};
+  const result: Record<string, string> = {};
+  if (typeof card.abv === "number" && Number.isFinite(card.abv))
+    result.abv = `${card.abv.toFixed(1)}%`;
+  for (const metric of card.metrics) {
+    if (["ibu", "og", "fg", "srm"].includes(metric.key)) result[metric.key] = metric.value;
+  }
+  return result;
+}
+
+function previewSampleCard(metricSettings: PublicTapCardMetricSettings): PublicTapCardView {
+  const metrics = [
+    ["abv", "ABV", "5.0%"],
+    ["ibu", "IBU", "42"],
+    ["og", "OG", "1.054"],
+    ["fg", "FG", "1.012"],
+    ["srm", "SRM", "4.0"],
+  ] as const;
+  const visibility = {
+    abv: metricSettings.showAbv,
+    ibu: metricSettings.showIbu,
+    og: metricSettings.showOg,
+    fg: metricSettings.showFg,
+    srm: metricSettings.showSrm,
+  } as const;
+  return {
+    id: "preview-tap",
+    tapNumber: 1,
+    tapName: "Preview Tap",
+    graphicId: "pint_glass",
+    graphic: getVesselDescriptor("pint_glass"),
+    displayColor: "#D97706",
+    beverageName: "Northbound Pale Ale",
+    style: "American Pale Ale",
+    abv: 5,
+    metrics: metrics
+      .filter(([key]) => visibility[key])
+      .map(([key, label, value]) => ({ key, label, value })),
+    description: "Citrus peel, soft pine, and a crisp finish.",
+    title: "Northbound Pale Ale",
+    accessibleLabel: "Tap 1, Northbound Pale Ale",
+    storyPath: null,
+    fillId: null,
+    fillPercent: 62,
+    remainingVolumeMl: 12000,
+    capacityMl: 19400,
+    servingsRemaining: 25,
+    daysRemaining: 4,
+    temperatureC: 4,
+    waitingForMeasurement: false,
+    health: "healthy",
+    badges: [],
+  };
+}
+
 function safeHealthOverview(healthService: HealthService, tapId: string): Record<string, unknown> {
   try {
     const overview = healthService.getAdminOverview(tapId) as unknown as Record<string, unknown>;
@@ -1840,6 +1943,7 @@ function safeFillCard(
     ),
     fillGlass: fillGlass ?? "pint_glass",
     displayColor: displayColor ?? "#D97706",
+    featured: fill.featured === true,
     graphic: getVesselDescriptor(graphicId),
     updatedAt: fill.updatedAt,
   };
@@ -2798,6 +2902,9 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
     const taps = dependencies.tapService.listTaps();
     const fills = dependencies.fillService.listFills();
     const health = dependencies.healthService.listAdminOverview();
+    const actionableHealth = health.filter((item) =>
+      isActionableHealth(item.aggregate.state, item.aggregate.severity),
+    );
     const kegs = dependencies.kegService.listKegs();
     const brewfather = dependencies.beverageService.getBrewfatherStatus();
     const header = dependencies.dashboardService.getHeader();
@@ -2820,12 +2927,7 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
           { label: "On deck", value: fills.filter((fill) => fill.state === "on_deck").length },
           {
             label: "Health warnings",
-            value: health.filter(
-              (item) =>
-                item.aggregate.state === "degraded" ||
-                item.aggregate.severity === "warning" ||
-                item.aggregate.severity === "critical",
-            ).length,
+            value: actionableHealth.length,
           },
         ],
         taps: taps.map((tap) => ({
@@ -2837,7 +2939,7 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
           beverageName: tap.activeAssignment?.beverageName ?? null,
           href: `/admin/taps/${encodeURIComponent(tap.id)}`,
         })),
-        health: health.map((item) => ({
+        health: actionableHealth.map((item) => ({
           tapId: item.tapId,
           tapNumber: taps.find((tap) => tap.id === item.tapId)?.tapNumber ?? null,
           tapName: item.name,
@@ -2847,12 +2949,7 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
           severity: item.aggregate.severity,
           severityLabel: humanizeAdminIdentifier(item.aggregate.severity),
           checks: (item.checks ?? [])
-            .filter(
-              (check) =>
-                check.state === "degraded" ||
-                check.severity === "warning" ||
-                check.severity === "critical",
-            )
+            .filter((check) => isActionableHealth(check.state, check.severity))
             .map((check) => ({
               id: check.checkId,
               label: healthCheckPresentation(check.checkId).title,
@@ -3283,6 +3380,12 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
         historyHref: "/admin/keg-room?state=ended",
         inventoryHref: "/admin/keg-room/kegs",
         newFillHref: "/admin/keg-room/fills/new",
+        kegRoomNav: {
+          fillHref: "/admin/keg-room/fills/new",
+          kegsHref: "/admin/keg-room/kegs",
+          historyHref: "/admin/keg-room?state=ended",
+          current: requested.state === "ended" ? "history" : null,
+        },
       },
     );
   });
@@ -3292,6 +3395,8 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
   registerAdminGet(dependencies, "/admin/keg-room/kegs", (request, response, context) => {
     const requested = adminKegPageQueryFromRequest(request);
     const page = fallbackAdminKegPage(dependencies.kegService, requested);
+    const displaySettings = dependencies.displayService.getSettings();
+    const unitSystem = displaySettings.unitSystem === "metric" ? "metric" : "us";
     const fillsFor = (kegId: string) => dependencies.fillService.listFills({ kegId });
     const kegs = page.items.map((keg) => {
       const detail = dependencies.kegService.getKeg(keg.id);
@@ -3324,6 +3429,8 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
         label: keg.label,
         capacityMl: keg.capacityMl,
         currentTareG: keg.currentTareG,
+        capacityLabel: capacityLabel(keg.capacityMl, unitSystem),
+        tareLabel: tareLabel(keg.currentTareG, unitSystem),
         isActive: keg.isActive,
         updatedAt: keg.updatedAt,
         currentFill: currentFill?.beverageName ?? null,
@@ -3366,8 +3473,13 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
           previousHref: page.page > 1 ? adminKegPageHref(requested, page.page - 1) : null,
           nextHref: page.page < page.pageCount ? adminKegPageHref(requested, page.page + 1) : null,
         },
-        roomHref: "/admin/keg-room",
         newKegHref: "/admin/keg-room/kegs/new",
+        kegRoomNav: {
+          fillHref: "/admin/keg-room/fills/new",
+          kegsHref: "/admin/keg-room/kegs",
+          historyHref: "/admin/keg-room?state=ended",
+          current: "kegs",
+        },
       },
     );
   });
@@ -3554,7 +3666,18 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
                   ? "Active"
                   : "Unknown",
         statusLabel: item.isRetired ? "Retired" : item.enabled ? "Enabled" : "Disabled",
-        publicCard,
+        publicCard:
+          publicCard === null
+            ? null
+            : {
+                ...publicCard,
+                graphic: publicCard.graphic ?? getVesselDescriptor(publicCard.graphicId),
+                title: publicCard.title ?? publicCard.beverageName ?? `Tap ${item.tapNumber}`,
+                accessibleLabel:
+                  publicCard.accessibleLabel ??
+                  publicCard.beverageName ??
+                  `Tap ${item.tapNumber} preview`,
+              },
         health,
       };
     });
@@ -3600,6 +3723,12 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
     const preview = mysteryLookupFailed
       ? null
       : safeMysteryPreview(publicCard, mystery?.enabled === true);
+    const previewCatalogCard = mysteryLookupFailed
+      ? null
+      : safeMysteryPreview(
+          safeDashboardTapPreview(dependencies.dashboardService, id, ALL_TAP_CARD_METRICS),
+          mystery?.enabled === true,
+        );
     const telemetrySources = dependencies.telemetryService
       .listSources()
       .slice(0, 200)
@@ -3693,7 +3822,11 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
     try {
       const effective = dependencies.displayService.getEffectiveTapCardSettings?.(id);
       if (effective !== undefined)
-        tapCard = { override: effective.override, effective: effective.settings };
+        tapCard = {
+          override: effective.override,
+          effective: effective.settings,
+          defaults: dependencies.displayService.getTapCardSettings(),
+        };
     } catch {
       tapCard = null;
     }
@@ -3824,6 +3957,7 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
           moveTargets,
           deletionImpact,
           publicPreview: preview,
+          previewMetricCatalog: previewMetricCatalog(previewCatalogCard),
           publicCard,
           displayDefaults,
         },
@@ -3863,6 +3997,18 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
   });
   registerAdminGet(dependencies, "/admin/display/shared", (request, response, context) => {
     const sharedDisplay = dependencies.displayService.getSettings();
+    const tapCardSettings =
+      typeof dependencies.displayService.getTapCardSettings === "function"
+        ? dependencies.displayService.getTapCardSettings()
+        : undefined;
+    const previewSettings: PublicTapCardMetricSettings = tapCardSettings ?? {
+      showAbv: true,
+      showIbu: true,
+      showOg: true,
+      showFg: true,
+      showSrm: false,
+    };
+    const previewTap = previewSampleCard(previewSettings);
     renderAdmin(
       dependencies,
       response,
@@ -3873,15 +4019,21 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
       "/admin/display/shared",
       {
         sharedDisplay,
-        tapCardSettings:
-          typeof dependencies.displayService.getTapCardSettings === "function"
-            ? dependencies.displayService.getTapCardSettings()
-            : undefined,
+        tapCardSettings,
+        previewTap,
+        previewMetricCatalog: {
+          abv: "5.0%",
+          ibu: "42",
+          og: "1.054",
+          fg: "1.012",
+          srm: "4.0",
+        },
         displayStylesheetHref: displayStylesheetHref(
           sharedDisplay.theme,
           sharedDisplay.accent,
           "all",
         ),
+        includeDashboardStyles: true,
       },
     );
   });
@@ -4707,6 +4859,9 @@ function registerAdminMutations(dependencies: WebRouteDependencies): void {
     "/admin/fills/:id/kick",
     "/admin/keg-room",
     async (form, context, params) => {
+      if (form.confirmKick !== "true") {
+        invalidForm("Confirm ending this fill before kicking the keg.");
+      }
       await dependencies.fillService.kickFill(
         params.id!,
         { reason: nullable(form.reason) },
@@ -4714,6 +4869,22 @@ function registerAdminMutations(dependencies: WebRouteDependencies): void {
       );
     },
     "Fill ended.",
+  );
+  registerAdminAction(
+    dependencies,
+    "/admin/fills/:id/featured",
+    (params) => `/admin/keg-room/fills/${encodeURIComponent(params.id ?? "")}`,
+    (form, context, params) => {
+      if (form.featured !== "true" && form.featured !== "false") {
+        invalidForm("Choose On or Off for the Featured setting.");
+      }
+      dependencies.fillService.setFeatured(
+        params.id!,
+        { featured: form.featured === "true" },
+        actor(context),
+      );
+    },
+    "Featured setting updated.",
   );
   registerAdminAction(
     dependencies,

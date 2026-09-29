@@ -147,6 +147,16 @@ if (shell) {
   const pinLive = pinForm?.querySelector("[data-pin-live]");
   const keypad = pinForm?.querySelector("[data-pin-keypad]");
   if (pinForm && pinInput && keypad) {
+    let pinSubmitting = false;
+    const submitPin = () => {
+      if (pinSubmitting || pinInput.value.length !== 4) return;
+      pinSubmitting = true;
+      pinForm.querySelectorAll("button, input").forEach((control) => {
+        if (control !== pinInput) control.disabled = true;
+      });
+      if (typeof pinForm.requestSubmit === "function") pinForm.requestSubmit();
+      else pinForm.submit();
+    };
     const updateIndicators = () => {
       const length = pinInput.value.replace(/\D/gu, "").length;
       indicators.forEach((indicator, index) => {
@@ -181,6 +191,14 @@ if (shell) {
       const sanitized = pinInput.value.replace(/\D/gu, "").slice(0, 4);
       if (sanitized !== pinInput.value) pinInput.value = sanitized;
       updateIndicators();
+      if (pinInput.value.length === 4) submitPin();
+    });
+    pinForm.addEventListener("submit", () => {
+      if (pinSubmitting) return;
+      pinSubmitting = true;
+      pinForm.querySelectorAll("button, input").forEach((control) => {
+        if (control !== pinInput) control.disabled = true;
+      });
     });
     keypad.addEventListener("click", (event) => {
       const button = event.target.closest("button");
@@ -305,3 +323,19 @@ if (shell) {
     });
   });
 }
+
+for (const fallback of document.querySelectorAll("form[data-confirm] [data-confirm-fallback]")) {
+  const checkbox = fallback.querySelector('input[name="confirmKick"]');
+  if (!(checkbox instanceof HTMLInputElement)) continue;
+  checkbox.required = false;
+  fallback.hidden = true;
+}
+
+document.addEventListener("submit", (event) => {
+  const form = event.target instanceof HTMLFormElement ? event.target : null;
+  if (!form || !form.dataset.confirm) return;
+  const confirmed = window.confirm(form.dataset.confirm);
+  const checkbox = form.querySelector('input[name="confirmKick"]');
+  if (checkbox instanceof HTMLInputElement) checkbox.checked = confirmed;
+  if (!confirmed) event.preventDefault();
+});

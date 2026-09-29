@@ -145,6 +145,85 @@ void test("validateFillDate validates exact YYYY-MM-DD calendar dates", () => {
   );
 });
 
+void test("FillService featured preference is durable, sparse by default, validated, and audited", async () => {
+  const { database, kegService, beverageService, fillService } = setupTestEnvironment();
+  try {
+    const keg = kegService.createKeg({ kegNumber: 1, capacityMl: 19000 });
+    const beverage = beverageService.createCustomBeverage({
+      name: "Featured Test Beverage",
+      beverageType: "beer",
+    });
+    const fill = fillService.createFill({ beverageId: beverage.beverage.id, kegId: keg.id });
+    assert.equal(fill.featured, false);
+    assert.equal(
+      database
+        .prepare<[], { readonly count: number }>(
+          "SELECT count(*) AS count FROM fill_display_preferences",
+        )
+        .get()?.count,
+      0,
+    );
+
+    const featuredAt = new Date("2026-08-17T12:00:00.000Z");
+    const enabled = fillService.setFeatured(
+      fill.id,
+      { featured: true },
+      { now: () => featuredAt, actorId: "operator-1", sessionId: "session-1" },
+    );
+    assert.equal(enabled.featured, true);
+    assert.equal(enabled.updatedAt, featuredAt.toISOString());
+    assert.deepEqual(
+      database
+        .prepare<[string], { readonly featured: number; readonly updated_at: string }>(
+          "SELECT featured, updated_at FROM fill_display_preferences WHERE fill_id = ?",
+        )
+        .get(fill.id),
+      { featured: 1, updated_at: featuredAt.toISOString() },
+    );
+    const enabledActivity = listActivity(database).find(
+      (activity) =>
+        activity.entityType === "fill" &&
+        activity.entityId === fill.id &&
+        activity.action === "configuration_changed",
+    );
+    assert.deepEqual(enabledActivity?.details, { featured: true });
+
+    assert.throws(
+      () => fillService.setFeatured(fill.id, { featured: "yes" }),
+      (error: ApplicationError) => error.code === "validation.invalid_value",
+    );
+    assert.throws(
+      () => fillService.setFeatured(fill.id, { featured: true, unexpected: false }),
+      (error: ApplicationError) => error.code === "validation.invalid_value",
+    );
+
+    const disabledAt = new Date("2026-08-17T12:01:00.000Z");
+    const disabled = fillService.setFeatured(
+      fill.id,
+      { featured: false },
+      { now: () => disabledAt },
+    );
+    assert.equal(disabled.featured, false);
+    assert.equal(disabled.updatedAt, disabledAt.toISOString());
+    assert.equal(
+      database
+        .prepare<[string], { readonly count: number }>(
+          "SELECT count(*) AS count FROM fill_display_preferences WHERE fill_id = ?",
+        )
+        .get(fill.id)?.count,
+      0,
+    );
+
+    await fillService.kickFill(fill.id);
+    assert.throws(
+      () => fillService.setFeatured(fill.id, { featured: true }),
+      (error: ApplicationError) => error.code === "fill.already_ended",
+    );
+  } finally {
+    database.close();
+  }
+});
+
 void test("createFill validates inputs, active keg constraints, and default dates", () => {
   const { database, kegService, beverageService, fillService } = setupTestEnvironment();
   try {

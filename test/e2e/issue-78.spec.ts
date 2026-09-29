@@ -4,10 +4,10 @@ import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 
 const MYSTERY_SECRET = "MYSTERY_SECRET_DO_NOT_LEAK_77";
 
-async function login(page: Page): Promise<void> {
+async function login(page: Page, options: { readonly manualSubmit?: boolean } = {}): Promise<void> {
   await page.goto("/admin");
   await page.getByRole("textbox", { name: "Admin PIN" }).fill("1234");
-  await page.getByRole("button", { name: "Sign in" }).click();
+  if (options.manualSubmit === true) await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/admin\/overview$/u);
 }
 

@@ -39,13 +39,17 @@
     </section>
   <% } else { %>
     <div class="table-scroll">
-      <table class="admin-table tap-list" aria-label="Taps">
+      <table class="admin-table admin-library-table tap-list" aria-label="Taps">
         <caption class="sr-only">Tap assignments and health</caption>
         <thead><tr><th scope="col">Tap</th><th scope="col">Assignment</th><th scope="col">Remaining</th><th scope="col">Health</th><th scope="col">Status</th><th scope="col">Action</th></tr></thead>
         <tbody>
           <% for (const tap of it.taps) { %>
-            <tr data-tap-id="<%= tap.id %>">
-              <th scope="row"><a href="/admin/taps/<%= tap.id %>">Tap <%= tap.tapNumber %><% if (tap.name) { %> — <%= tap.name %><% } else { %> — Unnamed Tap<% } %></a></th>
+            <tr class="admin-library-table__row" data-tap-id="<%= tap.id %>">
+              <th class="beverage-list__beverage-cell" scope="row">
+                <% if (tap.publicCard) { %><div class="beverage-list__preview"><%~ include("/partials/fill-graphic", { tap: { id: `tap-${tap.id}`, graphic: tap.publicCard.graphic, title: tap.publicCard.title, accessibleLabel: tap.publicCard.accessibleLabel, fillPercent: tap.publicCard.fillPercent, displayColor: tap.publicCard.displayColor, tapNumber: tap.tapNumber } }) %></div><% } else { %><div class="beverage-list__preview beverage-list__preview--empty" aria-hidden="true"></div><% } %>
+                <a class="beverage-list__name" href="/admin/taps/<%= tap.id %>">Tap <%= tap.tapNumber %><% if (tap.name) { %> — <%= tap.name %><% } else { %> — Unnamed Tap<% } %></a>
+                <span class="beverage-list__type"><%= tap.publicCard ? "Public card preview" : "No public preview" %></span>
+              </th>
               <td><% if (tap.assignment) { %><a href="/admin/keg-room/fills/<%= tap.assignment.fillId %>"><%= tap.assignmentLabel %></a><% if (tap.assignment.kegId) { %><span class="muted"> · <a href="/admin/keg-room/kegs/<%= tap.assignment.kegId %>">Keg <%= tap.assignment.kegNumber %><% if (tap.assignment.kegLabel) { %> — <%= tap.assignment.kegLabel %><% } %></a></span><% } %><% } else { %>Unassigned<% } %></td>
               <td><%= tap.remaining %></td>
               <td><span class="status-badge status-badge--<%= tap.health.severity === "critical" ? "critical" : tap.health.severity === "warning" || tap.health.state === "degraded" ? "warning" : tap.health.state === "healthy" ? "healthy" : "muted" %>"><%= tap.healthLabel %><% if (tap.health.severity !== "none") { %> · <%= tap.health.severityLabel %><% } %></span></td>

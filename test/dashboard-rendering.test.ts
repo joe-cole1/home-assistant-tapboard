@@ -32,6 +32,7 @@ function tap(id: number, enabled = true): PublicTapCardView & { readonly enabled
     temperatureC: id === 2 ? null : 4,
     waitingForMeasurement: id === 2,
     health: "healthy",
+    badges: [],
     enabled,
   };
 }

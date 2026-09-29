@@ -1,0 +1,1 @@
+<label data-confirm-fallback><input type="checkbox" name="confirmKick" value="true" required /> Confirm ending this fill and closing its current Tap assignment.</label>

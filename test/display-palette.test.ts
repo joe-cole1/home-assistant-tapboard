@@ -47,6 +47,13 @@ void test("display stylesheet output is deterministic, same-origin, and font-sel
   assert.ok(contrastRatio("#777777", "#ffffff") >= 3 || contrastRatio("#777777", "#000000") >= 3);
 
   const all = generateDisplayStylesheet("light_minimal", "amber", "all");
+  const rootPalette = all.css.match(/:root\{([^}]+)\}/u)?.[1];
+  const previewPalette = all.css.match(/\.display-preview\{([^}]+)\}/u)?.[1];
+  assert.ok(rootPalette);
+  assert.ok(previewPalette);
+  assert.ok(previewPalette.startsWith(`${rootPalette};`));
+  assert.match(previewPalette, /--surface:#ffffff;/u);
+  assert.match(previewPalette, /--text:#0f172a;/u);
   for (const font of Object.keys(displayFontFiles)) {
     assert.match(all.css, new RegExp(`assets/fonts/${font}-[0-9a-f]+\\.woff2`, "u"));
     assert.ok(all.css.includes(`data-preview-font="${font}"`));

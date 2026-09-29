@@ -4,6 +4,7 @@ import {
   read as readPreferences,
 } from "/assets/js/display-preferences.js";
 import { connect } from "/assets/js/sse.js";
+import { watchUtcDayChanges } from "/assets/js/utc-day-refresh.js";
 
 const root = document.querySelector("[data-dashboard]");
 const grid = document.querySelector("[data-tap-grid]");
@@ -495,15 +496,7 @@ function createCard(tap) {
   visual.append(forecast);
   const badges = document.createElement("div");
   badges.className = "tap-badges";
-  const health = document.createElement("span");
-  health.className = "health-badge";
-  health.dataset.field = "health";
-  const dot = document.createElement("span");
-  dot.className = "health-dot";
-  dot.setAttribute("aria-hidden", "true");
-  const label = createTextElement("span", "health-label");
-  health.append(dot, label);
-  badges.append(health);
+  badges.dataset.field = "badges";
   card.append(titleRow, copy, visual, badges);
   return card;
 }
@@ -543,6 +536,7 @@ function patchMetrics(card, metrics) {
   field.replaceChildren(
     ...values.map((metric) => {
       const wrapper = document.createElement("div");
+      if (typeof metric?.key === "string") wrapper.dataset.metricKey = metric.key;
       const label = document.createElement("dt");
       const value = document.createElement("dd");
       text(label, metric?.label);
@@ -558,6 +552,41 @@ function patchStyleLine(card, metrics, style) {
   if (!field) return;
   const abv = (Array.isArray(metrics) ? metrics : []).find((metric) => metric?.key === "abv");
   optionalText(field, [abv?.value, style].filter(Boolean).join(" · "));
+}
+
+function patchBadges(card, tap) {
+  const footer = card.querySelector('[data-field="badges"]');
+  if (!footer) return;
+  const tapWarsBadge = footer.querySelector("[data-tap-wars-card-badge]");
+  for (const child of [...footer.children]) {
+    if (child !== tapWarsBadge) child.remove();
+  }
+  const health = tap.health === "degraded" || tap.health === "unknown" ? tap.health : null;
+  if (health) {
+    const marker = document.createElement("span");
+    marker.className = `health-badge health-badge--${health}`;
+    marker.dataset.field = "health";
+    marker.setAttribute("aria-label", health === "degraded" ? "Degraded" : "Unknown");
+    const dot = document.createElement("span");
+    dot.className = "health-dot";
+    dot.setAttribute("aria-hidden", "true");
+    const label = document.createElement("span");
+    label.className = "sr-only";
+    label.dataset.field = "health-label";
+    text(label, health === "degraded" ? "Degraded" : "Unknown");
+    marker.append(dot, label);
+    footer.append(marker);
+  }
+  const labels = { low: "Low", new: "New", featured: "Featured" };
+  for (const badge of Array.isArray(tap.badges) ? tap.badges : []) {
+    if (!Object.hasOwn(labels, badge)) continue;
+    const element = document.createElement("span");
+    element.className = `tap-badge tap-badge--${badge}`;
+    element.dataset.tapBadge = badge;
+    text(element, labels[badge]);
+    footer.append(element);
+  }
+  if (tapWarsBadge) footer.append(tapWarsBadge);
 }
 
 function patchUnits(card) {
@@ -675,11 +704,8 @@ function patchTap(tap) {
   text(card.querySelector('[data-field="tap-number"]'), tap.tapNumber);
   text(card.querySelector('[data-field="tap-name"]'), title);
   patchStyleLine(card, tap.metrics, tap.style);
-  text(
-    card.querySelector('[data-field="health-label"]'),
-    tap.health === "healthy" ? "Healthy" : tap.health === "degraded" ? "Degraded" : "Unknown",
-  );
   patchMetrics(card, tap.metrics);
+  patchBadges(card, tap);
   optionalText(card.querySelector('[data-field="description"]'), tap.description);
   patchForecast(card, tap);
   const svg = card.querySelector(".tap-graphic");
@@ -1149,11 +1175,6 @@ function createTapWarsCardControls(war, side) {
   controls.dataset.warId = war.id;
   controls.dataset.warStatus = war.status;
   controls.dataset.warSide = String(side.side);
-  const badge = document.createElement("span");
-  badge.className = "tap-wars-card-badge";
-  badge.dataset.tapWarsCardBadge = "";
-  text(badge, "Tap Wars");
-  controls.append(badge);
   if (war.status === "active" && war.canVote) {
     const form = document.createElement("form");
     form.className = "tap-wars-vote-form";
@@ -1186,6 +1207,14 @@ function createTapWarsCardControls(war, side) {
 function patchTapWarsCard(card, war, side) {
   card.dataset.tapWarsParticipant = String(side.side);
   const existing = card.querySelector("[data-tap-wars-card-controls]");
+  const footer = card.querySelector('[data-field="badges"]');
+  if (footer && !footer.querySelector("[data-tap-wars-card-badge]")) {
+    const badge = document.createElement("span");
+    badge.className = "tap-badge tap-badge--tap-wars";
+    badge.dataset.tapWarsCardBadge = "";
+    text(badge, "Tap Wars");
+    footer.append(badge);
+  }
   const sameControls =
     existing?.dataset.warId === war.id &&
     existing.dataset.warStatus === war.status &&
@@ -1252,6 +1281,7 @@ function patchTapWars(war) {
     delete card.dataset.tapWarsParticipant;
     if (!participantTapIds.has(String(card.dataset.tapId))) {
       card.querySelector("[data-tap-wars-card-controls]")?.remove();
+      card.querySelector("[data-tap-wars-card-badge]")?.remove();
       card = restoreStoryCard(card);
     }
   }
@@ -1281,9 +1311,30 @@ function patchTapWars(war) {
   patchTapWarsDialog(war);
 }
 
+const voteFeedbackTimers = new WeakMap();
+
 function announceVote(element, message) {
-  text(element, "");
-  window.setTimeout(() => text(element, message), 0);
+  if (!element) return;
+  const previous = voteFeedbackTimers.get(element);
+  if (previous) {
+    window.clearTimeout(previous.fade);
+    window.clearTimeout(previous.clear);
+  }
+  element.classList.remove("is-fading");
+  text(element, message);
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const fade = window.setTimeout(() => {
+    if (!reduced) element.classList.add("is-fading");
+  }, 1000);
+  const clear = window.setTimeout(
+    () => {
+      text(element, "");
+      element.classList.remove("is-fading");
+      voteFeedbackTimers.delete(element);
+    },
+    reduced ? 1000 : 1650,
+  );
+  voteFeedbackTimers.set(element, { fade, clear });
 }
 
 document.addEventListener("click", (event) => {
@@ -1372,13 +1423,24 @@ connect(
   reconnectRefresh,
 );
 
+const badgeDayRefresh = watchUtcDayChanges(() => {
+  for (const card of grid.querySelectorAll("[data-tap-id]")) {
+    if (card.dataset.tapId) queueDirty(card.dataset.tapId);
+  }
+});
+window.addEventListener("pagehide", badgeDayRefresh.stop);
+window.addEventListener("pageshow", badgeDayRefresh.check);
+
 document.addEventListener("tapboard:display-preferences", () => {
   for (const card of grid.querySelectorAll("[data-tap-id]")) patchUnits(card);
   updateRotation();
 });
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) window.clearInterval(rotationTimer);
-  else updateRotation();
+  else {
+    badgeDayRefresh.check();
+    updateRotation();
+  }
 });
 document.addEventListener("focusin", () => window.clearInterval(rotationTimer));
 document.addEventListener("focusout", updateRotation);

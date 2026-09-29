@@ -172,3 +172,24 @@ void test("authoritative radio apply selects options without mutating values", (
     [false, false, false],
   );
 });
+
+void test("autosave value application announces preview resync fields", () => {
+  const controls: FakeControl[] = [
+    { name: "fillGlass", type: "radio", value: "", checked: true },
+    { name: "fillGlass", type: "radio", value: "pint", checked: false },
+  ];
+  const events: { readonly type: string; readonly detail?: { readonly fields?: string[] } }[] = [];
+  const form = {
+    ...fakeForm("fillGlass", controls),
+    dispatchEvent(event: { type: string; detail?: { readonly fields?: string[] } }): boolean {
+      events.push(event);
+      return true;
+    },
+  };
+
+  autosaveBrowser.applyResource(form, { fillGlass: "pint" });
+
+  assert.equal(events.length, 1);
+  assert.equal(events[0]?.type, "tapboard:autosave-values-applied");
+  assert.deepEqual(events[0]?.detail?.fields, ["fillGlass"]);
+});

@@ -32,6 +32,8 @@ import {
   listFills as listFillRows,
   listAdminFillPage,
   listOnDeckFills,
+  upsertFillFeatured,
+  updateFillUpdatedAt,
   reorderOnDeck as reorderOnDeckRows,
   updateFillSettings,
   updateOnDeckOrder,
@@ -52,12 +54,14 @@ import type {
   FillSettings,
   KickFillResult,
   PublicOnDeckItem,
+  UpdateFillFeaturedInput,
 } from "./types.ts";
 import {
   validateCreateFillInput,
   adminFillPageSize,
   validateDeleteFillInput,
   validateFillSettingsInput,
+  validateFillFeaturedInput,
   validateKickFillInput,
   validateListFillsQuery,
   validateReorderOnDeckInput,
@@ -222,6 +226,7 @@ export class FillService {
       endReason: fill.endReason,
       createdAt: fill.createdAt,
       updatedAt: fill.updatedAt,
+      featured: fill.featured,
     };
   }
 
@@ -247,7 +252,53 @@ export class FillService {
       endReason: row.end_reason,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
+      featured: row.featured === 1,
     };
+  }
+
+  setFeatured(id: unknown, input: unknown, options: FillActorOptions = {}): AdminFillView {
+    const fillId = validateUuid(id, "id");
+    const validated: UpdateFillFeaturedInput = validateFillFeaturedInput(input);
+    const nowIso = timestamp(options.now ?? this.#now);
+    const actorType = options.actorType ?? "admin";
+    const actorId = options.actorId;
+    const sessionId = options.sessionId;
+
+    return this.#database.withTransaction(() => {
+      const fill = findFillById(this.#database, fillId);
+      if (!fill) {
+        throw new ApplicationError({
+          category: "not_found",
+          code: "fill.not_found",
+          clientMessage: "Fill was not found.",
+          details: { id: fillId },
+        });
+      }
+      if (fill.endedAt !== null) {
+        throw new ApplicationError({
+          category: "conflict",
+          code: "fill.already_ended",
+          clientMessage: "Ended fill cannot be featured.",
+          details: { id: fillId },
+        });
+      }
+
+      upsertFillFeatured(this.#database, fillId, validated.featured, nowIso);
+      updateFillUpdatedAt(this.#database, fillId, nowIso);
+      appendActivity(this.#database, {
+        category: "admin",
+        action: "configuration_changed",
+        actorType,
+        ...(actorId !== undefined ? { actorId } : {}),
+        ...(sessionId !== undefined ? { sessionId } : {}),
+        entityType: "fill",
+        entityId: fillId,
+        details: { featured: validated.featured },
+        occurredAt: nowIso,
+      });
+
+      return this.#mapToAdminFillView(findFillById(this.#database, fillId)!);
+    });
   }
 
   createFill(input: unknown, options: FillActorOptions = {}): AdminFillView {
@@ -315,6 +366,7 @@ export class FillService {
         endReason: null,
         createdAt: nowIso,
         updatedAt: nowIso,
+        featured: false,
       };
 
       insertFill(this.#database, fill);

@@ -11,7 +11,7 @@ import {
 const form = document.querySelector("[data-display-preferences]");
 const status = document.querySelector("[data-display-preference-status]");
 const sharedForm = document.querySelector("[data-shared-display-form]");
-const preview = document.querySelector("[data-display-preview]");
+const preview = document.querySelector("[data-display-preview], .display-preview");
 const labels = {
   theme: "Theme",
   font: "Font",
@@ -208,4 +208,124 @@ document.querySelector("[data-reset-preferences]")?.addEventListener("click", ()
   setStatus("This display now inherits all shared defaults.");
 });
 
-apply(read());
+const metricNames = {
+  abv: ["showAbv", "ABV"],
+  ibu: ["showIbu", "IBU"],
+  og: ["showOg", "OG"],
+  fg: ["showFg", "FG"],
+  srm: ["showSrm", "SRM"],
+};
+
+function metricEnabled(control) {
+  if (control instanceof HTMLInputElement) return control.checked;
+  if (!(control instanceof HTMLElement) || control.tagName !== "SELECT") return false;
+  if (control.value === "show") return true;
+  if (control.value === "hide") return false;
+  return control.dataset.inheritedValue === "true";
+}
+
+function syncTapCardPreview() {
+  const card = document.querySelector(
+    "[data-display-preview] .tap-card, .display-preview .tap-card",
+  );
+  if (!(card instanceof HTMLElement)) return;
+  const metricForm =
+    document.querySelector('form[action="/admin/display/tap-card"]') ??
+    document.querySelector('form[action$="/display"]');
+  const styleLine = card.querySelector('[data-field="style-line"]');
+  const metrics = card.querySelector('[data-field="metrics"]');
+  if (metricForm instanceof HTMLFormElement) {
+    const abvControl = metricForm.querySelector('[name="showAbv"]');
+    const abv = metricEnabled(abvControl) ? card.dataset.previewMetricAbv : undefined;
+    if (styleLine instanceof HTMLElement) {
+      styleLine.textContent = [abv, styleLine.dataset.previewStyle].filter(Boolean).join(" · ");
+      styleLine.hidden = styleLine.textContent === "";
+    }
+    if (metrics instanceof HTMLElement) {
+      const rows = [];
+      for (const key of ["ibu", "og", "fg", "srm"]) {
+        const [name, label] = metricNames[key];
+        const value = card.dataset[`previewMetric${key[0].toUpperCase()}${key.slice(1)}`];
+        if (!value || !metricEnabled(metricForm.querySelector(`[name="${name}"]`))) continue;
+        const row = document.createElement("div");
+        row.dataset.metricKey = key;
+        const term = document.createElement("dt");
+        term.textContent = label;
+        const detail = document.createElement("dd");
+        detail.textContent = value;
+        row.append(term, detail);
+        rows.push(row);
+      }
+      metrics.replaceChildren(...rows);
+      metrics.hidden = rows.length === 0;
+    }
+  }
+  const shared = document.querySelector("[data-shared-display-form]");
+  const remaining =
+    metricForm instanceof HTMLFormElement
+      ? metricForm.querySelector('[name="remainingMode"]')
+      : null;
+  const unit = shared?.querySelector('[name="unitSystem"]');
+  const previewUnit =
+    unit instanceof HTMLElement &&
+    unit.tagName === "SELECT" &&
+    ["us", "metric"].includes(unit.value)
+      ? unit.value
+      : preview instanceof HTMLElement
+        ? preview.dataset.previewUnitSystem
+        : undefined;
+  const temperatureToggle = shared?.querySelector('[name="showServingTemperature"]');
+  const previewShowsTemperature =
+    temperatureToggle instanceof HTMLInputElement
+      ? temperatureToggle.checked
+      : preview instanceof HTMLElement
+        ? preview.dataset.previewShowServingTemperature !== "false"
+        : true;
+  if (preview instanceof HTMLElement) {
+    if (previewUnit === "us" || previewUnit === "metric")
+      preview.dataset.previewUnitSystem = previewUnit;
+    preview.dataset.previewShowServingTemperature = String(previewShowsTemperature);
+  }
+  const mode =
+    remaining instanceof HTMLElement && remaining.tagName === "SELECT" ? remaining.value : null;
+  const readout = card.querySelector('[data-field="remaining-readout"]');
+  if (mode && readout) {
+    const remainingMl = Number(card.dataset.remainingVolumeMl);
+    const capacityMl = Number(card.dataset.capacityMl);
+    const servings = Number(card.dataset.servingsRemaining);
+    const percent = Number(card.dataset.fillPercent);
+    const waiting = card.dataset.waitingForMeasurement === "true";
+    if (waiting) readout.textContent = "Waiting for measurement";
+    else if (mode === "percent" && Number.isFinite(percent))
+      readout.textContent = `${Math.round(percent)}% remaining`;
+    else if (mode === "pints" && Number.isFinite(remainingMl))
+      readout.textContent = `${(remainingMl / 473.176473).toFixed(1)} pints remaining`;
+    else if (mode === "pours" && Number.isFinite(servings))
+      readout.textContent = `${Math.max(0, Math.floor(servings))} pours remaining`;
+    else if (mode === "volume" && Number.isFinite(remainingMl) && Number.isFinite(capacityMl)) {
+      const metric = previewUnit === "metric";
+      const divisor = metric ? 1000 : 3785.411784;
+      const suffix = metric ? " L" : " gal";
+      readout.textContent = `${(remainingMl / divisor).toFixed(1)}${suffix} / ${(capacityMl / divisor).toFixed(1)}${suffix}`;
+    } else readout.textContent = "Measurement unavailable";
+  }
+  const temperature = card.querySelector('[data-field="temperature"]');
+  if (temperature instanceof HTMLElement) {
+    const hasTemperature = Number.isFinite(Number(card.dataset.temperatureC));
+    temperature.hidden = !hasTemperature || !previewShowsTemperature;
+  }
+}
+
+for (const previewForm of document.querySelectorAll(
+  'form[action="/admin/display/tap-card"], form[action$="/display"], [data-shared-display-form]',
+)) {
+  previewForm.addEventListener("input", syncTapCardPreview);
+  previewForm.addEventListener("change", syncTapCardPreview);
+}
+document.addEventListener("tapboard:autosave-values-applied", () => {
+  syncPreviewFromForm();
+  syncTapCardPreview();
+});
+syncTapCardPreview();
+
+if (form instanceof HTMLFormElement && !(preview instanceof HTMLElement)) apply(read());

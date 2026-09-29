@@ -145,8 +145,24 @@ function applyControlValue(controls, value) {
   }
 }
 
+function emitValuesApplied(form, fields) {
+  if (
+    fields.length === 0 ||
+    typeof form.dispatchEvent !== "function" ||
+    typeof CustomEvent !== "function"
+  )
+    return;
+  form.dispatchEvent(
+    new CustomEvent("tapboard:autosave-values-applied", {
+      bubbles: true,
+      detail: { fields },
+    }),
+  );
+}
+
 function applyResource(form, resource, onlyIfSentValues = undefined) {
   if (!resource || typeof resource !== "object") return;
+  const appliedFields = [];
   for (const field of fieldNames(form)) {
     if (!Object.prototype.hasOwnProperty.call(resource, field)) continue;
     const controls = controlsFor(form, field);
@@ -157,7 +173,9 @@ function applyResource(form, resource, onlyIfSentValues = undefined) {
     }
     const value = resource[field];
     applyControlValue(controls, value);
+    appliedFields.push(field);
   }
+  emitValuesApplied(form, appliedFields);
 }
 
 function ensureUndoButton(form, state) {
@@ -174,9 +192,14 @@ function ensureUndoButton(form, state) {
     const values = state.undoValues;
     state.undoValues = null;
     button.hidden = true;
+    const appliedFields = [];
     for (const [field, value] of Object.entries(values)) {
-      applyControlValue(controlsFor(form, field), value);
+      const controls = controlsFor(form, field);
+      if (controls.length === 0) continue;
+      applyControlValue(controls, value);
+      appliedFields.push(field);
     }
+    emitValuesApplied(form, appliedFields);
     queue(form, state);
   });
   output.insertAdjacentElement("afterend", button);

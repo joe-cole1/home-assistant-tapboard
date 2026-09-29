@@ -1,5 +1,6 @@
 import type { BeverageService } from "../beverages/service.ts";
 import type { DisplaySettingsService } from "../display/service.ts";
+import type { PublicTapCardMetricSettings } from "../story/service.ts";
 import type { FillService } from "../fills/service.ts";
 import type { ForecastService } from "../forecasting/service.ts";
 import type { HealthService } from "../health/service.ts";
@@ -115,6 +116,13 @@ export class DashboardService {
 
   getTap(tapId: string): PublicTapCardView | undefined {
     return this.#storyService().getCard(tapId);
+  }
+
+  getTapPreview(
+    tapId: string,
+    metricSettings: PublicTapCardMetricSettings,
+  ): PublicTapCardView | undefined {
+    return this.#storyService().getCardPreview(tapId, metricSettings);
   }
 
   getOnDeck(): PublicOnDeckView {

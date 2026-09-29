@@ -11,6 +11,7 @@ interface FillRow {
   readonly end_reason: string | null;
   readonly created_at: string;
   readonly updated_at: string;
+  readonly featured: number;
 }
 
 interface FillSettingsRow {
@@ -26,6 +27,10 @@ interface CountRow {
 interface MaxOrderRow {
   readonly max_order: number | null;
 }
+
+const FILL_ROW_COLUMNS = `id, beverage_id, keg_id, fill_date, on_deck_order, ended_at, end_reason,
+  created_at, updated_at,
+  COALESCE((SELECT featured FROM fill_display_preferences WHERE fill_id = fills.id), 0) AS featured`;
 
 export interface AdminFillProjectionRow {
   readonly id: string;
@@ -48,6 +53,7 @@ export interface AdminFillProjectionRow {
   readonly tap_id: string | null;
   readonly tap_number: number | null;
   readonly state: string;
+  readonly featured: number;
 }
 
 export interface AdminFillPageRepositoryQuery {
@@ -121,6 +127,7 @@ const ADMIN_FILL_PROJECTION_CTE = `
       f.end_reason,
       f.created_at,
       f.updated_at,
+      COALESCE(fdp.featured, 0) AS featured,
       aa.tap_id,
       aa.tap_number,
       CASE
@@ -132,6 +139,7 @@ const ADMIN_FILL_PROJECTION_CTE = `
     FROM fills f
     INNER JOIN kegs k ON k.id = f.keg_id
     LEFT JOIN beverage_projection bp ON bp.beverage_id = f.beverage_id
+    LEFT JOIN fill_display_preferences fdp ON fdp.fill_id = f.id
     LEFT JOIN active_assignments aa ON aa.fill_id = f.id
   )`;
 
@@ -189,7 +197,58 @@ function mapFillRow(row: FillRow): Fill {
     endReason: row.end_reason,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    featured: row.featured === 1,
   };
+}
+
+interface FillDisplayPreferenceRow {
+  readonly featured: number;
+}
+
+/** Read one fill's sparse public-card preference without loading other fills. */
+export function readFillFeatured(database: DatabaseExecutor, fillId: string): boolean {
+  const row = database
+    .prepare<[string], FillDisplayPreferenceRow>(
+      `SELECT featured
+       FROM fill_display_preferences
+       WHERE fill_id = ?`,
+    )
+    .get(fillId);
+  return row?.featured === 1;
+}
+
+/** Persist only enabled Featured state; false returns the row to the default. */
+export function upsertFillFeatured(
+  database: DatabaseExecutor,
+  fillId: string,
+  featured: boolean,
+  updatedAt: string,
+): void {
+  if (!featured) {
+    database
+      .prepare<[string]>(`DELETE FROM fill_display_preferences WHERE fill_id = ?`)
+      .run(fillId);
+    return;
+  }
+  database
+    .prepare<[string, number, string]>(
+      `INSERT INTO fill_display_preferences (fill_id, featured, updated_at)
+       VALUES (?, ?, ?)
+       ON CONFLICT(fill_id) DO UPDATE SET featured = excluded.featured, updated_at = excluded.updated_at`,
+    )
+    .run(fillId, 1, updatedAt);
+}
+
+export function updateFillUpdatedAt(
+  database: DatabaseExecutor,
+  fillId: string,
+  updatedAt: string,
+): boolean {
+  return (
+    database
+      .prepare<[string, string]>(`UPDATE fills SET updated_at = ? WHERE id = ?`)
+      .run(updatedAt, fillId).changes > 0
+  );
 }
 
 export function insertFill(database: DatabaseExecutor, fill: Fill): void {
@@ -243,7 +302,7 @@ export function updateFill(database: DatabaseExecutor, fill: Fill): boolean {
 export function findFillById(database: DatabaseExecutor, id: string): Fill | undefined {
   const row = database
     .prepare<[string], FillRow>(
-      `SELECT id, beverage_id, keg_id, fill_date, on_deck_order, ended_at, end_reason, created_at, updated_at
+      `SELECT ${FILL_ROW_COLUMNS}
        FROM fills
        WHERE id = ?`,
     )
@@ -255,7 +314,7 @@ export function findFillById(database: DatabaseExecutor, id: string): Fill | und
 export function findActiveFillByKegId(database: DatabaseExecutor, kegId: string): Fill | undefined {
   const row = database
     .prepare<[string], FillRow>(
-      `SELECT id, beverage_id, keg_id, fill_date, on_deck_order, ended_at, end_reason, created_at, updated_at
+      `SELECT ${FILL_ROW_COLUMNS}
        FROM fills
        WHERE keg_id = ? AND ended_at IS NULL`,
     )
@@ -270,7 +329,7 @@ export interface ListFillsFilter {
 }
 
 export function listFills(database: DatabaseExecutor, filter: ListFillsFilter = {}): Fill[] {
-  let sql = `SELECT id, beverage_id, keg_id, fill_date, on_deck_order, ended_at, end_reason, created_at, updated_at FROM fills`;
+  let sql = `SELECT ${FILL_ROW_COLUMNS} FROM fills`;
   const conditions: string[] = [];
   const params: unknown[] = [];
 
@@ -324,7 +383,7 @@ export function listAdminFillPage(
        SELECT id, beverage_id, beverage_name, beverage_type, beverage_style, beverage_abv,
               fill_glass, display_color, keg_id, keg_number, keg_label, fill_date,
               on_deck_order, ended_at, end_reason, created_at, updated_at,
-              tap_id, tap_number, state
+              tap_id, tap_number, state, featured
        FROM fill_projection
        ${where.sql}
        ORDER BY ${adminFillPageOrder(query.sort)}
@@ -418,7 +477,7 @@ export function updateFillSettings(
 export function listOnDeckFills(database: DatabaseExecutor): Fill[] {
   const rows = database
     .prepare<[], FillRow>(
-      `SELECT id, beverage_id, keg_id, fill_date, on_deck_order, ended_at, end_reason, created_at, updated_at
+      `SELECT ${FILL_ROW_COLUMNS}
        FROM fills
        WHERE ended_at IS NULL AND on_deck_order IS NOT NULL
        ORDER BY on_deck_order ASC, created_at ASC`,

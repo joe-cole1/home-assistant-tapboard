@@ -12,6 +12,7 @@ export interface Fill {
   readonly endReason: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
+  readonly featured: boolean;
 }
 
 export interface FillSettings {
@@ -72,6 +73,7 @@ export interface AdminFillView {
   readonly endReason: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
+  readonly featured: boolean;
 }
 
 export interface PublicOnDeckItem {
@@ -122,6 +124,10 @@ export interface ReorderOnDeckInput {
 
 export interface UpdateFillSettingsInput {
   readonly autoDeleteBeverageOnLastFill: boolean;
+}
+
+export interface UpdateFillFeaturedInput {
+  readonly featured: boolean;
 }
 
 export interface DeleteFillInput {

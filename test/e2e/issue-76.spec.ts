@@ -2,11 +2,11 @@
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
-async function login(page: Page): Promise<void> {
+async function login(page: Page, options: { readonly manualSubmit?: boolean } = {}): Promise<void> {
   await page.goto("/admin");
   await expect(page).toHaveURL(/\/admin\/login$/u);
   await page.getByRole("textbox", { name: "Admin PIN" }).fill("1234");
-  await page.getByRole("button", { name: "Sign in" }).click();
+  if (options.manualSubmit === true) await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/admin\/overview$/u);
 }
 
@@ -106,7 +106,7 @@ test("Admin login, navigation, and a normal HTTP mutation work without JavaScrip
 }) => {
   const context = await browser.newContext({ javaScriptEnabled: false });
   const page = await context.newPage();
-  await login(page);
+  await login(page, { manualSubmit: true });
   for (const [route, activeHref] of [
     ["overview", "/admin/overview"],
     ["integrations", "/admin/integrations"],

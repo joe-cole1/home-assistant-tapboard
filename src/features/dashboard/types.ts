@@ -27,6 +27,8 @@ export interface PublicHeaderView {
   readonly connectivityLabel: string;
 }
 
+export type PublicTapBadge = "low" | "new" | "featured";
+
 export interface PublicTapCardView {
   readonly id: string;
   readonly tapNumber: number;
@@ -55,6 +57,7 @@ export interface PublicTapCardView {
   readonly temperatureC: number | null;
   readonly waitingForMeasurement: boolean;
   readonly health: "healthy" | "degraded" | "unknown";
+  readonly badges: readonly PublicTapBadge[];
 }
 
 export type PublicTapMetricKey = "abv" | "ibu" | "og" | "fg" | "srm";

@@ -6,8 +6,9 @@ import type {
   BeverageSourceRecipeSnapshot,
   EffectiveBeveragePresentation,
 } from "../beverages/types.ts";
-import type { PublicTapCardView, PublicTapMetricView } from "../dashboard/types.ts";
+import type { PublicTapBadge, PublicTapCardView, PublicTapMetricView } from "../dashboard/types.ts";
 import type { DisplaySettingsService } from "../display/service.ts";
+import type { TapCardDisplaySettings } from "../display/types.ts";
 import type { FillService } from "../fills/service.ts";
 import type { AdminFillView } from "../fills/types.ts";
 import type { ForecastService } from "../forecasting/service.ts";
@@ -60,6 +61,7 @@ export interface PublicStoryServiceDependencies {
   readonly forecastService: ForecastService;
   readonly healthService: HealthService;
   readonly displayService?: DisplaySettingsService;
+  readonly now?: () => Date;
 }
 
 interface StoryContext {
@@ -190,6 +192,11 @@ const DEFAULT_TAP_CARD_METRICS = Object.freeze({
   showSrm: false,
 });
 
+export type PublicTapCardMetricSettings = Pick<
+  TapCardDisplaySettings,
+  "showAbv" | "showIbu" | "showOg" | "showFg" | "showSrm"
+>;
+
 function metricValue(key: PublicTapMetricView["key"], value: number): PublicTapMetricView {
   const labels = { abv: "ABV", ibu: "IBU", og: "OG", fg: "FG", srm: "SRM" } as const;
   const formatted =
@@ -203,11 +210,40 @@ function metricValue(key: PublicTapMetricView["key"], value: number): PublicTapM
   return { key, label: labels[key], value: formatted };
 }
 
+function utcCalendarDay(value: string): number | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (match === null) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const timestamp = Date.UTC(year, month - 1, day);
+  const parsed = new Date(timestamp);
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() + 1 !== month ||
+    parsed.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return timestamp;
+}
+
+function isFillNew(fillDate: string, now: Date): boolean {
+  if (!(now instanceof Date) || Number.isNaN(now.getTime())) return false;
+  const fillDay = utcCalendarDay(fillDate);
+  const todayDay = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  if (fillDay === null) return false;
+  const ageDays = Math.floor((todayDay - fillDay) / 86_400_000);
+  return ageDays >= 0 && ageDays <= 6;
+}
+
 export class PublicStoryService {
   readonly #dependencies: PublicStoryServiceDependencies;
+  readonly #now: () => Date;
 
   constructor(dependencies: PublicStoryServiceDependencies) {
     this.#dependencies = dependencies;
+    this.#now = dependencies.now ?? (() => new Date());
   }
 
   listCards(): readonly PublicTapCardView[] {
@@ -223,6 +259,33 @@ export class PublicStoryService {
       const context = this.#contextForTap(tapId);
       if (!context.tap.enabled || context.tap.isRetired) return undefined;
       return this.#cardForContext(context);
+    } catch (error) {
+      if (
+        isApplicationError(error) &&
+        (error.category === "validation" ||
+          error.code === "tap.not_found" ||
+          error.code === "fill.not_found" ||
+          error.code === "beverage.not_found")
+      ) {
+        return undefined;
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Build the same safe public card as getCard while hypothetically applying
+   * only metric visibility. This is read-only and deliberately does not
+   * change the persisted Display settings or the card's runtime projection.
+   */
+  getCardPreview(
+    tapId: string,
+    metricSettings: PublicTapCardMetricSettings,
+  ): PublicTapCardView | undefined {
+    try {
+      const context = this.#contextForTap(tapId);
+      if (!context.tap.enabled || context.tap.isRetired) return undefined;
+      return this.#cardForContext(context, metricSettings);
     } catch (error) {
       if (
         isApplicationError(error) &&
@@ -448,6 +511,38 @@ export class PublicStoryService {
     }
   }
 
+  #badgesFor(context: StoryContext, policy: MysteryVisibilityPolicy): readonly PublicTapBadge[] {
+    if (context.assignment === null || context.beverage === null || context.fill === null) {
+      return [];
+    }
+
+    const badges: PublicTapBadge[] = [];
+    try {
+      const overview = this.#dependencies.healthService.getAdminOverview(context.tap.id);
+      const lowKeg = overview.checks.find((check) => check.checkId === "low_keg");
+      if (
+        lowKeg !== undefined &&
+        (lowKeg.state === "active" ||
+          lowKeg.severity === "warning" ||
+          lowKeg.severity === "critical")
+      ) {
+        badges.push("low");
+      }
+    } catch {
+      // Badge projection is additive; health failures must not blank the card.
+    }
+
+    if (
+      context.fill.endedAt === null &&
+      (!policy.enabled || policy.reveal.history) &&
+      isFillNew(context.fill.fillDate, this.#now())
+    ) {
+      badges.push("new");
+    }
+    if (context.fill.featured) badges.push("featured");
+    return badges;
+  }
+
   #vessel(presentation: EffectiveBeveragePresentation): PublicStoryVesselView {
     // Glass/color are explicit Mystery exemptions.  Their deterministic
     // output therefore still uses the effective style/SRM evidence even when
@@ -485,6 +580,7 @@ export class PublicStoryService {
   #metricsFor(
     tapId: string,
     presentation: PublicStoryPresentationView,
+    hypotheticalSettings?: PublicTapCardMetricSettings,
   ): readonly PublicTapMetricView[] {
     let settings: {
       readonly showAbv: boolean;
@@ -493,7 +589,9 @@ export class PublicStoryService {
       readonly showFg: boolean;
       readonly showSrm: boolean;
     } = DEFAULT_TAP_CARD_METRICS;
-    if (this.#dependencies.displayService !== undefined) {
+    if (hypotheticalSettings !== undefined) {
+      settings = hypotheticalSettings;
+    } else if (this.#dependencies.displayService !== undefined) {
       try {
         settings = this.#dependencies.displayService.getEffectiveTapCardSettings(tapId).settings;
       } catch {
@@ -516,7 +614,10 @@ export class PublicStoryService {
       .map(([key, _enabled, value]) => metricValue(key, value));
   }
 
-  #cardForContext(context: StoryContext): PublicTapCardView {
+  #cardForContext(
+    context: StoryContext,
+    hypotheticalSettings?: PublicTapCardMetricSettings,
+  ): PublicTapCardView {
     const tap = context.tap;
     if (context.assignment === null || context.beverage === null || context.fill === null) {
       const vessel = resolveVessel({ fillGlass: null, style: null });
@@ -544,6 +645,7 @@ export class PublicStoryService {
         temperatureC: null,
         waitingForMeasurement: false,
         health: this.#health(tap.id),
+        badges: [],
       };
     }
 
@@ -563,7 +665,7 @@ export class PublicStoryService {
       beverageName: visiblePresentation.beverageName,
       style: visiblePresentation.style,
       abv: visiblePresentation.abv,
-      metrics: this.#metricsFor(tap.id, visiblePresentation),
+      metrics: this.#metricsFor(tap.id, visiblePresentation, hypotheticalSettings),
       description: visiblePresentation.description,
       title,
       accessibleLabel: policy.enabled
@@ -579,6 +681,7 @@ export class PublicStoryService {
       temperatureC: runtime.temperatureC,
       waitingForMeasurement: runtime.waitingForMeasurement,
       health: runtime.health,
+      badges: this.#badgesFor(context, policy),
     };
   }
 

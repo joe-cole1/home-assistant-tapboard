@@ -14,12 +14,11 @@
     <span data-tap-wars-message><%= war ? war.statusLabel : "" %></span>
   </div>
   <div class="tap-wars-banner__matchup">
-    <div class="tap-wars-banner__names"><b data-tap-wars-side="1"><%= war?.side1?.title || "" %></b><span aria-hidden="true">vs</span><b data-tap-wars-side="2"><%= war?.side2?.title || "" %></b></div>
+    <div class="tap-wars-banner__label-block"><div class="tap-wars-banner__names"><b data-tap-wars-side="1"><%= war?.side1?.title || "" %></b><span aria-hidden="true">vs</span><b data-tap-wars-side="2"><%= war?.side2?.title || "" %></b></div><div class="tap-wars-banner__percentages" aria-hidden="true"><em data-tap-wars-percent="1"><%= war ? (noVotes ? "—" : percent(war.side1)) : "" %></em><span>–</span><em data-tap-wars-percent="2"><%= war ? (noVotes ? "—" : percent(war.side2)) : "" %></em></div></div>
     <div class="tap-wars-meter<% if (noVotes) { %> is-neutral<% } %>" role="img" data-tap-wars-meter aria-label="<%= meterLabel %>">
       <i data-tap-wars-meter-side="1" style="width:<%= noVotes ? 0 : war.side1.percentage %>%"></i>
       <i data-tap-wars-meter-side="2" style="width:<%= noVotes ? 0 : war.side2.percentage %>%"></i>
     </div>
-    <div class="tap-wars-banner__percentages" aria-hidden="true"><em data-tap-wars-percent="1"><%= war ? (noVotes ? "—" : percent(war.side1)) : "" %></em><span>–</span><em data-tap-wars-percent="2"><%= war ? (noVotes ? "—" : percent(war.side2)) : "" %></em></div>
   </div>
   <button type="button" class="secondary tap-wars-banner__results" data-tap-wars-results aria-haspopup="dialog">View results</button>
 </section>

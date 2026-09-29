@@ -1,11 +1,11 @@
 # Tapboard v2 rebuild status
 
 - Architecture: **FROZEN**
-- Current phase: **Issue #79 outbound Home Assistant/webhook delivery implemented on the current branch; final validation and acceptance status pending**
-- Current branch: `codex/issue-79-outbound-delivery`
-- Current base: `cc804476` (merged #78)
-- Current schema: **v19** (`outbound-destination-delivery`)
-- Validation: **No automated or CI result is claimed in this status snapshot**
+- Current phase: **Browser-feedback refinements integrated after merged Issue #79; local validation complete**
+- Current branch: `codex/fix-browser-feedback`
+- Current base: `6df2843` (merged #79)
+- Current schema: **v20** (`fill-card-badges`, following v19 outbound delivery)
+- Validation: **Canonical `npm run check` passed: formatting, lint, typecheck, architecture/reuse checks, and 547 tests; independent read-only review found no actionable defects. Browser/E2E and CI checks explicitly waived.**
 - Prebaseline: **333 passing tests** (prebaseline evidence, not a current validation result)
 - Frozen v1 source commit: `429cf07e451b64ca1713655a34ffa5ebd376efae`
 - ADR index: [`docs/adr/README.md`](../adr/README.md)
@@ -33,18 +33,18 @@
 - 16. [#80 — System and local operator functions](https://github.com/joe-cole1/home-assistant-tapboard/issues/80)
 - 17. [#81 — Deployment, documentation, and final acceptance](https://github.com/joe-cole1/home-assistant-tapboard/issues/81)
 
-The list preserves the frozen implementation sequence with #85's local development surface between #67 and #68. Issues #67, #85, and #68–#78 are merged; #79 is delivered on the current implementation branch and remains in final validation/acceptance. Issues #80–#81 remain out of scope.
+The list preserves the frozen implementation sequence with #85's local development surface between #67 and #68. Issues #67, #85, and #68–#79 are merged. The current branch addresses operator browser feedback and related QC fixes; Issues #80–#81 remain out of scope.
 
 ## Implemented in Foundation
 
 - Node 24 ESM runtime with native erasable TypeScript and `tsc --noEmit` checking;
 - explicit application composition, Node HTTP lifecycle, and exactly `GET /healthz` for local application/database readiness;
 - file-based Eta rendering with default escaping plus layout/partial proof templates;
-- one controlled `better-sqlite3` connection, foreign keys, transactional versioned migrations, exact version-19 schema validation, and resource closure;
+- one controlled `better-sqlite3` connection, foreign keys, transactional versioned migrations, exact version-20 schema validation, and resource closure;
 - shared typed errors, centralized HTTP error mapping, explicit validation, and structured redacting logging;
 - Foundation- and #67–#74-aware architecture guardrails and negative fixtures;
 - canonical external-origin/trusted-proxy/session configuration and stdin-only operator PIN/key maintenance commands;
-- security/session, Activity/deletion-audit, stable event, secret, machine-key, and bounded-outbox primitives introduced in schema version 2 and retained through current schema version 19;
+- security/session, Activity/deletion-audit, stable event, secret, machine-key, and bounded-outbox primitives introduced in schema version 2 and retained through current schema version 20;
 - #85's coherent development-only Docker image/Compose surface, loopback binding, healthcheck, named-volume persistence, and external-secret/operator workflow;
 - #68 Physical Kegs domain inventory, capacity and tare ownership, prospective append-only tare history, append-only maintenance timeline, synchronous telemetry correction hook seam, deletion impact and audit integration, and authenticated admin HTTP API;
 - #69 Custom and Brewfather-linked Beverages domain entity, custom profile/recipe tree, dynamic effective presentation resolution, 3-state presentation overrides, density resolution precedence, candidate cache, rate-limited Brewfather sync with persistent backoff, atomic unlinking, and bounded recipe snapshots;
@@ -61,6 +61,14 @@ The list preserves the frozen implementation sequence with #85's local developme
 - Node 24 CI running `npm ci`, the canonical gate, and changed-line whitespace validation.
 
 Schema version 9 adds persisted detector state, version 10 adds forecast settings/history indexes, and version 11 adds health and Tap maintenance. Schema version 12 (`ssr-dashboard-display-settings`) adds the typed singleton shared-display defaults with deterministic seed, SQL constraints, and revision. Schema version 13 (`brew-story-sensory-mystery`) adds assignment-owned typed Mystery reveal flags. Versions 14–18 extend Tap-card/display, telemetry-source, font, and Tap Wars contracts. Schema version 19 (`outbound-destination-delivery`) adds optional logical destination profiles, immutable transport configuration/subscription versions, and bounded delivery retry evidence. Browser-local preferences, live clients/queues, rotation state, effective sensory values, and Story projections are never persisted.
+
+## Browser-feedback refinements
+
+Schema v20 adds only the Fill-owned Featured preference after canonical v19. Low and New badges remain derived, and the public dashboard refreshes age-dependent badges at UTC day rollover and when resuming. Featured changes publish post-commit targeted refreshes. Shared and per-Tap previews use the public card partial, resolve shared inheritance explicitly, and update after autosave Undo. Admin PIN entry auto-submits four digits; Kick Keg requires confirmation with or without JavaScript. Admin library tables, graphics, navigation, unit labels, and actionable health summaries follow the operator feedback.
+
+### MANUAL DEV TEST — browser feedback
+
+Use the [browser-feedback manual test](../../README.md#manual-dev-test--browser-feedback-and-card-badges) after the normal development rebuild, preserving the volume and checking schema version 20. No production or persistent-development database was changed during implementation. Unpublished badge-only v19 databases fail closed and need an explicit data-preserving migration plan; do not delete their volume or rewrite their ledger.
 
 ## Issue #73 implementation boundary
 
