@@ -12,7 +12,7 @@ export interface HttpServerAddress {
 }
 
 export interface HttpServerOptions {
-  readonly router: Router;
+  readonly router: Pick<Router, "handle">;
   readonly logger: Logger;
   readonly shutdownGraceMs: number;
   readonly createNodeServer?: typeof createServer;

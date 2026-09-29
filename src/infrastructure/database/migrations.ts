@@ -40,13 +40,15 @@ export const OUTBOUND_DESTINATIONS_SCHEMA_VERSION = 19;
 export const OUTBOUND_DESTINATIONS_MIGRATION_NAME = "outbound-destination-delivery";
 export const FILL_CARD_BADGES_SCHEMA_VERSION = 20;
 export const FILL_CARD_BADGES_MIGRATION_NAME = "fill-card-badges";
+export const BUILTIN_SIMULATION_SCHEMA_VERSION = 21;
+export const BUILTIN_SIMULATION_MIGRATION_NAME = "builtin-simulation";
 
 // Compatibility aliases for callers that use the shorter domain names.
 export const DISPLAY_ACCENT_SCHEMA_VERSION = DISPLAY_CUSTOM_ACCENT_SCHEMA_VERSION;
 export const DISPLAY_ACCENT_MIGRATION_NAME = DISPLAY_CUSTOM_ACCENT_MIGRATION_NAME;
 export const TELEMETRY_SOURCE_DISABLED_SCHEMA_VERSION = TELEMETRY_DISABLED_LIFECYCLE_SCHEMA_VERSION;
 export const TELEMETRY_SOURCE_DISABLED_MIGRATION_NAME = TELEMETRY_DISABLED_LIFECYCLE_MIGRATION_NAME;
-export const CURRENT_SCHEMA_VERSION = FILL_CARD_BADGES_SCHEMA_VERSION;
+export const CURRENT_SCHEMA_VERSION = BUILTIN_SIMULATION_SCHEMA_VERSION;
 
 export interface MigrationDefinition {
   readonly version: number;
@@ -3710,15 +3712,17 @@ function validateFillCardBadgesSchema(database: DatabaseExecutor): void {
     FILL_CARD_BADGES_SCHEMA_OBJECTS,
     `${FORENSIC_QC_SCHEMA_SQL}\n${TELEMETRY_EPOCHS_SCHEMA_SQL}\n${FORECASTING_SCHEMA_SQL}\n${HEALTH_MAINTENANCE_SCHEMA_SQL}\n${DISPLAY_SCHEMA_SQL}\n${BREW_STORY_SENSORY_MYSTERY_SCHEMA_SQL}\n${TAP_CARD_DISPLAY_SCHEMA_SQL}\n${DISPLAY_FONT_SCHEMA_SQL}\n${TELEMETRY_DISABLED_LIFECYCLE_SCHEMA_SQL}\n${TAP_WARS_SCHEMA_SQL}\n${OUTBOUND_DESTINATIONS_SCHEMA_SQL}\n${FILL_CARD_BADGES_SCHEMA_SQL}`,
     FILL_CARD_BADGES_SCHEMA_VERSION,
-    (schemaDatabase) => {
-      validateOutboundDestinationColumns(schemaDatabase);
-      expectColumns(schemaDatabase, "fill_display_preferences", [
-        { name: "fill_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
-        { name: "featured", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
-        { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
-      ]);
-    },
+    validateFillCardBadgesColumns,
   );
+}
+
+function validateFillCardBadgesColumns(database: DatabaseExecutor): void {
+  validateOutboundDestinationColumns(database);
+  expectColumns(database, "fill_display_preferences", [
+    { name: "fill_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+    { name: "featured", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
+    { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+  ]);
 }
 
 export const FILL_CARD_BADGES_MIGRATION: MigrationDefinition = {
@@ -3726,6 +3730,78 @@ export const FILL_CARD_BADGES_MIGRATION: MigrationDefinition = {
   name: FILL_CARD_BADGES_MIGRATION_NAME,
   apply(database) {
     database.execute(FILL_CARD_BADGES_SCHEMA_SQL);
+    return undefined;
+  },
+};
+
+export const BUILTIN_SIMULATION_SCHEMA_SQL = `
+  CREATE TABLE simulation_settings (
+    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+    enabled INTEGER NOT NULL DEFAULT 0 CHECK (enabled IN (0, 1)),
+    revision INTEGER NOT NULL DEFAULT 0 CHECK (typeof(revision) = 'integer' AND revision >= 0),
+    seeded INTEGER NOT NULL DEFAULT 0 CHECK (seeded IN (0, 1))
+  );
+
+  CREATE TABLE simulation_sensors (
+    tap_id TEXT PRIMARY KEY REFERENCES taps(id) ON DELETE CASCADE,
+    source_id TEXT NOT NULL REFERENCES telemetry_sources(id),
+    remaining_ml REAL NOT NULL CHECK (typeof(remaining_ml) IN ('integer', 'real') AND remaining_ml >= 0),
+    temperature_c REAL NOT NULL DEFAULT 4 CHECK (temperature_c BETWEEN -20 AND 80),
+    online INTEGER NOT NULL DEFAULT 1 CHECK (online IN (0, 1)),
+    noise_enabled INTEGER NOT NULL DEFAULT 0 CHECK (noise_enabled IN (0, 1)),
+    sequence INTEGER NOT NULL DEFAULT 0 CHECK (typeof(sequence) = 'integer' AND sequence >= 0)
+  );
+
+  CREATE TABLE simulation_fill_volumes (
+    fill_id TEXT PRIMARY KEY REFERENCES fills(id) ON DELETE CASCADE,
+    remaining_ml REAL NOT NULL CHECK (typeof(remaining_ml) IN ('integer', 'real') AND remaining_ml >= 0 AND remaining_ml <= 1.7976931348623157e308)
+  );
+`;
+
+const BUILTIN_SIMULATION_SCHEMA_OBJECTS = [
+  ...FILL_CARD_BADGES_SCHEMA_OBJECTS,
+  ["table", "simulation_settings"],
+  ["table", "simulation_sensors"],
+  ["table", "simulation_fill_volumes"],
+] as const;
+
+function validateBuiltinSimulationSchema(database: DatabaseExecutor): void {
+  validateTelemetrySchemaDefinition(
+    database,
+    BUILTIN_SIMULATION_SCHEMA_OBJECTS,
+    `${FORENSIC_QC_SCHEMA_SQL}\n${TELEMETRY_EPOCHS_SCHEMA_SQL}\n${FORECASTING_SCHEMA_SQL}\n${HEALTH_MAINTENANCE_SCHEMA_SQL}\n${DISPLAY_SCHEMA_SQL}\n${BREW_STORY_SENSORY_MYSTERY_SCHEMA_SQL}\n${TAP_CARD_DISPLAY_SCHEMA_SQL}\n${DISPLAY_FONT_SCHEMA_SQL}\n${TELEMETRY_DISABLED_LIFECYCLE_SCHEMA_SQL}\n${TAP_WARS_SCHEMA_SQL}\n${OUTBOUND_DESTINATIONS_SCHEMA_SQL}\n${FILL_CARD_BADGES_SCHEMA_SQL}\n${BUILTIN_SIMULATION_SCHEMA_SQL}`,
+    BUILTIN_SIMULATION_SCHEMA_VERSION,
+    (schemaDatabase) => {
+      validateFillCardBadgesColumns(schemaDatabase);
+      expectColumns(schemaDatabase, "simulation_settings", [
+        { name: "singleton", type: "INTEGER", notnull: 0, dflt_value: null, pk: 1 },
+        { name: "enabled", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
+        { name: "revision", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
+        { name: "seeded", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
+      ]);
+      expectColumns(schemaDatabase, "simulation_sensors", [
+        { name: "tap_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+        { name: "source_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+        { name: "remaining_ml", type: "REAL", notnull: 1, dflt_value: null, pk: 0 },
+        { name: "temperature_c", type: "REAL", notnull: 1, dflt_value: "4", pk: 0 },
+        { name: "online", type: "INTEGER", notnull: 1, dflt_value: "1", pk: 0 },
+        { name: "noise_enabled", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
+        { name: "sequence", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
+      ]);
+      expectColumns(schemaDatabase, "simulation_fill_volumes", [
+        { name: "fill_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+        { name: "remaining_ml", type: "REAL", notnull: 1, dflt_value: null, pk: 0 },
+      ]);
+    },
+  );
+}
+
+export const BUILTIN_SIMULATION_MIGRATION: MigrationDefinition = {
+  version: BUILTIN_SIMULATION_SCHEMA_VERSION,
+  name: BUILTIN_SIMULATION_MIGRATION_NAME,
+  apply(database) {
+    database.execute(BUILTIN_SIMULATION_SCHEMA_SQL);
+    database.execute("INSERT INTO simulation_settings (singleton) VALUES (1)");
     return undefined;
   },
 };
@@ -3752,6 +3828,7 @@ export const MIGRATIONS: readonly MigrationDefinition[] = [
   TAP_WARS_MIGRATION,
   OUTBOUND_DESTINATIONS_MIGRATION,
   FILL_CARD_BADGES_MIGRATION,
+  BUILTIN_SIMULATION_MIGRATION,
 ];
 
 // Compatibility aliases for callers that prefer an explicit application name.
@@ -3789,7 +3866,8 @@ function applyMigration(
         migration.version === DISPLAY_FONT_SCHEMA_VERSION ||
         migration.version === TAP_WARS_SCHEMA_VERSION ||
         migration.version === OUTBOUND_DESTINATIONS_SCHEMA_VERSION ||
-        migration.version === FILL_CARD_BADGES_SCHEMA_VERSION)
+        migration.version === FILL_CARD_BADGES_SCHEMA_VERSION ||
+        migration.version === BUILTIN_SIMULATION_SCHEMA_VERSION)
     ) {
       validateCanonicalSchemaAtVersion(database, migration.version);
     }
@@ -3852,6 +3930,9 @@ function validateRequiredCanonicalState(database: DatabaseExecutor, version: num
   if (version >= TAP_CARD_DISPLAY_SCHEMA_VERSION) {
     expectRequiredRows(database, "tap_card_display_settings", "id = 1", 1);
   }
+  if (version >= BUILTIN_SIMULATION_SCHEMA_VERSION) {
+    expectRequiredRows(database, "simulation_settings", "singleton = 1", 1);
+  }
 }
 
 function validateCanonicalSchemaAtVersion(database: DatabaseExecutor, version: number): void {
@@ -3899,6 +3980,8 @@ function validateCanonicalSchemaAtVersion(database: DatabaseExecutor, version: n
     validateOutboundDestinationsSchema(database);
   } else if (version === FILL_CARD_BADGES_SCHEMA_VERSION) {
     validateFillCardBadgesSchema(database);
+  } else if (version === BUILTIN_SIMULATION_SCHEMA_VERSION) {
+    validateBuiltinSimulationSchema(database);
   } else {
     throw incompatibleSchema("schema version is not a canonical Tapboard version");
   }
@@ -3940,6 +4023,11 @@ export function initializeSchema(
   validateMigrationLedger(database, currentVersion, migrations);
 
   if (
+    isCanonicalMigrationPrefix(migrations) &&
+    currentVersion === BUILTIN_SIMULATION_SCHEMA_VERSION
+  ) {
+    validateCanonicalSchemaAtVersion(database, currentVersion);
+  } else if (
     isCanonicalMigrationPrefix(migrations) &&
     currentVersion === FILL_CARD_BADGES_SCHEMA_VERSION
   ) {

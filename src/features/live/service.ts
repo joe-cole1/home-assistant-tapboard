@@ -87,4 +87,9 @@ export class LiveUpdateService {
     this.#publicHub.stop();
     this.#adminHub.stop();
   }
+
+  disconnectAll(): void {
+    this.#publicHub.disconnectAll();
+    this.#adminHub.disconnectAll();
+  }
 }

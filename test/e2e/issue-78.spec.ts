@@ -287,7 +287,8 @@ test("Tap Wars votes live-update stable cards, pause safely, and publish a froze
     6,
     raceVote.ok() ? 2 : 1,
   ]);
-  await admin.reload();
+  // Completion already triggers an SSE-driven navigation; wait for that page instead of racing it.
+  await expect(admin.getByRole("button", { name: "Dismiss public result" })).toBeVisible();
   await admin.getByRole("button", { name: "Dismiss public result" }).click();
   await expect(page.locator("[data-tap-wars]")).toBeHidden();
   await context.close();

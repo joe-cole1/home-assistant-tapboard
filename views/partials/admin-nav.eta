@@ -23,7 +23,18 @@
     <button class="admin-sidebar-close" type="button" data-admin-sidebar-close hidden>Close menu</button>
   </div>
   <nav aria-label="Admin">
-    <% const navItems = it.items.map((item) => ({ ...item, group: item.group || (item.href === "/admin/overview" ? "Overview" : "Manage"), activePaths: item.activePaths || [item.href], mark: item.mark || item.label.slice(0, 1).toUpperCase() })); %>
+    <% const sourceItems = it.items?.length ? it.items : [
+      { label: "Overview", href: "/admin/overview", group: "Overview", mark: "O" },
+      { label: "Keg Room", href: "/admin/keg-room", group: "Manage", mark: "K", activePaths: ["/admin/fills", "/admin/kegs", "/admin/keg-room"] },
+      { label: "Taps", href: "/admin/taps", group: "Manage", mark: "T" },
+      { label: "Beverages", href: "/admin/beverages", group: "Manage", mark: "B" },
+      { label: "Integrations", href: "/admin/integrations", group: "Configure", mark: "I" },
+      { label: "Display", href: "/admin/display", group: "Configure", mark: "D" },
+      { label: "Tap Wars", href: "/admin/tap-wars", group: "Manage", mark: "W" },
+      { label: "System", href: "/admin/system", group: "Configure", mark: "S" },
+    ];
+    const navItems = sourceItems.map((item) => ({ ...item, group: item.href === "/admin/system" ? "Configure" : item.group || (item.href === "/admin/overview" ? "Overview" : "Manage"), activePaths: item.activePaths || [item.href], mark: item.mark || item.label.slice(0, 1).toUpperCase() }));
+    if (it.page.workspace?.enabled && !navItems.some((item) => item.href === "/admin/simulator")) navItems.push({ label: "Simulator", href: "/admin/simulator", group: "Configure", mark: "S", activePaths: ["/admin/simulator"] }); %>
     <% for (const group of ["Overview", "Manage", "Configure", "Future"]) { const groupItems = navItems.filter((item) => item.group === group); if (groupItems.length > 0) { %>
       <section class="admin-nav-group" aria-labelledby="admin-nav-<%= group.toLocaleLowerCase() %>">
         <h2 id="admin-nav-<%= group.toLocaleLowerCase() %>"><%= group %></h2>

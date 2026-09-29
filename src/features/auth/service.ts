@@ -554,6 +554,31 @@ export class AuthService {
     });
   }
 
+  /** Rotate the active Admin session and invalidate stale forms in every workspace. */
+  rotateForWorkspace(token: string): SessionMaterial | undefined {
+    return this.#database.withTransaction(() => {
+      const current = this.validateSession(token);
+      if (current === undefined) return undefined;
+      const now = timestamp(this.#options.now);
+      const material = this.#makeSession(
+        current.credentialRevision,
+        now,
+        current.absoluteExpiresAt,
+      );
+      const count = revokeAllSessions(this.#database, now);
+      insertSession(this.#database, material.record);
+      appendActivity(this.#database, {
+        category: "security",
+        action: "sessions_revoked",
+        actorType: "admin",
+        sessionId: current.id,
+        details: { count, reason: "workspace_changed" },
+        occurredAt: now,
+      });
+      return material.public;
+    });
+  }
+
   prune(options: AuthClockOptions = {}): number {
     return pruneSessions(this.#database, timestamp(options.now ?? this.#options.now), 1_000);
   }
@@ -587,6 +612,7 @@ export class AuthService {
   #makeSession(
     revision: number,
     now: string,
+    absoluteExpiresAt?: string,
   ): { readonly record: SessionRecord; readonly public: SessionMaterial } {
     const random = this.#options.randomBytes ?? randomBytes;
     const sessionBytes = random(32);
@@ -601,7 +627,8 @@ export class AuthService {
     }
     const token = tokenFromBytes(sessionBytes);
     const csrfToken = tokenFromBytes(csrfBytes);
-    const absolute = new Date(Date.parse(now) + this.#settings.absoluteMs).toISOString();
+    const absolute =
+      absoluteExpiresAt ?? new Date(Date.parse(now) + this.#settings.absoluteMs).toISOString();
     const expires = new Date(
       Math.min(Date.parse(now) + this.#settings.inactivityMs, Date.parse(absolute)),
     ).toISOString();

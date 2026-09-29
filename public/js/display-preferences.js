@@ -1,4 +1,7 @@
-export const KEY = "tapboard.v2.display-preferences.v1";
+export const KEY =
+  document.documentElement.dataset.workspaceEnabled === "true"
+    ? "tapboard.v2.simulation.display-preferences.v1"
+    : "tapboard.v2.display-preferences.v1";
 export const fields = Object.freeze({
   theme: Object.freeze(["modern_dark", "warm_pub", "cyberpunk", "light_minimal"]),
   font: Object.freeze([

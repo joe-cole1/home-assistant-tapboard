@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="<%= it.sharedDisplay.theme %>" data-font="<%= it.sharedDisplay.font %>" data-accent="<%= it.sharedDisplay.accent %>" data-unit-system="<%= it.sharedDisplay.unitSystem %>" data-show-serving-temperature="<%= it.sharedDisplay.showServingTemperature %>" data-layout-mode="<%= it.sharedDisplay.layoutMode %>" data-remaining-mode="<%= it.sharedDisplay.remainingMode %>" data-shared-theme="<%= it.sharedDisplay.theme %>" data-shared-font="<%= it.sharedDisplay.font %>" data-shared-accent="<%= it.sharedDisplay.accent %>" data-shared-unit-system="<%= it.sharedDisplay.unitSystem %>" data-shared-show-serving-temperature="<%= it.sharedDisplay.showServingTemperature %>" data-shared-layout-mode="<%= it.sharedDisplay.layoutMode %>" data-shared-remaining-mode="<%= it.sharedDisplay.remainingMode %>" data-display-revision="<%= it.sharedDisplay.revision %>">
+<html lang="en" data-workspace-enabled="<%= it.workspace?.enabled === true %>" data-theme="<%= it.sharedDisplay.theme %>" data-font="<%= it.sharedDisplay.font %>" data-accent="<%= it.sharedDisplay.accent %>" data-unit-system="<%= it.sharedDisplay.unitSystem %>" data-show-serving-temperature="<%= it.sharedDisplay.showServingTemperature %>" data-layout-mode="<%= it.sharedDisplay.layoutMode %>" data-remaining-mode="<%= it.sharedDisplay.remainingMode %>" data-shared-theme="<%= it.sharedDisplay.theme %>" data-shared-font="<%= it.sharedDisplay.font %>" data-shared-accent="<%= it.sharedDisplay.accent %>" data-shared-unit-system="<%= it.sharedDisplay.unitSystem %>" data-shared-show-serving-temperature="<%= it.sharedDisplay.showServingTemperature %>" data-shared-layout-mode="<%= it.sharedDisplay.layoutMode %>" data-shared-remaining-mode="<%= it.sharedDisplay.remainingMode %>" data-display-revision="<%= it.sharedDisplay.revision %>">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -10,8 +10,14 @@
     <link id="display-stylesheet" data-display-stylesheet rel="stylesheet" href="/assets/css/display.css?v=1&theme=<%= encodeURIComponent(it.sharedDisplay.theme) %>&accent=<%= encodeURIComponent(it.sharedDisplay.accent) %>&font=<%= encodeURIComponent(it.sharedDisplay.font) %>" />
     <script src="/assets/js/preference-bootstrap.js"></script>
   </head>
-  <body>
+  <body<% if (it.workspace) { %> data-workspace-revision="<%= it.workspace.revision %>" data-workspace-enabled="<%= it.workspace.enabled %>"<% } %>>
     <a class="skip-link" href="#main-content">Skip to content</a>
+    <% if (it.workspace?.enabled) { %>
+      <div class="workspace-banner" role="note" aria-label="Simulation mode">
+        <strong>SIMULATION</strong><span>Sample workspace · saved separately</span><a href="/admin/simulator">Simulator controls</a>
+      </div>
+    <% } %>
     <%~ it.body %>
+    <% if (it.workspace) { %><script type="module" src="/assets/js/workspace.js"></script><% } %>
   </body>
 </html>

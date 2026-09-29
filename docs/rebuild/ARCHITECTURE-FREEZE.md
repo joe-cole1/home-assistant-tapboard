@@ -911,3 +911,7 @@ IMPACT:
 and stop for approval when the deviation is material.
 
 No unresolved architecture blocker exists at freeze.
+
+# 28. Approved extension — built-in Simulation (2026-09-29)
+
+The operator explicitly approved a System toggle and Simulator Admin page for recurring QC without hardware. [ADR-0008](../adr/0008-built-in-simulation-workspace.md) records the isolated saved workspace, shared normal authentication, real telemetry processing, disabled simulation transports, and transition/reset boundaries. This authorizes the feature before the remaining #80/#81 work and the additional connection for a separate simulation database inside the same deployable application. All existing domain ownership, lifecycle, API, security, and deployment boundaries remain applicable.

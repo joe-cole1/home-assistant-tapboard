@@ -178,6 +178,39 @@ summary {
 .actions form {
   margin: 0 0 0.4rem;
 }
+.skip-link:not(:focus) {
+  clip-path: inset(50%);
+}
+.workspace-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem 1rem;
+  padding: 0.55rem 1rem;
+  border-bottom: 1px solid #f6bd4b;
+  background: #f6bd4b;
+  color: #132033;
+  font:
+    500 0.85rem/1.4 system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+}
+.workspace-banner strong {
+  font-size: 0.75rem;
+  font-weight: 850;
+  letter-spacing: 0.1em;
+}
+.workspace-banner a {
+  color: inherit;
+  font-weight: 750;
+  text-underline-offset: 0.2em;
+}
+.workspace-banner a:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
 @media (max-width: 62rem) {
   .admin-header {
     align-items: flex-start;

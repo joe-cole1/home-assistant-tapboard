@@ -1,3 +1,25 @@
 <% layout("/layouts/admin", { page: it.page }) %>
 <%~ include("/partials/admin-nav", { page: it.page, items: it.navItems || [] }) %>
-<main id="main-content" class="admin-page"><header class="page-header"><p class="eyebrow">Future feature</p><h1>System</h1><p>Operator diagnostics and lifecycle tools will live here.</p></header><%~ include("/partials/admin-messages", { page: it.page }) %><section class="admin-card" aria-labelledby="system-status-heading"><span class="status-badge status-badge--healthy">Online</span><h2 id="system-status-heading">System status</h2><dl class="summary-grid"><div><dt>Schema version</dt><dd><%= it.system.schemaVersion %></dd></div><div><dt>Public live displays</dt><dd><%= it.system.liveClients.public.clients %></dd></div><div><dt>Admin live displays</dt><dd><%= it.system.liveClients.admin.clients %></dd></div></dl><p class="muted">Advanced system administration, retention controls, diagnostics, and operator tooling are planned for a future issue.</p></section></main>
+<% const workspace = it.workspace || it.page.workspace || { enabled: false, changing: false }; %>
+<main id="main-content" class="admin-page">
+  <header class="page-header"><p class="eyebrow">Configure</p><h1>System</h1><p>Manage your workspace and check system status.</p></header>
+  <%~ include("/partials/admin-messages", { page: it.page }) %>
+  <section class="admin-card simulation-settings" aria-labelledby="simulation-settings-heading">
+    <div class="simulation-settings__intro">
+      <p class="eyebrow">Explore Tapboard</p>
+      <h2 id="simulation-settings-heading">Simulation</h2>
+      <p>Try the complete Tapboard experience with sample taps and simulated pours. Your simulation and its history are saved separately from your real setup. External integrations are unavailable in simulation.</p>
+    </div>
+    <form action="/admin/simulation/<%= workspace.enabled ? 'disable' : 'enable' %>" method="post" class="simulation-switch-form" data-workspace-action>
+      <input type="hidden" name="_csrf" value="<%= it.page.csrfToken %>" />
+      <div class="simulation-switch-row"><span id="simulation-switch-label">Enable simulation</span><button type="submit" class="simulation-switch" role="switch" aria-checked="<%= workspace.enabled %>" aria-labelledby="simulation-switch-label"<% if (workspace.changing) { %> disabled<% } %>><span aria-hidden="true"><%= workspace.enabled ? 'On' : 'Off' %></span></button></div>
+      <p class="muted"><% if (workspace.changing) { %>Switching workspace…<% } else if (workspace.enabled) { %>Simulation is on. Open displays are showing your sample workspace.<% } else { %>Simulation is off. Enable it to open your saved sample workspace.<% } %></p>
+      <% if (workspace.enabled) { %><a class="button secondary" href="/admin/simulator">Open Simulator</a><% } %>
+    </form>
+  </section>
+  <section class="admin-card" aria-labelledby="system-status-heading">
+    <span class="status-badge status-badge--healthy">Online</span><h2 id="system-status-heading">System status</h2>
+    <dl class="summary-grid"><div><dt>Schema version</dt><dd><%= it.system.schemaVersion %></dd></div><div><dt>Public live displays</dt><dd><%= it.system.liveClients.public.clients %></dd></div><div><dt>Admin live displays</dt><dd><%= it.system.liveClients.admin.clients %></dd></div></dl>
+    <p class="muted">Advanced system administration, retention controls, diagnostics, and operator tooling are planned for a future issue.</p>
+  </section>
+</main>
