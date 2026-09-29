@@ -16,13 +16,13 @@
 
   <section class="attention-panel" aria-labelledby="attention-heading">
     <div class="section-heading"><div><p class="eyebrow">Needs attention</p><h2 id="attention-heading">Health summary</h2></div></div>
-    <% const attention = it.health.filter((item) => item.state === "degraded" || item.severity === "warning" || item.severity === "critical"); %>
+    <% const attention = it.health; %>
     <% if (attention.length === 0) { %>
       <p class="empty-state">No Tap health warnings are currently reported.</p>
     <% } else { %>
       <ul class="attention-list">
         <% for (const item of attention) { %>
-          <li><span class="status-badge status-badge--<%= item.severity === "critical" ? "critical" : item.state === "degraded" ? "degraded" : "warning" %>"><%= item.severity === "none" ? item.stateLabel : item.severityLabel %></span><a href="<%= item.href %>"><strong>Tap <%= item.tapNumber ?? "unknown" %></strong><% if (item.tapName) { %> — <%= item.tapName %><% } %></a><% if (item.checks.length > 0) { %><span class="muted"> · <%= item.checks.map((check) => check.label).join(", ") %></span><% } %></li>
+          <li><span class="status-badge status-badge--<%= item.severity === "critical" ? "critical" : item.severity === "warning" ? "warning" : item.state === "active" ? "active" : "degraded" %>"><%= item.severity === "none" ? item.stateLabel : item.severityLabel %></span><a href="<%= item.href %>"><strong>Tap <%= item.tapNumber ?? "unknown" %></strong><% if (item.tapName) { %> — <%= item.tapName %><% } %></a><% if (item.checks.length > 0) { %><span class="muted"> · <%= item.checks.map((check) => check.label).join(", ") %></span><% } %></li>
         <% } %>
       </ul>
     <% } %>

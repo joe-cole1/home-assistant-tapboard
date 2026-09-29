@@ -7,11 +7,7 @@
     <p class="muted">Keep Filled Kegs moving from available to On Deck to On Tap.</p>
   </div>
   <%~ include("/partials/admin-messages", { page: it.page }) %>
-  <div class="page-actions">
-    <a class="button primary button--small" href="<%= it.newFillHref %>">Fill a Keg</a>
-    <a class="button secondary button--small" href="<%= it.inventoryHref %>">Physical Kegs</a>
-    <a class="button secondary button--small" href="<%= it.historyHref %>">View history</a>
-  </div>
+  <%~ include("/partials/keg-room-nav", { kegRoomNav: it.kegRoomNav }) %>
   <section class="admin-card" aria-labelledby="keg-room-filters">
     <div class="section-heading"><div><h2 id="keg-room-filters">Find a Filled Keg</h2><p class="muted"><%= it.pagination.total %> result<%= it.pagination.total === 1 ? "" : "s" %></p></div></div>
     <form class="admin-form admin-form--inline keg-room-filter-form" method="get" action="/admin/keg-room" role="search">
@@ -28,15 +24,15 @@
       <% if (section.id === "on-deck") { %><div class="reorder-enhancement"><p class="muted">Drag the handle to reorder, or use the Move up/down buttons.</p><form data-reorder-form action="/admin/fills/reorder-on-deck" method="post"><input type="hidden" name="_csrf" value="<%= it.page.csrfToken %>" /><input type="hidden" name="fillIds" value="<%= section.items.map((item) => item.id).join(",") %>" /></form><output data-reorder-status aria-live="polite"></output></div><% } %>
       <% if (section.items.length === 0) { %><p class="muted">No Filled Kegs in this state.</p><% } else { %>
         <div class="table-scroll">
-          <table class="admin-table keg-room-table">
+          <table class="admin-table admin-library-table keg-room-table">
             <caption class="sr-only"><%= section.title %> Filled Kegs</caption>
             <thead><tr><th scope="col">Filled Keg</th><th scope="col">Physical Keg</th><th scope="col">Tap or queue</th><th scope="col">Remaining estimate</th><th scope="col">Actions</th></tr></thead>
             <tbody<% if (section.id === "on-deck") { %> data-reorder-list<% } %>>
               <% for (const fill of section.items) { %>
-                <tr data-fill-id="<%= fill.id %>" data-fill-state="<%= fill.state %>"<% if (fill.state === "on_deck") { %> data-keg-room-reorder data-reorder-item data-order="<%= fill.onDeckOrder || 0 %>"<% } %>>
+                <tr class="admin-library-table__row" data-fill-id="<%= fill.id %>" data-fill-state="<%= fill.state %>"<% if (fill.state === "on_deck") { %> data-keg-room-reorder data-reorder-item data-order="<%= fill.onDeckOrder || 0 %>"<% } %>>
                   <th scope="row"><div class="keg-room-table__fill"><div class="beverage-list__preview"><%~ include("/partials/fill-graphic", { tap: { id: fill.id, graphic: fill.graphic, title: fill.beverageName, accessibleLabel: `${fill.beverageName} Filled Keg`, fillPercent: fill.fillPercent, displayColor: fill.displayColor, tapNumber: fill.tapNumber || 0 } }) %></div><a class="beverage-list__name" href="/admin/keg-room/fills/<%= fill.id %>"><%= fill.beverageName %></a><span class="beverage-list__type"><span class="status-badge status-badge--<%= fill.state %>"><%= fill.stateLabel %></span></span></div></th>
                   <td><a href="/admin/keg-room/kegs/<%= fill.kegId || "" %>">Keg <%= fill.kegNumber %><% if (fill.kegLabel) { %> — <%= fill.kegLabel %><% } %></a></td>
-                  <td><% if (fill.tapNumber) { %>Tap <%= fill.tapNumber %><% } else if (fill.queuePosition) { %>Queue position <%= fill.queuePosition %><% } else { %>Not queued<% } %></td>
+                  <td><% if (fill.tapNumber && fill.tapId) { %><a href="/admin/taps/<%= fill.tapId %>">Tap <%= fill.tapNumber %></a><% } else if (fill.tapNumber) { %>Tap <%= fill.tapNumber %><% } else if (fill.queuePosition) { %>Queue position <%= fill.queuePosition %><% } else { %>Not queued<% } %></td>
                   <td><%= fill.remainingEstimate %></td>
                   <td><div class="card-actions keg-room-table__actions">
                   <% if (fill.state === "available") { %>
@@ -49,7 +45,7 @@
                       <form action="/admin/fills/<%= fill.id %>/move" method="post"><input type="hidden" name="_csrf" value="<%= it.page.csrfToken %>" /><button class="secondary button--small" name="direction" value="down" type="submit">Move down</button></form>
                     </div>
                   <% } else if (fill.state === "on_tap") { %>
-                    <details><summary>Kick Keg</summary><p class="muted">This ends the Filled Keg and closes its active Tap assignment.</p><form action="/admin/fills/<%= fill.id %>/kick" method="post"><input type="hidden" name="_csrf" value="<%= it.page.csrfToken %>" /><label>Reason <input name="reason" maxlength="255" /></label><button class="danger button--small" type="submit">Kick Keg</button></form></details>
+                    <details><summary>Kick Keg</summary><p class="muted">This ends the Filled Keg and closes its active Tap assignment.</p><form action="/admin/fills/<%= fill.id %>/kick" method="post" data-confirm="Kick this Filled Keg? It will end the fill and close its active Tap assignment."><input type="hidden" name="_csrf" value="<%= it.page.csrfToken %>" /><label>Reason <input name="reason" maxlength="255" /></label><%~ include("/partials/kick-confirmation") %><button class="danger button--small" type="submit">Kick Keg</button></form></details>
                   <% } else { %>
                     <a class="button secondary button--small" href="/admin/keg-room/fills/<%= fill.id %>">View Filled Keg</a>
                   <% } %>

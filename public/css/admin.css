@@ -5,6 +5,9 @@
   margin-inline: auto;
   padding: 1.5rem clamp(1rem, 4vw, 4rem) 4rem;
 }
+.admin-shell [data-confirm-fallback][hidden] {
+  display: none;
+}
 .admin-shell section {
   margin-block: 1.5rem 2rem;
 }
@@ -741,6 +744,9 @@ html[data-admin-accent="blue"] .admin-shell {
 .status-badge--healthy {
   color: var(--success);
 }
+.status-badge--active {
+  color: var(--success);
+}
 .status-badge--warning,
 .status-badge--degraded {
   color: var(--warning);
@@ -1166,9 +1172,39 @@ html[data-admin-accent="blue"] .admin-shell {
 .admin-back-link {
   margin-bottom: 1rem;
 }
+.admin-library-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+  margin-block: 1rem;
+}
 .beverage-list th,
 .beverage-list td {
   vertical-align: middle;
+}
+.admin-library-table th,
+.admin-library-table td {
+  padding-block: 0.8rem;
+  vertical-align: middle;
+}
+.admin-library-table tbody tr {
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+.admin-library-table tbody tr:hover th,
+.admin-library-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+  border-bottom-color: color-mix(in srgb, var(--accent) 28%, var(--border));
+}
+.admin-library-table tbody tr:focus-within th,
+.admin-library-table tbody tr:focus-within td {
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  border-bottom-color: color-mix(in srgb, var(--accent) 42%, var(--border));
+}
+.admin-library-table tbody th[scope="row"] {
+  font-weight: 750;
 }
 .beverage-list__row {
   cursor: pointer;
@@ -1204,6 +1240,37 @@ html[data-admin-accent="blue"] .admin-shell {
   max-width: 4rem;
   max-height: 5rem;
   height: auto;
+}
+.beverage-list__preview .glass {
+  fill: color-mix(in srgb, var(--surface) 58%, transparent);
+  stroke: var(--muted);
+  stroke-width: 5;
+}
+.beverage-list__preview .rim {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 5;
+}
+.beverage-list__preview .beer-pour-stream {
+  display: none;
+}
+.keg-inventory__graphic {
+  width: 100%;
+  max-width: 3.5rem;
+  height: auto;
+}
+.keg-inventory__body {
+  fill: color-mix(in srgb, var(--accent) 18%, var(--surface));
+  stroke: var(--accent-readable);
+  stroke-width: 3;
+}
+.keg-inventory__rim,
+.keg-inventory__handle {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .beverage-list__name {
   display: inline-flex;
@@ -1359,6 +1426,31 @@ html[data-admin-accent="blue"] .admin-shell {
 .tap-public-preview__frame {
   max-width: 34rem;
   margin-inline: auto;
+}
+:is(.display-preview, [data-display-preview])[data-preview-unit-system="metric"]
+  [data-unit="metric"],
+:is(.display-preview, [data-display-preview])[data-preview-unit-system="us"] [data-unit="us"] {
+  display: inline !important;
+}
+:is(.display-preview, [data-display-preview])[data-preview-unit-system="metric"] [data-unit="us"],
+:is(.display-preview, [data-display-preview])[data-preview-unit-system="us"] [data-unit="metric"] {
+  display: none !important;
+}
+:is(.display-preview, [data-display-preview])[data-preview-show-serving-temperature="false"]
+  [data-field="temperature"] {
+  display: none !important;
+}
+:is(.display-preview, [data-display-preview])[data-preview-show-serving-temperature="true"]
+  [data-field="temperature"]:not([hidden]) {
+  display: block !important;
+}
+:is(.display-preview, [data-display-preview])[data-preview-theme="light_minimal"]
+  .tap-graphic
+  .glass,
+:is(.display-preview, [data-display-preview])[data-preview-theme="light_minimal"]
+  .tap-graphic
+  .glass-detail[data-glass-contour="true"] {
+  fill: color-mix(in srgb, var(--surface) 58%, transparent);
 }
 .compact-list {
   margin-block: 0.75rem;

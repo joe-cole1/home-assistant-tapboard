@@ -38,13 +38,15 @@ export const TAP_WARS_SCHEMA_VERSION = 18;
 export const TAP_WARS_MIGRATION_NAME = "tap-wars";
 export const OUTBOUND_DESTINATIONS_SCHEMA_VERSION = 19;
 export const OUTBOUND_DESTINATIONS_MIGRATION_NAME = "outbound-destination-delivery";
+export const FILL_CARD_BADGES_SCHEMA_VERSION = 20;
+export const FILL_CARD_BADGES_MIGRATION_NAME = "fill-card-badges";
 
 // Compatibility aliases for callers that use the shorter domain names.
 export const DISPLAY_ACCENT_SCHEMA_VERSION = DISPLAY_CUSTOM_ACCENT_SCHEMA_VERSION;
 export const DISPLAY_ACCENT_MIGRATION_NAME = DISPLAY_CUSTOM_ACCENT_MIGRATION_NAME;
 export const TELEMETRY_SOURCE_DISABLED_SCHEMA_VERSION = TELEMETRY_DISABLED_LIFECYCLE_SCHEMA_VERSION;
 export const TELEMETRY_SOURCE_DISABLED_MIGRATION_NAME = TELEMETRY_DISABLED_LIFECYCLE_MIGRATION_NAME;
-export const CURRENT_SCHEMA_VERSION = OUTBOUND_DESTINATIONS_SCHEMA_VERSION;
+export const CURRENT_SCHEMA_VERSION = FILL_CARD_BADGES_SCHEMA_VERSION;
 
 export interface MigrationDefinition {
   readonly version: number;
@@ -3588,65 +3590,67 @@ function validateTapWarsSchema(database: DatabaseExecutor): void {
   );
 }
 
+function validateOutboundDestinationColumns(database: DatabaseExecutor): void {
+  expectColumns(database, "outbound_deliveries", [
+    { name: "id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+    { name: "event_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    { name: "destination_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    { name: "destination_version_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    { name: "state", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    { name: "attempt_count", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+    { name: "cycle_attempt_count", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
+    { name: "next_attempt_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    { name: "lease_owner", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+    { name: "lease_expires_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+    { name: "revision", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+    { name: "last_error_code", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+    { name: "envelope_bytes", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
+    { name: "active_failure_started_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+    { name: "last_attempt_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+    { name: "created_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    { name: "terminal_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+  ]);
+  expectColumns(database, "outbound_destination_configs", [
+    { name: "version_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 1 },
+    { name: "destination_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 2 },
+    { name: "transport_kind", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    { name: "safe_summary", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    { name: "config_json", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    { name: "created_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+  ]);
+  expectColumns(database, "outbound_destination_profiles", [
+    { name: "destination_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+    { name: "transport_kind", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    { name: "required", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
+    { name: "current_version_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    { name: "retired_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+    { name: "disabled_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+    { name: "disabled_reason", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+    { name: "connectivity_state", type: "TEXT", notnull: 1, dflt_value: "'unknown'", pk: 0 },
+    { name: "failure_started_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+    { name: "last_failure_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+    { name: "last_failure_code", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+    { name: "last_success_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
+    { name: "created_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    { name: "revision", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
+  ]);
+  expectColumns(database, "outbound_destination_subscriptions", [
+    { name: "version_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 1 },
+    { name: "destination_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 2 },
+    { name: "event_type", type: "TEXT", notnull: 1, dflt_value: null, pk: 3 },
+    { name: "created_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+  ]);
+}
+
 function validateOutboundDestinationsSchema(database: DatabaseExecutor): void {
   validateTelemetrySchemaDefinition(
     database,
     OUTBOUND_DESTINATIONS_SCHEMA_OBJECTS,
     `${FORENSIC_QC_SCHEMA_SQL}\n${TELEMETRY_EPOCHS_SCHEMA_SQL}\n${FORECASTING_SCHEMA_SQL}\n${HEALTH_MAINTENANCE_SCHEMA_SQL}\n${DISPLAY_SCHEMA_SQL}\n${BREW_STORY_SENSORY_MYSTERY_SCHEMA_SQL}\n${TAP_CARD_DISPLAY_SCHEMA_SQL}\n${DISPLAY_FONT_SCHEMA_SQL}\n${TELEMETRY_DISABLED_LIFECYCLE_SCHEMA_SQL}\n${TAP_WARS_SCHEMA_SQL}\n${OUTBOUND_DESTINATIONS_SCHEMA_SQL}`,
     OUTBOUND_DESTINATIONS_SCHEMA_VERSION,
-    () => {
-      expectColumns(database, "outbound_deliveries", [
-        { name: "id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
-        { name: "event_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
-        { name: "destination_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
-        { name: "destination_version_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
-        { name: "state", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
-        { name: "attempt_count", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
-        { name: "cycle_attempt_count", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
-        { name: "next_attempt_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
-        { name: "lease_owner", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
-        { name: "lease_expires_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
-        { name: "revision", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
-        { name: "last_error_code", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
-        { name: "envelope_bytes", type: "INTEGER", notnull: 1, dflt_value: null, pk: 0 },
-        { name: "active_failure_started_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
-        { name: "last_attempt_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
-        { name: "created_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
-        { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
-        { name: "terminal_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
-      ]);
-      expectColumns(database, "outbound_destination_configs", [
-        { name: "version_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 1 },
-        { name: "destination_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 2 },
-        { name: "transport_kind", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
-        { name: "safe_summary", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
-        { name: "config_json", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
-        { name: "created_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
-      ]);
-      expectColumns(database, "outbound_destination_profiles", [
-        { name: "destination_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
-        { name: "transport_kind", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
-        { name: "required", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
-        { name: "current_version_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
-        { name: "retired_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
-        { name: "disabled_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
-        { name: "disabled_reason", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
-        { name: "connectivity_state", type: "TEXT", notnull: 1, dflt_value: "'unknown'", pk: 0 },
-        { name: "failure_started_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
-        { name: "last_failure_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
-        { name: "last_failure_code", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
-        { name: "last_success_at", type: "TEXT", notnull: 0, dflt_value: null, pk: 0 },
-        { name: "created_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
-        { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
-        { name: "revision", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
-      ]);
-      expectColumns(database, "outbound_destination_subscriptions", [
-        { name: "version_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 1 },
-        { name: "destination_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 2 },
-        { name: "event_type", type: "TEXT", notnull: 1, dflt_value: null, pk: 3 },
-        { name: "created_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
-      ]);
-    },
+    validateOutboundDestinationColumns,
   );
 }
 
@@ -3687,6 +3691,45 @@ export const OUTBOUND_DESTINATIONS_MIGRATION: MigrationDefinition = {
   },
 };
 
+export const FILL_CARD_BADGES_SCHEMA_SQL = `
+  CREATE TABLE fill_display_preferences (
+    fill_id TEXT PRIMARY KEY REFERENCES fills(id) ON DELETE CASCADE,
+    featured INTEGER NOT NULL DEFAULT 0 CHECK (featured IN (0, 1)),
+    updated_at TEXT NOT NULL
+  );
+`;
+
+const FILL_CARD_BADGES_SCHEMA_OBJECTS = [
+  ...OUTBOUND_DESTINATIONS_SCHEMA_OBJECTS,
+  ["table", "fill_display_preferences"],
+] as const;
+
+function validateFillCardBadgesSchema(database: DatabaseExecutor): void {
+  validateTelemetrySchemaDefinition(
+    database,
+    FILL_CARD_BADGES_SCHEMA_OBJECTS,
+    `${FORENSIC_QC_SCHEMA_SQL}\n${TELEMETRY_EPOCHS_SCHEMA_SQL}\n${FORECASTING_SCHEMA_SQL}\n${HEALTH_MAINTENANCE_SCHEMA_SQL}\n${DISPLAY_SCHEMA_SQL}\n${BREW_STORY_SENSORY_MYSTERY_SCHEMA_SQL}\n${TAP_CARD_DISPLAY_SCHEMA_SQL}\n${DISPLAY_FONT_SCHEMA_SQL}\n${TELEMETRY_DISABLED_LIFECYCLE_SCHEMA_SQL}\n${TAP_WARS_SCHEMA_SQL}\n${OUTBOUND_DESTINATIONS_SCHEMA_SQL}\n${FILL_CARD_BADGES_SCHEMA_SQL}`,
+    FILL_CARD_BADGES_SCHEMA_VERSION,
+    (schemaDatabase) => {
+      validateOutboundDestinationColumns(schemaDatabase);
+      expectColumns(schemaDatabase, "fill_display_preferences", [
+        { name: "fill_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+        { name: "featured", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
+        { name: "updated_at", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      ]);
+    },
+  );
+}
+
+export const FILL_CARD_BADGES_MIGRATION: MigrationDefinition = {
+  version: FILL_CARD_BADGES_SCHEMA_VERSION,
+  name: FILL_CARD_BADGES_MIGRATION_NAME,
+  apply(database) {
+    database.execute(FILL_CARD_BADGES_SCHEMA_SQL);
+    return undefined;
+  },
+};
+
 /** Canonical production migration list. Keep this array identity stable. */
 export const MIGRATIONS: readonly MigrationDefinition[] = [
   FOUNDATION_MIGRATIONS[0]!,
@@ -3708,6 +3751,7 @@ export const MIGRATIONS: readonly MigrationDefinition[] = [
   DISPLAY_FONT_MIGRATION,
   TAP_WARS_MIGRATION,
   OUTBOUND_DESTINATIONS_MIGRATION,
+  FILL_CARD_BADGES_MIGRATION,
 ];
 
 // Compatibility aliases for callers that prefer an explicit application name.
@@ -3744,7 +3788,8 @@ function applyMigration(
         migration.version === TELEMETRY_DISABLED_LIFECYCLE_SCHEMA_VERSION ||
         migration.version === DISPLAY_FONT_SCHEMA_VERSION ||
         migration.version === TAP_WARS_SCHEMA_VERSION ||
-        migration.version === OUTBOUND_DESTINATIONS_SCHEMA_VERSION)
+        migration.version === OUTBOUND_DESTINATIONS_SCHEMA_VERSION ||
+        migration.version === FILL_CARD_BADGES_SCHEMA_VERSION)
     ) {
       validateCanonicalSchemaAtVersion(database, migration.version);
     }
@@ -3852,6 +3897,8 @@ function validateCanonicalSchemaAtVersion(database: DatabaseExecutor, version: n
     validateTapWarsSchema(database);
   } else if (version === OUTBOUND_DESTINATIONS_SCHEMA_VERSION) {
     validateOutboundDestinationsSchema(database);
+  } else if (version === FILL_CARD_BADGES_SCHEMA_VERSION) {
+    validateFillCardBadgesSchema(database);
   } else {
     throw incompatibleSchema("schema version is not a canonical Tapboard version");
   }
@@ -3893,6 +3940,11 @@ export function initializeSchema(
   validateMigrationLedger(database, currentVersion, migrations);
 
   if (
+    isCanonicalMigrationPrefix(migrations) &&
+    currentVersion === FILL_CARD_BADGES_SCHEMA_VERSION
+  ) {
+    validateCanonicalSchemaAtVersion(database, currentVersion);
+  } else if (
     isCanonicalMigrationPrefix(migrations) &&
     currentVersion === OUTBOUND_DESTINATIONS_SCHEMA_VERSION
   ) {

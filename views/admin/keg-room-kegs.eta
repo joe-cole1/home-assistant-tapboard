@@ -3,7 +3,8 @@
 <main id="main-content">
   <div class="page-header"><p class="eyebrow">Keg Room · Inventory</p><h1>Kegs</h1><p class="muted">Physical Kegs are the inventory layer behind each Filled Keg.</p></div>
   <%~ include("/partials/admin-messages", { page: it.page }) %>
-  <div class="page-actions"><a class="button secondary button--small" href="<%= it.roomHref %>">Filled Kegs</a><a class="button primary button--small" href="<%= it.newKegHref %>">Add a Keg</a></div>
+  <%~ include("/partials/keg-room-nav", { kegRoomNav: it.kegRoomNav }) %>
+  <div class="page-actions"><a class="button primary button--small" href="<%= it.newKegHref %>">Add a Keg</a></div>
   <section class="admin-card" aria-labelledby="physical-keg-filters">
     <div class="section-heading"><div><h2 id="physical-keg-filters">Physical inventory</h2><p class="muted"><%= it.pagination.total %> Keg<%= it.pagination.total === 1 ? "" : "s" %></p></div></div>
     <form class="admin-form admin-form--inline keg-room-filter-form" method="get" action="/admin/keg-room/kegs" role="search">
@@ -16,16 +17,16 @@
   <section class="admin-card" aria-labelledby="fill-history"><div class="section-heading"><div><h2 id="fill-history">Fill history</h2><p class="muted">Recent Filled Keg records remain visible from their physical inventory.</p></div></div>
     <% if (it.kegs.length === 0) { %><p class="muted">No physical Kegs are configured.</p><% } else { %>
       <div class="table-scroll">
-        <table class="admin-table keg-inventory-table">
+        <table class="admin-table admin-library-table keg-inventory-table">
           <caption class="sr-only">Physical Keg inventory</caption>
           <thead><tr><th scope="col">Physical Keg</th><th scope="col">Current fill</th><th scope="col">Capacity</th><th scope="col">Tare</th><th scope="col">Status</th><th scope="col">Fill history</th><th scope="col">Action</th></tr></thead>
           <tbody>
             <% for (const keg of it.kegs) { %>
-              <tr>
-                <th scope="row"><a href="/admin/keg-room/kegs/<%= keg.id %>">Keg <%= keg.kegNumber %><% if (keg.label) { %> — <%= keg.label %><% } %></a></th>
+              <tr class="admin-library-table__row">
+                <th class="beverage-list__beverage-cell" scope="row"><div class="beverage-list__preview keg-inventory__preview" aria-hidden="true"><svg class="keg-inventory__graphic" viewBox="0 0 80 96"><path class="keg-inventory__body" d="M18 19h44l5 11v43l-6 10H19l-6-10V30z"/><path class="keg-inventory__rim" d="M14 30h52M17 73h46"/><path class="keg-inventory__handle" d="M27 19v-6h26v6M32 13V8h16v5"/></svg></div><a class="beverage-list__name" href="/admin/keg-room/kegs/<%= keg.id %>">Keg <%= keg.kegNumber %><% if (keg.label) { %> — <%= keg.label %><% } %></a><span class="beverage-list__type">Physical inventory</span></th>
                 <td><% if (keg.currentFillRecord) { %><a href="/admin/keg-room/fills/<%= keg.currentFillRecord.id %>"><%= keg.currentFillRecord.beverageName %></a><% } else { %><span class="muted">None</span><% } %></td>
-                <td><%= keg.capacityMl %> mL</td>
-                <td><%= keg.currentTareG %> g</td>
+                <td><%= keg.capacityLabel %></td>
+                <td><%= keg.tareLabel %></td>
                 <td><span class="status-badge status-badge--<%= keg.isActive ? "healthy" : "muted" %>"><%= keg.isActive ? "Ready" : "Inactive" %></span></td>
                 <td><% if (keg.recentFillRecord) { %><a href="/admin/keg-room/fills/<%= keg.recentFillRecord.id %>"><%= keg.fillHistory.length %> fill record<%= keg.fillHistory.length === 1 ? "" : "s" %></a><% } else { %><span class="muted">No fills recorded</span><% } %></td>
                 <td><a class="button secondary button--small" href="/admin/keg-room/kegs/<%= keg.id %>">Open</a></td>

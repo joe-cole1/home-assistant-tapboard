@@ -36,7 +36,7 @@ The defaults are:
 | `TAPBOARD_SESSION_ABSOLUTE_MS`   | `31536000000` (365 days)                                     |
 | `TAPBOARD_SECRET_KEY`            | unset; optional canonical 32-byte base64url key              |
 
-The runtime creates the database parent directory when needed. A ready process returns HTTP 200 from `GET /healthz` with `{"status":"ok","schemaVersion":19}`. This is local application/database readiness only; it does not check external integrations. Public connectivity is a deliberately aggregate dashboard projection; health administration remains authenticated.
+The runtime creates the database parent directory when needed. A ready process returns HTTP 200 from `GET /healthz` with `{"status":"ok","schemaVersion":20}`. This is local application/database readiness only; it does not check external integrations. Public connectivity is a deliberately aggregate dashboard projection; health administration remains authenticated.
 
 The Admin PIN contract is exactly four ASCII decimal digits (`[0-9]{4}`), including every value from `0000` through `9999`; input is never trimmed or Unicode-normalized. Scrypt, durable SQLite throttling, opaque sessions, CSRF, and strict Origin checks protect online/local access, but the 10,000-value space has limited offline resistance if the SQLite verifier is stolen. The PIN never derives or protects `TAPBOARD_SECRET_KEY`.
 
@@ -149,7 +149,11 @@ npm run test:e2e
 
 CI installs Chromium and runs `npm run test:e2e` in its own Node 24 job.
 
-Schema version 19 (`outbound-destination-delivery`) is the current supported schema. It adds optional logical destination profiles, immutable transport configuration and subscription versions, and bounded delivery retry evidence while preserving generic destinations without profiles. Browser-local overrides, live/SSE state, and effective sensory projections are never persisted in SQLite. `/healthz` reports `schemaVersion: 19` when the database is ready.
+Schema version 20 (`fill-card-badges`) is the current supported schema. It adds a Fill-owned Featured preference after version 19's outbound destination and delivery schema, preserving existing lifecycle and outbound data. Low and New badges are derived rather than persisted; New covers UTC days 0–6 from the Fill date and respects Mystery history visibility. Browser-local overrides, live/SSE state, and effective sensory projections are never persisted in SQLite. `/healthz` reports `schemaVersion: 20` when the database is ready. An unpublished badge-only version-19 database is not a canonical upgrade source and is rejected without repair; preserve its data and obtain an explicit migration plan instead of deleting a volume or rewriting its ledger.
+
+## MANUAL DEV TEST — browser feedback and card badges
+
+After updating, rebuild and recreate the development container normally without deleting its volume, then verify `/healthz` reports schema version 20. With disposable entities, check four-digit PIN autosubmit and a cleared retry after an incorrect PIN; matching Beverage/Tap/Keg table styling and unit labels; live shared and per-Tap previews, including inheritance and Undo; Featured updates on an already-open dashboard; Low/New/Tap Wars footer badges; fading vote feedback; and canceled/confirmed Kick Keg actions with and without JavaScript. Kick must end the selected Fill and leave its Tap empty. Browser/E2E and CI verification were waived for this change; these manual checks remain for the operator.
 
 The event registry is an explicit allowlist with durable IDs and canonical UTC envelopes. Outbox admission uses hard global/per-destination row and UTF-8 byte bounds, bounded terminal pruning, restricted semantic coalescing, fixed overflow slots, and explicit `not_queued_capacity` degradation semantics. Delivery state provides at-least-once processing with leases and compare-and-set results; it does not claim exactly-once network delivery. Issue #79 adds provider-neutral destination workers, immutable configuration versions, and six-event subscriptions while keeping network I/O outside SQLite transactions.
 

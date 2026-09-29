@@ -7,6 +7,7 @@ import type {
   AdminFillPageSort,
   AdminFillPageState,
   ReorderOnDeckInput,
+  UpdateFillFeaturedInput,
   UpdateFillSettingsInput,
 } from "./types.ts";
 
@@ -162,6 +163,17 @@ export function validateFillSettingsInput(input: unknown): UpdateFillSettingsInp
   return {
     autoDeleteBeverageOnLastFill: object.autoDeleteBeverageOnLastFill,
   };
+}
+
+export function validateFillFeaturedInput(input: unknown): UpdateFillFeaturedInput {
+  const object = requirePlainObject(input, "body");
+  rejectUnknownKeys(object, ["featured"], "body");
+
+  if (typeof object.featured !== "boolean") {
+    throw validationError("featured", "must be a strict boolean");
+  }
+
+  return { featured: object.featured };
 }
 
 export function validateDeleteFillInput(input: unknown): DeleteFillInput {

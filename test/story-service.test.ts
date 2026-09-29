@@ -47,6 +47,7 @@ function fixture(
   options: {
     readonly tapCardMetricSettings?: TapCardMetricSettings;
     readonly displaySettingsFailure?: boolean;
+    readonly now?: Date;
   } = {},
 ) {
   let tap: AdminTapView = {
@@ -80,6 +81,9 @@ function fixture(
     updatedAt: "2026-08-02T00:00:00.000Z",
   };
   let assignmentMystery = defaultMystery;
+  let fillDate = "2026-08-02";
+  let featured = false;
+  let lowKeg: { readonly state: string; readonly severity: string } | null = null;
   let getAssignmentMysteryCalls = 0;
   let getBeverageCalls = 0;
   let getRecipeSnapshotsCalls = 0;
@@ -212,13 +216,14 @@ function fixture(
         beverageAbv: 6.4,
         kegNumber: 7,
         kegLabel: "Secret Keg",
-        fillDate: "2026-08-02",
+        fillDate,
         state: "on_tap",
         onDeckOrder: null,
         endedAt: null,
         endReason: null,
         createdAt: "2026-08-02T00:00:00.000Z",
         updatedAt: "2026-08-02T00:00:00.000Z",
+        featured,
       }),
     },
     detectorService: {
@@ -303,8 +308,13 @@ function fixture(
     healthService: {
       getAdminOverview: () => ({
         aggregate: { state: "healthy", severity: "none" },
+        checks:
+          lowKeg === null
+            ? []
+            : [{ checkId: "low_keg", state: lowKeg.state, severity: lowKeg.severity }],
       }),
     },
+    now: options.now === undefined ? undefined : () => options.now!,
     ...(options.tapCardMetricSettings === undefined && options.displaySettingsFailure !== true
       ? {}
       : {
@@ -332,6 +342,15 @@ function fixture(
     },
     setTap: (value: Partial<AdminTapView>) => {
       tap = { ...tap, ...value };
+    },
+    setFillDate: (value: string) => {
+      fillDate = value;
+    },
+    setFeatured: (value: boolean) => {
+      featured = value;
+    },
+    setLowKeg: (state: string, severity: string) => {
+      lowKeg = { state, severity };
     },
     getRecipeSnapshotsCalls: () => getRecipeSnapshotsCalls,
     getAssignmentMysteryCalls: () => getAssignmentMysteryCalls,
@@ -378,6 +397,54 @@ void test("public Story projection keeps normal fields and redacts internal IDs"
   ]) {
     assert.equal(serialized.includes(forbidden), false, forbidden);
   }
+});
+
+void test("public card badges derive actionable low, UTC new, and featured in canonical order", () => {
+  const { service, setFillDate, setFeatured, setLowKeg } = fixture({
+    now: new Date("2026-08-17T23:30:00.000Z"),
+  });
+
+  setLowKeg("degraded", "none");
+  setFillDate("2026-08-17");
+  assert.deepEqual(service.getCard(TAP_ID)?.badges, ["new"]);
+
+  setLowKeg("active", "none");
+  setFeatured(true);
+  assert.deepEqual(service.getCard(TAP_ID)?.badges, ["low", "new", "featured"]);
+
+  setLowKeg("healthy", "warning");
+  assert.deepEqual(service.getCard(TAP_ID)?.badges, ["low", "new", "featured"]);
+
+  setLowKeg("degraded", "none");
+  setFillDate("2026-08-18");
+  assert.deepEqual(service.getCard(TAP_ID)?.badges, ["featured"]);
+  setFillDate("2026-08-10");
+  assert.deepEqual(service.getCard(TAP_ID)?.badges, ["featured"]);
+  setFillDate("2026-08-11");
+  assert.deepEqual(service.getCard(TAP_ID)?.badges, ["new", "featured"]);
+});
+
+void test("Mystery suppresses New until history is revealed while Featured remains visible", () => {
+  const { service, setFillDate, setFeatured, setMystery } = fixture({
+    now: new Date("2026-08-17T00:01:00.000Z"),
+  });
+  setFillDate("2026-08-17");
+  setFeatured(true);
+  setMystery(mystery({ enabled: true }));
+  assert.deepEqual(service.getCard(TAP_ID)?.badges, ["featured"]);
+
+  setMystery(mystery({ enabled: true, revealHistory: true }));
+  assert.deepEqual(service.getCard(TAP_ID)?.badges, ["new", "featured"]);
+});
+
+void test("unassigned public cards always have no badges", () => {
+  const { service, setFillDate, setFeatured, setTap } = fixture({
+    now: new Date("2026-08-17T00:01:00.000Z"),
+  });
+  setFillDate("2026-08-17");
+  setFeatured(true);
+  setTap({ activeAssignment: null, isOccupied: false });
+  assert.deepEqual(service.getCard(TAP_ID)?.badges, []);
 });
 
 void test("Mystery defaults are safe across card, legacy, Story, and accessibility", () => {

@@ -189,12 +189,41 @@ main[data-dashboard] > section[aria-label="Current taps"] {
   border-radius: 50%;
   background: var(--muted);
 }
-.tap-card[data-health="healthy"] .health-dot {
-  background: var(--success);
-  box-shadow: 0 0 0.5rem var(--success);
-}
 .tap-card[data-health="degraded"] .health-dot {
   background: var(--warning);
+}
+.tap-card[data-health="unknown"] .health-dot {
+  background: #a855f7;
+}
+.tap-badge {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  min-height: 1.25rem;
+  padding: 0.16rem 0.5rem;
+  color: var(--accent-readable);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 48%, var(--border));
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+.tap-badge--low {
+  color: var(--warning);
+  border-color: color-mix(in srgb, var(--warning) 55%, var(--border));
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+}
+.tap-badge--new {
+  color: var(--success);
+  border-color: color-mix(in srgb, var(--success) 55%, var(--border));
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+}
+.tap-badge--featured,
+.tap-badge--tap-wars {
+  color: var(--accent-readable);
 }
 .tap-metrics {
   display: flex;
@@ -589,15 +618,20 @@ html[data-theme="light_minimal"] .tap-graphic .glass-detail[data-glass-contour="
 .tap-wars-banner__matchup {
   display: grid;
   min-width: 0;
-  grid-template-columns: minmax(10rem, auto) minmax(7rem, 1fr) auto;
-  align-items: center;
+  grid-template-columns: minmax(10rem, auto) minmax(7rem, 1fr);
+  align-items: end;
   gap: 0.8rem;
+}
+.tap-wars-banner__label-block {
+  display: grid;
+  min-width: 0;
+  gap: 0.25rem;
 }
 .tap-wars-banner__names {
   display: flex;
   min-width: 0;
   align-items: baseline;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 0.4rem;
   white-space: nowrap;
 }
@@ -700,6 +734,11 @@ html[data-theme="light_minimal"] .tap-graphic .glass-detail[data-glass-contour="
   color: var(--success);
   font-size: 0.75rem;
   font-weight: 750;
+  opacity: 1;
+  transition: opacity 600ms ease;
+}
+.tap-wars-vote-feedback.is-fading {
+  opacity: 0;
 }
 .tap-wars-vote-feedback:empty {
   display: none;
@@ -785,11 +824,7 @@ html[data-theme="light_minimal"] .tap-graphic .glass-detail[data-glass-contour="
     grid-template-columns: auto minmax(0, 1fr) auto;
   }
   .tap-wars-banner__matchup {
-    grid-template-columns: 1fr auto;
-  }
-  .tap-wars-banner__names {
-    grid-column: 1 / -1;
-    justify-content: flex-start;
+    grid-template-columns: 1fr;
   }
 }
 @media (max-width: 44rem) {
@@ -809,7 +844,7 @@ html[data-theme="light_minimal"] .tap-graphic .glass-detail[data-glass-contour="
     justify-self: start;
   }
   .tap-wars-banner__matchup {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: 1fr;
   }
   .tap-wars-banner__names {
     white-space: normal;
@@ -817,6 +852,9 @@ html[data-theme="light_minimal"] .tap-graphic .glass-detail[data-glass-contour="
 }
 @media (prefers-reduced-motion: reduce) {
   .tap-wars-meter i {
+    transition: none;
+  }
+  .tap-wars-vote-feedback {
     transition: none;
   }
 }

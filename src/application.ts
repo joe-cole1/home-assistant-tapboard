@@ -612,6 +612,15 @@ class FoundationApplication implements Application {
         },
       });
       const fillService = observeCommittedCalls(rawFillService, {
+        setFeatured: (_result, args) => {
+          const fillId = args[0];
+          if (typeof fillId !== "string") return;
+          for (const tap of rawTapService.listTaps()) {
+            if (tap.activeAssignment?.fillId === fillId) {
+              liveUpdates.publish({ name: "fill.updated", tapId: tap.id });
+            }
+          }
+        },
         createFill: () => {
           liveUpdates.publish({ name: "ondeck.updated", target: "ondeck" });
         },
@@ -854,6 +863,7 @@ class FoundationApplication implements Application {
           { kind: "js", file: "preference-bootstrap.js", path: "js/preference-bootstrap.js" },
           { kind: "js", file: "display-preferences.js", path: "js/display-preferences.js" },
           { kind: "js", file: "dirty-targets.js", path: "js/dirty-targets.js" },
+          { kind: "js", file: "utc-day-refresh.js", path: "js/utc-day-refresh.js" },
           { kind: "js", file: "sse.js", path: "js/sse.js" },
           { kind: "js", file: "dashboard.js", path: "js/dashboard.js" },
           { kind: "js", file: "story.js", path: "js/story.js" },
