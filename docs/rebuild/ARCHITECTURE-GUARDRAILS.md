@@ -1,8 +1,8 @@
 # Rebuild architecture guardrails
 
-## Active Foundation, #67, and #85 support gate
+## Active Foundation and deployment support gate
 
-`scripts/check-architecture.sh` now permits the legitimate package manifest and `src/` runtime introduced by issue #66, the exact coherent development-only container set introduced by #85, the v2-safe `.env.example` reference, and one exact non-runnable production compose illustration while enforcing topology- and content-aware boundaries:
+`scripts/check-architecture.sh` permits the legitimate package manifest and `src/` runtime introduced by issue #66, the exact coherent development container set introduced by #85, the default production Dockerfile/ignore pair restored for existing external Compose users, the v2-safe `.env.example` reference, and one exact non-runnable production compose illustration while enforcing topology- and content-aware boundaries:
 
 - required authoritative rebuild records remain present;
 - known v1 runtime, database, Home Assistant telemetry, backup, SPA, and deployment paths do not return;
@@ -15,9 +15,10 @@
 - security and crypto ownership remains in `src/features/auth/`, `src/features/secrets/`, and `src/features/machine-keys/`; Activity and event primitives remain provider-neutral in their feature directories; raw SQL remains repository-owned (`src/features/*/repository.ts` or `repositories/*.ts`).
 - the only runnable top-level development container paths are `Dockerfile.dev`, `Dockerfile.dev.dockerignore`, and `compose.dev.yaml`, and they must exist as one coherent set; an incomplete set reports `[development-container]`;
 - the exact top-level `compose.production.example.yaml` is a provisional, non-runnable illustrative exception that must declare `image:` and must not contain `build:` or `Dockerfile.dev`; invalid content reports `[production-example]`;
-- every other top-level Dockerfile or `compose`/`docker-compose` YAML/YML variant reports `[deployment-scope]`; the check is top-level anchored and does not recurse into docs or fixtures. Actual production Dockerfiles/Compose variants and #81 hardening remain rejected or deferred.
+- the exact production pair `Dockerfile` and `Dockerfile.dockerignore` must be coherent and content-checked: digest-pinned Node 24 stages, production-only installation, non-root v2 execution, narrow COPY inputs, health checks, and no secret defaults, legacy runtime, or backup/HA-telemetry configuration;
+- every other top-level Dockerfile or `compose`/`docker-compose` YAML/YML variant reports `[deployment-scope]`; the check is top-level anchored and does not recurse into docs or fixtures. `.dockerignore` and `docker-compose.yml` retain their legacy-path bans. Broader #81 final acceptance remains deferred.
 
-The gate reports the violated rule and path. `test/architecture.test.ts` uses isolated fixtures to prove that the exact coherent development set passes, `.env.example` is permitted, the exact production example passes with an image and no build, incomplete sets report `[development-container]`, canonical v1 container paths remain rejected, and representative unapproved variants report `[deployment-scope]`; focused production-example fixtures reject `build:` and `Dockerfile.dev` content with `[production-example]`. Its existing negative fixtures continue to prove rejection of shadow runtime trees, legacy imports, domain-to-integration imports, browser-to-server imports, SQL outside approved ownership, and SQLite access outside the controlled connection boundary. It also proves that the legitimate Foundation topology passes.
+The gate reports the violated rule and path. `test/architecture.test.ts` uses isolated fixtures to cover the real production pair and unsafe/incomplete alternatives, the coherent development set, the environment reference, and the illustrative production example. Unapproved variants and legacy runtime paths remain rejected. Existing negative fixtures continue to prove rejection of shadow runtime trees, legacy imports, domain-to-integration imports, browser-to-server imports, SQL outside approved ownership, and SQLite access outside the controlled connection boundary. Legitimate Foundation topology still passes.
 
 `scripts/check-reuse-manifest.py` remains dependency-free and enforces the exact immutable frozen v1 commit, manifest schema and classifications, required entry fields, unique entry IDs, and every source/test path's recorded Git blob. The architecture checker intentionally excludes `docs/` from legacy-name scans because the rebuild records and manifest must discuss v1 paths.
 
@@ -43,7 +44,7 @@ The event registry is explicit and rejects provider-specific fields. Outbox capa
 
 ## Boundaries reserved for later phases
 
-The exact known v1 Docker and Compose paths (`.dockerignore`, `Dockerfile`, and `docker-compose.yml`) remain banned, as do all unapproved top-level container variants. Issue #85's three development paths remain the only runnable container surface. The exact `compose.production.example.yaml` is a non-runnable illustrative exception only; issue #81 must add content-aware v2 production deployment checks in the same change that introduces actual approved production files, while continuing to reject legacy Node, backup-volume, Home Assistant telemetry, and unsafe secret-handling configuration.
+The default Dockerfile path is deliberately restored with v2 content checks; `.dockerignore`, `docker-compose.yml`, and unapproved top-level variants remain banned. The exact `compose.production.example.yaml` remains a non-runnable illustration. This repair does not complete #81, publish an image, add a new production Compose topology, reintroduce backup tooling, or migrate v1 data. The narrow `PORT`, `DATA_DIR`, and `TAPBOARD_PUBLIC_ORIGIN` config aliases are explicitly authorized deployment compatibility, not an import of old runtime behavior; removing them requires migration of supported external consumers and a breaking-change review.
 
 Future issues may add domain, integration, browser, and feature-repository locations only within the frozen architecture. When a legitimate new topology or migration adds a boundary not represented here, that issue must deliberately update the focused allowlists and negative tests without weakening the legacy, layering, SQL-ownership, SQLite-connection, or reuse-manifest protections.
 

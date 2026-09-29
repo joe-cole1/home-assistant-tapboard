@@ -1,11 +1,11 @@
 # Tapboard v2 rebuild status
 
 - Architecture: **FROZEN**
-- Current phase: **Browser-feedback refinements integrated after merged Issue #79; local validation complete**
-- Current branch: `codex/fix-browser-feedback`
-- Current base: `6df2843` (merged #79)
+- Current phase: **Production Git-context Compose compatibility repair; locally validated and ready for PR review**
+- Current branch: `codex/fix-production-docker`
+- Current base: `ed77ebe` (merged browser-feedback PR #106)
 - Current schema: **v20** (`fill-card-badges`, following v19 outbound delivery)
-- Validation: **Canonical `npm run check` passed: formatting, lint, typecheck, architecture/reuse checks, and 547 tests; independent read-only review found no actionable defects. Browser/E2E and CI checks explicitly waived.**
+- Validation: **Canonical `npm run check` passed: formatting, lint, types, architecture/reuse checks, and 562/562 tests. The production image built and passed disposable hardened-container smoke tests on linux/amd64. Independent final diff review found no material issues. Browser/E2E and CI checks remain explicitly waived; actual VPS deployment and other architectures are unverified.**
 - Prebaseline: **333 passing tests** (prebaseline evidence, not a current validation result)
 - Frozen v1 source commit: `429cf07e451b64ca1713655a34ffa5ebd376efae`
 - ADR index: [`docs/adr/README.md`](../adr/README.md)
@@ -33,7 +33,15 @@
 - 16. [#80 — System and local operator functions](https://github.com/joe-cole1/home-assistant-tapboard/issues/80)
 - 17. [#81 — Deployment, documentation, and final acceptance](https://github.com/joe-cole1/home-assistant-tapboard/issues/81)
 
-The list preserves the frozen implementation sequence with #85's local development surface between #67 and #68. Issues #67, #85, and #68–#79 are merged. The current branch addresses operator browser feedback and related QC fixes; Issues #80–#81 remain out of scope.
+The list preserves the frozen implementation sequence with #85's local development surface between #67 and #68. Issues #67, #85, and #68–#79 are merged. The current branch restores a bounded part of #81's packaging surface at the operator's explicit request; it does not close #81 or claim the rebuild's final acceptance. #80 and all other #81 work remain out of scope.
+
+## Production Compose compatibility repair
+
+Restore root Git-context builds using a digest-pinned Node 24 multi-stage image, production-only npm dependencies, non-root execution, `wget` readiness, and a tightly allowlisted build context. Preserve the existing external Compose port/hardening settings through image defaults and narrowly validated `PORT`, `DATA_DIR`, and `TAPBOARD_PUBLIC_ORIGIN` aliases. GET/HEAD readiness share one handler. Canonical v2 config wins, and local operator commands resolve the same database as the server.
+
+No external Compose file, secret, live service, persistent database, or volume is changed. The legacy `tapboard.db` and backup mount are left alone; the v2 database is separate and may be empty on a v1-only volume. No schema migration or default PIN is added. See [MANUAL DEV TEST — production Compose compatibility](../../README.md#manual-dev-test--production-compose-compatibility) for the post-merge, volume-preserving operator check.
+
+Disposable container verification covered the exact external `wget --spider` probe on port 3005, UID/GID 1000, read-only root, restricted tmpfs, dropped capabilities, no-new-privileges, GET/HEAD readiness, public SSR, stdin-only PIN initialization, restart persistence, and graceful SIGTERM exit 0. Legacy database and backup marker files remained unchanged. Only newly created QC containers and volumes were removed; no persistent development or production resources were used. Runtime source hashes matched the final tested image.
 
 ## Implemented in Foundation
 

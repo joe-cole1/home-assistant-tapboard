@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 const checker = fileURLToPath(new URL("../scripts/check-architecture.sh", import.meta.url));
+const repositoryRoot = dirname(dirname(checker));
 const writableTemporaryDirectory = process.platform === "win32" ? tmpdir() : "/tmp";
 
 const requiredRecords = [
@@ -109,6 +110,100 @@ void test("allows the exact coherent development container set", () => {
   assert.match(result.output, /Architecture guardrails passed\./);
 });
 
+const productionDockerfile = readFileSync(join(repositoryRoot, "Dockerfile"), "utf8");
+const productionDockerignore = readFileSync(
+  join(repositoryRoot, "Dockerfile.dockerignore"),
+  "utf8",
+);
+
+void test("allows the real coherent production Dockerfile and build-context policy", () => {
+  const result = runFixture({
+    Dockerfile: readFileSync(join(repositoryRoot, "Dockerfile"), "utf8"),
+    "Dockerfile.dockerignore": readFileSync(
+      join(repositoryRoot, "Dockerfile.dockerignore"),
+      "utf8",
+    ),
+  });
+
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.output, /Architecture guardrails passed\./);
+});
+
+void test("rejects an incomplete production Dockerfile pair", () => {
+  const result = runFixture({
+    Dockerfile: readFileSync(join(repositoryRoot, "Dockerfile"), "utf8"),
+  });
+
+  assert.notEqual(result.status, 0, result.output);
+  assert.match(result.output, /\[production-container\]/);
+  assert.match(result.output, /coherent set/);
+});
+
+void test("rejects a production build-context policy without its Dockerfile", () => {
+  const result = runFixture({ "Dockerfile.dockerignore": productionDockerignore });
+
+  assert.notEqual(result.status, 0, result.output);
+  assert.match(result.output, /\[production-container\]/);
+  assert.match(result.output, /coherent set/);
+});
+
+for (const [name, mutate] of [
+  [
+    "legacy Node runtime",
+    (contents: string) => contents.replaceAll("node:24-bookworm-slim", "node:22-bookworm-slim"),
+  ],
+  [
+    "legacy entrypoint",
+    (contents: string) => `${contents}\nENTRYPOINT ["node", "src/server.js"]\n`,
+  ],
+  ["root runtime user", (contents: string) => `${contents}\nUSER root\n`],
+  [
+    "copy-all context",
+    (contents: string) => contents.replace("COPY --chown=node:node src/ ./src/", "COPY . ."),
+  ],
+  [
+    "copy secret file",
+    (contents: string) =>
+      contents.replace("COPY --chown=node:node src/ ./src/", "COPY .env ./src/.env"),
+  ],
+  [
+    "secret build argument",
+    (contents: string) => `${contents}\nARG TAPBOARD_SECRET_KEY=not-a-secret\n`,
+  ],
+  [
+    "secret continuation environment",
+    (contents: string) =>
+      `${contents}\nENV NODE_ENV=production \\\n    TAPBOARD_SECRET_KEY=not-a-secret\n`,
+  ],
+  ["backup path", (contents: string) => `${contents}\nENV BACKUP_DIR=/app/backups\n`],
+] as const) {
+  void test(`rejects production Dockerfile with ${name}`, () => {
+    const result = runFixture({
+      Dockerfile: mutate(productionDockerfile),
+      "Dockerfile.dockerignore": productionDockerignore,
+    });
+
+    assert.notEqual(result.status, 0, result.output);
+    assert.match(result.output, /\[production-container\]/);
+  });
+}
+
+for (const [name, mutate] of [
+  ["root .env allowlist", (contents: string) => `${contents}\n!.env\n`],
+  ["nested .env allowlist", (contents: string) => `${contents}\n!src/.env\n`],
+  ["allowlist after final exclusions", (contents: string) => `${contents}\n!src/**\n`],
+] as const) {
+  void test(`rejects Dockerfile.dockerignore with ${name}`, () => {
+    const result = runFixture({
+      Dockerfile: productionDockerfile,
+      "Dockerfile.dockerignore": mutate(productionDockerignore),
+    });
+
+    assert.notEqual(result.status, 0, result.output);
+    assert.match(result.output, /\[production-container\]/);
+  });
+}
+
 void test("allows the v2 environment reference and exact provisional production example", () => {
   const result = runFixture({
     ".env.example": "TAPBOARD_HOST=127.0.0.1\n",
@@ -149,7 +244,7 @@ void test("rejects an incomplete development container set", () => {
   assert.match(result.output, /\[development-container\]/);
 });
 
-for (const path of [".dockerignore", "Dockerfile", "docker-compose.yml"] as const) {
+for (const path of [".dockerignore", "docker-compose.yml"] as const) {
   void test(`continues rejecting canonical v1 container path ${path}`, () => {
     const result = runFixture({ [path]: "legacy\n" });
 

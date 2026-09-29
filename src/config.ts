@@ -1,4 +1,4 @@
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { isIP } from "node:net";
 
 import { requireBoundedNonemptyString, requireIntegerInRange } from "./shared/validation.ts";
@@ -105,13 +105,20 @@ export function loadConfig(options: LoadConfigOptions = {}): ApplicationConfig {
     { maxLength: 255 },
   );
   const port = requireIntegerInRange(
-    envValue(env, "TAPBOARD_PORT", "3000"),
+    env.TAPBOARD_PORT ?? env.PORT ?? "3000",
     "TAPBOARD_PORT",
     0,
     65_535,
   );
-  const databasePathValue = requireBoundedNonemptyString(
-    envValue(env, "TAPBOARD_DATABASE_PATH", "data/tapboard-v2.sqlite3"),
+  const databasePathValue =
+    env.TAPBOARD_DATABASE_PATH === undefined
+      ? join(
+          requireBoundedNonemptyString(env.DATA_DIR ?? "data", "DATA_DIR", { maxLength: 4096 }),
+          "tapboard-v2.sqlite3",
+        )
+      : env.TAPBOARD_DATABASE_PATH;
+  const validatedDatabasePath = requireBoundedNonemptyString(
+    databasePathValue,
     "TAPBOARD_DATABASE_PATH",
     { maxLength: 4096 },
   );
@@ -136,14 +143,16 @@ export function loadConfig(options: LoadConfigOptions = {}): ApplicationConfig {
   if (sessionInactivityMs > sessionAbsoluteMs) {
     throw new TypeError("TAPBOARD_SESSION_INACTIVITY_MS must not exceed absolute lifetime");
   }
-  const canonicalExternalOrigin = optionalCanonicalOrigin(env.TAPBOARD_EXTERNAL_ORIGIN);
+  const canonicalExternalOrigin = optionalCanonicalOrigin(
+    env.TAPBOARD_EXTERNAL_ORIGIN ?? (env.TAPBOARD_PUBLIC_ORIGIN || undefined),
+  );
   const trustedProxies = optionalTrustedProxies(env.TAPBOARD_TRUSTED_PROXIES);
   const secretKey = secretKeyConfiguration(env.TAPBOARD_SECRET_KEY);
 
   return {
     host,
     port,
-    databasePath: resolve(baseDirectory, databasePathValue),
+    databasePath: resolve(baseDirectory, validatedDatabasePath),
     shutdownGraceMs,
     sessionInactivityMs,
     sessionAbsoluteMs,
