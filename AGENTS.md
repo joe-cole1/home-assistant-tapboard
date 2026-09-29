@@ -1,19 +1,17 @@
 # Tapboard Repository Instructions
 
-## Mandatory model and subagent orchestration
+## Coordinator and subagent orchestration
 
-Run the primary coordinator as **`gpt-5.6-sol` with high reasoning**. The Sol-high coordinator is the architect, orchestrator, integrator, verifier, and final quality-control owner. If the active primary agent is not running that model/reasoning combination, stop and re-run the task with the required coordinator rather than silently weakening this requirement.
+The primary coordinator is the architect, orchestrator, integrator, verifier, and final quality-control owner. Do not require a specific model version or reasoning setting to work in this repository.
 
-Use subagents whenever the approved work decomposes into bounded, non-overlapping tasks. Optimize worker assignments for the lowest practical token cost:
+Use subagents whenever the approved work decomposes into bounded, non-overlapping tasks. Keep assignments focused and use resources efficiently:
 
-- Default worker model: **`gpt-5.6-terra` with low reasoning**.
 - Spawn workers with `fork_turns: "none"` and provide a compact, self-contained assignment containing only the necessary repository context, constraints, exact file ownership, deliverable, and verification command.
-- Prefer Terra-low for repository inventories, reference tracing, fixture construction, isolated implementation, focused tests, documentation, and read-only diff review.
-- Increase a worker's reasoning effort only when a specific bounded task demonstrably requires it. Do not use Sol workers for ordinary implementation work merely for convenience.
+- Delegate repository inventories, reference tracing, fixture construction, isolated implementation, focused tests, documentation, and read-only diff review when the tasks are bounded.
 - Keep worker reports concise and evidence-based. Workers stop after their assigned deliverable and do not expand scope.
-- Use at most three workers concurrently so the Sol-high coordinator remains active in the fourth slot.
+- Use at most three workers concurrently so the primary coordinator remains active.
 
-The Sol-high coordinator must personally:
+The primary coordinator must personally:
 
 1. Read all applicable repository instructions, skills, handoffs, and issue requirements completely before delegating.
 2. Inspect the repository, establish the baseline, own the architecture and plan, and resolve cross-cutting decisions.
@@ -31,9 +29,9 @@ Subagents must not:
 - Edit files outside their assigned ownership or undo another worker's changes.
 - Make cross-cutting architecture decisions, weaken tests, broaden scope, or treat a focused test as final acceptance.
 
-After implementation, assign a fresh Terra-low worker a read-only final diff review focused on security, privacy, transaction ordering, failure handling, migration safety, compatibility, and missing tests. The Sol-high coordinator must independently validate every reported concern, implement or reject it with evidence, rerun verification, and retain sole authority for final QC.
+After implementation, assign a fresh worker a read-only final diff review focused on security, privacy, transaction ordering, failure handling, migration safety, compatibility, and missing tests. The primary coordinator must independently validate every reported concern, implement or reject it with evidence, rerun verification, and retain sole authority for final QC.
 
-Task-specific handoff prompts may define a more detailed worker split. Those assignments supplement this policy but may not weaken the coordinator, model, cost, file-ownership, safety, or final-QC requirements above.
+Task-specific handoff prompts may define a more detailed worker split. Those assignments supplement this policy but may not weaken the coordinator, file-ownership, safety, or final-QC requirements above.
 
 ## GitHub CLI authentication checks in WSL
 
