@@ -310,35 +310,14 @@ main[data-dashboard] > section[aria-label="Current taps"] {
 .forecast > span[hidden] {
   display: none;
 }
+/* Fill geometry is synchronized in vessel-fill.js; no independent CSS tween. */
 .glass,
 .rim {
-  fill: rgb(26 32 44 / 60%);
-  stroke: var(--muted);
-  stroke-width: 5;
+  stroke-linejoin: round;
 }
-.rim {
-  fill: none;
-}
-html[data-theme="light_minimal"] .tap-graphic .glass {
-  fill: color-mix(in srgb, var(--surface) 58%, transparent);
-}
-html[data-theme="light_minimal"] .tap-graphic .glass-detail[data-glass-contour="true"] {
-  fill: color-mix(in srgb, var(--surface) 58%, transparent);
-}
-.liquid {
-  opacity: 0.9;
-  transition:
-    y 250ms ease,
-    height 250ms ease;
-}
-.tap-card .beer-liquid-rect,
-.tap-card .beer-liquid-shadow,
-.tap-card .beer-liquid-clip rect,
-.tap-card .beer-cloud-foam {
-  transition:
-    y 8s cubic-bezier(0.25, 0.1, 0.25, 1),
-    height 8s cubic-bezier(0.25, 0.1, 0.25, 1),
-    transform 8s cubic-bezier(0.25, 0.1, 0.25, 1);
+.glass-front,
+.beer-bubbles {
+  pointer-events: none;
 }
 .beer-cloud-foam[hidden],
 .beer-bubbles[hidden] {
@@ -453,16 +432,10 @@ html[data-theme="light_minimal"] .tap-graphic .glass-detail[data-glass-contour="
 }
 .beer-pour-stream {
   opacity: 0;
-  transform: scaleY(0);
-  transform-box: fill-box;
-  transform-origin: top;
-  transition:
-    opacity 180ms ease,
-    transform 180ms ease;
+  transition: opacity 180ms ease;
 }
 .tap-card.is-pour-preview .beer-pour-stream {
   opacity: 0.78;
-  transform: scaleY(1);
   animation: pour-stream-pulse 700ms ease-in-out infinite alternate;
 }
 .tap-card.is-pour-preview .beer-bubble {
@@ -1035,8 +1008,10 @@ html[data-unit-system="us"] [data-unit="metric"] {
   .tap-card .beer-cloud-foam {
     transition: none;
   }
-  .beer-bubbles {
-    display: none;
+  .beer-bubble {
+    animation: none;
+    transform: none;
+    opacity: 0.6;
   }
   .beer-pour-stream,
   .tap-card.is-pour-preview .beer-pour-stream {

@@ -462,7 +462,7 @@ test("narrow mobile keeps natural scrolling and leaves the last card above fixed
   expect(reachability.footerBottom).toBeLessThanOrEqual(reachability.viewportHeight + 1);
 });
 
-test("light theme renders semantic vessel contours with a light computed fill", async ({
+test("light theme renders visible vessel contours with safe local glass gradients", async ({
   page,
 }) => {
   await page.goto("/");
@@ -477,14 +477,29 @@ test("light theme renders semantic vessel contours with a light computed fill", 
   const styles = await page.evaluate(() => {
     const contour = document.querySelector<SVGPathElement>('[data-glass-contour="true"]');
     if (!contour) throw new Error("Expected a semantic glass contour path.");
-    const values =
-      getComputedStyle(contour)
-        .fill.match(/[\d.]+/gu)
-        ?.map(Number) ?? [];
-    const rgb = values.slice(0, 3).map((value) => (value <= 1 ? value * 255 : value));
-    return { average: rgb.reduce((sum, value) => sum + value, 0) / rgb.length };
+    const svg = contour.ownerSVGElement;
+    const reference = contour.getAttribute("fill")?.match(/^url\(#([\w-]+)\)$/u)?.[1];
+    const gradient = reference
+      ? svg?.querySelector<SVGGradientElement>(`#${CSS.escape(reference)}`)
+      : null;
+    const stops = [...(gradient?.querySelectorAll("stop") ?? [])].map((stop) => {
+      const style = getComputedStyle(stop);
+      const values = style.stopColor.match(/[\d.]+/gu)?.map(Number) ?? [];
+      return {
+        average: values.slice(0, 3).reduce((sum, value) => sum + value, 0) / 3,
+        opacity: Number(style.stopOpacity),
+      };
+    });
+    return {
+      localGradient: gradient?.tagName === "linearGradient" && gradient.ownerSVGElement === svg,
+      visible: getComputedStyle(contour).display !== "none" && contour.getBBox().height > 0,
+      stops,
+    };
   });
-  expect(styles.average).toBeGreaterThan(80);
+  expect(styles.localGradient).toBe(true);
+  expect(styles.visible).toBe(true);
+  expect(styles.stops.length).toBeGreaterThanOrEqual(2);
+  expect(styles.stops.some((stop) => stop.average > 80 && stop.opacity > 0)).toBe(true);
 });
 
 test("On Deck overflow can pause and resume while the control remains focused", async ({
