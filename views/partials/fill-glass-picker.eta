@@ -10,14 +10,10 @@
   <summary>
     <span><%= it.label || "Fill Glass" %></span>
     <span class="fill-glass-picker__current">
-      <% if (selectedOption) { const graphic = selectedOption.graphic; const clipId = `${pickerId}-selected-clip`; %>
-        <svg class="fill-glass-picker__graphic fill-glass-picker__graphic--current" viewBox="<%= graphic.viewBox %>" aria-hidden="true" focusable="false">
-          <defs><clipPath id="<%= clipId %>"><path d="<%= graphic.clipPath %>" /></clipPath></defs>
-          <path class="glass" d="<%= graphic.bodyPath %>" />
-          <% for (const detail of graphic.detailPaths) { %><path class="<%= detail.className %>" d="<%= detail.d %>" fill="<%= detail.fill %>" stroke="<%= detail.stroke %>" stroke-width="<%= detail.strokeWidth %>" opacity="<%= detail.opacity %>" /><% } %>
-          <rect class="liquid" x="<%= graphic.fillX %>" y="<%= graphic.topY + (graphic.bottomY - graphic.topY) * 0.28 %>" width="<%= graphic.fillWidth %>" height="<%= (graphic.bottomY - graphic.topY) * 0.72 %>" fill="<%= color %>" clip-path="url(#<%= clipId %>)" />
-          <path class="rim" d="<%= graphic.rimPath %>" />
-        </svg>
+      <% if (selectedOption) { const graphic = selectedOption.graphic;  %>
+        <span class="fill-glass-picker__graphic fill-glass-picker__graphic--current" aria-hidden="true">
+          <%~ include("/partials/fill-graphic", { tap: { id: `${pickerId}-selected`, graphic, fillPercent: 72, displayColor: color, title: selectedLabel } }) %>
+        </span>
       <% } %>
       <span><%= selectedLabel %></span>
     </span>
@@ -28,17 +24,13 @@
       <input type="radio" name="<%= it.name || "fillGlass" %>" value=""<% if (selected === "") { %> checked<% } %> />
       <span class="fill-glass-picker__copy"><strong>None</strong><small>Use style suggestion</small></span>
     </label>
-    <% for (const option of pickerOptions) { const graphic = option.graphic; const clipId = `${pickerId}-${option.id}-clip`; %>
+    <% for (const option of pickerOptions) { const graphic = option.graphic;  %>
       <label class="fill-glass-picker__option">
         <input type="radio" name="<%= it.name || "fillGlass" %>" value="<%= option.id %>"<% if (selected === option.id) { %> checked<% } %> />
         <span class="fill-glass-picker__copy">
-          <svg class="fill-glass-picker__graphic" viewBox="<%= graphic.viewBox %>" aria-hidden="true" focusable="false">
-            <defs><clipPath id="<%= clipId %>"><path d="<%= graphic.clipPath %>" /></clipPath></defs>
-            <path class="glass" d="<%= graphic.bodyPath %>" />
-            <% for (const detail of graphic.detailPaths) { %><path class="<%= detail.className %>" d="<%= detail.d %>" fill="<%= detail.fill %>" stroke="<%= detail.stroke %>" stroke-width="<%= detail.strokeWidth %>" opacity="<%= detail.opacity %>" /><% } %>
-            <rect class="liquid" x="<%= graphic.fillX %>" y="<%= graphic.topY + (graphic.bottomY - graphic.topY) * 0.28 %>" width="<%= graphic.fillWidth %>" height="<%= (graphic.bottomY - graphic.topY) * 0.72 %>" fill="<%= color %>" clip-path="url(#<%= clipId %>)" />
-            <path class="rim" d="<%= graphic.rimPath %>" />
-          </svg>
+          <span class="fill-glass-picker__graphic" aria-hidden="true">
+            <%~ include("/partials/fill-graphic", { tap: { id: `${pickerId}-${option.id}`, graphic, fillPercent: 72, displayColor: color, title: option.label } }) %>
+          </span>
           <strong><%= option.label %></strong>
         </span>
       </label>

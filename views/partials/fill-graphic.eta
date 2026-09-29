@@ -1,53 +1,69 @@
 <%
-  const graphic = it.tap.graphic || {
-    id: "pint_glass",
-    token: "vessel/pint-glass",
-    bodyPath: "M 45 40 H 115 L 105 225 H 55 Z",
-    clipPath: "M 30 0 H 130 L 114 45 L 104 225 H 56 L 46 45 Z",
-    rimPath: "M 45 40 H 115",
-    viewBox: "0 40 160 190",
-    topY: 45,
-    bottomY: 225,
-    fillX: 30,
-    fillWidth: 100,
-    detailPaths: []
+  /* Finite paints also appear in vessel-renderer.js; browser tests verify SSR/live parity. */
+  const paints = {
+    glass: [[0,"#F0FCFF",.23],[.14,"#BCDCE6",.08],[.49,"#DEEEF2",.025],[.83,"#D5EAF0",.12],[1,"#7B9CA8",.26]],
+    handle: [[0,"#577482",.6],[.3,"#D0E4EA",.3],[.68,"#F2FCFF",.62],[1,"#879EAD",.5]],
+    base: [[0,"#BCD4DF",.07],[.5,"#E7F6FA",.42],[.72,"#F1FCFF",.59],[1,"#7C98A6",.32]],
+    rim: [[0,"#EEF9FC",.8],[.36,"#A7C2CD",.22],[.72,"#DAEAF0",.48],[1,"#5D7D8A",.32]],
+    facet: [[0,"#233A42",.12],[.25,"#FFFFFF",.01],[.76,"#FFFFFF",.02],[1,"#F1FBFF",.27]],
+    shine: [[0,"#FFFFFF",.56],[1,"#FFFFFF",0]],
+    metal: [[0,"#526775",1],[.2,"#CFDEE5",1],[.38,"#8097A5",1],[.7,"#DFE9ED",1],[1,"#617784",1]],
+    light: [[0,"#FFF5BB",.29],[.28,"#FFE1A3",.17],[.6,"#FFD085",.03],[1,"#361300",.33]],
+    depth: [[0,"#FFF3D6",0],[.72,"#552200",0],[1,"#6B2700",.2]],
+    foam: [[0,"#FFFFFF",1],[.55,"#FFFDF5",1],[1,"#EDE1C7",1]],
   };
-  const clipId = `fill-clip-${String(it.tap.id).replace(/[^a-zA-Z0-9_-]/gu, "-").slice(0, 80)}`;
-  const bubbleClipId = `${clipId}-bubbles`;
-  const percent = typeof it.tap.fillPercent === "number" ? Math.max(0, Math.min(100, it.tap.fillPercent)) : 0;
+  const graphic = it.tap.graphic || {
+    id: "pint_glass", token: "vessel/pint-glass",
+    bodyPath: "M 45 45 H 115 L 105 220 Q 80 228 55 220 Z",
+    clipPath: "M 48 48 H 112 L 102 216 Q 80 222 58 216 Z",
+    rimPath: "M 45 45 A 35 4 0 1 0 115 45 A 35 4 0 1 0 45 45 Z M 48 45 A 32 2 0 1 1 112 45 A 32 2 0 1 1 48 45 Z",
+    viewBox: "0 40 160 190", topY: 48, bottomY: 219, fillX: 45, fillWidth: 70,
+    detailPaths: [], frontPaths: []
+  };
+  const clipId = `fill-clip-${String(it.tap.id).replace(/[^a-zA-Z0-9_-]/gu, "-").slice(0, 80)}-${globalThis.crypto.randomUUID()}`;
+  const paint = (value) => ["glass","handle","base","rim","facet","shine","metal"].includes(value) ? `url(#${clipId}-${value})` : value;
+  const percent = typeof it.tap.fillPercent === "number" && Number.isFinite(it.tap.fillPercent) ? Math.max(0, Math.min(100, it.tap.fillPercent)) : 0;
   const liquidY = graphic.bottomY - ((graphic.bottomY - graphic.topY) * percent) / 100;
-  const liquidHeight = graphic.bottomY - liquidY + 4;
-  const graphicLabel = it.tap.accessibleLabel || it.tap.title || `Tap ${it.tap.tapNumber}`;
+  const liquidHeight = graphic.bottomY - liquidY;
+  const graphicLabel = it.tap.accessibleLabel || it.tap.title || it.tap.beverageName || `Tap ${it.tap.tapNumber}`;
   const color = typeof it.tap.displayColor === "string" && /^#[0-9A-Fa-f]{6}$/u.test(it.tap.displayColor) ? it.tap.displayColor : "#D97706";
-  const foamColor = color === "#080100" || color === "#130100" || color === "#200100" ? "#F5EBE6" : "#FFFDF5";
-  const foamCenter = graphic.fillX + graphic.fillWidth / 2;
-  const bubbleSpecs = [[0.18, 5, 2.3], [0.4, 10, 1.7], [0.62, 7, 2.1], [0.82, 15, 1.5], [0.3, 22, 1.4], [0.7, 27, 1.8], [0.1, 34, 1.2], [0.52, 39, 1.5], [0.9, 44, 1.1], [0.25, 50, 1.6], [0.68, 57, 1.3], [0.45, 64, 1.1], [0.08, 14, 1.5], [0.56, 18, 2], [0.78, 25, 1.2], [0.32, 31, 1.8], [0.92, 38, 1.3], [0.15, 45, 1.1], [0.58, 51, 1.4], [0.83, 58, 1.7], [0.38, 67, 1.2], [0.72, 76, 1.4], [0.24, 86, 1.1], [0.64, 95, 1.3]];
+  const center = graphic.fillX + graphic.fillWidth / 2;
+  const bubbleSpecs = [[.18,5,2.3],[.4,10,1.7],[.62,7,2.1],[.82,15,1.5],[.3,22,1.4],[.7,27,1.8],[.1,34,1.2],[.52,39,1.5],[.9,44,1.1],[.25,50,1.6],[.68,57,1.3],[.45,64,1.1],[.08,14,1.5],[.56,18,2],[.78,25,1.2],[.32,31,1.8],[.92,38,1.3],[.15,45,1.1],[.58,51,1.4],[.83,58,1.7],[.38,67,1.2],[.72,76,1.4],[.24,86,1.1],[.64,95,1.3]];
 %>
-<svg class="tap-graphic" data-graphic-id="<%= graphic.id %>" data-graphic-token="<%= graphic.token %>" data-fill-top-y="<%= graphic.topY %>" data-fill-bottom-y="<%= graphic.bottomY %>" viewBox="<%= graphic.viewBox %>" role="img" aria-label="<%= graphicLabel %> fill level">
+<svg class="tap-graphic" data-artwork-version="astra-1" data-graphic-id="<%= graphic.id %>" data-graphic-token="<%= graphic.token %>" data-fill-top-y="<%= graphic.topY %>" data-fill-bottom-y="<%= graphic.bottomY %>" data-rendered-fill-percent="<%= percent %>" viewBox="<%= graphic.viewBox %>" role="img" aria-label="<%= graphicLabel %> fill level">
   <title><%= graphicLabel %> fill level</title>
   <defs>
+    <% for (const [name, stops] of Object.entries(paints)) { const vertical = ["base","rim","depth","foam"].includes(name); %>
+      <linearGradient id="<%= clipId %>-<%= name %>" x1="0%" y1="0%" x2="<%= vertical ? '0%' : '100%' %>" y2="<%= vertical ? '100%' : '0%' %>">
+        <% for (const [offset, stopColor, opacity] of stops) { %><stop offset="<%= offset %>" stop-color="<%= stopColor %>" stop-opacity="<%= opacity %>" /><% } %>
+      </linearGradient>
+    <% } %>
     <clipPath id="<%= clipId %>" class="beer-liquid-clip"><path d="<%= graphic.clipPath %>" /></clipPath>
-    <clipPath id="<%= bubbleClipId %>" class="beer-bubble-clip"><rect class="beer-bubble-clip-rect" x="<%= graphic.fillX %>" y="<%= liquidY %>" width="<%= graphic.fillWidth %>" height="<%= liquidHeight %>" /></clipPath>
+    <clipPath id="<%= clipId %>-bubbles" class="beer-bubble-clip"><rect class="beer-bubble-clip-rect" x="<%= graphic.fillX %>" width="<%= graphic.fillWidth %>" y="<%= liquidY %>" height="<%= liquidHeight %>" /></clipPath>
   </defs>
-  <path class="glass" d="<%= graphic.bodyPath %>" />
   <% for (const item of graphic.detailPaths) { %>
-    <path class="<%= item.className %>" d="<%= item.d %>" fill="<%= item.fill %>" stroke="<%= item.stroke %>" stroke-width="<%= item.strokeWidth %>" opacity="<%= item.opacity %>"<% if (item.contour === true) { %> data-glass-contour="true"<% } %> />
+    <path class="<%= item.className %>" d="<%= item.d %>" fill="<%= paint(item.fill) %>" stroke="<%= paint(item.stroke) %>" stroke-width="<%= item.strokeWidth %>" opacity="<%= item.opacity %>" fill-rule="evenodd" stroke-linecap="round" stroke-linejoin="round"<% if (item.contour === true) { %> data-glass-contour="true"<% } %> />
   <% } %>
+  <path class="glass" d="<%= graphic.bodyPath %>" fill="url(#<%= clipId %>-glass)" stroke="#8BA3AF" stroke-width="1.35" data-glass-contour="true" />
   <g class="beer-liquid-clip" clip-path="url(#<%= clipId %>)">
-    <rect class="liquid beer-liquid-rect" x="<%= graphic.fillX %>" y="<%= liquidY %>" width="<%= graphic.fillWidth %>" height="<%= liquidHeight %>" fill="<%= color %>" data-field="fill-graphic" data-fill-percent="<%= percent %>" />
-    <rect class="beer-liquid-shadow" x="<%= foamCenter %>" y="<%= liquidY %>" width="<%= graphic.fillWidth / 2 %>" height="<%= liquidHeight %>" fill="rgba(0, 0, 0, 0.22)" />
-    <rect class="beer-pour-stream" x="<%= foamCenter - Math.max(2, graphic.fillWidth * 0.025) %>" y="<%= graphic.topY - 32 %>" width="<%= Math.max(4, graphic.fillWidth * 0.05) %>" height="<%= graphic.bottomY - graphic.topY + 32 %>" fill="<%= color %>" />
-    <g class="beer-cloud-foam" data-base-y="<%= liquidY %>" transform="translate(0 <%= liquidY %>)"<% if (percent <= 0) { %> hidden<% } %>>
-      <rect x="<%= graphic.fillX %>" y="-8" width="<%= graphic.fillWidth %>" height="16" fill="<%= foamColor %>" opacity="0.9" />
-      <circle cx="<%= graphic.fillX + graphic.fillWidth * 0.22 %>" cy="-5" r="<%= Math.max(6, graphic.fillWidth * 0.11) %>" fill="<%= foamColor %>" />
-      <circle cx="<%= graphic.fillX + graphic.fillWidth * 0.43 %>" cy="-8" r="<%= Math.max(7, graphic.fillWidth * 0.14) %>" fill="<%= foamColor %>" />
-      <circle cx="<%= graphic.fillX + graphic.fillWidth * 0.65 %>" cy="-7" r="<%= Math.max(7, graphic.fillWidth * 0.13) %>" fill="<%= foamColor %>" />
-      <circle cx="<%= graphic.fillX + graphic.fillWidth * 0.84 %>" cy="-5" r="<%= Math.max(6, graphic.fillWidth * 0.1) %>" fill="<%= foamColor %>" />
-      <circle cx="<%= foamCenter %>" cy="-9" r="<%= Math.max(5, graphic.fillWidth * 0.09) %>" fill="#FFFFFF" opacity="0.5" />
+    <rect class="liquid beer-liquid-rect" x="<%= graphic.fillX %>" width="<%= graphic.fillWidth %>" y="<%= liquidY %>" height="<%= liquidHeight %>" fill="<%= color %>" data-field="fill-graphic" data-fill-percent="<%= percent %>" />
+    <rect class="beer-liquid-shadow" x="<%= graphic.fillX %>" width="<%= graphic.fillWidth %>" y="<%= liquidY %>" height="<%= liquidHeight %>" fill="url(#<%= clipId %>-light)" />
+    <rect class="beer-liquid-depth" x="<%= graphic.fillX %>" width="<%= graphic.fillWidth %>" y="<%= liquidY %>" height="<%= liquidHeight %>" fill="url(#<%= clipId %>-depth)" />
+    <rect class="beer-pour-stream" x="<%= center - Math.max(2, graphic.fillWidth * .025) %>" y="<%= graphic.topY - 32 %>" width="<%= Math.max(4, graphic.fillWidth * .05) %>" height="<%= liquidY - (graphic.topY - 32) %>" fill="<%= color %>" opacity="0" />
+    <g class="beer-bubbles" clip-path="url(#<%= clipId %>-bubbles)"<% if (percent <= 0) { %> hidden<% } %>>
+      <% for (const [position, offset, radius] of bubbleSpecs) { %><circle class="beer-bubble" cx="<%= graphic.fillX + graphic.fillWidth * position %>" cy="<%= graphic.bottomY - (graphic.bottomY - graphic.topY) * offset / 180 %>" r="<%= radius * .65 %>" fill="#FFF4D7" fill-opacity=".12" stroke="#FFF4D7" stroke-opacity=".65" stroke-width=".55" /><% } %>
     </g>
-    <g class="beer-bubbles" clip-path="url(#<%= bubbleClipId %>)"<% if (percent <= 0) { %> hidden<% } %>>
-      <% for (let index = 0; index < bubbleSpecs.length; index += 1) { const bubble = bubbleSpecs[index]; %><circle class="beer-bubble" cx="<%= graphic.fillX + graphic.fillWidth * bubble[0] %>" cy="<%= graphic.bottomY - bubble[1] %>" r="<%= bubble[2] %>" fill="#FFFFFF" opacity="0.6" /><% } %>
+    <g class="beer-cloud-foam" data-base-y="<%= liquidY %>" transform="translate(0 <%= liquidY %>)"<% if (percent <= 0) { %> hidden<% } %>>
+      <g transform="translate(<%= graphic.fillX %> 0) scale(<%= graphic.fillWidth / 74 %> 1)">
+        <path class="beer-foam-shape" d="M 0 -2 C 1 -6 5 -8 9 -7 C 8 -12 14 -16 20 -12 C 23 -17 30 -17 34 -12 C 38 -15 44 -13 47 -9 C 51 -13 58 -12 60 -7 C 66 -9 71 -6 74 -2 L 74 6 C 65 10 56 6 46 8 C 36 10 26 6 16 7 C 9 8 4 7 0 5 Z" fill="url(#<%= clipId %>-foam)" />
+        <path d="M 12 -8 C 14 -12 18 -12 21 -9 M 25 -12 C 27 -14 31 -13 33 -10 M 48 -6 C 51 -9 55 -8 57 -5" fill="none" stroke="#FFFFFF" stroke-opacity=".85" stroke-width="1.4" stroke-linecap="round" />
+      </g>
     </g>
   </g>
-  <path class="rim" d="<%= graphic.rimPath %>" />
+  <g class="glass-front">
+    <% for (const item of graphic.frontPaths || []) { %>
+      <path class="<%= item.className %>" d="<%= item.d %>" fill="<%= paint(item.fill) %>" stroke="<%= paint(item.stroke) %>" stroke-width="<%= item.strokeWidth %>" opacity="<%= item.opacity %>" fill-rule="evenodd" stroke-linecap="round" stroke-linejoin="round"<% if (item.contour === true) { %> data-glass-contour="true"<% } %> />
+    <% } %>
+  </g>
+  <path class="rim" d="<%= graphic.rimPath %>" fill="url(#<%= clipId %>-rim)" stroke="#C4DAE4" stroke-width=".8" fill-rule="evenodd" stroke-linejoin="round" />
 </svg>

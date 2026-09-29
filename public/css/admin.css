@@ -332,19 +332,14 @@
   height: 1.85rem;
   flex-basis: 1.45rem;
 }
-.fill-glass-picker__graphic .glass {
-  fill: none;
-  stroke: var(--muted);
-  stroke-width: 4;
+.fill-glass-picker__graphic > .tap-graphic {
+  width: 100%;
+  height: 100%;
+  max-height: none;
 }
-.fill-glass-picker__graphic .glass-detail,
-.fill-glass-picker__graphic .glass-stem,
-.fill-glass-picker__graphic .glass-base,
-.fill-glass-picker__graphic .glass-highlight {
-  pointer-events: none;
-}
-.fill-glass-picker__graphic .liquid {
-  opacity: 0.9;
+.fill-glass-picker__graphic .beer-bubble {
+  animation: none;
+  opacity: 0.6;
 }
 @media (max-width: 45rem) {
   .admin-shell main {
@@ -1443,14 +1438,6 @@ html[data-admin-accent="blue"] .admin-shell {
 :is(.display-preview, [data-display-preview])[data-preview-show-serving-temperature="true"]
   [data-field="temperature"]:not([hidden]) {
   display: block !important;
-}
-:is(.display-preview, [data-display-preview])[data-preview-theme="light_minimal"]
-  .tap-graphic
-  .glass,
-:is(.display-preview, [data-display-preview])[data-preview-theme="light_minimal"]
-  .tap-graphic
-  .glass-detail[data-glass-contour="true"] {
-  fill: color-mix(in srgb, var(--surface) 58%, transparent);
 }
 .compact-list {
   margin-block: 0.75rem;

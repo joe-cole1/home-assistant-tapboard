@@ -590,13 +590,15 @@ test("Mystery redaction, reveal, finite graphics, and stable roots", async ({ br
   await context.close();
 });
 
-test("Fill Glass live updates use distinct v1 contours and preserve the root SVG", async ({
+test("Fill Glass live updates use the server vessel contour and preserve the root SVG", async ({
   browser,
 }) => {
   const context = await browser.newContext();
   const page = await context.newPage();
   await page.goto("/");
   const normalCard = page.locator('[data-tap-number="1"]');
+  const tapId = await normalCard.getAttribute("data-tap-id");
+  const originalContour = await normalCard.locator(".tap-graphic .glass").getAttribute("d");
   await normalCard.locator(".tap-graphic").evaluate((node) => {
     (window as unknown as { savedFillGraphic?: Element }).savedFillGraphic = node;
   });
@@ -625,13 +627,20 @@ test("Fill Glass live updates use distinct v1 contours and preserve the root SVG
   await autosaveRequest;
   await expect(presentationForm.locator("[data-autosave-status]")).toHaveText("Saved");
   await expect(normalCard.locator(".tap-graphic")).toHaveAttribute("data-graphic-id", "mug");
+  const response = await page.request.get(`/api/public/dashboard/taps/${tapId}`);
+  expect(response.ok()).toBe(true);
+  const payload = (await response.json()) as {
+    readonly graphic: { readonly bodyPath: string };
+  };
   await expect(normalCard.locator(".tap-graphic .glass")).toHaveAttribute(
     "d",
-    "M 48 50 H 112 A 8 8 0 0 1 120 58 V 212 A 8 8 0 0 1 112 220 H 48 A 8 8 0 0 1 40 212 V 58 A 8 8 0 0 1 48 50 Z",
+    payload.graphic.bodyPath,
   );
+  expect(payload.graphic.bodyPath).not.toBe(originalContour);
   await expect(normalCard.locator(".beer-bubble")).toHaveCount(24);
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await expect(normalCard.locator(".beer-bubbles")).toHaveCSS("display", "none");
+  await expect(normalCard.locator(".beer-bubbles")).not.toHaveCSS("display", "none");
+  await expect(normalCard.locator(".beer-bubble").first()).toHaveCSS("animation-name", "none");
   expect(
     await page.evaluate(
       () =>

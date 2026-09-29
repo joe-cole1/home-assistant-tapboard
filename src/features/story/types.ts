@@ -144,13 +144,14 @@ export interface VesselDetailPath {
   readonly stroke: string;
   readonly strokeWidth: number;
   readonly opacity: number;
+  readonly contour?: boolean;
 }
 
 export interface VesselGeometryDescriptor {
   readonly id: VesselId;
   /** A finite server-owned token. Clients never accept paths outside this catalog. */
   readonly token: string;
-  /** The v1 static body contour, carried as a bounded safe descriptor. */
+  /** Original, finite artwork carried as a bounded safe descriptor. */
   readonly bodyPath: string;
   /** The matching body contour used to clip the liquid and deterministic foam. */
   readonly clipPath: string;
@@ -161,6 +162,8 @@ export interface VesselGeometryDescriptor {
   readonly fillX: number;
   readonly fillWidth: number;
   readonly detailPaths: readonly VesselDetailPath[];
+  /** Reflections and facets render in front of the liquid. */
+  readonly frontPaths: readonly VesselDetailPath[];
 }
 
 export interface VesselResolution {

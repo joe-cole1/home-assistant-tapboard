@@ -869,6 +869,8 @@ class FoundationApplication implements Application {
           { kind: "js", file: "utc-day-refresh.js", path: "js/utc-day-refresh.js" },
           { kind: "js", file: "sse.js", path: "js/sse.js" },
           { kind: "js", file: "dashboard.js", path: "js/dashboard.js" },
+          { kind: "js", file: "vessel-renderer.js", path: "js/vessel-renderer.js" },
+          { kind: "js", file: "vessel-fill.js", path: "js/vessel-fill.js" },
           { kind: "js", file: "story.js", path: "js/story.js" },
           { kind: "js", file: "admin-display.js", path: "js/admin-display.js" },
           { kind: "js", file: "admin-shell.js", path: "js/admin-shell.js" },
