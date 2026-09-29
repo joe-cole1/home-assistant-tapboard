@@ -1,4 +1,5 @@
 import { mkdir } from "node:fs/promises";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -769,7 +770,7 @@ class FoundationApplication implements Application {
       });
 
       const router = new Router(this.#logger);
-      router.get("/healthz", (_request, response) => {
+      const readinessHandler = (_request: IncomingMessage, response: ServerResponse): void => {
         if (!this.isReady()) {
           sendJson(response, 503, { status: "unavailable" });
           return;
@@ -778,7 +779,9 @@ class FoundationApplication implements Application {
           status: "ok",
           schemaVersion: APPLICATION_SCHEMA_VERSION,
         });
-      });
+      };
+      router.get("/healthz", readinessHandler);
+      router.register("HEAD", "/healthz", readinessHandler);
 
       registerKegRoutes({ router, kegService, authService });
       registerBeverageRoutes({ router, beverageService, authService });

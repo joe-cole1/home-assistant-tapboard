@@ -1,8 +1,8 @@
 # Tapboard v2
 
-Tapboard v2 is an ESM modular monolith. Issues #66 and #67 establish the Node 24 Foundation and security/Activity/event/secret/machine-key/bounded-outbox primitives; #85 adds the development-only container workflow; #68–#75 add the domain, telemetry, forecasting, and health boundaries; #76 adds the Eta-rendered Admin/public browser surface, bounded SSE, and display preferences; #77 adds Brew Story, sensory guidance, Mystery Tap, and Beverage-owned presentation; #78 adds Tap Wars; and #79 adds outbound Home Assistant/webhook delivery. Production deployment remains deferred to #81.
+Tapboard v2 is an ESM modular monolith. Issues #66 and #67 establish the Node 24 Foundation and security/Activity/event/secret/machine-key/bounded-outbox primitives; #85 adds the development container workflow; #68–#75 add the domain, telemetry, forecasting, and health boundaries; #76 adds the Eta-rendered Admin/public browser surface, bounded SSE, and display preferences; #77 adds Brew Story, sensory guidance, Mystery Tap, and Beverage-owned presentation; #78 adds Tap Wars; and #79 adds outbound Home Assistant/webhook delivery. The root production Dockerfile restores existing Git-context builds; broader deployment acceptance remains tracked by #81.
 
-The current branch implements Issues #66–#79 and the #85 development container. Issue #79 is delivered on the current implementation branch; final automated and CI status is maintained in the rebuild handoff rather than claimed here. `/` is the authoritative server-rendered public dashboard; `/admin/*` provides the authenticated progressive Admin shell. Complete System administration and production deployment remain assigned to later issues.
+The current branch implements Issues #66–#79, the #85 development container, and a bounded production-container compatibility restoration. Validation status is maintained in the rebuild handoff. `/` is the authoritative server-rendered public dashboard; `/admin/*` provides the authenticated progressive Admin shell. Complete System administration and the rebuild's final deployment acceptance remain assigned to later issues.
 
 The frozen v1 application remains available at commit `429cf07e451b64ca1713655a34ffa5ebd376efae` and through Git history. Reusable v1 evidence is indexed in [`docs/rebuild/v1-reuse-manifest.json`](docs/rebuild/v1-reuse-manifest.json); it is reference material, not an active dependency or import source for v2.
 
@@ -44,7 +44,31 @@ The Admin PIN contract is exactly four ASCII decimal digits (`[0-9]{4}`), includ
 
 Local operator maintenance is stdin-only and never accepts secret positional arguments: `npm run operator:reset-pin` reads one exact PIN line, and `npm run operator:rotate-secret-key` reads exact old/new key lines. There is no browser PIN-reset workflow or default PIN. These commands print only safe revision/count metadata.
 
-The runtime has no backend transpiler, application bundler, SPA framework, or HTTP framework. The Docker/Compose surface below is development-only; production image hardening and deployment remain owned by issue #81.
+The runtime has no backend transpiler, application bundler, SPA framework, or HTTP framework.
+
+## Production Git-context builds
+
+The root `Dockerfile` is the default for existing Compose `build.context: <repository>#main` configurations; no `dockerfile:` override is needed. It uses a digest-pinned, multi-stage Node 24 image, installs only locked production npm dependencies in the runtime, and includes `wget` for existing health checks. `Dockerfile.dockerignore` admits only the reviewed runtime build inputs and excludes environment files, keys, databases, logs, and host dependencies. Git credentials belong to the deployment tool, never build arguments or committed URLs.
+
+The image runs as `node` (UID/GID 1000), listens on `0.0.0.0:3005` by default, and stores v2 SQLite at `/app/data/tapboard-v2.sqlite3`. Existing port `3005:3005`, UID `1000:1000`, read-only root, writable data volume, `/tmp` tmpfs, dropped capabilities, `no-new-privileges`, `init`, and 15-second stop grace settings remain usable. `GET` and `HEAD /healthz` share readiness semantics, including the existing `wget --no-verbose --tries=1 --spider http://localhost:3005/healthz` probe. The image supplies a health check as well; Compose may override it.
+
+For existing external env files, the following narrow aliases remain supported:
+
+| Canonical setting          | Existing deployment fallback           |
+| -------------------------- | -------------------------------------- |
+| `TAPBOARD_PORT`            | `PORT`                                 |
+| `TAPBOARD_DATABASE_PATH`   | `DATA_DIR` plus `/tapboard-v2.sqlite3` |
+| `TAPBOARD_EXTERNAL_ORIGIN` | `TAPBOARD_PUBLIC_ORIGIN`               |
+
+Canonical settings always win and retain validation, even when invalid or empty. An empty legacy public origin is treated as unset. The production image sets `PORT=3005`, `DATA_DIR=/app/data`, and `TAPBOARD_HOST=0.0.0.0`; direct Node and development Compose defaults stay unchanged. Local operator commands use the same config resolution as the server. These compatibility aliases may be removed only after supported external deployments have moved to the canonical names through an explicit breaking-change review.
+
+This restores packaging, not v1 application or data compatibility. Existing `tapboard.db` and `/app/backups` contents are not read, migrated, modified, or deleted; the old backup mount is inert. A volume containing only v1 data starts a separate, empty v2 database with no default Admin PIN. Initialize the PIN using the stdin-only local operator command. Keep `TAPBOARD_SECRET_KEY` external, and configure the canonical external origin for your reverse proxy; old PIN, integration, and secret settings are not translated. Do not point `TAPBOARD_DATABASE_PATH` at a v1 database or delete volumes to force startup. Backups and any v1 data migration remain separate operator-owned work.
+
+No VPS Compose edit, image publication, deployment, database migration contract change, or completion of the full #81 acceptance gate is implied by this restoration. `compose.production.example.yaml` remains an illustrative, non-runnable registry-image example.
+
+### MANUAL DEV TEST — production Compose compatibility
+
+After merge, use the existing Git sync/build workflow with the existing Compose file and keep its volumes. Confirm the build finds the root `Dockerfile`, the container becomes healthy, and `/healthz` reports schema 20 through the existing port/proxy. Confirm the existing `wget --spider` probe exits successfully, the dashboard and Admin login render, and stop/start retains v2 state. Check the selected database filename before initialization; v1 data is preserved but not imported. Test first with disposable state or an operator-managed backup, and never use `down --volumes` for this check.
 
 ## Updating the local development instance
 

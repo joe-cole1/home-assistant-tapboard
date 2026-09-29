@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # Foundation topology gate. Issue #85 permits one coherent development-only
-# container set; the exact production compose example is illustrative only,
-# while actual production Docker and Compose paths remain reserved for #81.
+# container set; issue #81 permits one exact, content-checked production image
+# and its matching deny-by-default build-context policy.
 # See docs/rebuild/ARCHITECTURE-GUARDRAILS.md.
 
 if [[ -n "${TAPBOARD_ARCHITECTURE_ROOT:-}" ]]; then
@@ -100,7 +100,6 @@ forbidden_v1_paths=(
   home-assistant/packages/brewfather_tapboard.yaml
   home-assistant/packages/tapboard.yaml
   home-assistant/packages/tapboard_helpers.yaml
-  Dockerfile
   docker-compose.yml
 )
 
@@ -137,7 +136,7 @@ for path in ./*; do
     Dockerfile.dev|Dockerfile.dev.dockerignore|compose.dev.yaml|compose.production.example.yaml)
       ;;
     # These canonical v1 paths retain their existing legacy-path diagnostics.
-    Dockerfile|.dockerignore|docker-compose.yml)
+    Dockerfile|Dockerfile.dockerignore|.dockerignore|docker-compose.yml)
       ;;
     # Keep the exact Dockerfile.dev.dockerignore exception above ahead of this
     # broad top-level variant check.
@@ -146,6 +145,134 @@ for path in ./*; do
       ;;
   esac
 done
+
+production_dockerfile="Dockerfile"
+production_dockerignore="Dockerfile.dockerignore"
+
+if [[ -e "$production_dockerfile" || -e "$production_dockerignore" ]]; then
+  if [[ ! -f "$production_dockerfile" || ! -f "$production_dockerignore" ]]; then
+    report "[production-container] Dockerfile and Dockerfile.dockerignore must be present as one coherent set"
+  fi
+fi
+
+if [[ -f "$production_dockerfile" ]]; then
+  production_from_pattern='^[[:space:]]*FROM[[:space:]]+node:24-bookworm-slim@sha256:[0-9a-f]{64}([[:space:]]+AS[[:space:]]+builder)?[[:space:]]*$'
+  production_from_count="$(grep -Ec '^[[:space:]]*FROM[[:space:]]+' "$production_dockerfile" || true)"
+
+  if [[ "$production_from_count" != "2" ]] ||
+    grep -E '^[[:space:]]*FROM[[:space:]]+' "$production_dockerfile" |
+      grep -Ev "$production_from_pattern" >/dev/null; then
+    report "[production-container] Dockerfile must use exactly two pinned Node 24 bookworm-slim stages"
+  fi
+  if ! grep -Eq '^[[:space:]]*FROM[[:space:]]+node:24-bookworm-slim@sha256:[0-9a-f]{64}[[:space:]]+AS[[:space:]]+builder[[:space:]]*$' "$production_dockerfile"; then
+    report "[production-container] Dockerfile must have a pinned builder stage"
+  fi
+  if ! grep -Eq '^[[:space:]]*COPY[[:space:]]+--from=builder([[:space:]]|$)' "$production_dockerfile"; then
+    report "[production-container] Dockerfile runtime must copy dependencies from the builder stage"
+  fi
+  if ! grep -Eq '^[[:space:]]*USER[[:space:]]+node[[:space:]]*$' "$production_dockerfile"; then
+    report "[production-container] Dockerfile must run as USER node"
+  fi
+  if grep -Eq '^[[:space:]]*USER[[:space:]]+root([[:space:]]|$)' "$production_dockerfile"; then
+    report "[production-container] Dockerfile must not switch to root at runtime"
+  fi
+  if ! grep -Eq 'npm[[:space:]]+ci[[:space:]]+--omit=dev([[:space:]]|$)' "$production_dockerfile"; then
+    report "[production-container] Dockerfile builder must install production dependencies with npm ci --omit=dev"
+  fi
+  if ! grep -Eq '^[[:space:]]*CMD[[:space:]]+\["node",[[:space:]]*"src/main\.ts"\][[:space:]]*$' "$production_dockerfile"; then
+    report "[production-container] Dockerfile must run the v2 src/main.ts entrypoint"
+  fi
+  if grep -Eq '^[[:space:]]*ENTRYPOINT([[:space:]]|$)' "$production_dockerfile"; then
+    report "[production-container] Dockerfile must not add a legacy ENTRYPOINT"
+  fi
+  if grep -Eq '^[[:space:]]*ADD([[:space:]]|$)' "$production_dockerfile"; then
+    report "[production-container] Dockerfile must use explicit COPY instructions and no ADD"
+  fi
+  production_copy_pattern='^[[:space:]]*COPY[[:space:]]+(--from=builder[[:space:]]+--chown=node:node[[:space:]]+/app/node_modules[[:space:]]+\./node_modules|--chown=node:node[[:space:]]+package\.json[[:space:]]+package-lock\.json[[:space:]]+\./|package\.json[[:space:]]+package-lock\.json[[:space:]]+\./|--chown=node:node[[:space:]]+(src|views|public)/[[:space:]]+\./(src|views|public)/)[[:space:]]*$'
+  invalid_copy_lines="$(grep -E '^[[:space:]]*COPY[[:space:]]+' "$production_dockerfile" | grep -Ev "$production_copy_pattern" || true)"
+  if [[ -n "$invalid_copy_lines" ]]; then
+    report "[production-container] Dockerfile COPY sources must be explicit and limited to package metadata, builder dependencies, src, views, and public"
+  fi
+  if grep -Eiq '^[[:space:]]*(ARG|ENV)[[:space:]].*(SECRET|TOKEN|PASSWORD|PIN|CREDENTIAL|PRIVATE[_-]?KEY|API[_-]?KEY)' "$production_dockerfile" ||
+    grep -Eiq '(^|[[:space:]])(TAPBOARD_SECRET_KEY|[A-Z0-9_]*(SECRET|TOKEN|PASSWORD|PIN|CREDENTIAL|PRIVATE[_-]?KEY|API[_-]?KEY))[[:space:]]*=' "$production_dockerfile"; then
+    report "[production-container] Dockerfile must not declare secret defaults or secret build arguments"
+  fi
+  if grep -Eiq '^FROM[[:space:]]+node:(1[0-9]|20|21|22|23)([-@[:space:]]|$)' "$production_dockerfile"; then
+    report "[production-container] Dockerfile must not use a legacy Node runtime"
+  fi
+  if grep -Eiq 'BACKUP_DIR|/app/backups|home[-_ ]?assistant|brewfather|HA_URL|HA_TOKEN|BREWFATHER|telemetry' "$production_dockerfile"; then
+    report "[production-container] Dockerfile must not contain backup or Home Assistant/telemetry paths"
+  fi
+  if grep -Eq '^[[:space:]]*VOLUME([[:space:]]|$)' "$production_dockerfile"; then
+    report "[production-container] Dockerfile must leave volume ownership to Compose"
+  fi
+  if ! grep -Fq 'wget --no-verbose --tries=1 --spider' "$production_dockerfile" ||
+    ! grep -Fq '${TAPBOARD_PORT:-${PORT:-3005}}/healthz' "$production_dockerfile"; then
+    report "[production-container] Dockerfile healthcheck must use wget and TAPBOARD_PORT, PORT, then 3005"
+  fi
+fi
+
+if [[ -f "$production_dockerignore" ]]; then
+  required_context_patterns=(
+    '*'
+    '!Dockerfile'
+    '!Dockerfile.dockerignore'
+    '!package.json'
+    '!package-lock.json'
+    '!src/'
+    '!src/**'
+    '!views/'
+    '!views/**'
+    '!public/'
+    '!public/**'
+    '.env*'
+    '**/.env*'
+    '**/.env.*'
+    '**/*credentials*'
+    '**/*private-key*'
+    '**/*private_key*'
+    '**/*.pem'
+    '**/*.key'
+    '**/*.sqlite'
+    '**/*.sqlite3'
+    '**/*.db'
+    '**/*.db-*'
+    '**/*.log'
+    '**/data'
+    '**/data/**'
+    '**/backups'
+    '**/backups/**'
+    '**/node_modules'
+    '**/node_modules/**'
+  )
+  for pattern in "${required_context_patterns[@]}"; do
+    if ! grep -Fqx -- "$pattern" "$production_dockerignore"; then
+      report "[production-container] Dockerfile.dockerignore is missing required pattern: $pattern"
+    fi
+  done
+
+  exclusions_started=0
+  while IFS= read -r pattern; do
+    case "$pattern" in
+      '!'Dockerfile|'!'Dockerfile.dockerignore|'!'package.json|'!'package-lock.json|'!'src/|'!'src/**|'!'views/|'!'views/**|'!'public/|'!'public/**)
+        if ((exclusions_started)); then
+          report "[production-container] Dockerfile.dockerignore allowlist entries must precede final exclusions: $pattern"
+        fi
+        ;;
+      # The final deny rules cover secrets and mutable/runtime state. They are
+      # intentionally recognized separately so allowlist additions after them
+      # cannot weaken the build-context boundary.
+      .env*|'**/.env*'|'**/.env.*'|'**/*credentials*'|'**/*private-key*'|'**/*private_key*'|'**/*.pem'|'**/*.key'|'**/*.sqlite'|'**/*.sqlite3'|'**/*.db'|'**/*.db-*'|'**/*.log'|'**/data'|'**/data/**'|'**/backups'|'**/backups/**'|'**/node_modules'|'**/node_modules/**')
+        exclusions_started=1
+        ;;
+      '!'*)
+        report "[production-container] Dockerfile.dockerignore allowlist contains an unapproved path: $pattern"
+        ;;
+      *)
+        ;;
+    esac
+  done < <(grep -Ev '^[[:space:]]*(#|$)' "$production_dockerignore" || true)
+fi
 
 if [[ -f compose.production.example.yaml ]]; then
   if ! grep -Eq '^[[:space:]]*image:[[:space:]]*[^[:space:]#]+' compose.production.example.yaml; then

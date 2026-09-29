@@ -1,0 +1,37 @@
+# Production build context: deny everything, then allow only the application
+# image specification, locked package metadata, and runtime assets.
+*
+!Dockerfile
+!Dockerfile.dockerignore
+!package.json
+!package-lock.json
+!src/
+!src/**
+!views/
+!views/**
+!public/
+!public/**
+
+# These exclusions stay last so nested runtime paths cannot re-allow secrets or
+# mutable state if an otherwise allowlisted directory gains one later.
+.env*
+**/.env*
+**/.env.*
+**/credentials
+**/credentials/**
+**/*credentials*
+**/*private-key*
+**/*private_key*
+**/*.pem
+**/*.key
+**/*.sqlite
+**/*.sqlite3
+**/*.db
+**/*.db-*
+**/*.log
+**/data
+**/data/**
+**/backups
+**/backups/**
+**/node_modules
+**/node_modules/**

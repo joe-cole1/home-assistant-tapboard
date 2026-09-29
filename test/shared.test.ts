@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { resolve } from "node:path";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import test from "node:test";
 
 import { loadConfig } from "../src/config.ts";
@@ -129,6 +131,80 @@ void test("configuration has collision-free defaults and validates injected valu
     secretKey: validKey,
     secretKeyState: "available",
   });
+});
+
+void test("configuration accepts legacy deployment aliases with canonical precedence", () => {
+  const baseDirectory = "/tmp/tapboard-config-alias-root";
+  assert.equal(loadConfig({ env: { PORT: "3005" }, baseDirectory }).port, 3005);
+  assert.equal(
+    loadConfig({ env: { DATA_DIR: "/srv/tapboard/data" }, baseDirectory }).databasePath,
+    resolve("/srv/tapboard/data/tapboard-v2.sqlite3"),
+  );
+  assert.equal(
+    loadConfig({ env: { TAPBOARD_PUBLIC_ORIGIN: "https://legacy.example" }, baseDirectory })
+      .canonicalExternalOrigin,
+    "https://legacy.example",
+  );
+  assert.equal(
+    loadConfig({ env: { TAPBOARD_PUBLIC_ORIGIN: "" }, baseDirectory }).canonicalExternalOrigin,
+    undefined,
+  );
+
+  assert.equal(loadConfig({ env: { TAPBOARD_PORT: "3006", PORT: "3007" } }).port, 3006);
+  assert.equal(
+    loadConfig({
+      env: {
+        TAPBOARD_DATABASE_PATH: "/srv/tapboard/canonical.sqlite3",
+        DATA_DIR: "/srv/tapboard/legacy",
+      },
+    }).databasePath,
+    resolve("/srv/tapboard/canonical.sqlite3"),
+  );
+  assert.equal(
+    loadConfig({
+      env: {
+        TAPBOARD_EXTERNAL_ORIGIN: "https://canonical.example",
+        TAPBOARD_PUBLIC_ORIGIN: "https://legacy.example",
+      },
+    }).canonicalExternalOrigin,
+    "https://canonical.example",
+  );
+
+  assert.throws(() => loadConfig({ env: { TAPBOARD_PORT: "", PORT: "3005" } }), /invalid/i);
+  assert.throws(
+    () => loadConfig({ env: { TAPBOARD_DATABASE_PATH: "", DATA_DIR: "/srv/tapboard" } }),
+    /invalid/i,
+  );
+  assert.throws(
+    () =>
+      loadConfig({
+        env: {
+          TAPBOARD_EXTERNAL_ORIGIN: "",
+          TAPBOARD_PUBLIC_ORIGIN: "https://legacy.example",
+        },
+      }),
+    /invalid/i,
+  );
+  assert.throws(() => loadConfig({ env: { PORT: "not-a-port" } }), /invalid/i);
+  assert.throws(() => loadConfig({ env: { DATA_DIR: "   " } }), /invalid/i);
+  assert.throws(() => loadConfig({ env: { TAPBOARD_PUBLIC_ORIGIN: "not-an-origin" } }), /invalid/i);
+});
+
+void test("legacy database files remain untouched when resolving the v2 path", () => {
+  const root = mkdtempSync(join(tmpdir(), "tapboard-config-alias-"));
+  try {
+    const legacyPath = join(root, "tapboard.db");
+    const v2Path = join(root, "tapboard-v2.sqlite3");
+    writeFileSync(legacyPath, "legacy database marker", "utf8");
+
+    const config = loadConfig({ env: { DATA_DIR: root }, baseDirectory: root });
+
+    assert.equal(config.databasePath, v2Path);
+    assert.equal(readFileSync(legacyPath, "utf8"), "legacy database marker");
+    assert.equal(existsSync(v2Path), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 void test("structured logging recursively redacts secrets and safely serializes difficult values", () => {
