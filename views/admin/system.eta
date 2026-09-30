@@ -2,8 +2,9 @@
 <%~ include("/partials/admin-nav", { page: it.page, items: it.navItems || [] }) %>
 <% const workspace = it.workspace || it.page.workspace || { enabled: false, changing: false }; %>
 <main id="main-content" class="admin-page">
-  <header class="page-header"><p class="eyebrow">Configure</p><h1>System</h1><p>Manage your workspace and check system status.</p></header>
+  <header class="page-header"><p class="eyebrow">Configure</p><h1>System</h1><p>Manage your workspace, installation settings, and Admin access.</p></header>
   <%~ include("/partials/admin-messages", { page: it.page }) %>
+  <% if (workspace.enabled) { %><p class="muted">Data settings, diagnostics, and activity below belong to the saved simulation workspace. Admin sessions and the PIN are shared with your real installation.</p><% } %>
   <section class="admin-card simulation-settings" aria-labelledby="simulation-settings-heading">
     <div class="simulation-settings__intro">
       <p class="eyebrow">Explore Tapboard</p>
@@ -18,8 +19,116 @@
     </form>
   </section>
   <section class="admin-card" aria-labelledby="system-status-heading">
-    <span class="status-badge status-badge--healthy">Online</span><h2 id="system-status-heading">System status</h2>
-    <dl class="summary-grid"><div><dt>Schema version</dt><dd><%= it.system.schemaVersion %></dd></div><div><dt>Public live displays</dt><dd><%= it.system.liveClients.public.clients %></dd></div><div><dt>Admin live displays</dt><dd><%= it.system.liveClients.admin.clients %></dd></div></dl>
-    <p class="muted">Advanced system administration, retention controls, diagnostics, and operator tooling are planned for a future issue.</p>
+    <span class="status-badge status-badge--<%= it.system.ready ? 'healthy' : 'degraded' %>"><%= it.system.ready ? 'Ready' : 'Unavailable' %></span><h2 id="system-status-heading">System status</h2>
+    <dl class="summary-grid">
+      <div><dt>Application version</dt><dd><%= it.system.version %></dd></div>
+      <div><dt>Schema version</dt><dd><%= it.system.schemaVersion %></dd></div>
+      <div><dt>Integrations</dt><dd><%= it.system.connectivity %></dd></div>
+      <div><dt>Public live displays</dt><dd><%= it.system.liveClients.public.clients %></dd></div>
+      <div><dt>Admin live displays</dt><dd><%= it.system.liveClients.admin.clients %></dd></div>
+      <div><dt>Database size</dt><dd><%= (it.system.diagnostics.storage.pageCount * it.system.diagnostics.storage.pageSizeBytes / 1048576).toFixed(2) %> MiB</dd></div>
+    </dl>
+    <p class="muted">This report reads local state. Your local inventory and displays remain available when an integration is disconnected.</p>
+  </section>
+  <section class="admin-card" aria-labelledby="system-calculation-heading">
+    <h2 id="system-calculation-heading">Calculation defaults</h2>
+    <p>Fallback gravity is used when a beverage has no measured final gravity or density override. Serving size is used when that beverage has no pour-size override. Completed pour history stays unchanged.</p>
+    <form action="/admin/system/calculation" method="post" class="stack-form">
+      <input type="hidden" name="_csrf" value="<%= it.page.csrfToken %>" />
+      <div class="form-grid">
+        <label>Fallback final gravity<input type="number" name="fallbackFg" min="0.5" max="2" step="any" required value="<%= it.system.calculation.fallbackFg %>" /></label>
+        <label>Default serving size (mL)<input type="number" name="servingSizeMl" min="0.001" step="any" required value="<%= it.system.calculation.servingSizeMl %>" /></label>
+      </div>
+      <button type="submit">Save calculation defaults</button>
+    </form>
+    <p class="muted">Configure <a href="/admin/health">health and pour detection</a>, <a href="/admin/display/shared">shared display defaults</a>, and <a href="/admin/integrations">integrations</a> in their settings pages.</p>
+  </section>
+  <section class="admin-card" aria-labelledby="system-sessions-heading">
+    <h2 id="system-sessions-heading">Admin sessions</h2>
+    <p>Up to 100 active sessions are shown, including this session first. Revoking a session signs that browser out.</p>
+    <div class="system-session-list">
+      <% for (const session of it.system.sessions) { %>
+        <article class="system-session" aria-labelledby="session-<%= session.id %>">
+          <h3 id="session-<%= session.id %>"><%= session.current ? 'This session' : `Session ${session.id.slice(0, 8)}` %></h3>
+          <dl class="summary-grid"><div><dt>Created</dt><dd><time datetime="<%= session.createdAt %>"><%= session.createdAt %></time></dd></div><div><dt>Last used</dt><dd><time datetime="<%= session.lastUsedAt %>"><%= session.lastUsedAt %></time></dd></div><div><dt>Expires</dt><dd><time datetime="<%= session.expiresAt %>"><%= session.expiresAt %></time></dd></div><div><dt>Absolute expiry</dt><dd><time datetime="<%= session.absoluteExpiresAt %>"><%= session.absoluteExpiresAt %></time></dd></div></dl>
+          <form action="/admin/system/sessions/<%= session.id %>/revoke" method="post" class="system-revoke-form">
+            <input type="hidden" name="_csrf" value="<%= it.page.csrfToken %>" />
+            <label class="checkbox-field"><input type="checkbox" name="confirm" value="revoke" required /> Confirm revocation<%= session.current ? ' of this session' : '' %></label>
+            <button type="submit" class="secondary">Revoke <%= session.current ? 'this session' : 'session' %></button>
+          </form>
+        </article>
+      <% } %>
+    </div>
+    <h3>Session lifetimes</h3>
+    <p>Both limits can be one minute to one year (525,600 minutes). Inactivity cannot exceed the absolute lifetime. Shortening applies immediately; lengthening preserves each existing session's original absolute deadline.</p>
+    <form action="/admin/system/session-policy" method="post" class="stack-form">
+      <input type="hidden" name="_csrf" value="<%= it.page.csrfToken %>" />
+      <input type="hidden" name="expectedRevision" value="<%= it.system.sessionPolicy.revision %>" />
+      <div class="form-grid">
+        <label>Inactivity timeout (minutes)<input type="number" name="inactivityMinutes" min="1" max="525600" step="any" required value="<%= it.system.sessionPolicy.inactivityMs / 60000 %>" /></label>
+        <label>Absolute lifetime (minutes)<input type="number" name="absoluteMinutes" min="1" max="525600" step="any" required value="<%= it.system.sessionPolicy.absoluteMs / 60000 %>" /></label>
+      </div>
+      <button type="submit">Save session lifetimes</button>
+    </form>
+    <details class="system-pin-change"><summary>Change Admin PIN</summary>
+      <p>Use exactly four ASCII digits. Changing the PIN signs out every Admin session.</p>
+      <form action="/admin/system/pin" method="post" class="stack-form" autocomplete="off">
+        <input type="hidden" name="_csrf" value="<%= it.page.csrfToken %>" />
+        <div class="form-grid">
+          <label>Current PIN<input type="password" name="currentPin" inputmode="numeric" pattern="[0-9]{4}" minlength="4" maxlength="4" required autocomplete="current-password" /></label>
+          <label>New PIN<input type="password" name="newPin" inputmode="numeric" pattern="[0-9]{4}" minlength="4" maxlength="4" required autocomplete="new-password" /></label>
+          <label>Confirm new PIN<input type="password" name="confirmPin" inputmode="numeric" pattern="[0-9]{4}" minlength="4" maxlength="4" required autocomplete="new-password" /></label>
+        </div>
+        <button type="submit">Change PIN and sign out all sessions</button>
+      </form>
+    </details>
+  </section>
+  <section class="admin-card" aria-labelledby="system-retention-heading">
+    <h2 id="system-retention-heading">Retention</h2>
+    <p>Automatic pruning uses small batches. Kegs, fills, completed pours, telemetry epochs, calibration, maintenance, deletion audits, and a Tap's first-use history remain protected. Queued and leased deliveries remain protected.</p>
+    <form action="/admin/system/retention" method="post" class="stack-form">
+      <input type="hidden" name="_csrf" value="<%= it.page.csrfToken %>" />
+      <div class="form-grid">
+        <label>Activity Log (days)<input type="number" name="activityDays" min="1" max="3650" step="1" required value="<%= it.system.retention.activity.retentionDays %>" /></label>
+        <label>Raw telemetry (seconds)<input type="number" name="rawSeconds" min="300" max="86400" step="1" required value="<%= it.system.retention.telemetry.rawRetentionSeconds %>" /></label>
+        <label>Deduplication receipts (seconds)<input type="number" name="receiptSeconds" min="3600" max="604800" step="1" required value="<%= it.system.retention.telemetry.receiptRetentionSeconds %>" /></label>
+        <label>Reconnect horizon (seconds)<input type="number" name="reconnectSeconds" min="60" max="86400" step="1" required value="<%= it.system.retention.telemetry.reconnectHorizonSeconds %>" /></label>
+        <label>Terminal outbound history (days)<input type="number" name="outboxDays" min="1" max="3650" step="1" required value="<%= it.system.retention.outbox.retentionDays %>" /></label>
+      </div>
+      <p class="muted">Receipt retention must cover both the raw-telemetry retention and the accepted reconnect horizon. Old raw measurements are pruned before their receipts.</p>
+      <button type="submit">Save retention settings</button>
+    </form>
+  </section>
+  <section class="admin-card" aria-labelledby="system-diagnostics-heading">
+    <h2 id="system-diagnostics-heading">Diagnostics</h2>
+    <dl class="summary-grid">
+      <div><dt>Activity rows</dt><dd><%= it.system.diagnostics.counts.activity %></dd></div>
+      <div><dt>Raw telemetry rows</dt><dd><%= it.system.diagnostics.counts.rawTelemetry %></dd></div>
+      <div><dt>Ingest receipts</dt><dd><%= it.system.diagnostics.counts.ingestReceipts %></dd></div>
+      <div><dt>Pending deliveries</dt><dd><%= it.system.diagnostics.counts.outboxPending %></dd></div>
+      <div><dt>Leased deliveries</dt><dd><%= it.system.diagnostics.counts.outboxLeased %></dd></div>
+      <div><dt>Retrying deliveries</dt><dd><%= it.system.diagnostics.counts.outboxRetry %></dd></div>
+      <div><dt>Terminal deliveries</dt><dd><%= it.system.diagnostics.counts.outboxTerminal %></dd></div>
+      <div><dt>Last retention pass</dt><dd><%= it.system.diagnostics.retention.lastOutcome === 'completed' ? 'Completed' : it.system.diagnostics.retention.lastOutcome === 'failed' ? 'Failed; will retry' : 'Not yet run' %></dd></div>
+      <div><dt>Retention checked at</dt><dd><%= it.system.diagnostics.retention.lastRunAt || '—' %></dd></div>
+    </dl>
+    <p class="muted">Counts and storage totals contain no credentials, integration endpoints, raw payloads, or private notes. Database backups and restores are managed by your installation operator.</p>
+  </section>
+  <section id="activity" class="admin-card" aria-labelledby="system-activity-heading">
+    <h2 id="system-activity-heading">Activity Log</h2>
+    <form action="/admin/system#activity" method="get" class="system-activity-filter">
+      <label>Activity category<select name="category"><option value="">All categories</option><% for (const category of ['security', 'admin', 'domain', 'integration', 'outbox', 'system']) { %><option value="<%= category %>"<% if (it.system.activity.category === category) { %> selected<% } %>><%= category[0].toUpperCase() + category.slice(1) %></option><% } %></select></label>
+      <button type="submit" class="secondary">Filter Activity Log</button>
+    </form>
+    <% if (it.system.activity.items.length === 0) { %><p>No activity matches this view.</p><% } else { %>
+      <div class="table-scroll" role="region" aria-label="Activity Log entries" tabindex="0">
+        <table class="data-table"><thead><tr><th scope="col">Time (UTC)</th><th scope="col">Category</th><th scope="col">Action</th><th scope="col">Actor</th><th scope="col">Resource</th></tr></thead><tbody>
+          <% for (const item of it.system.activity.items) { %><tr><td><time datetime="<%= item.occurredAt %>"><%= item.occurredAt %></time></td><td><%= item.categoryLabel %></td><td><%= item.actionLabel %></td><td><%= item.actorLabel %></td><td><% if (item.entityHref) { %><a href="<%= item.entityHref %>"><%= item.entityLabel %></a><% } else { %><%= item.entityLabel %><% } %></td></tr><% } %>
+        </tbody></table>
+      </div>
+    <% } %>
+    <p class="muted">Up to 50 entries per page. Activity records show actions and resource types; private details and authentication tokens are excluded.</p>
+    <% if (it.system.activity.nextHref) { %><a class="button secondary" href="<%= it.system.activity.nextHref %>">Older activity</a><% } %>
+    <% if (it.system.activity.category || it.system.activity.hasCursor) { %><a class="button secondary" href="/admin/system#activity">Latest activity</a><% } %>
   </section>
 </main>

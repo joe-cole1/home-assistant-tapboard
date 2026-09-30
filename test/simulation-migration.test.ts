@@ -145,7 +145,7 @@ void test("v20 upgrades to v21 without changing existing domain, pour history, o
     previous.close();
   }
 
-  const upgraded = openDatabase(path);
+  const upgraded = openDatabase(path, { migrations: MIGRATIONS.slice(0, 21) });
   try {
     assert.equal(
       upgraded.pragma<number>("user_version", { simple: true }),
@@ -173,7 +173,7 @@ void test("v20 upgrades to v21 without changing existing domain, pour history, o
     upgraded.close();
   }
 
-  const reopened = openDatabase(path);
+  const reopened = openDatabase(path, { migrations: MIGRATIONS.slice(0, 21) });
   try {
     assert.deepEqual(snapshotExistingRows(reopened), before);
     assert.deepEqual(readSettings(reopened), [
@@ -203,7 +203,7 @@ void test("v20 upgrades to v21 without changing existing domain, pour history, o
 });
 
 void test("simulation sensor defaults, references, and state constraints are enforced", () => {
-  const database = openDatabase(":memory:");
+  const database = openDatabase(":memory:", { migrations: MIGRATIONS.slice(0, 21) });
   try {
     seedSensorOwners(database);
     const insert = database.prepare<[string, string, number]>(
@@ -275,7 +275,7 @@ void test("simulation sensor defaults, references, and state constraints are enf
 });
 
 void test("simulation Fill volumes enforce ownership, finite nonnegative values, and deletion cascades", () => {
-  const database = openDatabase(":memory:");
+  const database = openDatabase(":memory:", { migrations: MIGRATIONS.slice(0, 21) });
   try {
     seedDomainHistory(database);
     const insert = database.prepare<[string, number]>(
@@ -338,13 +338,13 @@ void test("v21 rejects altered simulation DDL and missing singleton state on reo
   for (const entry of cases) {
     await context.test(entry.name, (subcontext) => {
       const path = makeDatabasePath(subcontext);
-      const database = openDatabase(path);
+      const database = openDatabase(path, { migrations: MIGRATIONS.slice(0, 21) });
       try {
         database.execute(entry.sql);
       } finally {
         database.close();
       }
-      assert.throws(() => openDatabase(path), entry.error);
+      assert.throws(() => openDatabase(path, { migrations: MIGRATIONS.slice(0, 21) }), entry.error);
     });
   }
 });
@@ -353,7 +353,10 @@ void test("an incompatible v20 schema fails before any v21 state is created", ()
   const database = openDatabase(":memory:", { migrations: MIGRATIONS.slice(0, 20) });
   try {
     database.execute("DROP TABLE fill_display_preferences");
-    assert.throws(() => initializeSchema(database, MIGRATIONS), /schema objects do not match/);
+    assert.throws(
+      () => initializeSchema(database, MIGRATIONS.slice(0, 21)),
+      /schema objects do not match/,
+    );
     assert.equal(database.pragma<number>("user_version", { simple: true }), 20);
     assert.deepEqual(
       database
@@ -403,7 +406,7 @@ void test("a failed v21 migration rolls back tables, seeded state, and the migra
       database.prepare("SELECT version FROM schema_migrations WHERE version = 21").get(),
       undefined,
     );
-    initializeSchema(database, MIGRATIONS);
+    initializeSchema(database, MIGRATIONS.slice(0, 21));
     assert.deepEqual(readSettings(database), [
       { singleton: 1, enabled: 0, revision: 0, seeded: 0 },
     ]);
