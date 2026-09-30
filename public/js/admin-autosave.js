@@ -178,6 +178,31 @@ function applyResource(form, resource, onlyIfSentValues = undefined) {
   emitValuesApplied(form, appliedFields);
 }
 
+function acknowledgedSnapshot(form, submitted, resource, revision) {
+  const values = { ...submitted };
+  if (resource && typeof resource === "object") {
+    for (const field of fieldNames(form)) {
+      if (!Object.prototype.hasOwnProperty.call(resource, field)) continue;
+      const controls = controlsFor(form, field);
+      const control = controls[0];
+      if (!control) continue;
+      const value = resource[field];
+      const text = value === null || value === undefined ? "" : String(value);
+      const radios = controls.filter((control) => control.type === "radio");
+      if (radios.length > 0) {
+        values[field] = radios.find((control) => String(control.value) === text)?.value ?? "";
+      } else if (control.type === "checkbox") {
+        const checked = value === true || value === "true" || value === control.value;
+        values[field] = checked ? control.value || "true" : "false";
+      } else values[field] = text;
+    }
+  }
+  if (typeof revision === "string" || typeof revision === "number") {
+    values[revisionField(form)] = String(revision);
+  }
+  return values;
+}
+
 function ensureUndoButton(form, state) {
   if (state.undoButton) return state.undoButton;
   const output = statusElement(form);
@@ -216,7 +241,7 @@ function invalidateUndo(state) {
 
 function armUndo(form, state, previousValues) {
   const previousFields = logicalSnapshot(form, previousValues);
-  const currentFields = logicalSnapshot(form);
+  const currentFields = logicalSnapshot(form, state.lastAuthoritative);
   if (JSON.stringify(previousFields) === JSON.stringify(currentFields)) return;
   invalidateUndo(state);
   state.undoValues = previousFields;
@@ -255,7 +280,8 @@ async function send(form, values) {
 function queue(form, state) {
   const values = snapshot(form);
   const key = logicalKey(form, values);
-  if (key === state.lastSentFieldsKey || key === state.pendingFieldsKey) return;
+  if (key === state.pendingFieldsKey || (!state.running && key === state.lastAcknowledgedFieldsKey))
+    return;
   invalidateUndo(state);
   state.pending = values;
   state.pendingFieldsKey = key;
@@ -275,12 +301,25 @@ async function drain(form, state) {
   setStatus(form, "Saving…", "saving");
   try {
     const body = await send(form, values);
+    // Acknowledgements describe this request, never a newer unsaved DOM edit.
+    const acknowledged = acknowledgedSnapshot(form, values, body?.resource, body?.revision);
     // Preserve a newer in-flight edit while still applying normalization for
     // fields that remained at the submitted value.
     applyResource(form, body?.resource, values);
     syncResourceRevision(state, body?.revision);
-    state.lastSentFieldsKey = logicalKey(form, values);
-    state.lastAuthoritative = snapshot(form);
+    state.lastAcknowledgedFieldsKey = logicalKey(form, acknowledged);
+    state.lastAuthoritative = acknowledged;
+    if (state.pending !== null) {
+      // Carry normalization into unchanged queued fields, retaining later edits.
+      for (const field of fieldNames(form)) {
+        if (state.pending[field] === values[field]) state.pending[field] = acknowledged[field];
+      }
+      state.pendingFieldsKey = logicalKey(form, state.pending);
+      if (state.pendingFieldsKey === state.lastAcknowledgedFieldsKey) {
+        state.pending = null;
+        state.pendingFieldsKey = "";
+      }
+    }
     applyFieldErrors(form, null);
     setStatus(form, "Saved", "saved");
     if (state.pending === null) armUndo(form, state, previous);
@@ -308,7 +347,7 @@ function initialize(form) {
     running: false,
     pending: null,
     pendingFieldsKey: "",
-    lastSentFieldsKey: logicalKey(form, initialValues),
+    lastAcknowledgedFieldsKey: logicalKey(form, initialValues),
     lastAuthoritative: initialValues,
     undoValues: null,
     undoTimer: null,

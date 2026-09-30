@@ -207,6 +207,12 @@ CI installs Chromium and runs `npm run test:e2e` in its own Node 24 job.
 
 Schema version 21 (`builtin-simulation`) is the current supported schema. It adds typed workspace settings, simulated sensor state, and Fill-owned physical volume. Version 20 (`fill-card-badges`), the preceding upgrade source, added a Fill-owned Featured preference after version 19's outbound destination and delivery schema, preserving existing lifecycle and outbound data. Low and New badges are derived rather than persisted; New covers UTC days 0–6 from the Fill date and respects Mystery history visibility. Browser-local overrides, live/SSE state, and effective sensory projections are never persisted in SQLite. `/healthz` reports `schemaVersion: 21` when the database is ready. An unpublished badge-only version-19 database is not a canonical upgrade source and is rejected without repair; preserve its data and obtain an explicit migration plan instead of deleting a volume or rewriting its ledger.
 
+## MANUAL DEV TEST — Issue #110 autosave and live refresh
+
+After updating, rebuild and recreate the development container without deleting its volume, then verify `/healthz` reports schema version 21. Enable Simulation and keep its public dashboard open beside Admin. With browser network throttling enabled, change a safe Tap name from A to B and back to A while the first save is pending; repeat with A to B to C. Wait for Saved and reload: the final value must match your last edit. Check Undo, inline validation, and a conflict from a second Admin tab.
+
+Temporarily block a targeted public dashboard request in browser developer tools, change a shared display setting, then unblock requests. The already-open display must recover to the saved state while retaining its existing cards, glass graphics, and bubbles. Disabling a Tap must remove its public card; reenabling it must restore it. Confirm the normal Admin form still saves with JavaScript disabled.
+
 ## MANUAL DEV TEST — vessel artwork and pour animation
 
 After the normal development rebuild, confirm `/healthz` reports schema 20. In the Beverage Fill Glass picker, inspect all 17 vessels and switch between a mug, tulip, snifter, and keg while the dashboard is open. Confirm the existing SVG node updates, the viewport stays the same, and a stemmed glass fills only its bowl. Check empty, low, half-full, and full levels in light and dark themes.

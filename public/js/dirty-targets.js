@@ -8,11 +8,16 @@ export function createDirtyQueue(run, maximumConcurrency = 4) {
       const target = queued.values().next().value;
       queued.delete(target);
       running.add(target);
-      void Promise.resolve(run(target)).finally(() => {
-        running.delete(target);
-        if (rerun.delete(target)) queued.add(target);
-        pump();
-      });
+      void Promise.resolve()
+        .then(() => run(target))
+        .catch(() => {
+          // Callers own recovery; failed work must still release its queue slot.
+        })
+        .finally(() => {
+          running.delete(target);
+          if (rerun.delete(target)) queued.add(target);
+          pump();
+        });
     }
   }
 
