@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build and verify only disposable resources created by this invocation.
-set -euo pipefail
+set -Eeuo pipefail
 set +x
 umask 077
 
@@ -9,7 +9,7 @@ fail() {
   printf 'Production container check failed: %s\n' "$1" >&2
   exit 1
 }
-trap 'printf "Production container phase failed: %s\n" "$qc_phase" >&2' ERR
+trap 'printf "Production container phase failed: %s (line %s)\n" "$qc_phase" "$LINENO" >&2' ERR
 
 command -v docker >/dev/null 2>&1 || fail "Docker is required; no container proof was run"
 command -v node >/dev/null 2>&1 || fail "Node 24 is required"
@@ -115,7 +115,10 @@ inspect_container() {
 }
 
 install_fixture() {
-  docker cp "$qc_fixture" "$qc_container:/tmp/production-container-smoke.mjs" >"$qc_private/copy.log" 2>&1
+  # Write through the unprivileged process into its writable tmpfs. Docker's
+  # archive-copy API can reject extraction when the container root is read-only.
+  docker exec --interactive "$qc_container" sh -c 'umask 077; cat > /tmp/production-container-smoke.mjs' \
+    <"$qc_fixture" >"$qc_private/copy.log" 2>&1
 }
 
 exercise() {
@@ -124,7 +127,8 @@ exercise() {
 }
 
 save_tokens_and_logs() {
-  docker cp "$qc_container:/tmp/production-smoke-tokens.json" "$qc_private/$1.tokens.json" >"$qc_private/copy.log" 2>&1
+  docker exec "$qc_container" cat /tmp/production-smoke-tokens.json \
+    >"$qc_private/$1.tokens.json" 2>"$qc_private/copy.log"
   docker logs "$qc_container" >"$qc_private/$1.log" 2>&1
 }
 
