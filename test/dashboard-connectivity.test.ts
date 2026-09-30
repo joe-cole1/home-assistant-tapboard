@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import test from "node:test";
 
 import {
@@ -6,11 +7,17 @@ import {
   type DashboardServiceDependencies,
 } from "../src/features/dashboard/service.ts";
 import type { BrewfatherSyncState } from "../src/features/beverages/types.ts";
+import { createBeverageService, type BeverageService } from "../src/features/beverages/service.ts";
+import {
+  insertBeverage,
+  insertBeverageLink,
+  updateBeverageLinkState,
+} from "../src/features/beverages/repository.ts";
 import type { HealthCheckSummary } from "../src/features/health/projections.ts";
 import { createOutboundService, type OutboundService } from "../src/features/outbound/service.ts";
 import type { OutboundDestination } from "../src/features/outbound/types.ts";
 import { createSecretsService } from "../src/features/secrets/service.ts";
-import { openDatabase } from "../src/infrastructure/database/connection.ts";
+import { openDatabase, type DatabaseExecutor } from "../src/infrastructure/database/connection.ts";
 
 const NOW = "2026-08-17T12:00:00.000Z";
 const DESTINATION = "11111111-1111-4111-8111-111111111111";
@@ -40,7 +47,10 @@ interface Signals {
   unavailable: "health" | "brewfather" | "outbound" | undefined;
 }
 
-function harness(outbound?: Pick<OutboundService, "list">) {
+function harness(
+  outbound?: Pick<OutboundService, "list">,
+  beverage?: Pick<BeverageService, "getBrewfatherSyncHealth">,
+) {
   const signals: Signals = {
     taps: [{ id: "tap-1", enabled: true, isRetired: false }],
     hasAuthority: true,
@@ -83,32 +93,31 @@ function harness(outbound?: Pick<OutboundService, "list">) {
         return { checks: signals.scale === undefined ? [] : [signals.scale] };
       },
     },
-    beverageService: {
-      listBrewfatherStatuses: () => {
+    beverageService: beverage ?? {
+      getBrewfatherSyncHealth: () => {
         if (signals.unavailable === "brewfather") throw new Error("Brewfather unavailable");
-        return [
+        const accounts = [
           {
-            account: { id: "default", enabled: signals.brewfatherEnabled },
+            id: "default",
+            enabled: signals.brewfatherEnabled,
             apiKeyConfigured: signals.brewfatherApiKeyConfigured,
-            lastDataUpdateAt: NOW,
             connectionState: signals.brewfatherConnection,
           },
           ...signals.extraBrewfatherAccounts.map((account) => ({
-            account: { id: account.id, enabled: account.enabled },
+            ...account,
             apiKeyConfigured: true,
-            connectionState: account.connectionState,
           })),
-        ];
-      },
-      listBeverages: () =>
-        signals.brewfatherLinks.map((_, index) => ({
-          beverage: { id: String(index), ownershipType: "brewfather" },
-        })),
-      getBeverage: (id: string) => {
-        const syncState = signals.brewfatherLinks[Number(id)];
+        ].filter((account) => account.enabled);
         return {
-          brewfatherLink:
-            syncState === null ? null : { syncState, accountId: signals.brewfatherLinkAccountId },
+          accounts,
+          hasUnsyncedLinks:
+            accounts.length > 0 &&
+            signals.brewfatherLinks.some(
+              (state) =>
+                state === null ||
+                (state !== "synced" &&
+                  accounts.some((account) => account.id === signals.brewfatherLinkAccountId)),
+            ),
         };
       },
     },
@@ -278,6 +287,102 @@ void test("every enabled Brewfather account counts and disabled-account links ar
   signals.brewfatherEnabled = false;
   signals.brewfatherLinkAccountId = "default";
   assertHeader(service, "healthy");
+});
+
+void test("the header reads bounded Brewfather sync health without hydrating profiles or recipes", async (context) => {
+  const database = openDatabase(":memory:");
+  context.after(() => database.close());
+  const statements: string[] = [];
+  const tracked: DatabaseExecutor = {
+    execute: (sql) => database.execute(sql),
+    prepare: (sql) => {
+      statements.push(sql);
+      return database.prepare(sql);
+    },
+    pragma: (statement, options) => database.pragma(statement, options),
+    withTransaction: (work) => database.withTransaction(work),
+  };
+  const secretsService = createSecretsService(database, {
+    rootKey: Buffer.alloc(32, 8).toString("base64url"),
+  });
+  const beverage = createBeverageService(tracked, { secretsService, now: () => new Date(NOW) });
+  const { service, signals } = harness(undefined, beverage);
+  const configure = (accountId: string, enabled: boolean) =>
+    beverage.configureBrewfatherAccount({
+      accountId,
+      userId: "fixture-user",
+      apiKey: "fixture-key",
+      discoveryStatuses: ["Fermenting"],
+      enabled,
+    });
+  configure("default", true);
+  configure("secondary", false);
+  assertHeader(service, "degraded");
+  await beverage.syncBrewfather({
+    fetchFn: () => Promise.resolve(new Response("[]", { status: 200 })),
+  });
+  assertHeader(service, "healthy");
+
+  const addLink = (accountId: string, state: BrewfatherSyncState) => {
+    const id = randomUUID();
+    insertBeverage(database, {
+      id,
+      ownershipType: "brewfather",
+      createdAt: NOW,
+      updatedAt: NOW,
+    });
+    insertBeverageLink(database, {
+      beverageId: id,
+      accountId,
+      sourceBatchId: id,
+      syncState: state,
+      lastSyncedAt: NOW,
+      lastErrorMessage: null,
+      createdAt: NOW,
+      updatedAt: NOW,
+    });
+    return id;
+  };
+  const first = addLink("default", "synced");
+  const countHeaderQueries = () => {
+    statements.length = 0;
+    assertHeader(service, "healthy");
+    assert.ok(statements.some((sql) => sql.includes("brewfather_beverage_links")));
+    assert.ok(
+      statements.every((sql) => !/profiles|recipes|recipe_snapshots|candidate_cache/u.test(sql)),
+    );
+    return statements.length;
+  };
+  const smallQueryCount = countHeaderQueries();
+  for (let index = 0; index < 40; index += 1) addLink("default", "synced");
+  addLink("secondary", "error");
+  assert.equal(countHeaderQueries(), smallQueryCount, "query count must not grow with beverages");
+
+  for (const state of ["pending", "error", "stale"] as const) {
+    updateBeverageLinkState(database, first, state, "Fixture failure", NOW);
+    assertHeader(service, "degraded");
+  }
+  updateBeverageLinkState(database, first, "synced", null, NOW);
+  assertHeader(service, "healthy");
+  const missingLink = randomUUID();
+  insertBeverage(database, {
+    id: missingLink,
+    ownershipType: "brewfather",
+    createdAt: NOW,
+    updatedAt: NOW,
+  });
+  assertHeader(service, "degraded");
+  database.prepare("UPDATE beverages SET ownership_type = 'custom' WHERE id = ?").run(missingLink);
+  assertHeader(service, "healthy");
+
+  beverage.removeBrewfatherApiKey();
+  assertHeader(service, "disconnected");
+  configure("default", false);
+  updateBeverageLinkState(database, first, "stale", null, NOW);
+  assert.deepEqual(beverage.getBrewfatherSyncHealth(), { accounts: [], hasUnsyncedLinks: false });
+  assertHeader(service, "healthy");
+  signals.taps = [];
+  assertHeader(service, "disconnected");
 });
 
 for (const unavailable of ["health", "brewfather", "outbound"] as const) {

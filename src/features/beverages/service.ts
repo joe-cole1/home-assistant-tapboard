@@ -13,6 +13,7 @@ import {
   countBeverages,
   deleteBeverageWithAudit,
   deleteCustomRecipe,
+  hasUnsyncedBrewfatherLinks,
   insertBeverage,
   insertBeverageLink,
   insertCustomProfile,
@@ -126,6 +127,11 @@ export interface BrewfatherStatus {
   readonly totalCandidates: number;
   readonly totalLinkedBeverages: number;
   readonly lastDataUpdateAt: string | null;
+}
+
+export interface BrewfatherSyncHealth {
+  readonly accounts: readonly Pick<BrewfatherStatus, "apiKeyConfigured" | "connectionState">[];
+  readonly hasUnsyncedLinks: boolean;
 }
 
 interface BrewfatherConnectionEvidence {
@@ -1498,7 +1504,33 @@ export class BeverageService {
             Date.parse(current) > Date.parse(latest) ? current : latest,
           );
 
-    const secrets = this.#refreshBrewfatherConnections();
+    return {
+      configured: account !== undefined,
+      ...(account ? { account } : {}),
+      ...this.#brewfatherConnectionStatus(accountId, account, this.#refreshBrewfatherConnections()),
+      totalCandidates: candidates.length,
+      totalLinkedBeverages: links.length,
+      lastDataUpdateAt,
+    };
+  }
+
+  getBrewfatherSyncHealth(): BrewfatherSyncHealth {
+    const accounts = listBrewfatherAccounts(this.#database);
+    const secrets = this.#refreshBrewfatherConnections(accounts);
+    const enabled = accounts.filter((account) => account.enabled);
+    return {
+      accounts: enabled.map((account) =>
+        this.#brewfatherConnectionStatus(account.id, account, secrets),
+      ),
+      hasUnsyncedLinks: enabled.length > 0 && hasUnsyncedBrewfatherLinks(this.#database),
+    };
+  }
+
+  #brewfatherConnectionStatus(
+    accountId: string,
+    account: BrewfatherAccount | undefined,
+    secrets: readonly SecretDescriptor[],
+  ): Pick<BrewfatherStatus, "apiKeyConfigured" | "connectionState"> {
     const evidence = this.#brewfatherConnections.get(accountId);
     const apiKeyConfigured =
       evidence?.apiKeyConfigured ??
@@ -1521,15 +1553,7 @@ export class BeverageService {
       connectionState = "disconnected";
     } else connectionState = evidence.result.partial ? "partial" : "healthy";
 
-    return {
-      configured: account !== undefined,
-      ...(account ? { account } : {}),
-      apiKeyConfigured,
-      connectionState,
-      totalCandidates: candidates.length,
-      totalLinkedBeverages: links.length,
-      lastDataUpdateAt,
-    };
+    return { apiKeyConfigured, connectionState };
   }
 
   listBrewfatherStatuses(): readonly BrewfatherStatus[] {
@@ -1559,8 +1583,9 @@ export class BeverageService {
     return this.#inFlightBrewfatherSync;
   }
 
-  #refreshBrewfatherConnections(): readonly SecretDescriptor[] {
-    const accounts = listBrewfatherAccounts(this.#database);
+  #refreshBrewfatherConnections(
+    accounts = listBrewfatherAccounts(this.#database),
+  ): readonly SecretDescriptor[] {
     let secrets: readonly SecretDescriptor[] = [];
     try {
       secrets = this.#secretsService?.list() ?? [];

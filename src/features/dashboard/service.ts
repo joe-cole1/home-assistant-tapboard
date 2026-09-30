@@ -86,10 +86,8 @@ export class DashboardService {
     }
 
     try {
-      const enabledAccounts = new Set<string>();
-      for (const brewfather of this.#dependencies.beverageService.listBrewfatherStatuses()) {
-        if (brewfather.account?.enabled !== true) continue;
-        enabledAccounts.add(brewfather.account.id);
+      const brewfatherHealth = this.#dependencies.beverageService.getBrewfatherSyncHealth();
+      for (const brewfather of brewfatherHealth.accounts) {
         checks.push(
           !brewfather.apiKeyConfigured || brewfather.connectionState === "disconnected"
             ? "disconnected"
@@ -98,20 +96,7 @@ export class DashboardService {
               : "degraded",
         );
       }
-      if (enabledAccounts.size > 0) {
-        for (const beverage of this.#dependencies.beverageService.listBeverages()) {
-          if (beverage.beverage.ownershipType !== "brewfather") continue;
-          const link = this.#dependencies.beverageService.getBeverage(
-            beverage.beverage.id,
-          ).brewfatherLink;
-          if (
-            link === null ||
-            link === undefined ||
-            (enabledAccounts.has(link.accountId) && link.syncState !== "synced")
-          )
-            checks.push("degraded");
-        }
-      }
+      if (brewfatherHealth.hasUnsyncedLinks) checks.push("degraded");
     } catch {
       checks.push("disconnected");
     }
