@@ -712,34 +712,55 @@ function updateEmptyState() {
 
 async function json(path) {
   const response = await fetch(path, { headers: { accept: "application/json" } });
-  if (!response.ok) return undefined;
+  if (!response.ok) throw new Error(`Refresh failed: HTTP ${response.status}`);
   return response.json();
 }
 
 async function refresh(target) {
-  if (target === "header") {
-    const header = await json("/api/public/dashboard/header");
-    if (header) patchHeader(header);
+  if (reconnectReconciling) {
+    queueDirty(target);
     return;
   }
-  if (target === "ondeck") {
-    const onDeck = await json("/api/public/dashboard/on-deck");
-    if (onDeck) patchOnDeck(onDeck.items);
-    return;
+  const generation = reconnectGeneration;
+  try {
+    let patch;
+    if (target === "header") {
+      const header = await json("/api/public/dashboard/header");
+      patch = () => patchHeader(header);
+    } else if (target === "ondeck") {
+      const onDeck = await json("/api/public/dashboard/on-deck");
+      patch = () => patchOnDeck(onDeck.items);
+    } else if (target === "display") {
+      const shared = await json("/api/public/dashboard/display");
+      patch = () => patchSharedDisplay(shared);
+    } else if (target === "tapwars") {
+      const current = await json("/api/public/tap-wars");
+      patch = () => patchTapWars(current.tapWars);
+    } else {
+      const response = await fetch(`/api/public/dashboard/taps/${encodeURIComponent(target)}`, {
+        headers: { accept: "application/json" },
+      });
+      if (!response.ok && response.status !== 404)
+        throw new Error(`Refresh failed: HTTP ${response.status}`);
+      const tap = response.status === 404 ? undefined : await response.json();
+      patch = () => {
+        if (response.status === 404)
+          grid.querySelector(`[data-tap-id="${CSS.escape(String(target))}"]`)?.remove();
+        else patchTap(tap);
+        updateEmptyState();
+        updateRotation();
+      };
+    }
+    if (generation !== reconnectGeneration) {
+      // An older request must not overwrite a newer authoritative snapshot.
+      queueDirty(target);
+      return;
+    }
+    patch();
+  } catch {
+    if (generation !== reconnectGeneration) queueDirty(target);
+    else void reconnectRefresh();
   }
-  if (target === "display") {
-    const shared = await json("/api/public/dashboard/display");
-    if (shared) patchSharedDisplay(shared);
-    return;
-  }
-  const response = await fetch(`/api/public/dashboard/taps/${encodeURIComponent(target)}`, {
-    headers: { accept: "application/json" },
-  });
-  if (response.status === 404)
-    grid.querySelector(`[data-tap-id="${CSS.escape(String(target))}"]`)?.remove();
-  else if (response.ok) patchTap(await response.json());
-  updateEmptyState();
-  updateRotation();
 }
 
 async function reconnectRefresh() {
@@ -749,6 +770,7 @@ async function reconnectRefresh() {
     return reconnectPromise;
   }
   reconnectReconciling = true;
+  reconnectGeneration += 1;
   reconnectPromise = (async () => {
     try {
       for (;;) {
@@ -1026,15 +1048,10 @@ document.addEventListener("submit", async (event) => {
       },
       body: new URLSearchParams(new FormData(form)).toString(),
     });
-    let payload;
-    try {
-      payload = await response.json();
-    } catch {
-      payload = undefined;
-    }
     announceVote(live, response.ok ? "Vote counted!" : "Vote could not be counted.");
-    const current = await json("/api/public/tap-wars");
-    patchTapWars(current?.tapWars ?? payload?.tapWars ?? null);
+    // Finish the response without making vote feedback depend on parsing its body.
+    void response.json().catch(() => undefined);
+    queueDirty("tapwars");
   } catch {
     announceVote(live, "Vote could not be counted.");
   }
@@ -1047,6 +1064,7 @@ const RECONNECT_RETRY_MS = 1500;
 let reconnectReconciling = false;
 let reconnectDirtyOverflow = false;
 let reconnectPromise;
+let reconnectGeneration = 0;
 
 function queueDirty(target) {
   if (!reconnectReconciling) {
@@ -1080,11 +1098,8 @@ connect(
             if (card.dataset.tapId) queueDirty(card.dataset.tapId);
           }
         }
-      } else if (name === "tap_wars.updated") {
-        void json("/api/public/tap-wars")
-          .then((value) => patchTapWars(value?.tapWars ?? null))
-          .catch(() => undefined);
-      } else queueDirty("header");
+      } else if (name === "tap_wars.updated") queueDirty("tapwars");
+      else queueDirty("header");
     } catch {
       // A malformed ephemeral event is ignored; reconnect remains authoritative.
     }
@@ -1116,8 +1131,6 @@ document.addEventListener("focusout", updateRotation);
 attachOnDeckListeners();
 attachPourPreviewListeners();
 applyPreferences(readPreferences());
-void json("/api/public/tap-wars")
-  .then((value) => patchTapWars(value?.tapWars ?? null))
-  .catch(() => undefined);
+queueDirty("tapwars");
 updateEmptyState();
 updateRotation();

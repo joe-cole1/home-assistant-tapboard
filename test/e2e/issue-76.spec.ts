@@ -824,3 +824,139 @@ test("six cards remain collision-free at supported display sizes and more than s
   );
   await expect(page.locator("[data-tap-id]:visible")).toHaveCount(7);
 });
+
+for (const returnToOriginal of [true, false]) {
+  test(`autosave keeps the latest edit while saving A → B → ${returnToOriginal ? "A" : "C"}`, async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto("/admin/taps");
+    await page
+      .locator("table.tap-list tbody tr")
+      .first()
+      .getByRole("link", { name: "Open", exact: true })
+      .click();
+    const form = await openTapNameForm(page);
+    const name = form.getByLabel("Tap name");
+    const original = await name.inputValue();
+    const intermediate = `${original} pending`;
+    const final = returnToOriginal ? original : `${original} final`;
+    const action = await form.getAttribute("action");
+    expect(action).not.toBeNull();
+    const firstRequest = Promise.withResolvers<void>();
+    const submitted: string[] = [];
+    await page.route(`**${action!}`, async (route) => {
+      if (route.request().method() !== "POST") {
+        await route.continue();
+        return;
+      }
+      const body = route.request().postDataJSON() as { name: string };
+      submitted.push(body.name);
+      if (submitted.length === 1) await firstRequest.promise;
+      await route.continue();
+    });
+    try {
+      await name.fill(intermediate);
+      await name.dispatchEvent("change");
+      await expect.poll(() => submitted).toEqual([intermediate]);
+      await name.fill(final);
+      await name.dispatchEvent("change");
+      firstRequest.resolve();
+      await expect.poll(() => submitted).toEqual([intermediate, final]);
+      await expect(form.locator("[data-autosave-status]")).toHaveText("Saved");
+      await expect(name).toHaveValue(final);
+      await page.reload();
+      const reloaded = await openTapNameForm(page);
+      await expect(reloaded.getByLabel("Tap name")).toHaveValue(final);
+    } finally {
+      firstRequest.resolve();
+    }
+  });
+}
+
+test("failed targeted updates recover through bounded snapshots and preserve card identity", async ({
+  browser,
+}) => {
+  const context = await browser.newContext();
+  const publicPage = await context.newPage();
+  const pageErrors: string[] = [];
+  publicPage.on("pageerror", (error) => pageErrors.push(error.message));
+  const subscribed = publicPage.waitForResponse("**/api/public/events");
+  await publicPage.goto("/");
+  await subscribed;
+  const brand = publicPage.locator(".public-brand");
+  const originalName = (await brand.textContent())!.trim();
+  const card = publicPage.locator('[data-tap-number="1"]');
+  await card.evaluate((node) => {
+    (window as unknown as { recoveryCard: Element }).recoveryCard = node;
+    (window as unknown as { recoveryGraphic: Element }).recoveryGraphic =
+      node.querySelector(".tap-graphic")!;
+  });
+
+  let targetedFailures = 0;
+  const snapshotTimes: number[] = [];
+  await publicPage.route("**/api/public/dashboard/display", async (route) => {
+    if (targetedFailures === 0) {
+      targetedFailures += 1;
+      await route.fulfill({ status: 503, json: { message: "Temporary test failure" } });
+    } else await route.continue();
+  });
+  await publicPage.route("**/api/public/dashboard", async (route) => {
+    snapshotTimes.push(Date.now());
+    if (snapshotTimes.length === 1)
+      await route.fulfill({ status: 503, json: { message: "Retry this snapshot" } });
+    else if (snapshotTimes.length === 2) await route.abort("failed");
+    else await route.continue();
+  });
+
+  const admin = await context.newPage();
+  await login(admin);
+  await saveSharedTapboardName(admin, "Recovered after targeted failure");
+  const savedDisplay = (await (
+    await admin.request.get("/api/public/dashboard/display")
+  ).json()) as { revision: number };
+  await expect.poll(() => targetedFailures).toBe(1);
+  await expect.poll(() => snapshotTimes.length, { timeout: 10_000 }).toBe(3);
+  await expect(publicPage.locator("html")).toHaveAttribute(
+    "data-display-revision",
+    String(savedDisplay.revision),
+  );
+  await expect(brand).toHaveText("Recovered after targeted failure", { timeout: 10_000 });
+  expect(snapshotTimes).toHaveLength(3);
+  expect(snapshotTimes[1]! - snapshotTimes[0]!).toBeGreaterThanOrEqual(1_000);
+  expect(snapshotTimes[2]! - snapshotTimes[1]!).toBeGreaterThanOrEqual(1_000);
+  expect(
+    await publicPage.evaluate(
+      () =>
+        (window as unknown as { recoveryCard: Element }).recoveryCard ===
+          document.querySelector('[data-tap-number="1"]') &&
+        (window as unknown as { recoveryGraphic: Element }).recoveryGraphic ===
+          document.querySelector('[data-tap-number="1"] .tap-graphic'),
+    ),
+  ).toBe(true);
+
+  // A deliberate not-public response removes only that Tap, without recovery.
+  const tap2 = publicPage.locator('[data-tap-number="2"]');
+  const tap2Id = await tap2.getAttribute("data-tap-id");
+  expect(tap2Id).not.toBeNull();
+  await admin.goto(`/admin/taps/${tap2Id!}`);
+  await admin.getByText("Edit identity and serving metadata", { exact: true }).click();
+  await admin.locator('select[name="enabled"]').selectOption("false");
+  const notPublic = publicPage.waitForResponse(
+    (response) =>
+      response.url().endsWith(`/api/public/dashboard/taps/${tap2Id}`) && response.status() === 404,
+  );
+  await admin.getByRole("button", { name: "Save Tap metadata" }).click();
+  await notPublic;
+  await expect(tap2).toHaveCount(0);
+  expect(snapshotTimes).toHaveLength(3);
+
+  await admin.getByText("Edit identity and serving metadata", { exact: true }).click();
+  await admin.locator('select[name="enabled"]').selectOption("true");
+  await admin.getByRole("button", { name: "Save Tap metadata" }).click();
+  await expect(tap2).toHaveCount(1);
+  await saveSharedTapboardName(admin, originalName);
+  await expect(brand).toHaveText(originalName);
+  expect(pageErrors).toEqual([]);
+  await context.close();
+});
