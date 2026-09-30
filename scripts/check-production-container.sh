@@ -3,13 +3,15 @@
 set -Eeuo pipefail
 set +x
 umask 077
+# Keep fixed diagnostics visible even when a helper's raw stderr is private.
+exec 3>&2
 
 qc_phase="prerequisites"
 fail() {
   printf 'Production container check failed: %s\n' "$1" >&2
   exit 1
 }
-trap 'printf "Production container phase failed: %s (line %s)\n" "$qc_phase" "$LINENO" >&2' ERR
+trap 'printf "Production container phase failed: %s (line %s)\n" "$qc_phase" "$LINENO" >&3' ERR
 
 command -v docker >/dev/null 2>&1 || fail "Docker is required; no container proof was run"
 command -v node >/dev/null 2>&1 || fail "Node 24 is required"

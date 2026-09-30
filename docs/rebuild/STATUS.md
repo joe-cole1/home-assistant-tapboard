@@ -1,12 +1,12 @@
 # Tapboard v2 rebuild status
 
 - Architecture: **FROZEN**
-- Current phase: **Issue #80 complete in reviewed PR #120; Issue #81 final acceptance in progress**
+- Current phase: **#80/#81 implementation and final v2 acceptance complete in PRs #120/#121; awaiting review/merge**
 - Current branch: `feat/issue-81-final-acceptance`, stacked on `feat/issue-80-system`
 - Current base: `abcc34b5f99541643f6b5cb61a32651e397fdbf9` (PR #120; not merged)
 - Prepared application version: **2.0.0**, private package; no release publication
 - Current schema: **v22** (`system-administration-and-retention`, additive after v21 simulation)
-- Current validation: **#81 exact final canonical/browser/container/review gates are pending.** #80 exact head `abcc34b5f99541643f6b5cb61a32651e397fdbf9` passed [CI 36747461541](https://github.com/joe-cole1/home-assistant-tapboard/actions/runs/36747461541): 777 Node tests plus format/lint/types/architecture and 40 Chromium tests; local frozen-tree gates and independent final review also passed without waiver. Those results establish #80, not acceptance of the newer #81 diff.
+- Current validation: #81 implementation revision `1643cd70d0e336cfa8559082c155d1b0f50f5ff9` passed all three jobs in [CI 36751654774](https://github.com/joe-cole1/home-assistant-tapboard/actions/runs/36751654774): **848 Node tests**, format/lint/types/architecture/reuse/whitespace, **40 Chromium tests**, and a fresh hardened `linux/amd64` production-container run. Local frozen-source canonical/browser checks and an independent final review passed without waiver. The final documentation/diagnostic reconciliation runs those same three jobs; exact latest-head evidence is recorded in [PR #121](https://github.com/joe-cole1/home-assistant-tapboard/pull/121) and its Checks tab. All three must remain green before merge. #80 exact head `abcc34b5f99541643f6b5cb61a32651e397fdbf9` separately passed [CI 36747461541](https://github.com/joe-cole1/home-assistant-tapboard/actions/runs/36747461541): 777 Node tests plus canonical checks and 40 Chromium tests.
 - Prior packaging validation (historical): **Canonical `npm run check` passed: formatting, lint, types, architecture/reuse checks, and 562/562 tests. The production image built and passed disposable hardened-container smoke tests on linux/amd64. Independent final diff review found no material issues. Browser/E2E and CI checks remain explicitly waived; actual VPS deployment and other architectures are unverified.**
 - Prebaseline: **333 passing tests** (prebaseline evidence, not a current validation result)
 - Frozen v1 source commit: `429cf07e451b64ca1713655a34ffa5ebd376efae`
@@ -39,7 +39,7 @@ The operator approved the isolated saved simulation workspace before #80/#81 on 
 - 16. [#80 — System and local operator functions](https://github.com/joe-cole1/home-assistant-tapboard/issues/80)
 - 17. [#81 — Deployment, documentation, and final acceptance](https://github.com/joe-cole1/home-assistant-tapboard/issues/81)
 
-Issues #66–#79 and #85 are merged. PR #120 delivers #80 and awaits review/merge. The remaining sequence is **#120 → #81 → #65 final acceptance**, then the deferred follow-up issues **#111 → #112 → #113 → #114**. The saved #111 HTTP-boundary branch is a checkpoint, not part of this build. Historical v1 roadmap #22 and Mystery capability #34 are closed as superseded; the frozen v2 target remains authoritative.
+Issues #66–#79 and #85 are merged. [PR #120](https://github.com/joe-cole1/home-assistant-tapboard/pull/120) delivers #80; stacked [PR #121](https://github.com/joe-cole1/home-assistant-tapboard/pull/121) completes #81 and the final #65 gate. Both await review/merge. The remaining sequence is **merge #120 → retarget/recheck/merge #121 → close #65**, then the deferred follow-up issues **#111 → #112 → #113 → #114**. The saved #111 HTTP-boundary branch at `158f80f5f5da105b424c4d89b972341c082161e9` is untouched and remains a checkpoint, not part of this build. Historical v1 roadmap #22 and Mystery capability #34 are closed as superseded; the frozen v2 target remains authoritative.
 
 The past-week audit credits eight merged PRs: #106 Admin refinements/badges, #107 production packaging compatibility, #108 repository instructions, #115 vessel artwork, #116 saved Simulation, #117 Settings/connectivity, #118 autosave/live recovery (closing #110), and #119 bounded Brewfather streaming/current-link rechecks (closing #109). Their historical evidence remains separate from the remaining #80/#81 final gates.
 
@@ -53,7 +53,7 @@ A cancellable/coalesced maintenance timer runs only bounded retention batches: A
 
 The stacked #81 change prepares application version 2.0.0, runnable hardened production Compose with LAN/proxy operator patterns, one resource disposer, outbound lifecycle generations, permanent Brewfather cancellation, declaration-only alias removal, and final README/architecture/ADR/OpenAPI/operator reconciliation. Shutdown stops background producers and SSE before HTTP drain and database close, attempts all cleanup despite errors, and preserves the startup/first shutdown failure. Obsolete work cannot persist late integration evidence.
 
-`npm run check`, separate `npm run test:e2e`, and `bash scripts/check-production-container.sh` are the reproducible gates. The container script owns only a unique disposable project/volume and tests the current image's source, clean initialization, health/SSR, permissions, stdin PIN setup, restart/recreate persistence, degraded local operation, and SIGTERM. The current environment has no Docker daemon; exact hosted-CI execution is required before this gate is credited. Previous PR #107 packaging evidence remains historical.
+`npm run check`, separate `npm run test:e2e`, and `bash scripts/check-production-container.sh` are the reproducible gates. The container script owns only a unique disposable project/volume and tests the current image's source, clean initialization, health/SSR, permissions, stdin PIN setup, restart/recreate persistence, degraded local operation, and SIGTERM. The development environment has no Docker daemon; the successful hosted execution above supplies this container proof. Its image was built from that checkout and exact runtime/source hashes were checked. The first new CI attempt caught unsupported archive copying into tmpfs; fixture I/O now runs as the unprivileged container user, preserving read-only hardening. Previous PR #107 packaging evidence remains historical.
 
 | Frozen acceptance boundary                                    | Evidence in the final gate                                     |
 | ------------------------------------------------------------- | -------------------------------------------------------------- |
@@ -69,6 +69,8 @@ The stacked #81 change prepares application version 2.0.0, runnable hardened pro
 | Hardened image, fresh/restart/recreate/degraded/SIGTERM       | Separate production-container CI job                           |
 | Architecture/reuse/dependency/dead-code/secret artifact audit | Canonical guardrails, tracked-tree/reference/dependency audit  |
 | Independent final security/privacy/lifecycle review           | Fresh read-only final diff review; root resolves every finding |
+
+The final audit retained only the locked `better-sqlite3`/`eta` production dependencies, removed 18 declaration-only internal aliases after reference tracing, retained supported deployment aliases, and found no tracked secret/generated/legacy artifacts in the 382-file tree. Final review's cleanup-error and external-file operator-documentation findings were corrected and independently reconfirmed. The documented configuration update was exercised only on disposable files, preserving other settings and rejecting symlinks.
 
 No final gate is waived. Actual VPS deployment, other CPU architectures and live external integration mutations remain unverified operator boundaries. Review/merge and release/deployment are separate actions. Master #65 and #80/#81 remain open until their implementation PRs are accepted/merged; #111–#114 stay explicitly deferred. See [MANUAL DEV TEST — Issue #81](../../README.md#manual-dev-test--issue-81) and [operator/security guidance](../operations.md).
 
