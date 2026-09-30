@@ -46,7 +46,6 @@ export function readActivities(
 }
 
 export const listActivities = readActivities;
-export const recordActivity = appendActivity;
 
 export function setActivityRetention(
   database: DatabaseExecutor,
@@ -59,8 +58,6 @@ export function setActivityRetention(
   const now = options.now ?? (() => new Date());
   return updateActivityRetention(database, retentionDays, retentionTimestamp(now));
 }
-
-export const getActivityRetention = readActivityRetention;
 
 export interface ActivityPruneOptions extends ActivityClockOptions {
   readonly batchSize?: number;

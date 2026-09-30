@@ -36,7 +36,8 @@ export type BrewfatherErrorCategory =
   | "response_too_large"
   | "invalid_response"
   | "transient"
-  | "configuration";
+  | "configuration"
+  | "disposed";
 
 export class BrewfatherError extends Error {
   readonly category: BrewfatherErrorCategory;
@@ -85,7 +86,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function withinDeadline<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const abort = () => reject(new BrewfatherError("timeout", "Brewfather request timed out."));
+    const abort = () => {
+      signal.removeEventListener("abort", abort);
+      reject(
+        signal.reason instanceof BrewfatherError
+          ? signal.reason
+          : new BrewfatherError("timeout", "Brewfather request timed out."),
+      );
+    };
     if (signal.aborted) abort();
     else signal.addEventListener("abort", abort, { once: true });
     // Remove each read's listener when it settles so chunk count cannot grow the listener set.
@@ -138,6 +146,8 @@ export class BrewfatherAdapter {
 
   #requestTimes: number[] = [];
   #blockedUntil: number = 0;
+  #disposed = false;
+  readonly #controllers = new Set<AbortController>();
 
   constructor(options: BrewfatherAdapterOptions) {
     if (!options.userId || !options.apiKey) {
@@ -158,7 +168,43 @@ export class BrewfatherAdapter {
     this.#retryDelayMs = options.retryDelayMs ?? 100;
   }
 
+  /** Permanently cancel current work; a disposed adapter cannot issue another request. */
+  dispose(): void {
+    if (this.#disposed) return;
+    this.#disposed = true;
+    for (const controller of this.#controllers) {
+      controller.abort(new BrewfatherError("disposed", "Brewfather integration is shut down."));
+    }
+    this.#controllers.clear();
+  }
+
+  #assertActive(): void {
+    if (this.#disposed) {
+      throw new BrewfatherError("disposed", "Brewfather integration is shut down.");
+    }
+  }
+
+  #waitForRetry(delay: number): Promise<void> {
+    this.#assertActive();
+    return new Promise<void>((resolve, reject) => {
+      const controller = new AbortController();
+      const finish = (error?: Error) => {
+        clearTimeout(timer);
+        controller.signal.removeEventListener("abort", abort);
+        this.#controllers.delete(controller);
+        if (error === undefined) resolve();
+        else reject(error);
+      };
+      const abort = () =>
+        finish(new BrewfatherError("disposed", "Brewfather integration is shut down."));
+      const timer = setTimeout(() => finish(), delay);
+      controller.signal.addEventListener("abort", abort, { once: true });
+      this.#controllers.add(controller);
+    });
+  }
+
   #consumeBudget(): void {
+    this.#assertActive();
     const current = this.#now();
     if (current < this.#blockedUntil) {
       throw new BrewfatherError(
@@ -190,8 +236,11 @@ export class BrewfatherAdapter {
     while (true) {
       this.#consumeBudget();
       try {
-        return await this.#requestAttempt(method, path, options);
+        const result = await this.#requestAttempt(method, path, options);
+        this.#assertActive();
+        return result;
       } catch (error: unknown) {
+        this.#assertActive();
         const retryable =
           error instanceof BrewfatherError &&
           (error.category === "timeout" ||
@@ -205,7 +254,7 @@ export class BrewfatherAdapter {
           typeof this.#retryDelayMs === "function"
             ? this.#retryDelayMs(attempt)
             : this.#retryDelayMs;
-        if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
+        if (delay > 0) await this.#waitForRetry(delay);
       }
     }
   }
@@ -215,6 +264,7 @@ export class BrewfatherAdapter {
     path: string,
     options: BrewfatherRequestOptions,
   ): Promise<unknown> {
+    this.#assertActive();
     const url = new URL(path, this.#origin);
     if (options.query !== undefined) {
       for (const [key, value] of Object.entries(options.query)) {
@@ -224,6 +274,9 @@ export class BrewfatherAdapter {
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.#timeoutMs);
+    const clearDeadline = () => clearTimeout(timer);
+    controller.signal.addEventListener("abort", clearDeadline, { once: true });
+    this.#controllers.add(controller);
     let response: Response | undefined;
     let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
     let bodyComplete = false;
@@ -246,6 +299,7 @@ export class BrewfatherAdapter {
         return result;
       });
       response = await withinDeadline(fetching, controller.signal);
+      this.#assertActive();
 
       if (response.status === 404 && options.notFoundAsNull) {
         return null;
@@ -308,6 +362,7 @@ export class BrewfatherAdapter {
         let receivedBytes = 0;
         while (true) {
           const chunk = await withinDeadline(reader.read(), controller.signal);
+          this.#assertActive();
           if (chunk.done) break;
           receivedBytes += chunk.value.byteLength;
           if (receivedBytes > this.#maxResponseBytes) {
@@ -348,6 +403,8 @@ export class BrewfatherAdapter {
         if (!bodyComplete) controller.abort();
         reader?.releaseLock();
         clearTimeout(timer);
+        controller.signal.removeEventListener("abort", clearDeadline);
+        this.#controllers.delete(controller);
       }
     }
   }
@@ -364,6 +421,7 @@ export class BrewfatherAdapter {
         ...(options.startAfter ? { start_after: options.startAfter } : {}),
       },
     });
+    this.#assertActive();
 
     if (!Array.isArray(result)) {
       throw new BrewfatherError("invalid_response", "Brewfather batch list was not an array.");
@@ -382,6 +440,7 @@ export class BrewfatherAdapter {
     readonly failures: readonly { readonly status: string; readonly error: BrewfatherError }[];
     readonly complete: boolean;
   }> {
+    this.#assertActive();
     const batches: Record<string, unknown>[] = [];
     const failures: { readonly status: string; readonly error: BrewfatherError }[] = [];
     let complete = true;
@@ -400,6 +459,7 @@ export class BrewfatherAdapter {
             status,
             ...(startAfter !== undefined ? { startAfter } : {}),
           });
+          this.#assertActive();
           for (const item of page) {
             batches.push({ ...item, status: item.status ?? status });
             if (batches.length >= this.#maxItems) {
@@ -423,6 +483,7 @@ export class BrewfatherAdapter {
           startAfter = nextId;
         }
       } catch (error: unknown) {
+        this.#assertActive();
         complete = false;
         const brewError =
           error instanceof BrewfatherError
@@ -446,6 +507,7 @@ export class BrewfatherAdapter {
     const result = await this.request("GET", `/v2/batches/${encodeURIComponent(batchId)}`, {
       notFoundAsNull: true,
     });
+    this.#assertActive();
     if (result === null || isRecord(result)) return result;
     throw new BrewfatherError("invalid_response", "Brewfather batch was not a record.");
   }
@@ -454,6 +516,7 @@ export class BrewfatherAdapter {
     const result = await this.request("GET", `/v2/recipes/${encodeURIComponent(recipeId)}`, {
       notFoundAsNull: true,
     });
+    this.#assertActive();
     if (result === null || isRecord(result)) return result;
     throw new BrewfatherError("invalid_response", "Brewfather recipe was not a record.");
   }
@@ -466,6 +529,7 @@ export class BrewfatherAdapter {
       body: { status },
       allowTextResponse: true,
     });
+    this.#assertActive();
     if (result === null || typeof result === "string" || isRecord(result)) return result;
     throw new BrewfatherError(
       "invalid_response",

@@ -275,11 +275,67 @@ if [[ -f "$production_dockerignore" ]]; then
 fi
 
 if [[ -f compose.production.example.yaml ]]; then
-  if ! grep -Eq '^[[:space:]]*image:[[:space:]]*[^[:space:]#]+' compose.production.example.yaml; then
-    report "[production-example] compose.production.example.yaml must declare an image:"
+  if [[ ! -f "$production_dockerfile" || ! -f "$production_dockerignore" ]]; then
+    report "[production-example] compose.production.example.yaml requires the coherent production Dockerfile pair"
   fi
-  if grep -Eq 'build:|Dockerfile\.dev' compose.production.example.yaml; then
-    report "[production-example] compose.production.example.yaml must not reference build: or Dockerfile.dev"
+
+  # Freeze the reviewed deployment content, ignoring only blank/comment lines
+  # and trailing whitespace. Unlike keyword checks, this also rejects duplicate
+  # YAML keys, extra writable mounts, privilege overrides, and secret defaults.
+  approved_production_compose="$(cat <<'YAML'
+services:
+  tapboard:
+    image: ${TAPBOARD_IMAGE:-tapboard:local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    pull_policy: never
+    env_file:
+      - path: ${TAPBOARD_ENV_FILE:-.env}
+        required: false
+    environment:
+      NODE_ENV: production
+      TAPBOARD_HOST: 0.0.0.0
+      TAPBOARD_PORT: "3005"
+      TAPBOARD_DATABASE_PATH: /app/data/tapboard-v2.sqlite3
+      TAPBOARD_EXTERNAL_ORIGIN: ${TAPBOARD_EXTERNAL_ORIGIN:-http://127.0.0.1:3005}
+      TAPBOARD_SHUTDOWN_GRACE_MS: "5000"
+    ports:
+      - "${TAPBOARD_PUBLISH_ADDRESS:-127.0.0.1}:${TAPBOARD_PUBLISH_PORT:-3005}:3005"
+    user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    init: true
+    stop_signal: SIGTERM
+    stop_grace_period: 15s
+    restart: unless-stopped
+    volumes:
+      - tapboard-data:/app/data
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - >-
+          fetch("http://127.0.0.1:3005/healthz", { signal: AbortSignal.timeout(2500) })
+          .then((response) => process.exit(response.status === 200 ? 0 : 1))
+          .catch(() => process.exit(1))
+      interval: 5s
+      timeout: 3s
+      start_period: 5s
+      retries: 12
+volumes:
+  tapboard-data:
+YAML
+  )"
+  actual_production_compose="$(sed -E '/^[[:space:]]*(#|$)/d; s/[[:space:]]+$//' compose.production.example.yaml)"
+  if [[ "$actual_production_compose" != "$approved_production_compose" ]]; then
+    report "[production-example] compose.production.example.yaml must match the approved production build, canonical paths, exposure knobs, and hardening contract"
   fi
 fi
 

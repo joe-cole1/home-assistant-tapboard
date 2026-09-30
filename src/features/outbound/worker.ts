@@ -104,10 +104,11 @@ export class OutboundWorker {
   readonly #clock: OutboundWorkerClock | undefined;
   readonly #onError: ((error: unknown) => void) | undefined;
   readonly #onStatusChanged: OutboundWorkerOptions["onStatusChanged"];
-  readonly #inFlightDestinations = new Set<string>();
+  readonly #inFlightDestinations = new Map<string, number>();
   #running = false;
   #stopRequested = false;
-  #polling = false;
+  #generation = 0;
+  #pollingGeneration: number | undefined;
   #timer: unknown = undefined;
 
   constructor(options: OutboundWorkerOptions) {
@@ -137,25 +138,51 @@ export class OutboundWorker {
     if (this.#running) return;
     this.#stopRequested = false;
     this.#running = true;
+    const generation = this.#generation;
     this.#timer = this.#setInterval(() => {
-      void this.pollOnce().catch((error: unknown) => this.#onError?.(error));
+      if (!this.#isCurrent(generation) || !this.#running) return;
+      void this.#pollOnce(generation).catch((error: unknown) =>
+        this.#reportError(error, generation),
+      );
     }, this.#pollIntervalMs);
-    void this.#probeEnabledHomeAssistant().catch((error: unknown) => this.#onError?.(error));
-    void this.pollOnce().catch((error: unknown) => this.#onError?.(error));
+    void this.#probeEnabledHomeAssistant(generation).catch((error: unknown) =>
+      this.#reportError(error, generation),
+    );
+    void this.#pollOnce(generation).catch((error: unknown) => this.#reportError(error, generation));
   }
 
   stop(): void {
-    if (!this.#running) return;
+    if (this.#stopRequested) return;
+    // Constructor-time manual polls and lifecycle probes also belong to this
+    // generation, even when start() has never been called.
     this.#stopRequested = true;
     this.#running = false;
-    if (this.#timer !== undefined) this.#clearInterval(this.#timer);
+    this.#generation += 1;
+    const timer = this.#timer;
     this.#timer = undefined;
-    this.#transports.stop?.();
+    this.#pollingGeneration = undefined;
+    this.#inFlightDestinations.clear();
+    let failure: { readonly error: unknown } | undefined;
+    try {
+      if (timer !== undefined) this.#clearInterval(timer);
+    } catch (error) {
+      failure = { error };
+    }
+    try {
+      this.#transports.stop?.();
+    } catch (error) {
+      failure ??= { error };
+    }
+    if (failure) throw failure.error;
   }
 
-  async pollOnce(): Promise<number> {
-    if (this.#polling) return 0;
-    this.#polling = true;
+  pollOnce(): Promise<number> {
+    return this.#pollOnce(this.#generation);
+  }
+
+  async #pollOnce(generation: number): Promise<number> {
+    if (!this.#isCurrent(generation) || this.#pollingGeneration === generation) return 0;
+    this.#pollingGeneration = generation;
     try {
       const current = now(this.#clock);
       const availableCapacity = this.#concurrency - this.#inFlightDestinations.size;
@@ -169,37 +196,44 @@ export class OutboundWorker {
       );
       const tasks: Promise<void>[] = [];
       for (const claim of claims) {
+        if (!this.#isCurrent(generation)) break;
         if (this.#inFlightDestinations.has(claim.destinationId)) {
           releaseClaim(this.#database, claim, current.toISOString());
           continue;
         }
-        this.#inFlightDestinations.add(claim.destinationId);
+        this.#inFlightDestinations.set(claim.destinationId, generation);
         tasks.push(
-          this.#processClaim(claim).finally(() =>
-            this.#inFlightDestinations.delete(claim.destinationId),
-          ),
+          this.#processClaim(claim, generation).finally(() => {
+            if (this.#inFlightDestinations.get(claim.destinationId) === generation)
+              this.#inFlightDestinations.delete(claim.destinationId);
+          }),
         );
       }
       await Promise.all(tasks);
       return tasks.length;
     } finally {
-      this.#polling = false;
+      if (this.#pollingGeneration === generation) this.#pollingGeneration = undefined;
     }
   }
 
   /** Lifecycle callback used by the application when a destination is enabled. */
   onDestinationEnabled(destinationId: string): void {
-    void this.#probeHomeAssistant(destinationId).catch((error: unknown) => this.#onError?.(error));
+    const generation = this.#generation;
+    void this.#probeHomeAssistant(destinationId, generation).catch((error: unknown) =>
+      this.#reportError(error, generation),
+    );
   }
 
   /** Rebind HA after token replacement; webhooks are intentionally not probed. */
   onDestinationCredentialsChanged(destinationId: string): void {
+    if (this.#stopRequested) return;
     this.#transports.closeDestination?.(destinationId);
     this.onDestinationEnabled(destinationId);
   }
 
   /** Lifecycle callback used by the application when disabled or retired. */
   onDestinationDisabled(destinationId: string): void {
+    if (this.#stopRequested) return;
     this.#transports.closeDestination?.(destinationId);
   }
 
@@ -209,6 +243,8 @@ export class OutboundWorker {
 
   /** Durable evidence from the current persistent HA connection binding. */
   onHomeAssistantConnectionState(event: HomeAssistantConnectionStateEvent): void {
+    const generation = this.#generation;
+    if (!this.#isCurrent(generation)) return;
     this.#database.withTransaction(() => {
       const timestamp = now(this.#clock).toISOString();
       const destination = listDestinations(this.#database, {
@@ -237,6 +273,7 @@ export class OutboundWorker {
         event.destinationId,
         normalized,
         timestamp,
+        generation,
         profileRevision,
         event.destinationVersionId,
         event.bindingGeneration,
@@ -244,7 +281,8 @@ export class OutboundWorker {
     });
   }
 
-  async #processClaim(claim: DeliveryClaim): Promise<void> {
+  async #processClaim(claim: DeliveryClaim, generation: number): Promise<void> {
+    if (!this.#isCurrent(generation)) return;
     const timestamp = now(this.#clock).toISOString();
     const config = readClaimConfiguration(this.#database, claim, descriptors(this.#secrets));
     if (
@@ -260,6 +298,7 @@ export class OutboundWorker {
     try {
       input = this.#transportInput(config.destination, config.version, claim.envelope);
     } catch (error) {
+      if (!this.#isCurrent(generation)) return;
       const message = error instanceof Error ? error.message : "missing outbound secret";
       if (message === "missing token") {
         markTokenMissing(this.#database, claim.destinationId, timestamp);
@@ -281,6 +320,7 @@ export class OutboundWorker {
     }
 
     let result: TransportAttemptResult | OutboundTransportOutcome;
+    if (!this.#isCurrent(generation)) return;
     try {
       result = await promiseLike(this.#transports.send(input));
     } catch {
@@ -289,7 +329,7 @@ export class OutboundWorker {
     // Graceful shutdown deliberately leaves an unresolved lease for normal
     // expiry/reclaim. Transport teardown is not evidence of a delivery
     // failure and must not consume retry horizon or terminalize work.
-    if (this.#stopRequested) return;
+    if (!this.#isCurrent(generation)) return;
     const normalized = normalizeResult(result);
     this.#database.withTransaction(() => {
       // Sample time only after SQLite grants the write transaction. A wait on
@@ -309,17 +349,18 @@ export class OutboundWorker {
         claim.destinationId,
         normalized,
         completionTimestamp,
+        generation,
         config.profileRevision,
         config.version.id,
         input.bindingGeneration,
       );
     });
     if (
-      !this.#stopRequested &&
+      this.#isCurrent(generation) &&
       config.destination.transport === "home_assistant" &&
       config.version.id !== config.destination.currentVersion?.id
     ) {
-      await this.#probeHomeAssistant(claim.destinationId);
+      await this.#probeHomeAssistant(claim.destinationId, generation);
     }
   }
 
@@ -373,7 +414,8 @@ export class OutboundWorker {
     };
   }
 
-  async #probeEnabledHomeAssistant(): Promise<void> {
+  async #probeEnabledHomeAssistant(generation: number): Promise<void> {
+    if (!this.#isCurrent(generation)) return;
     const destinations = listDestinations(this.#database, {
       secrets: descriptors(this.#secrets),
       now: now(this.#clock),
@@ -386,11 +428,12 @@ export class OutboundWorker {
             destination.retiredAt === null &&
             destination.transport === "home_assistant",
         )
-        .map((destination) => this.#probeHomeAssistant(destination.id)),
+        .map((destination) => this.#probeHomeAssistant(destination.id, generation)),
     );
   }
 
-  async #probeHomeAssistant(destinationId: string): Promise<void> {
+  async #probeHomeAssistant(destinationId: string, generation: number): Promise<void> {
+    if (!this.#isCurrent(generation)) return;
     if (this.#transports.ensureHealthy === undefined && this.#transports.connect === undefined)
       return;
     const destination = listDestinations(this.#database, {
@@ -438,6 +481,7 @@ export class OutboundWorker {
     } catch {
       result = { outcome: "retryable_failure", errorCode: "ha_probe_failed" };
     }
+    if (!this.#isCurrent(generation)) return;
     const normalized = normalizeResult(result);
     const timestamp = now(this.#clock).toISOString();
     this.#database.withTransaction(() => {
@@ -445,6 +489,7 @@ export class OutboundWorker {
         destinationId,
         normalized,
         timestamp,
+        generation,
         profileRevision,
         version.id,
         bindingGeneration,
@@ -456,10 +501,12 @@ export class OutboundWorker {
     destinationId: string,
     result: ReturnType<typeof normalizeResult>,
     timestamp: string,
+    generation: number,
     expectedRevision?: number,
     expectedVersionId?: string,
     expectedCredentialRevision?: string,
   ): void {
+    if (!this.#isCurrent(generation)) return;
     if (
       expectedCredentialRevision !== undefined &&
       expectedCredentialRevision !==
@@ -524,6 +571,19 @@ export class OutboundWorker {
 
   #setInterval(callback: () => void, delayMs: number): unknown {
     return this.#clock?.setInterval?.(callback, delayMs) ?? setInterval(callback, delayMs);
+  }
+
+  #isCurrent(generation: number): boolean {
+    return !this.#stopRequested && this.#generation === generation;
+  }
+
+  #reportError(error: unknown, generation: number): void {
+    if (!this.#isCurrent(generation)) return;
+    try {
+      this.#onError?.(error);
+    } catch {
+      // Reporting a background failure cannot create an unhandled rejection.
+    }
   }
 
   #clearInterval(handle: unknown): void {

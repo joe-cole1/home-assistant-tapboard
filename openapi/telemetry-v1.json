@@ -3,7 +3,7 @@
   "info": {
     "title": "Tapboard Telemetry Ingestion API",
     "version": "1.0.0",
-    "description": "Versioned, deterministic telemetry ingestion for machine clients. Requests use the snake_case wire contract. Single-sample JSON bodies are limited to 16 KiB and batch JSON bodies to 256 KiB. Timestamps must be strict RFC3339 with an uppercase T and explicit uppercase Z or +/-HH:MM offset; Tapboard canonicalizes them to UTC ISO-8601 milliseconds."
+    "description": "Versioned, deterministic telemetry ingestion for machine clients. Requests use the snake_case wire contract. Single-sample JSON bodies are limited to 16 KiB and batch JSON bodies to 256 KiB. Timestamps must be strict RFC3339 with an uppercase T and explicit uppercase Z or +/-HH:MM offset; Tapboard canonicalizes them to UTC ISO-8601 milliseconds. Operational defaults are a 100-sample batch, 300-second future skew, 21600-second reconnect/raw retention, 86400-second receipt retention, and a per-source token bucket of 600 samples/minute with a 100-sample burst. The configured batch ceiling may be lower than the structural 100-item maximum. Installation bounds: batch 1-100, skew 0-3600 seconds, reconnect 60-86400 seconds, raw retention 300-86400 seconds, receipt retention 3600-604800 seconds, rate 1-6000 samples/minute, burst 1-1000 samples. Receipt retention must cover both raw retention and reconnect; the batch ceiling cannot exceed the burst. Exact duplicate receipt lookup occurs before rate admission; clients should reconnect within the configured horizon. Pruning raw measurements precedes receipts and preserves accepted projection state."
   },
   "servers": [
     {
@@ -94,7 +94,7 @@
     "/api/v1/telemetry/batch": {
       "post": {
         "summary": "Ingest a telemetry batch",
-        "description": "Submit 1-100 samples. The request body is limited to 256 KiB. Structural failures use the normal HTTP error responses. Per-item durable conflicts and rate-limit outcomes are represented in the 200 response and do not turn the batch into HTTP 409 or HTTP 429.",
+        "description": "Submit 1-100 samples. The request body is limited to 256 KiB. Structural failures use the normal HTTP error responses. Per-item durable conflicts and rate-limit outcomes are represented in the 200 response and do not turn the batch into HTTP 409 or HTTP 429. The installation can configure a smaller batch ceiling, which is validated before any item has effects.",
         "operationId": "ingestTelemetryBatch",
         "security": [
           {

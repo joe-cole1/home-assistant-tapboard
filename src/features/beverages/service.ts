@@ -59,6 +59,7 @@ import {
   validateUpdatePresentationOverridesInput,
 } from "./beverage-validation.ts";
 import { BrewfatherSyncCoordinator, type SyncOptions, type SyncResult } from "./brewfather/sync.ts";
+import { BrewfatherError } from "./brewfather/adapter.ts";
 import { BEVERAGE_SENSORY_AXES, BEVERAGE_TYPES } from "./types.ts";
 import type {
   Beverage,
@@ -193,6 +194,7 @@ export class BeverageService {
   #inFlightBrewfatherSync?: Promise<readonly SyncResult[]> | undefined;
   #startupTimer?: NodeJS.Timeout | undefined;
   #periodicTimer?: NodeJS.Timeout | undefined;
+  #disposed = false;
 
   constructor(database: DatabaseExecutor, options: BeverageServiceOptions = {}) {
     this.#database = database;
@@ -213,6 +215,7 @@ export class BeverageService {
     } = {},
   ): void {
     this.stopPeriodicSync();
+    if (this.#disposed) return;
     const initialDelay = options.initialDelayMs ?? 1_000;
     const interval = options.intervalMs ?? 3_600_000;
 
@@ -235,6 +238,14 @@ export class BeverageService {
       clearInterval(this.#periodicTimer);
       this.#periodicTimer = undefined;
     }
+  }
+
+  /** Permanently stop outbound work before Application closes its database. */
+  dispose(): void {
+    if (this.#disposed) return;
+    this.#disposed = true;
+    this.stopPeriodicSync();
+    this.#syncCoordinator.dispose();
   }
 
   getSettings(): BeverageSettings {
@@ -1567,6 +1578,9 @@ export class BeverageService {
   }
 
   async syncBrewfather(options: SyncOptions = {}): Promise<readonly SyncResult[]> {
+    if (this.#disposed) {
+      throw new BrewfatherError("disposed", "Brewfather integration is shut down.");
+    }
     if (!this.#secretsService) {
       throw new ApplicationError({
         category: "internal",
@@ -1643,8 +1657,11 @@ export class BeverageService {
         densityExtensionPort: this.#densityExtensionPort,
       });
     } catch (error) {
-      this.#recordBrewfatherSyncEvidence(startedWith);
+      if (!this.#disposed) this.#recordBrewfatherSyncEvidence(startedWith);
       throw error;
+    }
+    if (this.#disposed) {
+      throw new BrewfatherError("disposed", "Brewfather integration is shut down.");
     }
     this.#recordBrewfatherSyncEvidence(startedWith, results);
     this.#onSyncCompleted?.(results);
@@ -1655,6 +1672,7 @@ export class BeverageService {
     startedWith: ReadonlyMap<string, BrewfatherConnectionEvidence>,
     results?: readonly SyncResult[],
   ): void {
+    if (this.#disposed) return;
     this.#refreshBrewfatherConnections();
     const now = this.#now().getTime();
     for (const [accountId, evidence] of startedWith) {
@@ -1692,6 +1710,9 @@ export class BeverageService {
     readonly outcome: "not_applicable" | "already_terminal" | "completed" | "failed";
     readonly message?: string;
   }> {
+    if (this.#disposed) {
+      return { outcome: "failed", message: "Brewfather integration is shut down." };
+    }
     if (!this.#secretsService) {
       return {
         outcome: "failed",

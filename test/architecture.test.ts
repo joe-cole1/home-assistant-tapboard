@@ -62,6 +62,14 @@ void test("the real worktree architecture checker is syntactically valid", () =>
   execFileSync("bash", ["-n", checker]);
 });
 
+void test("the production container smoke script and fixture are syntactically valid", () => {
+  execFileSync("bash", ["-n", join(repositoryRoot, "scripts/check-production-container.sh")]);
+  execFileSync(process.execPath, [
+    "--check",
+    join(repositoryRoot, "test/fixtures/production-container-smoke.mjs"),
+  ]);
+});
+
 void test("legitimate Foundation topology passes", () => {
   const result = runFixture({
     "src/main.ts":
@@ -113,6 +121,10 @@ void test("allows the exact coherent development container set", () => {
 const productionDockerfile = readFileSync(join(repositoryRoot, "Dockerfile"), "utf8");
 const productionDockerignore = readFileSync(
   join(repositoryRoot, "Dockerfile.dockerignore"),
+  "utf8",
+);
+const productionCompose = readFileSync(
+  join(repositoryRoot, "compose.production.example.yaml"),
   "utf8",
 );
 
@@ -204,29 +216,144 @@ for (const [name, mutate] of [
   });
 }
 
-void test("allows the v2 environment reference and exact provisional production example", () => {
+void test("allows the environment reference and runnable hardened production example", () => {
   const result = runFixture({
+    Dockerfile: productionDockerfile,
+    "Dockerfile.dockerignore": productionDockerignore,
     ".env.example": "TAPBOARD_HOST=127.0.0.1\n",
-    "compose.production.example.yaml":
-      "services:\n  tapboard:\n    image: example.invalid/tapboard:production-image-not-published\n",
+    "compose.production.example.yaml": productionCompose,
   });
 
   assert.equal(result.status, 0, result.output);
   assert.match(result.output, /Architecture guardrails passed\./);
 });
 
-for (const [name, contents] of [
+void test("production example requires its production Dockerfile pair", () => {
+  const result = runFixture({ "compose.production.example.yaml": productionCompose });
+
+  assert.notEqual(result.status, 0, result.output);
+  assert.match(result.output, /\[production-example\]/);
+  assert.match(result.output, /coherent production Dockerfile pair/);
+});
+
+void test("production example permits comments and blank lines without changing content", () => {
+  const result = runFixture({
+    Dockerfile: productionDockerfile,
+    "Dockerfile.dockerignore": productionDockerignore,
+    "compose.production.example.yaml": `# Operator guidance\n\n${productionCompose}\n`,
+  });
+
+  assert.equal(result.status, 0, result.output);
+});
+
+for (const [name, mutate] of [
   [
-    "build",
-    "services:\n  tapboard:\n    image: example.invalid/tapboard:placeholder\n    build: .\n",
+    "placeholder image",
+    (contents: string) =>
+      contents.replace("${TAPBOARD_IMAGE:-tapboard:local}", "example.invalid/tapboard:placeholder"),
   ],
   [
-    "Dockerfile.dev",
-    "services:\n  tapboard:\n    image: example.invalid/tapboard:placeholder\n    command: Dockerfile.dev\n",
+    "development Dockerfile",
+    (contents: string) => contents.replace("dockerfile: Dockerfile", "dockerfile: Dockerfile.dev"),
+  ],
+  ["remote build context", (contents: string) => contents.replace("context: .", "context: /tmp")],
+  ["root runtime user", (contents: string) => contents.replace('user: "1000:1000"', 'user: "0:0"')],
+  [
+    "writable root filesystem",
+    (contents: string) => contents.replace("read_only: true", "read_only: false"),
+  ],
+  [
+    "duplicate writable root override",
+    (contents: string) =>
+      contents.replace("read_only: true", "read_only: true\n    read_only: false"),
+  ],
+  [
+    "hardening present only in comments",
+    (contents: string) => contents.replace("    read_only: true", "    # read_only: true"),
+  ],
+  ["executable tmpfs", (contents: string) => contents.replace("rw,noexec,nosuid", "rw,exec,suid")],
+  ["unbounded tmpfs", (contents: string) => contents.replace("size=16m", "size=1g")],
+  [
+    "retained capabilities",
+    (contents: string) => contents.replace("      - ALL", "      - NET_RAW"),
+  ],
+  [
+    "new privileges",
+    (contents: string) => contents.replace("no-new-privileges:true", "no-new-privileges:false"),
+  ],
+  [
+    "privileged mode",
+    (contents: string) => contents.replace("    init: true", "    privileged: true"),
+  ],
+  ["missing init", (contents: string) => contents.replace("    init: true", "    init: false")],
+  [
+    "hard kill",
+    (contents: string) => contents.replace("stop_signal: SIGTERM", "stop_signal: SIGKILL"),
+  ],
+  [
+    "short shutdown timeout",
+    (contents: string) => contents.replace("stop_grace_period: 15s", "stop_grace_period: 1s"),
+  ],
+  [
+    "v1 database",
+    (contents: string) => contents.replace("tapboard-v2.sqlite3", "tapboard.sqlite3"),
+  ],
+  [
+    "extra backup mount",
+    (contents: string) =>
+      contents.replace(
+        "      - tapboard-data:/app/data",
+        "      - tapboard-data:/app/data\n      - ./backups:/app/backups",
+      ),
+  ],
+  [
+    "host networking",
+    (contents: string) =>
+      contents.replace(
+        "    restart: unless-stopped",
+        "    network_mode: host\n    restart: unless-stopped",
+      ),
+  ],
+  [
+    "public bind default",
+    (contents: string) =>
+      contents.replace(
+        "${TAPBOARD_PUBLISH_ADDRESS:-127.0.0.1}",
+        "${TAPBOARD_PUBLISH_ADDRESS:-0.0.0.0}",
+      ),
+  ],
+  [
+    "legacy health port",
+    (contents: string) =>
+      contents.replace("http://127.0.0.1:3005/healthz", "http://127.0.0.1:3000/healthz"),
+  ],
+  [
+    "secret environment default",
+    (contents: string) =>
+      contents.replace(
+        "      NODE_ENV: production",
+        "      NODE_ENV: production\n      TAPBOARD_SECRET_KEY: placeholder",
+      ),
+  ],
+  [
+    "missing canonical public origin",
+    (contents: string) =>
+      contents.replace(
+        "      TAPBOARD_EXTERNAL_ORIGIN: ${TAPBOARD_EXTERNAL_ORIGIN:-http://127.0.0.1:3005}\n",
+        "",
+      ),
+  ],
+  [
+    "required operator environment file",
+    (contents: string) => contents.replace("required: false", "required: true"),
   ],
 ] as const) {
-  void test(`rejects the provisional production example using ${name}`, () => {
-    const result = runFixture({ "compose.production.example.yaml": contents });
+  void test(`rejects the production example with ${name}`, () => {
+    const result = runFixture({
+      Dockerfile: productionDockerfile,
+      "Dockerfile.dockerignore": productionDockerignore,
+      "compose.production.example.yaml": mutate(productionCompose),
+    });
 
     assert.notEqual(result.status, 0, result.output);
     assert.match(result.output, /\[production-example\]/);

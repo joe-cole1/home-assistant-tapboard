@@ -162,7 +162,7 @@ export class WorkspaceApplication implements Application, SimulationController {
       }
       return address;
     } catch (error) {
-      await this.stop();
+      await this.stop().catch(() => this.#reportCleanupFailure("workspace"));
       throw error;
     }
   }
@@ -417,13 +417,26 @@ export class WorkspaceApplication implements Application, SimulationController {
       this.#simulationApp = app;
       this.#runner?.start();
     } catch (error) {
-      this.#runner?.stop();
-      await app.stop();
+      const runner = this.#runner;
       this.#simulation = undefined;
       this.#simulationApp = undefined;
       this.#simulationRouter = undefined;
       this.#runner = undefined;
+      try {
+        runner?.stop();
+      } catch {
+        this.#reportCleanupFailure("simulation-runner");
+      }
+      await app.stop().catch(() => this.#reportCleanupFailure("simulation"));
       throw error;
+    }
+  }
+
+  #reportCleanupFailure(resource: "workspace" | "simulation-runner" | "simulation"): void {
+    try {
+      this.#logger.error("Workspace cleanup failed", { resource });
+    } catch {
+      // Reporting cannot replace the original failure or skip another disposer.
     }
   }
 
@@ -447,30 +460,56 @@ export class WorkspaceApplication implements Application, SimulationController {
   }
 
   async #closeSimulation(): Promise<void> {
-    this.#runner?.stop();
+    const runner = this.#runner;
+    const app = this.#simulationApp;
+    this.#simulationApp = undefined;
+    this.#simulation = undefined;
+    this.#simulationRouter = undefined;
+    this.#runner = undefined;
+    let failure: { readonly error: unknown } | undefined;
     try {
-      await this.#simulationApp?.stop();
-    } finally {
-      this.#simulationApp = undefined;
-      this.#simulation = undefined;
-      this.#simulationRouter = undefined;
-      this.#runner = undefined;
+      runner?.stop();
+    } catch (error) {
+      failure = { error };
     }
+    try {
+      await app?.stop();
+    } catch (error) {
+      failure ??= { error };
+    }
+    if (failure) throw failure.error;
   }
 
   stop(): Promise<void> {
     this.#stopPromise ??= (async () => {
       this.#stopping = true;
-      this.#runner?.stop();
-      this.#simulation?.liveUpdates.disconnectAll();
+      const runner = this.#runner;
+      this.#runner = undefined;
+      let failure: { readonly error: unknown } | undefined;
+      try {
+        runner?.stop();
+      } catch (error) {
+        failure = { error };
+      }
+      try {
+        this.#simulation?.liveUpdates.disconnectAll();
+      } catch (error) {
+        failure ??= { error };
+      }
       // Embedded composition can still be opening when a host shutdown arrives.
       if (this.#opening) await this.#opening.catch(() => undefined);
       if (this.#transitionWork) await this.#transitionWork.catch(() => undefined);
       try {
         await this.#primary.stop();
-      } finally {
-        await this.#closeSimulation();
+      } catch (error) {
+        failure ??= { error };
       }
+      try {
+        await this.#closeSimulation();
+      } catch (error) {
+        failure ??= { error };
+      }
+      if (failure) throw failure.error;
     })();
     return this.#stopPromise;
   }
