@@ -20,7 +20,7 @@ import {
 } from "../repository.ts";
 import { resolveBeverageDensity } from "../density.ts";
 import { resolveLinkedPresentation } from "../presentation.ts";
-import { BrewfatherAdapter } from "./adapter.ts";
+import { BrewfatherAdapter, BrewfatherError } from "./adapter.ts";
 import {
   STATUS_SET,
   sanitizeBatchSummary,
@@ -41,6 +41,16 @@ export interface SyncResult {
   readonly candidatesFound: number;
   readonly durationMs: number;
   readonly error?: string;
+  readonly authenticationFailed?: boolean;
+  /** True only when this run received a successful response from Brewfather. */
+  readonly connectionVerified?: boolean;
+}
+
+function isAuthenticationFailure(error: unknown): boolean {
+  return (
+    error instanceof BrewfatherError &&
+    (error.category === "auth" || error.category === "forbidden")
+  );
 }
 
 export interface SyncOptions {
@@ -178,6 +188,7 @@ export class BrewfatherSyncCoordinator {
         linkedErrors: 0,
         candidatesFound: 0,
         durationMs: Date.now() - start,
+        connectionVerified: false,
         error: "Brewfather API key is not configured or secret decryption is unavailable.",
       };
     }
@@ -186,6 +197,8 @@ export class BrewfatherSyncCoordinator {
 
     let linkedSynced = 0;
     let linkedErrors = 0;
+    let authenticationFailed = false;
+    let connectionVerified = false;
 
     // 2. LINKED BATCHES PRIORITY: Synchronize all active linked beverages
     const allLinks = listBeverageLinks(database).filter((l) => l.accountId === account.id);
@@ -205,6 +218,7 @@ export class BrewfatherSyncCoordinator {
           linkedErrors += 1;
           continue;
         }
+        connectionVerified = true;
 
         // Sanitize source profile outside transaction
         const sanitizedProfile = sanitizeBatchToSourceProfile(batchData);
@@ -281,6 +295,7 @@ export class BrewfatherSyncCoordinator {
 
         linkedSynced += 1;
       } catch (error: unknown) {
+        authenticationFailed ||= isAuthenticationFailure(error);
         const rawMessage = error instanceof Error ? error.message : "Sync error";
         const errorMessage = sanitizeErrorMessage(rawMessage, 255);
         updateBeverageLinkState(database, link.beverageId, "error", errorMessage, nowIso);
@@ -295,7 +310,9 @@ export class BrewfatherSyncCoordinator {
       const { batches, failures, complete } = await adapter.listBatchesByStatuses(
         account.discoveryStatuses,
       );
+      connectionVerified ||= account.discoveryStatuses.length > 0 && failures.length === 0;
       if (failures.length > 0) {
+        authenticationFailed ||= failures.some((failure) => isAuthenticationFailure(failure.error));
         candidateError = failures.map((f) => `${f.status}: ${f.error.message}`).join("; ");
       }
       for (const rawBatch of batches) {
@@ -343,6 +360,7 @@ export class BrewfatherSyncCoordinator {
         }
       }
     } catch (error: unknown) {
+      authenticationFailed ||= isAuthenticationFailure(error);
       candidateError = error instanceof Error ? error.message : "Candidate discovery error";
     }
 
@@ -372,7 +390,9 @@ export class BrewfatherSyncCoordinator {
       linkedErrors,
       candidatesFound,
       durationMs: Date.now() - start,
+      connectionVerified,
       ...(safeCandidateError !== undefined ? { error: safeCandidateError } : {}),
+      ...(authenticationFailed ? { authenticationFailed: true } : {}),
     };
   }
 

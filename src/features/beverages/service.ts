@@ -5,7 +5,7 @@ import {
 } from "../../infrastructure/database/connection.ts";
 import { ApplicationError } from "../../shared/errors.ts";
 import { appendActivity } from "../activity/operations.ts";
-import type { SecretsService } from "../secrets/service.ts";
+import type { SecretDescriptor, SecretsService } from "../secrets/service.ts";
 import { resolveBeverageDensity } from "./density.ts";
 import { resolveCustomPresentation, resolveLinkedPresentation } from "./presentation.ts";
 import {
@@ -19,6 +19,7 @@ import {
   listBeverageLinks,
   listBeveragePage,
   listBeverages,
+  listBrewfatherAccounts,
   listCandidates,
   readBeverage,
   readBeverageLink,
@@ -114,6 +115,32 @@ export interface BeverageServiceOptions {
   readonly onSyncCompleted?: (results: readonly SyncResult[]) => void;
 }
 
+export type BrewfatherConnectionState =
+  "disabled" | "unknown" | "healthy" | "partial" | "disconnected";
+
+export interface BrewfatherStatus {
+  readonly configured: boolean;
+  readonly account?: BrewfatherAccount;
+  readonly apiKeyConfigured: boolean;
+  readonly connectionState: BrewfatherConnectionState;
+  readonly totalCandidates: number;
+  readonly totalLinkedBeverages: number;
+  readonly lastDataUpdateAt: string | null;
+}
+
+interface BrewfatherConnectionEvidence {
+  readonly configurationFingerprint: string;
+  readonly apiKeyConfigured: boolean;
+  readonly apiKeyAvailable: boolean;
+  result?: {
+    readonly partial: boolean;
+    readonly authenticationFailed: boolean;
+    readonly failureSince: number | null;
+  };
+}
+
+const BREWFATHER_FAILURE_GRACE_MS = 5 * 60_000;
+
 function mergeOverrideField<T>(
   fieldInput:
     | {
@@ -155,6 +182,9 @@ export class BeverageService {
   readonly #now: () => Date;
   readonly #idFactory: () => string;
   readonly #onSyncCompleted?: ((results: readonly SyncResult[]) => void) | undefined;
+  // Rebuilt from completed syncs; retain only one result for each current account configuration.
+  readonly #brewfatherConnections = new Map<string, BrewfatherConnectionEvidence>();
+  #inFlightBrewfatherSync?: Promise<readonly SyncResult[]> | undefined;
   #startupTimer?: NodeJS.Timeout | undefined;
   #periodicTimer?: NodeJS.Timeout | undefined;
 
@@ -1392,7 +1422,7 @@ export class BeverageService {
     const accountId = validated.accountId ?? "default";
     const now = (actorOptions.now ?? this.#now)().toISOString();
 
-    return this.#database.withTransaction(() => {
+    const account = this.#database.withTransaction(() => {
       const account = upsertBrewfatherAccount(
         this.#database,
         {
@@ -1431,6 +1461,8 @@ export class BeverageService {
 
       return account;
     });
+    this.#brewfatherConnections.delete(accountId);
+    return account;
   }
 
   removeBrewfatherApiKey(
@@ -1444,19 +1476,14 @@ export class BeverageService {
         clientMessage: "Secret storage is unavailable.",
       });
     }
-    return this.#secretsService.remove("brewfather", accountId, "api_key", {
+    const removed = this.#secretsService.remove("brewfather", accountId, "api_key", {
       ...(actorOptions.now ? { now: actorOptions.now } : {}),
     });
+    this.#brewfatherConnections.delete(accountId);
+    return removed;
   }
 
-  getBrewfatherStatus(accountId: string = "default"): {
-    readonly configured: boolean;
-    readonly account?: BrewfatherAccount;
-    readonly apiKeyConfigured: boolean;
-    readonly totalCandidates: number;
-    readonly totalLinkedBeverages: number;
-    readonly lastDataUpdateAt: string | null;
-  } {
+  getBrewfatherStatus(accountId: string = "default"): BrewfatherStatus {
     const account = readBrewfatherAccount(this.#database, accountId);
     const candidates = listCandidates(this.#database, accountId);
     const links = listBeverageLinks(this.#database).filter((l) => l.accountId === accountId);
@@ -1471,31 +1498,44 @@ export class BeverageService {
             Date.parse(current) > Date.parse(latest) ? current : latest,
           );
 
-    let apiKeyConfigured = false;
-    if (this.#secretsService) {
-      try {
-        const desc = this.#secretsService
-          .list()
-          .find(
-            (s) =>
-              s.integrationType === "brewfather" &&
-              s.recordId === accountId &&
-              s.fieldName === "api_key",
-          );
-        apiKeyConfigured = desc?.configured === true;
-      } catch {
-        apiKeyConfigured = false;
-      }
-    }
+    const secrets = this.#refreshBrewfatherConnections();
+    const evidence = this.#brewfatherConnections.get(accountId);
+    const apiKeyConfigured =
+      evidence?.apiKeyConfigured ??
+      secrets.some(
+        (secret) =>
+          secret.integrationType === "brewfather" &&
+          secret.recordId === accountId &&
+          secret.fieldName === "api_key" &&
+          secret.configured,
+      );
+    let connectionState: BrewfatherConnectionState;
+    if (!account?.enabled) connectionState = "disabled";
+    else if (!evidence?.apiKeyAvailable) connectionState = "disconnected";
+    else if (evidence.result === undefined) connectionState = "unknown";
+    else if (
+      evidence.result.authenticationFailed ||
+      (evidence.result.failureSince !== null &&
+        this.#now().getTime() - evidence.result.failureSince >= BREWFATHER_FAILURE_GRACE_MS)
+    ) {
+      connectionState = "disconnected";
+    } else connectionState = evidence.result.partial ? "partial" : "healthy";
 
     return {
       configured: account !== undefined,
       ...(account ? { account } : {}),
       apiKeyConfigured,
+      connectionState,
       totalCandidates: candidates.length,
       totalLinkedBeverages: links.length,
       lastDataUpdateAt,
     };
+  }
+
+  listBrewfatherStatuses(): readonly BrewfatherStatus[] {
+    return listBrewfatherAccounts(this.#database).map((account) =>
+      this.getBrewfatherStatus(account.id),
+    );
   }
 
   listCandidates(accountId: string = "default"): readonly BrewfatherCandidate[] {
@@ -1511,13 +1551,113 @@ export class BeverageService {
       });
     }
 
-    const results = await this.#syncCoordinator.sync(this.#database, this.#secretsService, {
-      now: this.#now,
-      ...options,
-      densityExtensionPort: this.#densityExtensionPort,
+    // Match coordinator coalescing so a caller with new credentials cannot adopt an older run.
+    if (this.#inFlightBrewfatherSync !== undefined) return this.#inFlightBrewfatherSync;
+    this.#inFlightBrewfatherSync = this.#executeBrewfatherSync(options).finally(() => {
+      this.#inFlightBrewfatherSync = undefined;
     });
+    return this.#inFlightBrewfatherSync;
+  }
+
+  #refreshBrewfatherConnections(): readonly SecretDescriptor[] {
+    const accounts = listBrewfatherAccounts(this.#database);
+    let secrets: readonly SecretDescriptor[] = [];
+    try {
+      secrets = this.#secretsService?.list() ?? [];
+    } catch {
+      // Unavailable credentials cannot establish a working connection.
+    }
+    const accountIds = new Set(accounts.map((account) => account.id));
+    for (const accountId of this.#brewfatherConnections.keys()) {
+      if (!accountIds.has(accountId)) this.#brewfatherConnections.delete(accountId);
+    }
+    for (const account of accounts) {
+      const apiKey = secrets.find(
+        (secret) =>
+          secret.integrationType === "brewfather" &&
+          secret.recordId === account.id &&
+          secret.fieldName === "api_key",
+      );
+      const configurationFingerprint = JSON.stringify([
+        account.userId,
+        account.enabled,
+        account.discoveryStatuses,
+        account.updatedAt,
+        apiKey?.id,
+        apiKey?.revision,
+        apiKey?.configured,
+        apiKey?.available,
+      ]);
+      if (
+        this.#brewfatherConnections.get(account.id)?.configurationFingerprint !==
+        configurationFingerprint
+      ) {
+        this.#brewfatherConnections.set(account.id, {
+          configurationFingerprint,
+          apiKeyConfigured: apiKey?.configured === true,
+          apiKeyAvailable: apiKey?.available === true,
+        });
+      }
+    }
+    return secrets;
+  }
+
+  async #executeBrewfatherSync(options: SyncOptions): Promise<readonly SyncResult[]> {
+    this.#refreshBrewfatherConnections();
+    const accounts = listBrewfatherAccounts(this.#database).filter((account) =>
+      options.accountId === undefined ? account.enabled : account.id === options.accountId,
+    );
+    const startedWith = new Map(
+      accounts.map((account) => [account.id, this.#brewfatherConnections.get(account.id)!]),
+    );
+    let results: readonly SyncResult[];
+    try {
+      results = await this.#syncCoordinator.sync(this.#database, this.#secretsService!, {
+        now: this.#now,
+        ...options,
+        densityExtensionPort: this.#densityExtensionPort,
+      });
+    } catch (error) {
+      this.#recordBrewfatherSyncEvidence(startedWith);
+      throw error;
+    }
+    this.#recordBrewfatherSyncEvidence(startedWith, results);
     this.#onSyncCompleted?.(results);
     return results;
+  }
+
+  #recordBrewfatherSyncEvidence(
+    startedWith: ReadonlyMap<string, BrewfatherConnectionEvidence>,
+    results?: readonly SyncResult[],
+  ): void {
+    this.#refreshBrewfatherConnections();
+    const now = this.#now().getTime();
+    for (const [accountId, evidence] of startedWith) {
+      // Identity also detects a reset that kept the same values and clock timestamp.
+      if (this.#brewfatherConnections.get(accountId) !== evidence || !evidence.apiKeyAvailable) {
+        continue;
+      }
+      const result = results?.find((entry) => entry.accountId === accountId);
+      if (results !== undefined && result === undefined) continue;
+      const accountFailed =
+        result === undefined || result.error !== undefined || result.authenticationFailed === true;
+      if (!accountFailed && result.linkedErrors === 0 && result.connectionVerified !== true) {
+        // A run without a successful request proves neither connectivity nor recovery.
+        if (evidence.result?.partial !== true) delete evidence.result;
+        continue;
+      }
+      evidence.result = {
+        partial: accountFailed || result.linkedErrors > 0,
+        authenticationFailed:
+          (accountFailed || result.connectionVerified !== true) &&
+          (result?.authenticationFailed === true || evidence.result?.authenticationFailed === true),
+        failureSince: accountFailed
+          ? (evidence.result?.failureSince ?? now)
+          : result.connectionVerified === true
+            ? null
+            : (evidence.result?.failureSince ?? null),
+      };
+    }
   }
 
   async completeBrewfatherBatch(

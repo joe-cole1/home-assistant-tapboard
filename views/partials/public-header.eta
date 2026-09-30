@@ -1,4 +1,7 @@
 <header class="public-header" data-connectivity="<%= it.header.connectivity %>" data-connectivity-label="<%= it.header.connectivityLabel %>">
   <h1><a class="public-brand" href="/"><%= it.header.tapboardName %></a></h1>
-  <a class="connectivity" href="/admin"><span aria-hidden="true"></span><span data-connectivity-label><%= it.header.connectivityLabel %></span><span class="sr-only"> Open administration</span></a>
+  <div class="public-header-actions">
+    <a class="connectivity" href="/admin"><span aria-hidden="true"></span><span data-connectivity-label><%= it.header.connectivityLabel %></span><span class="sr-only"> Open administration</span></a>
+    <a class="public-settings-link" href="/admin/system">Settings</a>
+  </div>
 </header>

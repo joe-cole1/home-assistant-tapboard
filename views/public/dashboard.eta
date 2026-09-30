@@ -1,4 +1,15 @@
 <% layout("/layouts/public", { sharedDisplay: it.sharedDisplay, header: it.header }) %>
 <%~ include("/partials/public-header", { header: it.header }) %>
-<main id="main-content" data-dashboard data-admin-pour-preview="<%= it.adminPourPreview === true %>" data-sse-path="<%= it.ssePath %>"><%~ include("/partials/tap-wars-banner", { tapWars: it.tapWars }) %><section aria-label="Current taps"><div class="tap-grid" data-tap-grid><% for (const tap of it.taps) { %><%~ include("/partials/tap-card", { tap, sharedDisplay: it.sharedDisplay, adminPourPreview: it.adminPourPreview === true, tapWars: it.tapWars }) %><% } %></div></section><%~ include("/partials/on-deck", { onDeck: it.onDeck }) %></main>
+<main id="main-content" data-dashboard data-admin-pour-preview="<%= it.adminPourPreview === true %>" data-sse-path="<%= it.ssePath %>">
+  <%~ include("/partials/tap-wars-banner", { tapWars: it.tapWars }) %>
+  <section aria-label="Current taps">
+    <div class="dashboard-empty" data-dashboard-empty<% if (it.taps.length > 0) { %> hidden<% } %>>
+      <h2>No taps to display</h2>
+      <p>Set up taps in Admin, or enable simulation in System to try sample data.</p>
+      <a class="public-settings-link" href="/admin/system">Open settings</a>
+    </div>
+    <div class="tap-grid" data-tap-grid<% if (it.taps.length === 0) { %> hidden<% } %>><% for (const tap of it.taps) { %><%~ include("/partials/tap-card", { tap, sharedDisplay: it.sharedDisplay, adminPourPreview: it.adminPourPreview === true, tapWars: it.tapWars }) %><% } %></div>
+  </section>
+  <%~ include("/partials/on-deck", { onDeck: it.onDeck }) %>
+</main>
 <script type="module" src="/assets/js/dashboard.js"></script>

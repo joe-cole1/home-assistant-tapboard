@@ -10,6 +10,11 @@ import type { DetectorService } from "../telemetry/detector-service.ts";
 import type { TelemetryService } from "../telemetry/service.ts";
 import type { PublicTapWarsService } from "../tap-wars/public.ts";
 import type { OutboundService } from "../outbound/service.ts";
+import {
+  aggregateConnectivity,
+  CONNECTIVITY_LABELS,
+  requiredDestinationConnectivity,
+} from "./connectivity.ts";
 import type {
   PublicDashboardView,
   PublicDisplayDefaultsView,
@@ -60,53 +65,73 @@ export class DashboardService {
     const enabledTaps = this.#dependencies.tapService
       .listTaps()
       .filter((tap) => tap.enabled && !tap.isRetired);
-    let degraded = false;
+    const checks: PublicHeaderView["connectivity"][] = [];
 
     for (const tap of enabledTaps) {
-      const authority = this.#dependencies.telemetryService.getTapAuthority(tap.id);
-      if (authority === undefined) degraded = true;
       try {
+        const authority = this.#dependencies.telemetryService.getTapAuthority(tap.id);
         const health = this.#dependencies.healthService.getAdminOverview(tap.id);
         const scale = health.checks.find((check) => check.checkId === "scale_availability");
-        if (scale?.severity === "warning" || scale?.severity === "critical") degraded = true;
+        if (scale?.reason === "check_disabled") continue;
+        checks.push(
+          scale?.severity === "critical"
+            ? "disconnected"
+            : authority !== undefined && scale?.state === "healthy"
+              ? "healthy"
+              : "degraded",
+        );
       } catch {
-        degraded = true;
+        checks.push("disconnected");
       }
     }
 
     try {
-      const brewfather = this.#dependencies.beverageService.getBrewfatherStatus();
-      if (brewfather.account?.enabled === true) {
-        if (!brewfather.apiKeyConfigured) degraded = true;
+      const enabledAccounts = new Set<string>();
+      for (const brewfather of this.#dependencies.beverageService.listBrewfatherStatuses()) {
+        if (brewfather.account?.enabled !== true) continue;
+        enabledAccounts.add(brewfather.account.id);
+        checks.push(
+          !brewfather.apiKeyConfigured || brewfather.connectionState === "disconnected"
+            ? "disconnected"
+            : brewfather.connectionState === "healthy"
+              ? "healthy"
+              : "degraded",
+        );
+      }
+      if (enabledAccounts.size > 0) {
         for (const beverage of this.#dependencies.beverageService.listBeverages()) {
           if (beverage.beverage.ownershipType !== "brewfather") continue;
           const link = this.#dependencies.beverageService.getBeverage(
             beverage.beverage.id,
           ).brewfatherLink;
-          if (link?.syncState === "error" || link?.syncState === "stale") degraded = true;
+          if (
+            link === null ||
+            link === undefined ||
+            (enabledAccounts.has(link.accountId) && link.syncState !== "synced")
+          )
+            checks.push("degraded");
         }
       }
     } catch {
-      degraded = true;
+      checks.push("disconnected");
     }
 
-    // Only required outbound destinations contribute to the aggregate
-    // connectivity badge. Optional destinations remain visible in their own
-    // admin projections without making the public header degraded.
+    // Read individual required signals so pending checks and early failures
+    // cannot be mistaken for a confirmed connection during the grace period.
     try {
-      if (this.#dependencies.outboundService?.connectivity().state === "degraded") {
-        degraded = true;
+      for (const destination of this.#dependencies.outboundService?.list() ?? []) {
+        const state = requiredDestinationConnectivity(destination);
+        if (state !== undefined) checks.push(state);
       }
     } catch {
-      // An unavailable optional integration projection must not make the
-      // dashboard claim a transport failure; the admin view remains the
-      // source of detail.
+      checks.push("disconnected");
     }
 
+    const connectivity = aggregateConnectivity(checks);
     return {
       tapboardName: shared.tapboardName,
-      connectivity: degraded ? "degraded" : "healthy",
-      connectivityLabel: degraded ? "Degraded" : "Connected",
+      connectivity,
+      connectivityLabel: CONNECTIVITY_LABELS[connectivity],
     };
   }
 

@@ -6,6 +6,7 @@ import {
   listDestinations,
   markTokenMissing,
   readClaimConfiguration,
+  readDestinationCredentialRevision,
   readDestinationProfile,
   recordFailure,
   recordSuccess,
@@ -220,7 +221,9 @@ export class OutboundWorker {
         destination.retiredAt !== null ||
         destination.transport !== "home_assistant" ||
         destination.currentVersion === null ||
-        destination.currentVersion.id !== event.destinationVersionId
+        destination.currentVersion.id !== event.destinationVersionId ||
+        event.bindingGeneration !==
+          readDestinationCredentialRevision(this.#database, event.destinationId)
       ) {
         return;
       }
@@ -230,7 +233,14 @@ export class OutboundWorker {
       )?.profile_revision;
       if (profileRevision === undefined) return;
       const normalized = normalizeResult(event.result);
-      this.#recordTransportStatus(event.destinationId, normalized, timestamp, profileRevision);
+      this.#recordTransportStatus(
+        event.destinationId,
+        normalized,
+        timestamp,
+        profileRevision,
+        event.destinationVersionId,
+        event.bindingGeneration,
+      );
     });
   }
 
@@ -300,6 +310,8 @@ export class OutboundWorker {
         normalized,
         completionTimestamp,
         config.profileRevision,
+        config.version.id,
+        input.bindingGeneration,
       );
     });
     if (
@@ -317,6 +329,7 @@ export class OutboundWorker {
     envelope: EventEnvelope,
   ): OutboundTransportSendInput {
     const config = version.config;
+    const bindingGeneration = readDestinationCredentialRevision(this.#database, destination.id);
     const secretHeaders: Record<string, string> = {};
     for (const header of config.secretHeaders) {
       if (!header.configured || header.available !== true) throw new Error("missing header token");
@@ -339,6 +352,7 @@ export class OutboundWorker {
         version,
         envelope,
         token,
+        bindingGeneration,
         secretHeaders,
         headers,
         endpoint: config.baseUrl,
@@ -351,6 +365,7 @@ export class OutboundWorker {
       destination,
       version,
       envelope,
+      bindingGeneration,
       secretHeaders,
       headers,
       endpoint,
@@ -394,6 +409,7 @@ export class OutboundWorker {
     if (version.config.transport !== "home_assistant") return;
     const profileRevision = readDestinationProfile(this.#database, destinationId)?.profile_revision;
     if (profileRevision === undefined) return;
+    const bindingGeneration = readDestinationCredentialRevision(this.#database, destinationId);
     if (
       this.#secrets === undefined ||
       !version.config.authConfigured ||
@@ -411,6 +427,7 @@ export class OutboundWorker {
         destination,
         version,
         token: this.#secrets.revealPrivileged("outbound", destinationId, HA_TOKEN_SLOT),
+        bindingGeneration,
         secretHeaders: {},
         endpoint: version.config.baseUrl,
       };
@@ -424,7 +441,14 @@ export class OutboundWorker {
     const normalized = normalizeResult(result);
     const timestamp = now(this.#clock).toISOString();
     this.#database.withTransaction(() => {
-      this.#recordTransportStatus(destinationId, normalized, timestamp, profileRevision);
+      this.#recordTransportStatus(
+        destinationId,
+        normalized,
+        timestamp,
+        profileRevision,
+        version.id,
+        bindingGeneration,
+      );
     });
   }
 
@@ -433,11 +457,26 @@ export class OutboundWorker {
     result: ReturnType<typeof normalizeResult>,
     timestamp: string,
     expectedRevision?: number,
+    expectedVersionId?: string,
+    expectedCredentialRevision?: string,
   ): void {
+    if (
+      expectedCredentialRevision !== undefined &&
+      expectedCredentialRevision !==
+        readDestinationCredentialRevision(this.#database, destinationId)
+    ) {
+      return;
+    }
     const before = this.#integrationStatus(destinationId, timestamp);
     const applied =
       result.outcome === "success"
-        ? recordSuccess(this.#database, destinationId, timestamp, expectedRevision)
+        ? recordSuccess(
+            this.#database,
+            destinationId,
+            timestamp,
+            expectedRevision,
+            expectedVersionId,
+          )
         : recordFailure(
             this.#database,
             destinationId,
@@ -445,6 +484,7 @@ export class OutboundWorker {
             result.failureClass,
             timestamp,
             expectedRevision,
+            expectedVersionId,
           );
     if (!applied) return;
     const after = this.#integrationStatus(destinationId, timestamp);
