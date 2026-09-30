@@ -42,13 +42,15 @@ export const FILL_CARD_BADGES_SCHEMA_VERSION = 20;
 export const FILL_CARD_BADGES_MIGRATION_NAME = "fill-card-badges";
 export const BUILTIN_SIMULATION_SCHEMA_VERSION = 21;
 export const BUILTIN_SIMULATION_MIGRATION_NAME = "builtin-simulation";
+export const SYSTEM_ADMINISTRATION_SCHEMA_VERSION = 22;
+export const SYSTEM_ADMINISTRATION_MIGRATION_NAME = "system-administration-and-retention";
 
 // Compatibility aliases for callers that use the shorter domain names.
 export const DISPLAY_ACCENT_SCHEMA_VERSION = DISPLAY_CUSTOM_ACCENT_SCHEMA_VERSION;
 export const DISPLAY_ACCENT_MIGRATION_NAME = DISPLAY_CUSTOM_ACCENT_MIGRATION_NAME;
 export const TELEMETRY_SOURCE_DISABLED_SCHEMA_VERSION = TELEMETRY_DISABLED_LIFECYCLE_SCHEMA_VERSION;
 export const TELEMETRY_SOURCE_DISABLED_MIGRATION_NAME = TELEMETRY_DISABLED_LIFECYCLE_MIGRATION_NAME;
-export const CURRENT_SCHEMA_VERSION = BUILTIN_SIMULATION_SCHEMA_VERSION;
+export const CURRENT_SCHEMA_VERSION = SYSTEM_ADMINISTRATION_SCHEMA_VERSION;
 
 export interface MigrationDefinition {
   readonly version: number;
@@ -3771,29 +3773,31 @@ function validateBuiltinSimulationSchema(database: DatabaseExecutor): void {
     BUILTIN_SIMULATION_SCHEMA_OBJECTS,
     `${FORENSIC_QC_SCHEMA_SQL}\n${TELEMETRY_EPOCHS_SCHEMA_SQL}\n${FORECASTING_SCHEMA_SQL}\n${HEALTH_MAINTENANCE_SCHEMA_SQL}\n${DISPLAY_SCHEMA_SQL}\n${BREW_STORY_SENSORY_MYSTERY_SCHEMA_SQL}\n${TAP_CARD_DISPLAY_SCHEMA_SQL}\n${DISPLAY_FONT_SCHEMA_SQL}\n${TELEMETRY_DISABLED_LIFECYCLE_SCHEMA_SQL}\n${TAP_WARS_SCHEMA_SQL}\n${OUTBOUND_DESTINATIONS_SCHEMA_SQL}\n${FILL_CARD_BADGES_SCHEMA_SQL}\n${BUILTIN_SIMULATION_SCHEMA_SQL}`,
     BUILTIN_SIMULATION_SCHEMA_VERSION,
-    (schemaDatabase) => {
-      validateFillCardBadgesColumns(schemaDatabase);
-      expectColumns(schemaDatabase, "simulation_settings", [
-        { name: "singleton", type: "INTEGER", notnull: 0, dflt_value: null, pk: 1 },
-        { name: "enabled", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
-        { name: "revision", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
-        { name: "seeded", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
-      ]);
-      expectColumns(schemaDatabase, "simulation_sensors", [
-        { name: "tap_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
-        { name: "source_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
-        { name: "remaining_ml", type: "REAL", notnull: 1, dflt_value: null, pk: 0 },
-        { name: "temperature_c", type: "REAL", notnull: 1, dflt_value: "4", pk: 0 },
-        { name: "online", type: "INTEGER", notnull: 1, dflt_value: "1", pk: 0 },
-        { name: "noise_enabled", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
-        { name: "sequence", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
-      ]);
-      expectColumns(schemaDatabase, "simulation_fill_volumes", [
-        { name: "fill_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
-        { name: "remaining_ml", type: "REAL", notnull: 1, dflt_value: null, pk: 0 },
-      ]);
-    },
+    validateBuiltinSimulationColumns,
   );
+}
+
+function validateBuiltinSimulationColumns(schemaDatabase: DatabaseExecutor): void {
+  validateFillCardBadgesColumns(schemaDatabase);
+  expectColumns(schemaDatabase, "simulation_settings", [
+    { name: "singleton", type: "INTEGER", notnull: 0, dflt_value: null, pk: 1 },
+    { name: "enabled", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
+    { name: "revision", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
+    { name: "seeded", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
+  ]);
+  expectColumns(schemaDatabase, "simulation_sensors", [
+    { name: "tap_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+    { name: "source_id", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+    { name: "remaining_ml", type: "REAL", notnull: 1, dflt_value: null, pk: 0 },
+    { name: "temperature_c", type: "REAL", notnull: 1, dflt_value: "4", pk: 0 },
+    { name: "online", type: "INTEGER", notnull: 1, dflt_value: "1", pk: 0 },
+    { name: "noise_enabled", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
+    { name: "sequence", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
+  ]);
+  expectColumns(schemaDatabase, "simulation_fill_volumes", [
+    { name: "fill_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+    { name: "remaining_ml", type: "REAL", notnull: 1, dflt_value: null, pk: 0 },
+  ]);
 }
 
 export const BUILTIN_SIMULATION_MIGRATION: MigrationDefinition = {
@@ -3802,6 +3806,84 @@ export const BUILTIN_SIMULATION_MIGRATION: MigrationDefinition = {
   apply(database) {
     database.execute(BUILTIN_SIMULATION_SCHEMA_SQL);
     database.execute("INSERT INTO simulation_settings (singleton) VALUES (1)");
+    return undefined;
+  },
+};
+
+export const SYSTEM_ADMINISTRATION_SCHEMA_SQL = `
+  CREATE TABLE auth_session_settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    inactivity_ms INTEGER,
+    absolute_ms INTEGER,
+    revision INTEGER NOT NULL DEFAULT 0 CHECK (typeof(revision) = 'integer' AND revision >= 0),
+    updated_at TEXT NOT NULL DEFAULT '1970-01-01T00:00:00.000Z',
+    CHECK (
+      (inactivity_ms IS NULL AND absolute_ms IS NULL) OR
+      (typeof(inactivity_ms) = 'integer' AND typeof(absolute_ms) = 'integer'
+        AND inactivity_ms BETWEEN 60000 AND 31536000000
+        AND absolute_ms BETWEEN 60000 AND 31536000000
+        AND inactivity_ms <= absolute_ms)
+    )
+  );
+
+  CREATE TABLE outbox_retention (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    retention_days INTEGER NOT NULL DEFAULT 30 CHECK (typeof(retention_days) = 'integer' AND retention_days BETWEEN 1 AND 3650),
+    revision INTEGER NOT NULL DEFAULT 0 CHECK (typeof(revision) = 'integer' AND revision >= 0),
+    updated_at TEXT NOT NULL DEFAULT '1970-01-01T00:00:00.000Z'
+  );
+`;
+
+const SYSTEM_ADMINISTRATION_SCHEMA_OBJECTS = [
+  ...BUILTIN_SIMULATION_SCHEMA_OBJECTS,
+  ["table", "auth_session_settings"],
+  ["table", "outbox_retention"],
+] as const;
+
+function validateSystemAdministrationSchema(database: DatabaseExecutor): void {
+  validateTelemetrySchemaDefinition(
+    database,
+    SYSTEM_ADMINISTRATION_SCHEMA_OBJECTS,
+    `${FORENSIC_QC_SCHEMA_SQL}\n${TELEMETRY_EPOCHS_SCHEMA_SQL}\n${FORECASTING_SCHEMA_SQL}\n${HEALTH_MAINTENANCE_SCHEMA_SQL}\n${DISPLAY_SCHEMA_SQL}\n${BREW_STORY_SENSORY_MYSTERY_SCHEMA_SQL}\n${TAP_CARD_DISPLAY_SCHEMA_SQL}\n${DISPLAY_FONT_SCHEMA_SQL}\n${TELEMETRY_DISABLED_LIFECYCLE_SCHEMA_SQL}\n${TAP_WARS_SCHEMA_SQL}\n${OUTBOUND_DESTINATIONS_SCHEMA_SQL}\n${FILL_CARD_BADGES_SCHEMA_SQL}\n${BUILTIN_SIMULATION_SCHEMA_SQL}\n${SYSTEM_ADMINISTRATION_SCHEMA_SQL}`,
+    SYSTEM_ADMINISTRATION_SCHEMA_VERSION,
+    (schemaDatabase) => {
+      validateBuiltinSimulationColumns(schemaDatabase);
+      expectColumns(schemaDatabase, "auth_session_settings", [
+        { name: "id", type: "INTEGER", notnull: 0, dflt_value: null, pk: 1 },
+        { name: "inactivity_ms", type: "INTEGER", notnull: 0, dflt_value: null, pk: 0 },
+        { name: "absolute_ms", type: "INTEGER", notnull: 0, dflt_value: null, pk: 0 },
+        { name: "revision", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
+        {
+          name: "updated_at",
+          type: "TEXT",
+          notnull: 1,
+          dflt_value: "'1970-01-01T00:00:00.000Z'",
+          pk: 0,
+        },
+      ]);
+      expectColumns(schemaDatabase, "outbox_retention", [
+        { name: "id", type: "INTEGER", notnull: 0, dflt_value: null, pk: 1 },
+        { name: "retention_days", type: "INTEGER", notnull: 1, dflt_value: "30", pk: 0 },
+        { name: "revision", type: "INTEGER", notnull: 1, dflt_value: "0", pk: 0 },
+        {
+          name: "updated_at",
+          type: "TEXT",
+          notnull: 1,
+          dflt_value: "'1970-01-01T00:00:00.000Z'",
+          pk: 0,
+        },
+      ]);
+    },
+  );
+}
+
+export const SYSTEM_ADMINISTRATION_MIGRATION: MigrationDefinition = {
+  version: SYSTEM_ADMINISTRATION_SCHEMA_VERSION,
+  name: SYSTEM_ADMINISTRATION_MIGRATION_NAME,
+  apply(database) {
+    database.execute(SYSTEM_ADMINISTRATION_SCHEMA_SQL);
+    database.execute("INSERT INTO auth_session_settings (id) VALUES (1)");
+    database.execute("INSERT INTO outbox_retention (id) VALUES (1)");
     return undefined;
   },
 };
@@ -3829,6 +3911,7 @@ export const MIGRATIONS: readonly MigrationDefinition[] = [
   OUTBOUND_DESTINATIONS_MIGRATION,
   FILL_CARD_BADGES_MIGRATION,
   BUILTIN_SIMULATION_MIGRATION,
+  SYSTEM_ADMINISTRATION_MIGRATION,
 ];
 
 // Compatibility aliases for callers that prefer an explicit application name.
@@ -3867,7 +3950,8 @@ function applyMigration(
         migration.version === TAP_WARS_SCHEMA_VERSION ||
         migration.version === OUTBOUND_DESTINATIONS_SCHEMA_VERSION ||
         migration.version === FILL_CARD_BADGES_SCHEMA_VERSION ||
-        migration.version === BUILTIN_SIMULATION_SCHEMA_VERSION)
+        migration.version === BUILTIN_SIMULATION_SCHEMA_VERSION ||
+        migration.version === SYSTEM_ADMINISTRATION_SCHEMA_VERSION)
     ) {
       validateCanonicalSchemaAtVersion(database, migration.version);
     }
@@ -3933,6 +4017,10 @@ function validateRequiredCanonicalState(database: DatabaseExecutor, version: num
   if (version >= BUILTIN_SIMULATION_SCHEMA_VERSION) {
     expectRequiredRows(database, "simulation_settings", "singleton = 1", 1);
   }
+  if (version >= SYSTEM_ADMINISTRATION_SCHEMA_VERSION) {
+    expectRequiredRows(database, "auth_session_settings", "id = 1", 1);
+    expectRequiredRows(database, "outbox_retention", "id = 1", 1);
+  }
 }
 
 function validateCanonicalSchemaAtVersion(database: DatabaseExecutor, version: number): void {
@@ -3982,6 +4070,8 @@ function validateCanonicalSchemaAtVersion(database: DatabaseExecutor, version: n
     validateFillCardBadgesSchema(database);
   } else if (version === BUILTIN_SIMULATION_SCHEMA_VERSION) {
     validateBuiltinSimulationSchema(database);
+  } else if (version === SYSTEM_ADMINISTRATION_SCHEMA_VERSION) {
+    validateSystemAdministrationSchema(database);
   } else {
     throw incompatibleSchema("schema version is not a canonical Tapboard version");
   }
@@ -4023,6 +4113,11 @@ export function initializeSchema(
   validateMigrationLedger(database, currentVersion, migrations);
 
   if (
+    isCanonicalMigrationPrefix(migrations) &&
+    currentVersion === SYSTEM_ADMINISTRATION_SCHEMA_VERSION
+  ) {
+    validateCanonicalSchemaAtVersion(database, currentVersion);
+  } else if (
     isCanonicalMigrationPrefix(migrations) &&
     currentVersion === BUILTIN_SIMULATION_SCHEMA_VERSION
   ) {

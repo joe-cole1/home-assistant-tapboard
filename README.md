@@ -2,7 +2,7 @@
 
 Tapboard v2 is an ESM modular monolith. Issues #66 and #67 establish the Node 24 Foundation and security/Activity/event/secret/machine-key/bounded-outbox primitives; #85 adds the development container workflow; #68–#75 add the domain, telemetry, forecasting, and health boundaries; #76 adds the Eta-rendered Admin/public browser surface, bounded SSE, and display preferences; #77 adds Brew Story, sensory guidance, Mystery Tap, and Beverage-owned presentation; #78 adds Tap Wars; and #79 adds outbound Home Assistant/webhook delivery. The root production Dockerfile restores existing Git-context builds; broader deployment acceptance remains tracked by #81.
 
-The current branch implements Issues #66–#79, the #85 development container, and a bounded production-container compatibility restoration. Validation status is maintained in the rebuild handoff. `/` is the authoritative server-rendered public dashboard; `/admin/*` provides the authenticated progressive Admin shell. Complete System administration and the rebuild's final deployment acceptance remain assigned to later issues.
+The current branch implements Issues #66–#80, the #85 development container, and a bounded production-container compatibility restoration. Validation status is maintained in the rebuild handoff. `/` is the authoritative server-rendered public dashboard; `/admin/*` provides the authenticated progressive Admin shell. Issue #81 owns the remaining deployment, documentation, and final rebuild acceptance.
 
 The frozen v1 application remains available at commit `429cf07e451b64ca1713655a34ffa5ebd376efae` and through Git history. Reusable v1 evidence is indexed in [`docs/rebuild/v1-reuse-manifest.json`](docs/rebuild/v1-reuse-manifest.json); it is reference material, not an active dependency or import source for v2.
 
@@ -36,7 +36,7 @@ The defaults are:
 | `TAPBOARD_SESSION_ABSOLUTE_MS`   | `31536000000` (365 days)                                     |
 | `TAPBOARD_SECRET_KEY`            | unset; optional canonical 32-byte base64url key              |
 
-The runtime creates the database parent directory when needed. A ready process returns HTTP 200 from `GET /healthz` with `{"status":"ok","schemaVersion":21}`. This is local application/database readiness only; it does not check external integrations. Public connectivity is a deliberately aggregate dashboard projection; health administration remains authenticated.
+The runtime creates the database parent directory when needed. A ready process returns HTTP 200 from `GET /healthz` with `{"status":"ok","schemaVersion":22}`. This is local application/database readiness only; it does not check external integrations. Public connectivity is a deliberately aggregate dashboard projection; health administration remains authenticated.
 
 The Admin PIN contract is exactly four ASCII decimal digits (`[0-9]{4}`), including every value from `0000` through `9999`; input is never trimmed or Unicode-normalized. Scrypt, durable SQLite throttling, opaque sessions, CSRF, and strict Origin checks protect online/local access, but the 10,000-value space has limited offline resistance if the SQLite verifier is stolen. The PIN never derives or protects `TAPBOARD_SECRET_KEY`.
 
@@ -190,6 +190,22 @@ After the normal rebuild without deleting the data volume, verify `/healthz` sti
 
 After merging, rebuild and recreate the development container without deleting its volume; confirm `/healthz` is healthy and the database remains at schema version 21. Use a development fixture or local fake Brewfather transport: defer a linked batch response, unlink or delete its Beverage, then release the response and verify the obsolete source profile/recipe is not restored. Repeat with a missing/error response and confirm a replacement link keeps its own state. Verify normal sync still updates linked data, disabled accounts do not degrade the public header, and enabled stale/error links show Partial. Oversized, malformed, stalled, and retried response checks are covered by automated fake-transport tests; no production Brewfather writes are needed.
 
+## System administration
+
+Open **Admin → System** for application readiness/version, local storage and delivery counts, a category-filtered Activity Log, calculation defaults, retention settings, and active Admin sessions. These are normal forms that work without JavaScript. Activity pages are capped at 50 entries with stable time/ID pagination; diagnostics never fetch an external service or expose credentials, private notes, raw payloads, or configured endpoints.
+
+Calculation defaults coordinate the existing Beverage fallback final gravity and Forecast serving-size settings. Beverage-specific density and pour-size overrides take precedence. Changes use the existing prospective telemetry correction lifecycle and preserve completed pours.
+
+Session inactivity and absolute lifetimes can be saved from one minute to one year, with inactivity no longer than the absolute lifetime. A saved policy overrides environment defaults. Shorter limits immediately constrain existing sessions; later lengthening cannot revive an expired session or extend its original absolute deadline. System lists up to 100 active sessions, marks the current session, and supports confirmed individual revocation. Changing the four-digit Admin PIN requires the current PIN and revokes every session. Forgotten-PIN recovery remains a local operator command.
+
+Automatic retention runs one bounded pass per minute: at most 1,000 Activity rows, 500 raw measurements, 500 deduplication receipts, 100 combined terminal delivery/event/version rows, and 1,000 expired or revoked sessions. Receipts outlive raw telemetry and cover the reconnect horizon. Pending, retrying, and leased deliveries protect their events and versions; current destination versions and versions owning encrypted endpoint material remain protected. Explicit destination retirement removes those secrets before obsolete versions become eligible. Capacity pressure may prune terminal delivery history earlier to enforce the existing outbox hard bounds. Domain history, epochs, completed pours, calibration, maintenance, deletion audits, and monotonic Tap first-use evidence are preserved.
+
+Simulation data settings, Activity, and storage diagnostics belong to its separate saved workspace. Admin sessions, PIN changes, and session policy use normal installation authentication in both workspaces. Backups/restores and encryption master-key handling remain deployment-owned.
+
+### MANUAL DEV TEST — Issue #80
+
+After merging, rebuild and recreate normally without deleting the development volume. Verify `/healthz` reports schema 22. Open System in two signed-in browsers and with JavaScript disabled. Save calculation defaults, verify a live display refreshes, and restore the defaults. Reject a receipt horizon shorter than raw telemetry or reconnect without changing any retention field. Filter Activity and open an older page; confirm credentials and private notes are absent. Revoke the other browser's session and verify it must sign in again while this browser stays signed in. In disposable state, shorten session lifetimes, change the PIN, and verify all prior sessions are rejected. Enable Simulation and verify access controls remain shared while data settings/history stay separate. Check 390px mobile and desktop layouts. Never delete the persistent volume for these tests.
+
 ## Canonical validation
 
 Run the complete local gate with Node 24:
@@ -209,7 +225,7 @@ npm run test:e2e
 
 CI installs Chromium and runs `npm run test:e2e` in its own Node 24 job.
 
-Schema version 21 (`builtin-simulation`) is the current supported schema. It adds typed workspace settings, simulated sensor state, and Fill-owned physical volume. Version 20 (`fill-card-badges`), the preceding upgrade source, added a Fill-owned Featured preference after version 19's outbound destination and delivery schema, preserving existing lifecycle and outbound data. Low and New badges are derived rather than persisted; New covers UTC days 0–6 from the Fill date and respects Mystery history visibility. Browser-local overrides, live/SSE state, and effective sensory projections are never persisted in SQLite. `/healthz` reports `schemaVersion: 21` when the database is ready. An unpublished badge-only version-19 database is not a canonical upgrade source and is rejected without repair; preserve its data and obtain an explicit migration plan instead of deleting a volume or rewriting its ledger.
+Schema version 22 (`system-administration-and-retention`) is the current supported schema. It adds singleton typed session-policy and terminal-outbox-retention tables, preserving the previous schema and data. Session defaults remain inherited until explicitly saved. Version 21 (`builtin-simulation`) added typed workspace settings, simulated sensor state, and Fill-owned physical volume; version 20 added Fill-owned Featured preferences after version 19's outbound delivery schema. Low and New badges are derived rather than persisted. Browser-local overrides, live/SSE state, and effective sensory projections are never persisted in SQLite. `/healthz` reports `schemaVersion: 22` when the database is ready. An unpublished badge-only version-19 database is not a canonical upgrade source and is rejected without repair; preserve its data and obtain an explicit migration plan instead of deleting a volume or rewriting its ledger.
 
 ## MANUAL DEV TEST — Issue #110 autosave and live refresh
 

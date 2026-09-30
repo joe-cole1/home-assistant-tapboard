@@ -27,6 +27,18 @@ export interface SessionRecord {
   readonly revokedAt: string | null;
 }
 
+export type SessionSummaryRecord = Pick<
+  SessionRecord,
+  "id" | "createdAt" | "lastUsedAt" | "expiresAt" | "absoluteExpiresAt"
+>;
+
+export interface SessionPolicyRecord {
+  readonly inactivityMs: number | null;
+  readonly absoluteMs: number | null;
+  readonly revision: number;
+  readonly updatedAt: string;
+}
+
 interface CredentialRow {
   readonly id: number;
   readonly verifier_version: number;
@@ -59,6 +71,21 @@ interface SessionRow {
   readonly expires_at: string;
   readonly absolute_expires_at: string;
   readonly revoked_at: string | null;
+}
+
+interface SessionSummaryRow {
+  readonly id: string;
+  readonly created_at: string;
+  readonly last_used_at: string;
+  readonly expires_at: string;
+  readonly absolute_expires_at: string;
+}
+
+interface SessionPolicyRow {
+  readonly inactivity_ms: number | null;
+  readonly absolute_ms: number | null;
+  readonly revision: number;
+  readonly updated_at: string;
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -142,6 +169,124 @@ function mapSession(row: SessionRow): SessionRecord {
     throw new Error("Stored session is invalid");
   }
   return mapped;
+}
+
+function mapSessionSummary(row: SessionSummaryRow): SessionSummaryRecord {
+  if (
+    !UUID.test(row.id) ||
+    !isCanonicalTimestamp(row.created_at) ||
+    !isCanonicalTimestamp(row.last_used_at) ||
+    !isCanonicalTimestamp(row.expires_at) ||
+    !isCanonicalTimestamp(row.absolute_expires_at)
+  ) {
+    throw new Error("Stored session is invalid");
+  }
+  return {
+    id: row.id,
+    createdAt: row.created_at,
+    lastUsedAt: row.last_used_at,
+    expiresAt: row.expires_at,
+    absoluteExpiresAt: row.absolute_expires_at,
+  };
+}
+
+export function readSessionPolicy(database: DatabaseExecutor): SessionPolicyRecord {
+  const row = database
+    .prepare<[], SessionPolicyRow>(
+      `SELECT inactivity_ms, absolute_ms, revision, updated_at
+       FROM auth_session_settings WHERE id = 1`,
+    )
+    .get();
+  if (row === undefined) throw new Error("Session policy is missing");
+  const inherited = row.inactivity_ms === null && row.absolute_ms === null;
+  if (
+    !Number.isSafeInteger(row.revision) ||
+    row.revision < 0 ||
+    !isCanonicalTimestamp(row.updated_at) ||
+    (!inherited &&
+      (row.inactivity_ms === null ||
+        row.absolute_ms === null ||
+        !Number.isSafeInteger(row.inactivity_ms) ||
+        !Number.isSafeInteger(row.absolute_ms) ||
+        row.inactivity_ms < 60_000 ||
+        row.absolute_ms > 31_536_000_000 ||
+        row.inactivity_ms > row.absolute_ms))
+  ) {
+    throw new Error("Stored session policy is invalid");
+  }
+  return {
+    inactivityMs: row.inactivity_ms,
+    absoluteMs: row.absolute_ms,
+    revision: row.revision,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function updateSessionPolicy(
+  database: DatabaseExecutor,
+  input: {
+    readonly inactivityMs: number;
+    readonly absoluteMs: number;
+    readonly expectedRevision: number;
+  },
+  updatedAt: string,
+): boolean {
+  return (
+    database
+      .prepare<[number, number, string, number]>(
+        `UPDATE auth_session_settings
+         SET inactivity_ms = ?, absolute_ms = ?, revision = revision + 1, updated_at = ?
+         WHERE id = 1 AND revision = ?`,
+      )
+      .run(input.inactivityMs, input.absoluteMs, updatedAt, input.expectedRevision).changes === 1
+  );
+}
+
+/** Persist shorter deadlines so a later policy change cannot revive old sessions. */
+export function limitSessionLifetimes(
+  database: DatabaseExecutor,
+  inactivityMs: number,
+  absoluteMs: number,
+): void {
+  database
+    .prepare<[number, number, number]>(
+      `UPDATE admin_sessions
+       SET expires_at = MIN(
+             expires_at,
+             absolute_expires_at,
+             strftime('%Y-%m-%dT%H:%M:%fZ', unixepoch(last_used_at, 'subsec') + ? / 1000.0, 'unixepoch'),
+             strftime('%Y-%m-%dT%H:%M:%fZ', unixepoch(created_at, 'subsec') + ? / 1000.0, 'unixepoch')
+           ),
+           absolute_expires_at = MIN(
+             absolute_expires_at,
+             strftime('%Y-%m-%dT%H:%M:%fZ', unixepoch(created_at, 'subsec') + ? / 1000.0, 'unixepoch')
+           )
+       WHERE revoked_at IS NULL`,
+    )
+    .run(inactivityMs, absoluteMs, absoluteMs);
+}
+
+export function listActiveSessionSummaries(
+  database: DatabaseExecutor,
+  credentialRevision: number,
+  now: string,
+  limit: number,
+  currentSessionId?: string,
+): SessionSummaryRecord[] {
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+    throw new RangeError("Session list limit must be between 1 and 100");
+  }
+  return database
+    .prepare<[number, string, string, string, number], SessionSummaryRow>(
+      `SELECT id, created_at, last_used_at, expires_at, absolute_expires_at
+       FROM admin_sessions
+       WHERE credential_revision = ? AND revoked_at IS NULL
+         AND expires_at > ? AND absolute_expires_at > ?
+       ORDER BY CASE WHEN id = ? THEN 0 ELSE 1 END, last_used_at DESC, id ASC
+       LIMIT ?`,
+    )
+    .all(credentialRevision, now, now, currentSessionId ?? "", limit)
+    .map(mapSessionSummary);
 }
 
 export function readCredential(database: DatabaseExecutor): CredentialRecord | undefined {
@@ -342,6 +487,17 @@ export function readSessionByDigest(
        FROM admin_sessions WHERE session_digest = ?`,
     )
     .get(Buffer.from(digest));
+  return row === undefined ? undefined : mapSession(row);
+}
+
+export function readSessionById(database: DatabaseExecutor, id: string): SessionRecord | undefined {
+  const row = database
+    .prepare<[string], SessionRow>(
+      `SELECT id, session_digest, csrf_digest, credential_revision,
+              created_at, last_used_at, expires_at, absolute_expires_at, revoked_at
+       FROM admin_sessions WHERE id = ?`,
+    )
+    .get(id);
   return row === undefined ? undefined : mapSession(row);
 }
 

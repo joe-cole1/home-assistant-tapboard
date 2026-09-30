@@ -1,19 +1,25 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 
 import type { DatabaseExecutor } from "../../infrastructure/database/connection.ts";
+import { ApplicationError } from "../../shared/errors.ts";
 import { appendActivity } from "../activity/operations.ts";
 import {
   insertCredential,
   insertSession,
+  limitSessionLifetimes,
+  listActiveSessionSummaries,
   pruneSessions,
   readCredential,
   readSessionByDigest,
+  readSessionById,
+  readSessionPolicy,
   replaceCredential,
   resetThrottle,
   reserveAttempt,
   revokeAllSessions,
   revokeSession,
   conditionalTouchSession,
+  updateSessionPolicy as persistSessionPolicy,
   type SessionRecord,
 } from "./repository.ts";
 import { hashPin, verifyPin, type PinVerifier } from "./pin.ts";
@@ -42,8 +48,34 @@ export interface SessionSettings {
   readonly absoluteMs: number;
 }
 
+export interface SessionPolicy extends SessionSettings {
+  readonly configured: boolean;
+  readonly revision: number;
+  readonly updatedAt: string;
+}
+
+export interface ActiveAdminSession {
+  readonly id: string;
+  readonly createdAt: string;
+  readonly lastUsedAt: string;
+  readonly expiresAt: string;
+  readonly absoluteExpiresAt: string;
+  readonly current: boolean;
+}
+
 export interface AuthClockOptions {
   readonly now?: () => Date;
+}
+
+export interface AuthManagementOptions extends AuthClockOptions {
+  readonly actorType?: "admin" | "operator" | "system";
+  readonly actorId?: string;
+  readonly sessionId?: string;
+}
+
+export interface ActiveSessionListOptions extends AuthClockOptions {
+  readonly limit?: number;
+  readonly currentSessionId?: string;
 }
 
 export interface AuthServiceOptions extends AuthClockOptions {
@@ -128,6 +160,110 @@ function defaults(options: AuthServiceOptions): SessionSettings {
     inactivityMs: options.session?.inactivityMs ?? 30 * DAY_MS,
     absoluteMs: options.session?.absoluteMs ?? 365 * DAY_MS,
   });
+}
+
+function invalidPolicy(): never {
+  throw new ApplicationError({
+    category: "validation",
+    code: "auth.invalid_session_policy",
+    clientMessage:
+      "Session lifetimes must be whole milliseconds from one minute to one year, with inactivity no longer than the absolute lifetime.",
+  });
+}
+
+function policyInput(value: unknown): SessionSettings & { readonly expectedRevision: number } {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) invalidPolicy();
+  const prototype: unknown = Object.getPrototypeOf(value) as unknown;
+  if (prototype !== Object.prototype && prototype !== null) invalidPolicy();
+  const keys = Reflect.ownKeys(value);
+  if (
+    keys.length !== 3 ||
+    keys.some((key) => !["inactivityMs", "absoluteMs", "expectedRevision"].includes(String(key)))
+  ) {
+    invalidPolicy();
+  }
+  const values: Record<string, unknown> = {};
+  for (const key of ["inactivityMs", "absoluteMs", "expectedRevision"] as const) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (descriptor === undefined || !("value" in descriptor)) invalidPolicy();
+    values[key] = descriptor.value;
+  }
+  const { inactivityMs, absoluteMs, expectedRevision } = values;
+  if (
+    typeof inactivityMs !== "number" ||
+    typeof absoluteMs !== "number" ||
+    typeof expectedRevision !== "number" ||
+    !Number.isSafeInteger(expectedRevision) ||
+    expectedRevision < 0 ||
+    expectedRevision >= Number.MAX_SAFE_INTEGER
+  ) {
+    invalidPolicy();
+  }
+  try {
+    validateSettings({ inactivityMs, absoluteMs });
+  } catch {
+    invalidPolicy();
+  }
+  return { inactivityMs, absoluteMs, expectedRevision };
+}
+
+function policyConflict(): never {
+  throw new ApplicationError({
+    category: "conflict",
+    code: "auth.session_policy_changed",
+    clientMessage: "Session settings changed concurrently. Reload before saving.",
+  });
+}
+
+function sessionIdentifier(value: unknown): string {
+  if (typeof value !== "string" || !UUID.test(value)) {
+    throw new ApplicationError({
+      category: "validation",
+      code: "auth.invalid_session_id",
+      clientMessage: "Choose a valid session.",
+    });
+  }
+  return value;
+}
+
+function activeSession(
+  row: SessionRecord | undefined,
+  credentialRevision: number | undefined,
+  nowMs: number,
+  policy: SessionPolicy,
+): SessionRecord | undefined {
+  if (
+    row === undefined ||
+    credentialRevision === undefined ||
+    row.revokedAt !== null ||
+    row.credentialRevision !== credentialRevision
+  ) {
+    return undefined;
+  }
+  const createdAt = canonicalTimestamp(row.createdAt);
+  const lastUsedAt = canonicalTimestamp(row.lastUsedAt);
+  const storedExpiresAt = canonicalTimestamp(row.expiresAt);
+  const storedAbsoluteExpiresAt = canonicalTimestamp(row.absoluteExpiresAt);
+  if (
+    createdAt === undefined ||
+    lastUsedAt === undefined ||
+    storedExpiresAt === undefined ||
+    storedAbsoluteExpiresAt === undefined
+  ) {
+    return undefined;
+  }
+  const absoluteExpiresAt = policy.configured
+    ? Math.min(storedAbsoluteExpiresAt, createdAt + policy.absoluteMs)
+    : storedAbsoluteExpiresAt;
+  const expiresAt = policy.configured
+    ? Math.min(storedExpiresAt, absoluteExpiresAt, lastUsedAt + policy.inactivityMs)
+    : storedExpiresAt;
+  if (nowMs >= expiresAt || nowMs >= absoluteExpiresAt) return undefined;
+  return {
+    ...row,
+    expiresAt: new Date(expiresAt).toISOString(),
+    absoluteExpiresAt: new Date(absoluteExpiresAt).toISOString(),
+  };
 }
 
 function digest(value: string): Buffer {
@@ -227,6 +363,104 @@ export class AuthService {
 
   getStatus(): CredentialStatus {
     return this.getCredentialStatus();
+  }
+
+  getSessionPolicy(): SessionPolicy {
+    const stored = readSessionPolicy(this.#database);
+    return {
+      inactivityMs: stored.inactivityMs ?? this.#settings.inactivityMs,
+      absoluteMs: stored.absoluteMs ?? this.#settings.absoluteMs,
+      configured: stored.inactivityMs !== null,
+      revision: stored.revision,
+      updatedAt: stored.updatedAt,
+    };
+  }
+
+  updateSessionPolicy(input: unknown, options: AuthManagementOptions = {}): SessionPolicy {
+    const parsed = policyInput(input);
+    return this.#database.withTransaction(() => {
+      const current = this.getSessionPolicy();
+      if (current.revision !== parsed.expectedRevision) policyConflict();
+      if (
+        current.configured &&
+        current.inactivityMs === parsed.inactivityMs &&
+        current.absoluteMs === parsed.absoluteMs
+      ) {
+        return current;
+      }
+      const now = timestamp(options.now ?? this.#options.now);
+      if (!persistSessionPolicy(this.#database, parsed, now)) policyConflict();
+      limitSessionLifetimes(this.#database, parsed.inactivityMs, parsed.absoluteMs);
+      const updated = this.getSessionPolicy();
+      appendActivity(this.#database, {
+        category: "admin",
+        action: "configuration_changed",
+        actorType: options.actorType ?? "admin",
+        ...(options.actorId === undefined ? {} : { actorId: options.actorId }),
+        ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
+        entityType: "auth_session_settings",
+        entityId: "1",
+        details: {
+          inactivity_ms: updated.inactivityMs,
+          absolute_ms: updated.absoluteMs,
+          revision: updated.revision,
+        },
+        occurredAt: now,
+      });
+      return updated;
+    });
+  }
+
+  listActiveSessions(options: ActiveSessionListOptions = {}): ActiveAdminSession[] {
+    const limit = options.limit ?? 100;
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+      throw new ApplicationError({
+        category: "validation",
+        code: "auth.invalid_session_limit",
+        clientMessage: "Session list limit must be between 1 and 100.",
+      });
+    }
+    const currentSessionId =
+      options.currentSessionId === undefined
+        ? undefined
+        : sessionIdentifier(options.currentSessionId);
+    const now = timestamp(options.now ?? this.#options.now);
+    return this.#database.withTransaction(() => {
+      const credential = readCredential(this.#database);
+      if (credential === undefined) return [];
+      return listActiveSessionSummaries(
+        this.#database,
+        credential.revision,
+        now,
+        limit,
+        currentSessionId,
+      ).map((row) => ({ ...row, current: row.id === currentSessionId }));
+    });
+  }
+
+  revokeSessionById(id: unknown, options: AuthManagementOptions = {}): boolean {
+    const sessionId = sessionIdentifier(id);
+    const now = timestamp(options.now ?? this.#options.now);
+    return this.#database.withTransaction(() => {
+      const row = activeSession(
+        readSessionById(this.#database, sessionId),
+        readCredential(this.#database)?.revision,
+        Date.parse(now),
+        this.getSessionPolicy(),
+      );
+      if (row === undefined || !revokeSession(this.#database, sessionId, now)) return false;
+      appendActivity(this.#database, {
+        category: "security",
+        action: "session_revoked",
+        actorType: options.actorType ?? "admin",
+        ...(options.actorId === undefined ? {} : { actorId: options.actorId }),
+        ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
+        entityType: "admin_session",
+        entityId: sessionId,
+        occurredAt: now,
+      });
+      return true;
+    });
   }
 
   async setPin(pin: unknown, options: CredentialChangeOptions = {}): Promise<CredentialStatus> {
@@ -443,27 +677,16 @@ export class AuthService {
       const nowMs = nowDate.getTime();
       const row = readSessionByDigest(this.#database, digest(token as string));
       const credential = readCredential(this.#database);
-      const expiresAt = row === undefined ? undefined : canonicalTimestamp(row.expiresAt);
-      const absoluteExpiresAt =
-        row === undefined ? undefined : canonicalTimestamp(row.absoluteExpiresAt);
-      const lastUsedAt = row === undefined ? undefined : canonicalTimestamp(row.lastUsedAt);
-      if (
-        row === undefined ||
-        credential === undefined ||
-        expiresAt === undefined ||
-        absoluteExpiresAt === undefined ||
-        lastUsedAt === undefined ||
-        row.revokedAt !== null ||
-        row.credentialRevision !== credential.revision ||
-        nowMs >= expiresAt ||
-        nowMs >= absoluteExpiresAt
-      ) {
-        return undefined;
-      }
-      const due = Math.min(5 * 60_000, this.#settings.inactivityMs / 4);
-      if (nowMs - lastUsedAt >= due) {
+      const policy = this.getSessionPolicy();
+      const active = activeSession(row, credential?.revision, nowMs, policy);
+      if (row === undefined || active === undefined) return undefined;
+      // A longer policy must still refresh an active session before its
+      // previously captured, shorter inactivity deadline elapses.
+      const capturedWindow = Date.parse(active.expiresAt) - Date.parse(active.lastUsedAt);
+      const due = Math.min(5 * 60_000, policy.inactivityMs / 4, capturedWindow / 4);
+      if (nowMs - Date.parse(active.lastUsedAt) >= due) {
         const nextExpires = new Date(
-          Math.min(nowMs + this.#settings.inactivityMs, absoluteExpiresAt),
+          Math.min(nowMs + policy.inactivityMs, Date.parse(active.absoluteExpiresAt)),
         ).toISOString();
         conditionalTouchSession(
           this.#database,
@@ -473,17 +696,15 @@ export class AuthService {
           nextExpires,
           row.absoluteExpiresAt,
         );
-        const refreshed = readSessionByDigest(this.#database, digest(token as string));
-        if (
-          refreshed === undefined ||
-          refreshed.revokedAt !== null ||
-          refreshed.credentialRevision !== credential.revision
-        ) {
-          return undefined;
-        }
-        return publicSession(refreshed);
+        const refreshed = activeSession(
+          readSessionByDigest(this.#database, digest(token as string)),
+          credential?.revision,
+          nowMs,
+          policy,
+        );
+        return refreshed === undefined ? undefined : publicSession(refreshed);
       }
-      return publicSession(row);
+      return publicSession(active);
     });
   }
 
@@ -494,24 +715,8 @@ export class AuthService {
     const nowMs = nowDate.getTime();
     const row = readSessionByDigest(this.#database, digest(token as string));
     const credential = readCredential(this.#database);
-    const expiresAt = row === undefined ? undefined : canonicalTimestamp(row.expiresAt);
-    const absoluteExpiresAt =
-      row === undefined ? undefined : canonicalTimestamp(row.absoluteExpiresAt);
-    const lastUsedAt = row === undefined ? undefined : canonicalTimestamp(row.lastUsedAt);
-    if (
-      row === undefined ||
-      credential === undefined ||
-      expiresAt === undefined ||
-      absoluteExpiresAt === undefined ||
-      lastUsedAt === undefined ||
-      row.revokedAt !== null ||
-      row.credentialRevision !== credential.revision ||
-      nowMs >= expiresAt ||
-      nowMs >= absoluteExpiresAt
-    ) {
-      return undefined;
-    }
-    return publicSession(row);
+    const active = activeSession(row, credential?.revision, nowMs, this.getSessionPolicy());
+    return active === undefined ? undefined : publicSession(active);
   }
 
   revoke(token: unknown, options: AuthClockOptions = {}): boolean {
@@ -627,10 +832,15 @@ export class AuthService {
     }
     const token = tokenFromBytes(sessionBytes);
     const csrfToken = tokenFromBytes(csrfBytes);
-    const absolute =
-      absoluteExpiresAt ?? new Date(Date.parse(now) + this.#settings.absoluteMs).toISOString();
+    const policy = this.getSessionPolicy();
+    const absolute = new Date(
+      Math.min(
+        Date.parse(now) + policy.absoluteMs,
+        absoluteExpiresAt === undefined ? Infinity : Date.parse(absoluteExpiresAt),
+      ),
+    ).toISOString();
     const expires = new Date(
-      Math.min(Date.parse(now) + this.#settings.inactivityMs, Date.parse(absolute)),
+      Math.min(Date.parse(now) + policy.inactivityMs, Date.parse(absolute)),
     ).toISOString();
     const id = (this.#options.idFactory ?? randomUUID)();
     if (!UUID.test(id)) throw new TypeError("Invalid session identifier");

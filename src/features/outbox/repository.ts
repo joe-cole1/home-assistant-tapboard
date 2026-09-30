@@ -370,6 +370,118 @@ function pruneTerminal(database: DatabaseExecutor, batchSize: number): number {
   return result.changes + events.changes;
 }
 
+export interface TerminalOutboxPruneResult {
+  readonly deliveries: number;
+  readonly events: number;
+  readonly versions: number;
+}
+
+export interface OutboxRetentionSettings {
+  readonly retentionDays: number;
+  readonly revision: number;
+  readonly updatedAt: string;
+}
+
+export function readOutboxRetentionSettings(database: DatabaseExecutor): OutboxRetentionSettings {
+  const row = database
+    .prepare<[], { retention_days: number; revision: number; updated_at: string }>(
+      "SELECT retention_days, revision, updated_at FROM outbox_retention WHERE id = 1",
+    )
+    .get();
+  if (
+    row === undefined ||
+    !Number.isSafeInteger(row.retention_days) ||
+    row.retention_days < 1 ||
+    row.retention_days > 3_650 ||
+    !Number.isSafeInteger(row.revision) ||
+    row.revision < 0
+  )
+    throw new Error("Outbox retention settings are invalid");
+  const updatedAt = canonicalTime(row.updated_at, () => new Date());
+  return { retentionDays: row.retention_days, revision: row.revision, updatedAt };
+}
+
+/** Update the feature-owned singleton without taking transaction ownership. */
+export function updateOutboxRetentionSettings(
+  database: DatabaseExecutor,
+  retentionDays: number,
+  updatedAt: string,
+): OutboxRetentionSettings {
+  positiveInteger(retentionDays, "retentionDays", 3_650);
+  const timestamp = canonicalTime(updatedAt, () => new Date());
+  const current = readOutboxRetentionSettings(database);
+  if (current.retentionDays === retentionDays) return current;
+  database
+    .prepare<[number, string]>(
+      "UPDATE outbox_retention SET retention_days = ?, revision = revision + 1, updated_at = ? WHERE id = 1",
+    )
+    .run(retentionDays, timestamp);
+  return readOutboxRetentionSettings(database);
+}
+
+/**
+ * One deterministic retention batch with a shared cap across deliveries,
+ * orphan events and obsolete versions. Active deliveries and the currently
+ * configured destination version always protect their referenced data.
+ * Version-scoped secrets also retain the ownership metadata needed by
+ * OutboundService to remove them during explicit destination retirement.
+ */
+export function pruneTerminalOutbox(
+  database: DatabaseExecutor,
+  cutoff: Date | string,
+  limit = MAX_PRUNE_BATCH,
+): TerminalOutboxPruneResult {
+  const timestamp = canonicalTime(cutoff, () => new Date());
+  positiveInteger(limit, "terminal retention limit", MAX_PRUNE_BATCH);
+  return database.withTransaction(() => {
+    const deliveries = database
+      .prepare<[string, string, number]>(
+        `DELETE FROM outbound_deliveries WHERE id IN (
+           SELECT id FROM outbound_deliveries
+           WHERE state IN ('succeeded', 'terminal', 'dismissed')
+             AND terminal_at < ? AND updated_at < ?
+             AND lease_owner IS NULL AND lease_expires_at IS NULL
+           ORDER BY terminal_at ASC, id ASC LIMIT ?
+         )`,
+      )
+      .run(timestamp, timestamp, limit).changes;
+    let remaining = limit - deliveries;
+    if (remaining === 0) return { deliveries, events: 0, versions: 0 };
+    const events = database
+      .prepare<[string, number]>(
+        `DELETE FROM outbound_events WHERE id IN (
+           SELECT e.id FROM outbound_events e
+           WHERE e.created_at < ?
+             AND NOT EXISTS (SELECT 1 FROM outbound_deliveries d WHERE d.event_id = e.id)
+           ORDER BY e.created_at ASC, e.id ASC LIMIT ?
+         )`,
+      )
+      .run(timestamp, remaining).changes;
+    remaining -= events;
+    if (remaining === 0) return { deliveries, events, versions: 0 };
+    const versions = database
+      .prepare<[string, number]>(
+        `DELETE FROM outbound_destination_versions WHERE id IN (
+           SELECT v.id FROM outbound_destination_versions v
+           WHERE v.created_at < ?
+             AND NOT EXISTS (
+               SELECT 1 FROM outbound_deliveries d WHERE d.destination_version_id = v.id
+             )
+             AND NOT EXISTS (
+               SELECT 1 FROM outbound_destination_profiles p WHERE p.current_version_id = v.id
+             )
+             AND NOT EXISTS (
+               SELECT 1 FROM encrypted_secrets s
+               WHERE s.integration_type = 'outbound' AND s.record_id = v.id
+             )
+           ORDER BY v.created_at ASC, v.id ASC LIMIT ?
+         )`,
+      )
+      .run(timestamp, remaining).changes;
+    return { deliveries, events, versions };
+  });
+}
+
 function findCoalescibleEvent(
   database: DatabaseExecutor,
   eventType: EventType,

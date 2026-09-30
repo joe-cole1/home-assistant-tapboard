@@ -1,11 +1,11 @@
 # Tapboard v2 rebuild status
 
 - Architecture: **FROZEN**
-- Current phase: **Built-in simulation workspace implemented and locally validated; ready for PR review**
-- Current branch: `feat/builtin-simulation`
-- Current base: `628255c` (merged vessel artwork PR #115)
-- Current schema: **v21** (`builtin-simulation`, following v20 fill-card badges)
-- Current validation: **Canonical `npm run check` passed (formatting, lint, types, architecture/reuse checks, and 605/605 tests). The full Chromium Playwright suite passed 32/32 tests using the installed browser through a temporary launch configuration. Desktop/mobile screens were inspected. Independent final review findings were fixed and rereview found no remaining blockers. This change has not been deployed or tested with physical hardware.**
+- Current phase: **Issue #80 System administration implemented; final verification in progress**
+- Current branch: `feat/issue-80-system`
+- Current base: `768ef4f3e69ce9a2409b3143bff359522d556920` (merged PR #119)
+- Current schema: **v22** (`system-administration-and-retention`, additive after v21 simulation)
+- Current validation: **Canonical `npm run check` passed all formatting, lint, types, architecture checks and 777/777 Node tests. Independent final diff review found no remaining blockers. The new no-JavaScript System browser workflow passed; the complete browser and hosted-CI gates remain pending.** Main's exact baseline CI [36740826299](https://github.com/joe-cole1/home-assistant-tapboard/actions/runs/36740826299) passed both check and Chromium E2E on `768ef4f3e69ce9a2409b3143bff359522d556920`; that is baseline evidence, not acceptance of this diff.
 - Prior packaging validation (historical): **Canonical `npm run check` passed: formatting, lint, types, architecture/reuse checks, and 562/562 tests. The production image built and passed disposable hardened-container smoke tests on linux/amd64. Independent final diff review found no material issues. Browser/E2E and CI checks remain explicitly waived; actual VPS deployment and other architectures are unverified.**
 - Prebaseline: **333 passing tests** (prebaseline evidence, not a current validation result)
 - Frozen v1 source commit: `429cf07e451b64ca1713655a34ffa5ebd376efae`
@@ -38,7 +38,17 @@ The operator approved the isolated saved simulation workspace before #80/#81 on 
 - 16. [#80 — System and local operator functions](https://github.com/joe-cole1/home-assistant-tapboard/issues/80)
 - 17. [#81 — Deployment, documentation, and final acceptance](https://github.com/joe-cole1/home-assistant-tapboard/issues/81)
 
-The list preserves the frozen implementation sequence with #85's local development surface between #67 and #68. Issues #67, #85, and #68–#79 are merged. The current branch restores a bounded part of #81's packaging surface at the operator's explicit request; it does not close #81 or claim the rebuild's final acceptance. #80 and all other #81 work remain out of scope.
+Issues #66–#79 and #85 are merged. The remaining sequence is **#80 → #81 → #65 final acceptance**, then the deferred follow-up issues **#111 → #112 → #113 → #114**. The saved #111 HTTP-boundary branch is a checkpoint, not part of this build. Historical v1 roadmap #22 and Mystery capability #34 are closed as superseded; the frozen v2 target remains authoritative.
+
+The past-week audit credits eight merged PRs: #106 Admin refinements/badges, #107 production packaging compatibility, #108 repository instructions, #115 vessel artwork, #116 saved Simulation, #117 Settings/connectivity, #118 autosave/live recovery (closing #110), and #119 bounded Brewfather streaming/current-link rechecks (closing #109). Their historical evidence remains separate from the remaining #80/#81 final gates.
+
+## Issue #80 — System administration
+
+System now coordinates typed feature-owned calculation/retention settings, local readiness/version/storage counts, a redacted category-filtered Activity Log with stable 50-entry pages, active-session listing and confirmed selected/self revocation, configurable session lifetimes, and current-PIN-confirmed credential changes. Saved session policies apply across live instances and restarts; shortening is immediate and lengthening cannot revive expired sessions. Schema22 seeds defaults without changing old domain state.
+
+A cancellable/coalesced maintenance timer runs only bounded retention batches: Activity1000, raw telemetry500, receipts500, terminal delivery/event/version100 combined, and sessions1000. Receipts follow raw measurements and preserve deduplication/reconnect horizons. Pending/leased/retry references, current destination versions, domain histories, epochs, pours, calibration, and Tap first-use evidence are protected. Existing stdin-only PIN recovery and verified atomic key rotation remain supported. Simulation uses its separate data workspace and normal installation authentication. See [MANUAL DEV TEST — Issue #80](../../README.md#manual-dev-test--issue-80).
+
+Issue #81 still owns the production Compose patterns, lifecycle completion guards and centralized cleanup, final documentation/OpenAPI/ADR/audit reconciliation, exact container/E2E gates, and independent final acceptance. Implementation does not authorize merge, production deployment, or release publication.
 
 ## Production Compose compatibility repair
 
@@ -109,7 +119,7 @@ Issue #76 established the stable generic Tap graphic node seam consumed by the I
 
 `/` is complete authoritative SSR: aggregate header/connectivity, every enabled nonretired Tap in ascending number order, a stable hidden Tap Wars slot, and the existing authoritative On Deck projection. Public JSON and SSE use explicit privacy DTOs and dirty identifiers only. Browser modules patch existing text/attributes/SVG geometry, insert or remove only changed cards, and fetch a dashboard-scoped authoritative projection after reconnect. The in-process public/Admin hubs bound clients, queued events, and queued bytes; coalesce dirty targets; respect write backpressure and drain; disconnect overflow; clean up listeners; and periodically revalidate Admin sessions. They do not provide durable replay.
 
-Authenticated Eta Admin pages cover Overview, Integrations, Beverages, Kegs, Fills, Taps, Tap Wars, Display, System, and #79 outbound destination/history controls. Ordinary forms retain CSRF/Origin-protected POST→303 behavior without JavaScript. Complete System administration remains the next local-operator seam; #78 Tap Wars and #79 outbound behavior are implemented rather than fabricated.
+Authenticated Eta Admin pages cover Overview, Integrations, Beverages, Kegs, Fills, Taps, Tap Wars, Display, System, and #79 outbound destination/history controls. Ordinary forms retain CSRF/Origin-protected POST→303 behavior without JavaScript. System administration is implemented by #80; the remaining acceptance phase is #81.
 
 Shared display defaults are typed, revisioned schema-v12 state. Sparse browser overrides use localStorage key `tapboard.v2.display-preferences.v1`, version 1, exact keys, safe enums, reset-to-inherit, and cross-tab storage events. An external synchronous bootstrap applies validated values before CSS; malformed/unavailable storage fails to shared defaults. Layout defaults to responsive scrolling, while optional automatic rotation retains all SSR cards in the DOM and respects focus, visibility, and reduced motion.
 

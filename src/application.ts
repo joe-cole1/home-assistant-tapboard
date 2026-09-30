@@ -24,6 +24,8 @@ import {
   type Renderer,
 } from "./infrastructure/rendering/renderer.ts";
 import { createAuthService } from "./features/auth/service.ts";
+import { createActivityService } from "./features/activity/index.ts";
+import { SystemService } from "./features/system/index.ts";
 import { createSecretsService } from "./features/secrets/service.ts";
 import { createKegService } from "./features/kegs/service.ts";
 import { registerKegRoutes } from "./features/kegs/routes.ts";
@@ -236,6 +238,7 @@ class FoundationApplication implements Application {
   #beverageService: BeverageService | undefined;
   #detectorService: DetectorService | undefined;
   #healthService: HealthService | undefined;
+  #systemService: SystemService | undefined;
   #outboundRuntime: OutboundRuntime | undefined;
   #liveUpdates: LiveUpdateService | undefined;
   #stopConnectivityMonitor: (() => void) | undefined;
@@ -732,6 +735,19 @@ class FoundationApplication implements Application {
         },
       });
       const forecastService = createForecastService(this.#database);
+      const rawSystemService = new SystemService({
+        database: this.#database,
+        activityService: createActivityService(this.#database),
+        telemetryService,
+        beverageService: rawBeverageService,
+        forecastService,
+        authService,
+        onError: () => this.#logger.error("System retention maintenance failed"),
+      });
+      const systemService = observeCommittedCalls(rawSystemService, {
+        updateCalculationSettings: () => publishAllTaps("fill.updated"),
+      });
+      this.#systemService = rawSystemService;
       const rawDisplayService = createDisplaySettingsService(this.#database);
       const displayService = observeCommittedCalls(rawDisplayService, {
         updateSettings: () => liveUpdates.publish({ name: "display.updated", target: "display" }),
@@ -836,6 +852,8 @@ class FoundationApplication implements Application {
         tapWarsService,
         publicTapWarsService,
         outboundService,
+        systemService,
+        isReady: () => this.isReady(),
       });
       this.#workspaceHooks.onComposed({
         database: this.#database,
@@ -957,6 +975,7 @@ class FoundationApplication implements Application {
         onError: () => this.#logger.error("Detector maintenance failed"),
       });
       healthService.startMaintenance();
+      systemService.startMaintenance();
       this.#stopConnectivityMonitor = startConnectivityMonitor({
         readState: () => dashboardService.getHeader().connectivity,
         onChange: () =>
@@ -994,6 +1013,13 @@ class FoundationApplication implements Application {
 
   async #stop(): Promise<void> {
     let failure: unknown;
+    const systemService = this.#systemService;
+    this.#systemService = undefined;
+    try {
+      systemService?.stopMaintenance();
+    } catch (error) {
+      failure = error;
+    }
     this.#stopConnectivityMonitor?.();
     this.#stopConnectivityMonitor = undefined;
     const outboundRuntime = this.#outboundRuntime;
@@ -1070,6 +1096,13 @@ class FoundationApplication implements Application {
   }
 
   async #closeResourcesAfterFailure(): Promise<void> {
+    const systemService = this.#systemService;
+    this.#systemService = undefined;
+    try {
+      systemService?.stopMaintenance();
+    } catch {
+      this.#logger.error("System cleanup after startup failure failed");
+    }
     this.#stopConnectivityMonitor?.();
     this.#stopConnectivityMonitor = undefined;
     const outboundRuntime = this.#outboundRuntime;
