@@ -104,10 +104,6 @@ export class SecretsService {
     );
   }
 
-  listDescriptors(): readonly SecretDescriptor[] {
-    return this.list();
-  }
-
   upsert(
     integrationType: string,
     recordId: string,
@@ -223,10 +219,6 @@ export class SecretsService {
     return decryptSecret(rowEnvelope(row), this.#rootKey, secretIdentity);
   }
 
-  revealSecretPrivileged(integrationType: string, recordId: string, fieldName: string): string {
-    return this.revealPrivileged(integrationType, recordId, fieldName);
-  }
-
   rotateRootKey(
     oldKeyInput: unknown,
     newKeyInput: unknown,
@@ -297,14 +289,6 @@ export class SecretsService {
     });
     this.#rootKey = new Uint8Array(newKey);
     return { generation: snapshotGeneration + 1, rotated: candidates.length };
-  }
-
-  rotate(
-    oldKeyInput: unknown,
-    newKeyInput: unknown,
-    options?: { readonly now?: () => Date },
-  ): SecretRotationResult {
-    return this.rotateRootKey(oldKeyInput, newKeyInput, options);
   }
 
   #canDecrypt(row: SecretRow, key: Uint8Array): boolean {

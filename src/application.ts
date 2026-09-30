@@ -993,7 +993,7 @@ class FoundationApplication implements Application {
     } catch (error) {
       this.#state = "failed";
       this.#address = undefined;
-      await this.#closeResourcesAfterFailure();
+      await this.#disposeResources();
       throw error;
     } finally {
       this.#starting = undefined;
@@ -1012,74 +1012,15 @@ class FoundationApplication implements Application {
   }
 
   async #stop(): Promise<void> {
-    let failure: unknown;
-    const systemService = this.#systemService;
-    this.#systemService = undefined;
-    try {
-      systemService?.stopMaintenance();
-    } catch (error) {
-      failure = error;
-    }
-    this.#stopConnectivityMonitor?.();
-    this.#stopConnectivityMonitor = undefined;
-    const outboundRuntime = this.#outboundRuntime;
-    this.#outboundRuntime = undefined;
-    try {
-      if (outboundRuntime !== undefined) {
-        if (outboundRuntime.stop !== undefined) outboundRuntime.stop();
-        else outboundRuntime.worker.stop();
-      }
-    } catch (error) {
-      failure = error;
-    }
-    try {
-      this.#liveUpdates?.stop();
-      this.#liveUpdates = undefined;
-    } catch {
-      // Ignored
-    }
-    try {
-      this.#beverageService?.stopPeriodicSync();
-      this.#beverageService = undefined;
-    } catch {
-      // Ignored
-    }
-
-    try {
-      this.#healthService?.stopMaintenance();
-      this.#healthService = undefined;
-    } catch {
-      // Ignored
-    }
-
-    try {
-      this.#detectorService?.stopMaintenance();
-      this.#detectorService = undefined;
-    } catch {
-      // Ignored
-    }
-
-    try {
-      if (this.#starting !== undefined) {
-        await this.#starting.catch(() => undefined);
-      }
-      await this.#httpServer?.stop();
-    } catch (error) {
-      failure = error;
-    }
-
-    try {
-      this.#closeDatabase();
-    } catch (error) {
-      this.#logger.error("Database close failed", { error });
-      failure ??= error;
-    } finally {
-      this.#renderer = undefined;
-      this.#state = "stopped";
-    }
-
+    // Startup owns acquisition until it settles. Its failure path uses the same
+    // disposer, so a shutdown during an awaited bind cannot miss late resources.
+    if (this.#starting !== undefined) await this.#starting.catch(() => undefined);
+    const failure = await this.#disposeResources();
+    this.#state = "stopped";
     if (failure !== undefined) {
-      throw failure instanceof Error ? failure : new Error("Application shutdown failed");
+      throw failure.error instanceof Error
+        ? failure.error
+        : new Error("Application shutdown failed");
     }
   }
 
@@ -1095,71 +1036,63 @@ class FoundationApplication implements Application {
     return this.#renderer;
   }
 
-  async #closeResourcesAfterFailure(): Promise<void> {
-    const systemService = this.#systemService;
-    this.#systemService = undefined;
-    try {
-      systemService?.stopMaintenance();
-    } catch {
-      this.#logger.error("System cleanup after startup failure failed");
-    }
-    this.#stopConnectivityMonitor?.();
-    this.#stopConnectivityMonitor = undefined;
-    const outboundRuntime = this.#outboundRuntime;
-    this.#outboundRuntime = undefined;
-    try {
-      if (outboundRuntime !== undefined) {
-        if (outboundRuntime.stop !== undefined) outboundRuntime.stop();
-        else outboundRuntime.worker.stop();
-      }
-    } catch (error) {
-      this.#logger.error("Outbound cleanup after startup failure failed", { error });
-    }
-    try {
-      this.#liveUpdates?.stop();
-      this.#liveUpdates = undefined;
-    } catch {
-      // Ignored
-    }
-    try {
-      this.#beverageService?.stopPeriodicSync();
-      this.#beverageService = undefined;
-    } catch {
-      // Ignored
-    }
-
-    try {
-      this.#healthService?.stopMaintenance();
-      this.#healthService = undefined;
-    } catch {
-      // Ignored
-    }
-
-    try {
-      this.#detectorService?.stopMaintenance();
-      this.#detectorService = undefined;
-    } catch {
-      // Ignored
-    }
-
-    try {
-      await this.#httpServer?.stop();
-    } catch (closeError) {
-      this.#logger.error("HTTP cleanup after startup failure failed", { error: closeError });
-    } finally {
-      try {
-        this.#closeDatabase();
-      } catch (closeError) {
-        this.#logger.error("Database cleanup after startup failure failed", { error: closeError });
-      }
-      this.#renderer = undefined;
-    }
-  }
-
-  #closeDatabase(): void {
+  async #disposeResources(): Promise<{ readonly error: unknown } | undefined> {
+    // Relinquish ownership before calling any disposer, including one that
+    // throws. Every acquired resource gets one attempt in dependency order.
+    const system = this.#systemService;
+    const connectivity = this.#stopConnectivityMonitor;
+    const outbound = this.#outboundRuntime;
+    const live = this.#liveUpdates;
+    const beverages = this.#beverageService;
+    const health = this.#healthService;
+    const detector = this.#detectorService;
+    const http = this.#httpServer;
     const database = this.#database;
+    this.#systemService = undefined;
+    this.#stopConnectivityMonitor = undefined;
+    this.#outboundRuntime = undefined;
+    this.#liveUpdates = undefined;
+    this.#beverageService = undefined;
+    this.#healthService = undefined;
+    this.#detectorService = undefined;
+    this.#httpServer = undefined;
     this.#database = undefined;
-    database?.close();
+    this.#renderer = undefined;
+    let failure: { readonly error: unknown } | undefined;
+    const recordFailure = (resource: string, error: unknown): void => {
+      failure ??= { error };
+      // Fixed resource labels only: cleanup exceptions may contain secrets,
+      // paths, URLs, or arbitrary non-Error values from an injected adapter.
+      try {
+        this.#logger.error("Application cleanup failed", { resource });
+      } catch {
+        // A custom logger must not prevent the remaining disposal attempts.
+      }
+    };
+    const stop = (resource: string, dispose: () => void): void => {
+      try {
+        dispose();
+      } catch (error) {
+        recordFailure(resource, error);
+      }
+    };
+    stop("system", () => system?.stopMaintenance());
+    stop("connectivity", () => connectivity?.());
+    stop("outbound", () => {
+      if (outbound?.stop !== undefined) outbound.stop();
+      else outbound?.worker.stop();
+    });
+    stop("live", () => live?.stop());
+    stop("beverages", () => beverages?.dispose());
+    stop("health", () => health?.stopMaintenance());
+    stop("detector", () => detector?.stopMaintenance());
+    try {
+      await http?.stop();
+    } catch (error) {
+      recordFailure("http", error);
+    }
+    stop("database", () => database?.close());
+    return failure;
   }
 }
 

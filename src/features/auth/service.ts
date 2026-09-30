@@ -361,10 +361,6 @@ export class AuthService {
     return this.getCredentialStatus();
   }
 
-  getStatus(): CredentialStatus {
-    return this.getCredentialStatus();
-  }
-
   getSessionPolicy(): SessionPolicy {
     const stored = readSessionPolicy(this.#database);
     return {
@@ -482,14 +478,6 @@ export class AuthService {
     return this.getCredentialStatus();
   }
 
-  setCredential(pin: unknown, options: CredentialChangeOptions = {}): Promise<CredentialStatus> {
-    return this.setPin(pin, options);
-  }
-
-  setAdminPin(pin: unknown, options: CredentialChangeOptions = {}): Promise<CredentialStatus> {
-    return this.setPin(pin, options);
-  }
-
   async changePin(
     currentPin: unknown,
     newPin: unknown,
@@ -525,22 +513,6 @@ export class AuthService {
       this.#activity("credential_changed", options, now);
     });
     return this.getCredentialStatus();
-  }
-
-  changeCredential(
-    currentPin: unknown,
-    newPin: unknown,
-    options: CredentialChangeOptions = {},
-  ): Promise<CredentialStatus> {
-    return this.changePin(currentPin, newPin, options);
-  }
-
-  changeAdminPin(
-    currentPin: unknown,
-    newPin: unknown,
-    options: CredentialChangeOptions = {},
-  ): Promise<CredentialStatus> {
-    return this.changePin(currentPin, newPin, options);
   }
 
   async resetPin(pin: unknown, options: CredentialChangeOptions = {}): Promise<CredentialStatus> {
@@ -650,22 +622,6 @@ export class AuthService {
     };
   }
 
-  login(
-    pin: unknown,
-    presentedSession?: unknown,
-    options?: AuthClockOptions,
-  ): Promise<AuthenticationResult> {
-    return this.authenticate(pin, presentedSession, options);
-  }
-
-  authenticatePin(
-    pin: unknown,
-    presentedSession?: unknown,
-    options?: AuthClockOptions,
-  ): Promise<AuthenticationResult> {
-    return this.authenticate(pin, presentedSession, options);
-  }
-
   authenticateSession(
     token: unknown,
     options: AuthClockOptions = {},
@@ -736,10 +692,6 @@ export class AuthService {
       });
       return true;
     });
-  }
-
-  revokeSession(token: unknown, options: AuthClockOptions = {}): boolean {
-    return this.revoke(token, options);
   }
 
   revokeAll(options: AuthClockOptions = {}): number {
@@ -903,6 +855,3 @@ export function createAuthService(
 ): AuthService {
   return new AuthService(database, options);
 }
-
-export const createAuthenticationService = createAuthService;
-export const createAuthUseCase = createAuthService;

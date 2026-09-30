@@ -85,5 +85,3 @@ export async function readFormBody(
   }
   return form;
 }
-
-export const readUrlEncodedForm = readFormBody;

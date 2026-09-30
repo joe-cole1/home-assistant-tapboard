@@ -21,3 +21,7 @@ Source is organized primarily by domain feature. Cross-domain workflows use expl
 - Proven algorithms and assets are deliberately reintroduced only through approved v2 boundaries.
 - Foundation will establish the new application runtime and development/validation configuration. The frozen deployment phase will later establish the production Docker and Compose configuration.
 - `architecture.md` must describe implemented reality rather than the future target.
+
+## Implementation record — v2 finalization
+
+Issues #66–#80 implement the single Node 24 runtime and canonical schema 22, including the approved isolated Simulation workspace in ADR-0008. Issue #81 supplies the runnable hardened production Compose pattern and independent canonical/browser/container gates. The two production dependencies remain `better-sqlite3` and Eta; no transpiler, bundler, HTTP framework, or alternate v1 runtime was introduced. The frozen v1 source is recoverable at `429cf07e451b64ca1713655a34ffa5ebd376efae`, not from the current v2 main tree. Release publication and actual deployment remain operator actions.

@@ -23,3 +23,9 @@ A missing or incorrect master key preserves encrypted values and starts Tapboard
 - Human sessions, telemetry keys, and recoverable integration secrets have separate storage and threat models.
 - Public DTOs and errors fail closed without leaking internal or integration data.
 - Infrastructure-only trust settings and the master key remain deployment configuration; normal settings and encrypted credentials live in typed SQLite ownership.
+
+## Implementation record — System and deployment
+
+Schema22 stores typed inactivity/absolute session policy with revision/CAS. Environment defaults apply until the first explicit System save; saved policy applies across instances and restarts. Shortening clamps existing deadlines immediately, while lengthening cannot revive expired sessions or extend their original absolute lifetime. System lists only safe active-session summaries and supports confirmed individual/self revocation. Browser PIN change requires the current PIN and revokes every session; stdin-only operator recovery and verified atomic encryption-key rotation remain separate local commands.
+
+The production image/Compose boundary is non-root, read-only except the data volume and restricted tmpfs, drops capabilities, and uses no-new-privileges. The configured external origin remains authoritative even behind an explicitly trusted proxy. Background integration and maintenance disposal precedes HTTP drain and SQLite close; obsolete probe/delivery generations and disposed Brewfather requests cannot persist late evidence. Fixed cleanup diagnostics exclude exception payloads. [Operator guidance](../operations.md) keeps secrets external, preserves env-file configuration during key rotation, and leaves backups/restore and production deployment with the operator.

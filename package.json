@@ -1,6 +1,6 @@
 {
   "name": "tapboard",
-  "version": "0.0.0",
+  "version": "2.0.0",
   "private": true,
   "description": "Tapboard v2 modular monolith",
   "type": "module",

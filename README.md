@@ -1,8 +1,8 @@
 # Tapboard v2
 
-Tapboard v2 is an ESM modular monolith. Issues #66 and #67 establish the Node 24 Foundation and security/Activity/event/secret/machine-key/bounded-outbox primitives; #85 adds the development container workflow; #68–#75 add the domain, telemetry, forecasting, and health boundaries; #76 adds the Eta-rendered Admin/public browser surface, bounded SSE, and display preferences; #77 adds Brew Story, sensory guidance, Mystery Tap, and Beverage-owned presentation; #78 adds Tap Wars; and #79 adds outbound Home Assistant/webhook delivery. The root production Dockerfile restores existing Git-context builds; broader deployment acceptance remains tracked by #81.
+Tapboard v2 is a Node 24 modular monolith with server-rendered public and Admin pages, a clean SQLite domain model, canonical machine telemetry, deterministic pour detection, forecasting, health, Brew Story/Mystery, Tap Wars, optional outbound integrations, saved Simulation, and System administration. `/` is the authoritative public dashboard; `/admin/*` provides ordinary authenticated forms with progressive browser enhancements.
 
-The current branch implements Issues #66–#80, the #85 development container, and a bounded production-container compatibility restoration. Validation status is maintained in the rebuild handoff. `/` is the authoritative server-rendered public dashboard; `/admin/*` provides the authenticated progressive Admin shell. Issue #81 owns the remaining deployment, documentation, and final rebuild acceptance.
+The v2 implementation is prepared as application version **2.0.0**, schema **22**. [The acceptance ledger](docs/rebuild/STATUS.md) records exact checks and review/merge status for #80, #81, and master #65. Building and testing do not publish a release or deploy a service. The remaining tracked follow-up is #111 → #112 → #113 → #114.
 
 The frozen v1 application remains available at commit `429cf07e451b64ca1713655a34ffa5ebd376efae` and through Git history. Reusable v1 evidence is indexed in [`docs/rebuild/v1-reuse-manifest.json`](docs/rebuild/v1-reuse-manifest.json); it is reference material, not an active dependency or import source for v2.
 
@@ -16,7 +16,7 @@ npm ci
 
 `better-sqlite3` is a native dependency. A platform C/C++ build toolchain is required when npm compiles it during installation (for example, GNU Make and a C++ compiler on Linux).
 
-Start the local Foundation server:
+Start the local server:
 
 ```sh
 npm start
@@ -64,11 +64,35 @@ Canonical settings always win and retain validation, even when invalid or empty.
 
 This restores packaging, not v1 application or data compatibility. Existing `tapboard.db` and `/app/backups` contents are not read, migrated, modified, or deleted; the old backup mount is inert. A volume containing only v1 data starts a separate, empty v2 database with no default Admin PIN. Initialize the PIN using the stdin-only local operator command. Keep `TAPBOARD_SECRET_KEY` external, and configure the canonical external origin for your reverse proxy; old PIN, integration, and secret settings are not translated. Do not point `TAPBOARD_DATABASE_PATH` at a v1 database or delete volumes to force startup. Backups and any v1 data migration remain separate operator-owned work.
 
-No VPS Compose edit, image publication, deployment, database migration contract change, or completion of the full #81 acceptance gate is implied by this restoration. `compose.production.example.yaml` remains an illustrative, non-runnable registry-image example.
+### Hardened production Compose
+
+`compose.production.example.yaml` is runnable with Docker Compose 2.24.0 or later. It builds the root Dockerfile, defaults to the local `tapboard:local` image, publishes only host loopback port 3005, and loads an optional ignored `.env` (or `TAPBOARD_ENV_FILE`). It enforces UID/GID 1000, a read-only root, a restricted 16MiB `/tmp`, dropped capabilities, no-new-privileges, init, SIGTERM, a 15-second stop grace, and a writable named data volume. Runtime readiness stays independent of optional integrations.
+
+```sh
+docker compose -p tapboard-prod -f compose.production.example.yaml up -d --build
+docker compose -p tapboard-prod -f compose.production.example.yaml ps
+curl -fsS http://127.0.0.1:3005/healthz
+```
+
+For an external configuration file, supply it for both runtime variables and Compose interpolation:
+
+```sh
+export TAPBOARD_ENV_FILE=/absolute/path/to/tapboard.env
+docker compose --env-file "$TAPBOARD_ENV_FILE" -p tapboard-prod -f compose.production.example.yaml up -d --build
+docker compose --env-file "$TAPBOARD_ENV_FILE" -p tapboard-prod -f compose.production.example.yaml ps
+```
+
+Use that same `--env-file` option on later `exec`, restart, and recreate commands. `TAPBOARD_ENV_FILE` alone does not supply image, host-port, or external-origin interpolation. Shell variables override values in the interpolation file.
+
+Initialize a fresh installation's PIN over stdin, using the same hidden-variable pattern below with the production Compose file/project. A fresh named volume inherits the image's writable `/app/data` ownership. Existing bind mounts must already permit UID/GID 1000 to write; do not run the application as root to bypass incorrect permissions.
+
+For LAN HTTP, set `TAPBOARD_PUBLISH_ADDRESS` to the host's selected LAN IP and `TAPBOARD_EXTERNAL_ORIGIN` to its exact reachable origin, including port. `TAPBOARD_PUBLISH_PORT` controls the host port; the container stays at3005. For a same-host HTTPS proxy, keep loopback publishing and configure the exact HTTPS origin; allow only the proxy's observed source address in `TAPBOARD_TRUSTED_PROXIES`. The configured origin controls Origin validation and Secure cookies; forwarded headers never provide an origin fallback. A containerized proxy should share a private network with Tapboard and remove Tapboard's published ports. See [operator/security patterns](docs/operations.md) for the complete examples and volume-preserving update procedure.
+
+Run the disposable production acceptance check with `bash scripts/check-production-container.sh`. It builds a new local image and uses only its own uniquely named containers/volume, never the normal development or production data. CI runs this separately from canonical Node and Chromium checks. This is validation, not image publication or VPS deployment.
 
 ### MANUAL DEV TEST — production Compose compatibility
 
-After merge, use the existing Git sync/build workflow with the existing Compose file and keep its volumes. Confirm the build finds the root `Dockerfile`, the container becomes healthy, and `/healthz` reports schema 20 through the existing port/proxy. Confirm the existing `wget --spider` probe exits successfully, the dashboard and Admin login render, and stop/start retains v2 state. Check the selected database filename before initialization; v1 data is preserved but not imported. Test first with disposable state or an operator-managed backup, and never use `down --volumes` for this check.
+After merge, use the existing Git sync/build workflow with the existing Compose file and keep its volumes. Confirm the build finds the root `Dockerfile`, the container becomes healthy, and `/healthz` reports schema version 22 through the existing port/proxy. Confirm the existing `wget --spider` probe exits successfully, the dashboard and Admin login render, and stop/start retains v2 state. Check the selected database filename before initialization; v1 data is preserved but not imported. Test first with disposable state or an operator-managed backup, and never use `down --volumes` for this check.
 
 ## Updating the local development instance
 
@@ -89,14 +113,14 @@ Follow the service logs when diagnosing a rebuild:
 docker compose -f compose.dev.yaml logs -f --tail=200 tapboard
 ```
 
-Normal rebuilds MUST NOT use `docker compose -f compose.dev.yaml down --volumes`; that intentionally deletes Tapboard development state. `.env.example` is a v2-safe configuration reference to copy into the ignored `.env` file. `compose.production.example.yaml` is only a provisional, non-runnable illustrative deployment contract; it does not claim a production image or acceptance.
+Normal rebuilds MUST NOT use `docker compose -f compose.dev.yaml down --volumes`; that intentionally deletes Tapboard development state. `.env.example` is a v2-safe configuration reference to copy into the ignored `.env` file. Use the production Compose example only for the separately named production project; do not switch the development project or repurpose its volume.
 
 ## Development container workflow
 
 Install Docker Desktop with the Compose v2 plugin, then create an ignored local `.env` containing an external canonical 32-byte base64url `TAPBOARD_SECRET_KEY`. No real key or default value belongs in Git. A new key can be written without printing it:
 
 ```sh
-(umask 077; printf 'TAPBOARD_SECRET_KEY=' > .env; openssl rand -base64 32 | tr '+/' '-_' | tr -d '\n=' >> .env; printf '\n' >> .env)
+test ! -e .env && (umask 077; printf 'TAPBOARD_SECRET_KEY=' > .env; openssl rand -base64 32 | tr '+/' '-_' | tr -d '\n=' >> .env; printf '\n' >> .env)
 ```
 
 Build and start the development service:
@@ -146,11 +170,22 @@ IFS= read -r -s TAPBOARD_NEW_KEY; printf '\n'
 printf '%s\n%s\n' "$TAPBOARD_OLD_KEY" "$TAPBOARD_NEW_KEY" | docker compose -f compose.dev.yaml exec -T tapboard npm run operator:rotate-secret-key
 ```
 
-After a successful rotation, write the new external key to the ignored `.env`, force-recreate the service, and then clear the shell variables:
+After a successful rotation, write the new external key to the selected configuration file (default `.env`), force-recreate the service, and then clear the shell variables. For production, replace both `compose.dev.yaml` invocations in the rotation sequence with the production file/project and the same `--env-file` prefix shown in [operations](docs/operations.md) before running it:
 
 ```sh
-(umask 077; printf 'TAPBOARD_SECRET_KEY=%s\n' "$TAPBOARD_NEW_KEY" > .env)
-docker compose -f compose.dev.yaml up --force-recreate -d
+export TAPBOARD_NEW_KEY
+node --input-type=module <<'NODE' && docker compose -f compose.dev.yaml up --force-recreate -d
+import { readFileSync, writeFileSync, renameSync, lstatSync } from "node:fs";
+const path = process.env.TAPBOARD_ENV_FILE ?? ".env";
+if (!lstatSync(path).isFile() || lstatSync(path).isSymbolicLink()) throw new Error("Expected a regular env file");
+const key = process.env.TAPBOARD_NEW_KEY;
+if (!key || !/^[A-Za-z0-9_-]{43}$/.test(key) || Buffer.from(key, "base64url").toString("base64url") !== key) throw new Error("Invalid new key");
+const old = readFileSync(path, "utf8");
+const lines = old.split(/\r?\n/).filter(line => !/^\s*(?:export\s+)?TAPBOARD_SECRET_KEY\s*=/.test(line));
+const temporary = `${path}.rotation.tmp`;
+writeFileSync(temporary, `${lines.join("\n").replace(/\n*$/, "")}\nTAPBOARD_SECRET_KEY=${key}\n`, { mode: 0o600, flag: "wx" });
+renameSync(temporary, path);
+NODE
 unset TAPBOARD_OLD_KEY TAPBOARD_NEW_KEY
 ```
 
@@ -180,15 +215,15 @@ The selected mode and sample data survive application restart. Running pours sto
 
 ### MANUAL DEV TEST — built-in Simulation
 
-After the normal non-destructive rebuild, verify `/healthz` reports schema 21. Sign in with the existing PIN, enable simulation from System, and confirm six sample taps and a SIMULATION banner in Admin and the public dashboard. Pour 12 oz from a Ready sensor; watch remaining volume update, then confirm the settled remaining estimate has fallen by about 355 mL. Pause/resume another sensor and check its health after the configured stale interval. Turn on noise and confirm idle readings do not create pours. Change a sample Beverage's glass and a Display theme while readings continue. Exit and re-enter to confirm sample history persists and normal inventory returns. Restart the container and confirm the selected workspace/history survive. Finally, explicitly reset simulation and verify only the sample workspace is replaced. Never remove the normal development volume for this check.
+After the normal non-destructive rebuild, verify `/healthz` reports schema version 22. Sign in with the existing PIN, enable simulation from System, and confirm six sample taps and a SIMULATION banner in Admin and the public dashboard. Pour 12 oz from a Ready sensor; watch remaining volume update, then confirm the settled remaining estimate has fallen by about 355 mL. Pause/resume another sensor and check its health after the configured stale interval. Turn on noise and confirm idle readings do not create pours. Change a sample Beverage's glass and a Display theme while readings continue. Exit and re-enter to confirm sample history persists and normal inventory returns. Restart the container and confirm the selected workspace/history survive. Finally, explicitly reset simulation and verify only the sample workspace is replaced. Never remove the normal development volume for this check.
 
 ### MANUAL DEV TEST — dashboard Settings access
 
-After the normal rebuild without deleting the data volume, verify `/healthz` still reports schema 21. On a phone and a wall display, confirm **Settings** remains visible with populated and empty dashboards, including while Home Assistant is unavailable. In a disposable workspace, hide every tap and check **No taps to display** and **Open settings**; re-enable a tap and check the message disappears on the already-open dashboard. Follow Settings, sign in if needed, open **System**, and confirm **Enable simulation** is reachable. Repeat navigation with JavaScript disabled. The connectivity indicator must still open Admin. With a disposable required integration, verify green **Connected** after confirmed success, yellow **Partial** on a connection failure, and red **Disconnected** after five minutes; recovery must return to green when all other checks are healthy. Missing credentials or critical sensor loss must be red. An optional destination failure must not override healthy required checks.
+After the normal rebuild without deleting the data volume, verify `/healthz` still reports schema version 22. On a phone and a wall display, confirm **Settings** remains visible with populated and empty dashboards, including while Home Assistant is unavailable. In a disposable workspace, hide every tap and check **No taps to display** and **Open settings**; re-enable a tap and check the message disappears on the already-open dashboard. Follow Settings, sign in if needed, open **System**, and confirm **Enable simulation** is reachable. Repeat navigation with JavaScript disabled. The connectivity indicator must still open Admin. With a disposable required integration, verify green **Connected** after confirmed success, yellow **Partial** on a connection failure, and red **Disconnected** after five minutes; recovery must return to green when all other checks are healthy. Missing credentials or critical sensor loss must be red. An optional destination failure must not override healthy required checks.
 
 ## MANUAL DEV TEST — Issue #109 Brewfather boundaries
 
-After merging, rebuild and recreate the development container without deleting its volume; confirm `/healthz` is healthy and the database remains at schema version 21. Use a development fixture or local fake Brewfather transport: defer a linked batch response, unlink or delete its Beverage, then release the response and verify the obsolete source profile/recipe is not restored. Repeat with a missing/error response and confirm a replacement link keeps its own state. Verify normal sync still updates linked data, disabled accounts do not degrade the public header, and enabled stale/error links show Partial. Oversized, malformed, stalled, and retried response checks are covered by automated fake-transport tests; no production Brewfather writes are needed.
+After merging, rebuild and recreate the development container without deleting its volume; confirm `/healthz` is healthy and the database remains at schema version 22. Use a development fixture or local fake Brewfather transport: defer a linked batch response, unlink or delete its Beverage, then release the response and verify the obsolete source profile/recipe is not restored. Repeat with a missing/error response and confirm a replacement link keeps its own state. Verify normal sync still updates linked data, disabled accounts do not degrade the public header, and enabled stale/error links show Partial. Oversized, malformed, stalled, and retried response checks are covered by automated fake-transport tests; no production Brewfather writes are needed.
 
 ## System administration
 
@@ -223,25 +258,25 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-CI installs Chromium and runs `npm run test:e2e` in its own Node 24 job.
+CI runs canonical checks, the complete Chromium suite, and disposable hardened production-container validation as separate jobs. No validation command deploys or publishes the image.
 
 Schema version 22 (`system-administration-and-retention`) is the current supported schema. It adds singleton typed session-policy and terminal-outbox-retention tables, preserving the previous schema and data. Session defaults remain inherited until explicitly saved. Version 21 (`builtin-simulation`) added typed workspace settings, simulated sensor state, and Fill-owned physical volume; version 20 added Fill-owned Featured preferences after version 19's outbound delivery schema. Low and New badges are derived rather than persisted. Browser-local overrides, live/SSE state, and effective sensory projections are never persisted in SQLite. `/healthz` reports `schemaVersion: 22` when the database is ready. An unpublished badge-only version-19 database is not a canonical upgrade source and is rejected without repair; preserve its data and obtain an explicit migration plan instead of deleting a volume or rewriting its ledger.
 
 ## MANUAL DEV TEST — Issue #110 autosave and live refresh
 
-After updating, rebuild and recreate the development container without deleting its volume, then verify `/healthz` reports schema version 21. Enable Simulation and keep its public dashboard open beside Admin. With browser network throttling enabled, change a safe Tap name from A to B and back to A while the first save is pending; repeat with A to B to C. Wait for Saved and reload: the final value must match your last edit. Check Undo, inline validation, and a conflict from a second Admin tab.
+After updating, rebuild and recreate the development container without deleting its volume, then verify `/healthz` reports schema version 22. Enable Simulation and keep its public dashboard open beside Admin. With browser network throttling enabled, change a safe Tap name from A to B and back to A while the first save is pending; repeat with A to B to C. Wait for Saved and reload: the final value must match your last edit. Check Undo, inline validation, and a conflict from a second Admin tab.
 
 Temporarily block a targeted public dashboard request in browser developer tools, change a shared display setting, then unblock requests. The already-open display must recover to the saved state while retaining its existing cards, glass graphics, and bubbles. Disabling a Tap must remove its public card; reenabling it must restore it. Confirm the normal Admin form still saves with JavaScript disabled.
 
 ## MANUAL DEV TEST — vessel artwork and pour animation
 
-After the normal development rebuild, confirm `/healthz` reports schema 20. In the Beverage Fill Glass picker, inspect all 17 vessels and switch between a mug, tulip, snifter, and keg while the dashboard is open. Confirm the existing SVG node updates, the viewport stays the same, and a stemmed glass fills only its bowl. Check empty, low, half-full, and full levels in light and dark themes.
+After the normal development rebuild, confirm `/healthz` reports schema version 22. In the Beverage Fill Glass picker, inspect all 17 vessels and switch between a mug, tulip, snifter, and keg while the dashboard is open. Confirm the existing SVG node updates, the viewport stays the same, and a stemmed glass fills only its bowl. Check empty, low, half-full, and full levels in light and dark themes.
 
 As an authenticated Admin, hold a glass or use Shift+Space to preview a pour. It fills visually from empty to the current reading; the stream ends at the rising surface and never enters a stem. The preview does not change the stored reading. Confirm bubbles still rise within the beer, live updates interrupt the preview safely, and reduced motion shows the final reading with stationary bubbles. Inspect the same artwork in the Admin picker and display preview.
 
 ## MANUAL DEV TEST — browser feedback and card badges
 
-After updating, rebuild and recreate the development container normally without deleting its volume, then verify `/healthz` reports schema version 20. With disposable entities, check four-digit PIN autosubmit and a cleared retry after an incorrect PIN; matching Beverage/Tap/Keg table styling and unit labels; live shared and per-Tap previews, including inheritance and Undo; Featured updates on an already-open dashboard; Low/New/Tap Wars footer badges; fading vote feedback; and canceled/confirmed Kick Keg actions with and without JavaScript. Kick must end the selected Fill and leave its Tap empty. Browser/E2E and CI verification were waived for this change; these manual checks remain for the operator.
+After updating, rebuild and recreate the development container normally without deleting its volume, then verify `/healthz` reports schema version 22. With disposable entities, check four-digit PIN autosubmit and a cleared retry after an incorrect PIN; matching Beverage/Tap/Keg table styling and unit labels; live shared and per-Tap previews, including inheritance and Undo; Featured updates on an already-open dashboard; Low/New/Tap Wars footer badges; fading vote feedback; and canceled/confirmed Kick Keg actions with and without JavaScript. Kick must end the selected Fill and leave its Tap empty. The original PR #106 used a historical browser/CI waiver; final v2 validation is recorded separately in the acceptance ledger. These manual checks remain for the operator.
 
 The event registry is an explicit allowlist with durable IDs and canonical UTC envelopes. Outbox admission uses hard global/per-destination row and UTF-8 byte bounds, bounded terminal pruning, restricted semantic coalescing, fixed overflow slots, and explicit `not_queued_capacity` degradation semantics. Delivery state provides at-least-once processing with leases and compare-and-set results; it does not claim exactly-once network delivery. Issue #79 adds provider-neutral destination workers, immutable configuration versions, and six-event subscriptions while keeping network I/O outside SQLite transactions.
 
@@ -257,7 +292,7 @@ Secret values remain encrypted and are never read back through Admin, errors, lo
 
 ### MANUAL DEV TEST — Issue #79
 
-After updating to the Issue #79 revision, use the normal non-destructive rebuild (`docker compose -f compose.dev.yaml up -d --build --force-recreate`; never use `down --volumes` or delete `tapboard-dev_tapboard-data`). Verify `GET /healthz` returns `{"status":"ok","schemaVersion":19}`. Sign in to Admin and inspect the outbound destination UI: confirm all six registered event subscriptions are selected by default and `Required` defaults to OFF, then inspect safe summaries, create/edit/toggle/retire controls, and bounded delivery history. Create one disposable Home Assistant destination and one disposable webhook destination, inspect the Standard JSON and bounded Discord format choices, and confirm secret values are never returned in the page, history, logs, or errors. If available, run the optional Home Assistant check only against a safe disposable/LAN endpoint and verify `tapboard_event` without arbitrary service calls. Exercise both webhook formats against a disposable receiver, including rejection of redirects/private or mixed-DNS targets. Disable and re-enable a disposable destination and verify due/failure timing shifts while history remains; confirm Retry is available only for terminal rows and Dismiss is final. Inspect responsive behavior at approximately 800 px, 1280×720, 1920×1080, and 3840×2160. Do not delete or repurpose the persistent development volume.
+After updating to the Issue #79 revision, use the normal non-destructive rebuild (`docker compose -f compose.dev.yaml up -d --build --force-recreate`; never use `down --volumes` or delete `tapboard-dev_tapboard-data`). Verify `GET /healthz` returns `{"status":"ok","schemaVersion":22}`. Sign in to Admin and inspect the outbound destination UI: confirm all six registered event subscriptions are selected by default and `Required` defaults to OFF, then inspect safe summaries, create/edit/toggle/retire controls, and bounded delivery history. Create one disposable Home Assistant destination and one disposable webhook destination, inspect the Standard JSON and bounded Discord format choices, and confirm secret values are never returned in the page, history, logs, or errors. If available, run the optional Home Assistant check only against a safe disposable/LAN endpoint and verify `tapboard_event` without arbitrary service calls. Exercise both webhook formats against a disposable receiver, including rejection of redirects/private or mixed-DNS targets. Disable and re-enable a disposable destination and verify due/failure timing shifts while history remains; confirm Retry is available only for terminal rows and Dismiss is final. Inspect responsive behavior at approximately 800 px, 1280×720, 1920×1080, and 3840×2160. Do not delete or repurpose the persistent development volume.
 
 ## Issue #77 Brew Story, sensory guidance, and Mystery Tap
 
@@ -267,7 +302,7 @@ Sensory guidance exposes only bitterness, sweetness, body, roast, tartness, and 
 
 ### MANUAL DEV TEST — Issue #77
 
-After the normal non-destructive rebuild (`docker compose -f compose.dev.yaml up -d --build --force-recreate`; never use `down --volumes`), verify `/healthz` reports schema version 13. Using disposable entities where mutation is needed, open a normal Brew Story with JavaScript disabled and inspect custom, linked, and detached recipe provenance; check each sensory axis and clear a manual override to expose the next precedence layer. Enable Mystery on an active assignment, confirm the exact `Mystery Tap` title, protected identity, selective reveals, always-visible exemptions, assignment reset after unassign/move, live redaction updates, and dirty-ID-only SSE. Change at least two finite Fill Glass choices and display-color/SRM inputs, confirming distinct safe graphics and stable SVG root identity. Do not delete or repurpose the persistent development volume.
+After the normal non-destructive rebuild (`docker compose -f compose.dev.yaml up -d --build --force-recreate`; never use `down --volumes`), verify `/healthz` reports schema version 22. Using disposable entities where mutation is needed, open a normal Brew Story with JavaScript disabled and inspect custom, linked, and detached recipe provenance; check each sensory axis and clear a manual override to expose the next precedence layer. Enable Mystery on an active assignment, confirm the exact `Mystery Tap` title, protected identity, selective reveals, always-visible exemptions, assignment reset after unassign/move, live redaction updates, and dirty-ID-only SSE. Change at least two finite Fill Glass choices and display-color/SRM inputs, confirming distinct safe graphics and stable SVG root identity. Do not delete or repurpose the persistent development volume.
 
 ## Issue #75 health and Tap maintenance
 
@@ -279,7 +314,7 @@ Accepted telemetry evaluates health after detector processing; assignment, autho
 
 ### MANUAL DEV TEST — Issue #75
 
-Persistent, safe read-only checks: after the normal rebuild, verify `GET /healthz` returns `{"status":"ok","schemaVersion":11}` and inspect the authenticated Admin health and Tap-maintenance projections without acknowledging incidents, changing configuration/overrides/cooldowns, or recording maintenance. Do not mutate the persistent development volume in this pass.
+Persistent, safe read-only checks: after the normal rebuild, verify `GET /healthz` returns `{"status":"ok","schemaVersion":22}` and inspect the authenticated Admin health and Tap-maintenance projections without acknowledging incidents, changing configuration/overrides/cooldowns, or recording maintenance. Do not mutate the persistent development volume in this pass.
 
 Ephemeral, mutating smoke: use a disposable database and disposable Tap to exercise a default-enabled check, an opt-in check, a nullable per-Tap override, incident acknowledgement/cooldown, retired-Tap resolution, and append-only line maintenance with a server-derived due date. Confirm durable incidents and maintenance atomically set `first_used_at`, and that `line_cleaned` establishes the line-cleaning baseline only. Maintenance and incidents permanently mark a Tap used; never use a persistent Tap or the named development volume, and do not delete the volume as cleanup. No tests are claimed as run here; this is an operator test plan.
 
@@ -291,7 +326,11 @@ Shared display defaults flow into sparse, strictly validated browser-local overr
 
 ### MANUAL DEV TEST — Issue #76
 
-Rebuild and recreate normally without deleting `tapboard-dev_tapboard-data`, then confirm `/healthz` reports schema version 12. Check `/` with zero, one, six, and more than six enabled Taps; a disabled Tap; an unassigned Tap; and On Deck entries. Sign in at `/admin/login`, visit every Admin navigation route, submit one representative form with JavaScript disabled, and exercise shared plus local Display settings. In two tabs, verify local preference persistence, reset-to-inherit, and storage synchronization. Update a Tap while the dashboard is open, confirm the field changes without replacing its SVG graphic node, then interrupt/reconnect the event stream and confirm authoritative reconciliation. Inspect approximately 800 px, 1280×720, 1920×1080, and 3840×2160. Use disposable state for destructive fixture scenarios; never delete the persistent volume.
+Rebuild and recreate normally without deleting `tapboard-dev_tapboard-data`, then confirm `/healthz` reports schema version 22. Check `/` with zero, one, six, and more than six enabled Taps; a disabled Tap; an unassigned Tap; and On Deck entries. Sign in at `/admin/login`, visit every Admin navigation route, submit one representative form with JavaScript disabled, and exercise shared plus local Display settings. In two tabs, verify local preference persistence, reset-to-inherit, and storage synchronization. Update a Tap while the dashboard is open, confirm the field changes without replacing its SVG graphic node, then interrupt/reconnect the event stream and confirm authoritative reconciliation. Inspect approximately 800 px, 1280×720, 1920×1080, and 3840×2160. Use disposable state for destructive fixture scenarios; never delete the persistent volume.
+
+## MANUAL DEV TEST — Issue #81
+
+After both implementation PRs are merged, update main and rebuild/recreate the development container with its existing volume. Verify `/healthz` reports schema 22 and System reports application 2.0.0. Confirm PIN login, no-JavaScript forms, a saved Simulation pour, Story/Mystery redaction, Tap Wars, and live display updates still work. Stop/start and recreate without deleting volumes; verify normal inventory, Simulation history, and installation policies persist. Use disposable fake integrations to confirm an outage degrades connectivity while local administration/readiness remain available, and stop during a delayed request without late database errors. For production, run the disposable container script before applying the documented LAN/proxy pattern to the operator's own stack. Keep actual deployment, key/backup management, and destructive fixtures separate from the persistent development volume.
 
 ## Authoritative rebuild context
 

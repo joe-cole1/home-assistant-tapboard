@@ -82,6 +82,8 @@ export interface SyncOptions {
 
 export class BrewfatherSyncCoordinator {
   #inFlightSync: Promise<readonly SyncResult[]> | null = null;
+  #disposed = false;
+  readonly #activeAdapters = new Map<BrewfatherAdapter, number>();
   readonly #fetchFn?: typeof fetch | undefined;
   readonly #origin?: string | undefined;
   readonly #adapters = new Map<
@@ -100,11 +102,41 @@ export class BrewfatherSyncCoordinator {
     this.#origin = options.origin;
   }
 
+  /** Cancel cached and in-flight adapters before their owning database is closed. */
+  dispose(): void {
+    if (this.#disposed) return;
+    this.#disposed = true;
+    for (const { adapter } of this.#adapters.values()) adapter.dispose();
+    for (const adapter of this.#activeAdapters.keys()) adapter.dispose();
+    this.#adapters.clear();
+    this.#activeAdapters.clear();
+  }
+
+  #assertActive(): void {
+    if (this.#disposed) {
+      throw new BrewfatherError("disposed", "Brewfather integration is shut down.");
+    }
+  }
+
+  #retainAdapter(adapter: BrewfatherAdapter): void {
+    this.#activeAdapters.set(adapter, (this.#activeAdapters.get(adapter) ?? 0) + 1);
+  }
+
+  #releaseAdapter(accountId: string, adapter: BrewfatherAdapter): void {
+    const remaining = (this.#activeAdapters.get(adapter) ?? 1) - 1;
+    if (remaining > 0) this.#activeAdapters.set(adapter, remaining);
+    else {
+      this.#activeAdapters.delete(adapter);
+      if (this.#adapters.get(accountId)?.adapter !== adapter) adapter.dispose();
+    }
+  }
+
   #getOrCreateAdapter(
     account: BrewfatherAccount,
     apiKey: string,
     options: SyncOptions,
   ): BrewfatherAdapter {
+    this.#assertActive();
     const origin = options.origin ?? this.#origin;
     const fetchFn = options.fetchFn ?? this.#fetchFn;
     const cached = this.#adapters.get(account.id);
@@ -130,6 +162,7 @@ export class BrewfatherSyncCoordinator {
       ...(origin !== undefined ? { origin } : {}),
       ...(fetchFn !== undefined ? { fetchFn } : {}),
     });
+    if (cached && !this.#activeAdapters.has(cached.adapter)) cached.adapter.dispose();
     return adapter;
   }
 
@@ -142,6 +175,7 @@ export class BrewfatherSyncCoordinator {
     secretsService: SecretsService,
     options: SyncOptions = {},
   ): Promise<readonly SyncResult[]> {
+    this.#assertActive();
     if (this.#inFlightSync !== null) {
       return this.#inFlightSync;
     }
@@ -158,6 +192,7 @@ export class BrewfatherSyncCoordinator {
     secretsService: SecretsService,
     options: SyncOptions,
   ): Promise<readonly SyncResult[]> {
+    this.#assertActive();
     const nowIso = (options.now ?? (() => new Date()))().toISOString();
 
     const accounts = options.accountId
@@ -173,6 +208,7 @@ export class BrewfatherSyncCoordinator {
     const results: SyncResult[] = [];
 
     for (const account of accounts) {
+      this.#assertActive();
       const accountResult = await this.#syncAccount(
         database,
         secretsService,
@@ -180,6 +216,7 @@ export class BrewfatherSyncCoordinator {
         nowIso,
         options,
       );
+      this.#assertActive();
       results.push(accountResult);
     }
 
@@ -193,6 +230,7 @@ export class BrewfatherSyncCoordinator {
     nowIso: string,
     options: SyncOptions,
   ): Promise<SyncResult> {
+    this.#assertActive();
     const start = Date.now();
 
     // 1. Get decrypted API key
@@ -212,7 +250,22 @@ export class BrewfatherSyncCoordinator {
     }
 
     const adapter = this.#getOrCreateAdapter(account, apiKey, options);
+    this.#retainAdapter(adapter);
+    try {
+      return await this.#syncAccountWithAdapter(database, account, nowIso, options, adapter, start);
+    } finally {
+      this.#releaseAdapter(account.id, adapter);
+    }
+  }
 
+  async #syncAccountWithAdapter(
+    database: DatabaseExecutor,
+    account: BrewfatherAccount,
+    nowIso: string,
+    options: SyncOptions,
+    adapter: BrewfatherAdapter,
+    start: number,
+  ): Promise<SyncResult> {
     let linkedSynced = 0;
     let linkedErrors = 0;
     let authenticationFailed = false;
@@ -222,8 +275,10 @@ export class BrewfatherSyncCoordinator {
     const allLinks = listBeverageLinks(database).filter((l) => l.accountId === account.id);
 
     for (const link of allLinks) {
+      this.#assertActive();
       try {
         const batchData = await adapter.getBatch(link.sourceBatchId);
+        this.#assertActive();
         if (batchData === null) {
           // Source batch not found / 404
           const applied = database.withTransaction(() => {
@@ -297,6 +352,7 @@ export class BrewfatherSyncCoordinator {
                 nextDensity,
                 nowIso,
               );
+              this.#assertActive();
             }
           }
 
@@ -319,6 +375,7 @@ export class BrewfatherSyncCoordinator {
 
         if (applied) linkedSynced += 1;
       } catch (error: unknown) {
+        this.#assertActive();
         // Authentication is account evidence even when the requested link became obsolete.
         authenticationFailed ||= isAuthenticationFailure(error);
         const rawMessage = error instanceof Error ? error.message : "Sync error";
@@ -339,6 +396,7 @@ export class BrewfatherSyncCoordinator {
       const { batches, failures, complete } = await adapter.listBatchesByStatuses(
         account.discoveryStatuses,
       );
+      this.#assertActive();
       connectionVerified ||= account.discoveryStatuses.length > 0 && failures.length === 0;
       if (failures.length > 0) {
         authenticationFailed ||= failures.some((failure) => isAuthenticationFailure(failure.error));
@@ -395,6 +453,7 @@ export class BrewfatherSyncCoordinator {
         });
       }
     } catch (error: unknown) {
+      this.#assertActive();
       authenticationFailed ||= isAuthenticationFailure(error);
       candidateError = error instanceof Error ? error.message : "Candidate discovery error";
     }
@@ -403,6 +462,7 @@ export class BrewfatherSyncCoordinator {
       ? sanitizeErrorMessage(candidateError, 255)
       : undefined;
 
+    this.#assertActive();
     appendActivity(database, {
       category: "admin",
       action: "configuration_changed",
@@ -460,6 +520,9 @@ export class BrewfatherSyncCoordinator {
     readonly outcome: "not_applicable" | "already_terminal" | "completed" | "failed";
     readonly message?: string;
   }> {
+    if (this.#disposed) {
+      return { outcome: "failed", message: "Brewfather integration is shut down." };
+    }
     const link = listBeverageLinks(database).find((l) => l.beverageId === beverageId);
     if (!link) {
       return {
@@ -487,10 +550,12 @@ export class BrewfatherSyncCoordinator {
     }
 
     const adapter = this.#getOrCreateAdapter(account, apiKey, options);
+    this.#retainAdapter(adapter);
 
     try {
       // Step 1: Pre-check batch status
       const batch = await adapter.getBatch(link.sourceBatchId);
+      this.#assertActive();
       if (!batch) {
         return { outcome: "failed", message: "Batch not found on Brewfather" };
       }
@@ -512,6 +577,7 @@ export class BrewfatherSyncCoordinator {
 
       // Step 2: PATCH batch status -> "Completed"
       await adapter.updateBatchStatus(link.sourceBatchId, "Completed");
+      this.#assertActive();
       return {
         outcome: "completed",
         message: "Batch status updated to Completed",
@@ -520,6 +586,8 @@ export class BrewfatherSyncCoordinator {
       const msg = error instanceof Error ? error.message : "Brewfather request failed";
       const safeMsg = sanitizeErrorMessage(msg, 255);
       return { outcome: "failed", message: safeMsg };
+    } finally {
+      this.#releaseAdapter(account.id, adapter);
     }
   }
 }

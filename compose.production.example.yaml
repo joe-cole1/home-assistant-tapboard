@@ -1,18 +1,37 @@
-# PROVISIONAL ILLUSTRATIVE DEPLOYMENT CONTRACT.
-# This is not runnable until issue #81 supplies the production image.
-# It is not production acceptance; production hardening remains deferred to #81.
+# Build and run with: docker compose -f compose.production.example.yaml up --build -d
+# Compose 2.24+ supports the optional, ignored operator environment file.
+# LAN and reverse-proxy exposure are documented in docs/operations.md.
 
 services:
   tapboard:
-    image: example.invalid/tapboard:production-image-not-published
-    env_file: [.env]
+    image: ${TAPBOARD_IMAGE:-tapboard:local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    pull_policy: never
+    env_file:
+      - path: ${TAPBOARD_ENV_FILE:-.env}
+        required: false
     environment:
+      NODE_ENV: production
       TAPBOARD_HOST: 0.0.0.0
-      TAPBOARD_PORT: "3000"
+      TAPBOARD_PORT: "3005"
       TAPBOARD_DATABASE_PATH: /app/data/tapboard-v2.sqlite3
+      TAPBOARD_EXTERNAL_ORIGIN: ${TAPBOARD_EXTERNAL_ORIGIN:-http://127.0.0.1:3005}
+      TAPBOARD_SHUTDOWN_GRACE_MS: "5000"
     ports:
-      # Issue #81 owns final LAN/proxy exposure.
-      - "127.0.0.1:3000:3000"
+      - "${TAPBOARD_PUBLISH_ADDRESS:-127.0.0.1}:${TAPBOARD_PUBLISH_PORT:-3005}:3005"
+    user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    init: true
+    stop_signal: SIGTERM
+    stop_grace_period: 15s
     restart: unless-stopped
     volumes:
       - tapboard-data:/app/data
@@ -22,11 +41,12 @@ services:
         - node
         - -e
         - >-
-          fetch("http://127.0.0.1:3000/healthz")
+          fetch("http://127.0.0.1:3005/healthz", { signal: AbortSignal.timeout(2500) })
           .then((response) => process.exit(response.status === 200 ? 0 : 1))
           .catch(() => process.exit(1))
       interval: 5s
       timeout: 3s
+      start_period: 5s
       retries: 12
 
 volumes:

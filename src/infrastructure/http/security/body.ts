@@ -155,6 +155,3 @@ export async function readJsonBody<T = unknown>(
     throw bodyError("http.invalid_json", "The request body is not valid JSON.");
   }
 }
-
-export const readJsonRequestBody = readJsonBody;
-export const readBody = readRequestBody;
