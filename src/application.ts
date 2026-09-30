@@ -68,6 +68,7 @@ import {
   type PublicTapWarsService,
 } from "./features/tap-wars/index.ts";
 import { LiveUpdateService, observeCommittedCalls } from "./features/live/index.ts";
+import { startConnectivityMonitor } from "./features/dashboard/connectivity-monitor.ts";
 import { registerWebRoutes } from "./features/web/index.ts";
 import { createLogger, type Logger } from "./shared/logging.ts";
 import { createEventEnvelope } from "./features/events/envelope.ts";
@@ -137,6 +138,9 @@ function createDefaultOutboundRuntime(options: OutboundRuntimeFactoryOptions): O
         const destination: HomeAssistantDestination = {
           destinationId: input.destination.id,
           destinationVersionId: input.version.id,
+          ...(input.bindingGeneration === undefined
+            ? {}
+            : { bindingGeneration: input.bindingGeneration }),
           baseUrl: input.endpoint ?? (config.transport === "home_assistant" ? config.baseUrl : ""),
           token: input.token ?? "",
         };
@@ -155,6 +159,9 @@ function createDefaultOutboundRuntime(options: OutboundRuntimeFactoryOptions): O
       const destination: HomeAssistantDestination = {
         destinationId: input.destination.id,
         destinationVersionId: input.version.id,
+        ...(input.bindingGeneration === undefined
+          ? {}
+          : { bindingGeneration: input.bindingGeneration }),
         baseUrl: input.endpoint ?? (config.transport === "home_assistant" ? config.baseUrl : ""),
         token: input.token ?? "",
       };
@@ -231,6 +238,7 @@ class FoundationApplication implements Application {
   #healthService: HealthService | undefined;
   #outboundRuntime: OutboundRuntime | undefined;
   #liveUpdates: LiveUpdateService | undefined;
+  #stopConnectivityMonitor: (() => void) | undefined;
   #address: HttpServerAddress | undefined;
   #starting: Promise<HttpServerAddress> | undefined;
   #stopping: Promise<void> | undefined;
@@ -949,6 +957,12 @@ class FoundationApplication implements Application {
         onError: () => this.#logger.error("Detector maintenance failed"),
       });
       healthService.startMaintenance();
+      this.#stopConnectivityMonitor = startConnectivityMonitor({
+        readState: () => dashboardService.getHeader().connectivity,
+        onChange: () =>
+          liveUpdates.publish({ name: "integration_status.updated", target: "header" }),
+        onError: () => this.#logger.error("Connectivity status refresh failed"),
+      });
       this.#address = address;
       this.#state = "ready";
       if (this.#outboundRuntime !== undefined) {
@@ -980,6 +994,8 @@ class FoundationApplication implements Application {
 
   async #stop(): Promise<void> {
     let failure: unknown;
+    this.#stopConnectivityMonitor?.();
+    this.#stopConnectivityMonitor = undefined;
     const outboundRuntime = this.#outboundRuntime;
     this.#outboundRuntime = undefined;
     try {
@@ -1054,6 +1070,8 @@ class FoundationApplication implements Application {
   }
 
   async #closeResourcesAfterFailure(): Promise<void> {
+    this.#stopConnectivityMonitor?.();
+    this.#stopConnectivityMonitor = undefined;
     const outboundRuntime = this.#outboundRuntime;
     this.#outboundRuntime = undefined;
     try {

@@ -23,7 +23,7 @@ export interface PublicDisplayDefaultsView {
 
 export interface PublicHeaderView {
   readonly tapboardName: string;
-  readonly connectivity: "healthy" | "degraded";
+  readonly connectivity: "healthy" | "degraded" | "disconnected";
   readonly connectivityLabel: string;
 }
 

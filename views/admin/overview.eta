@@ -49,7 +49,7 @@
 
   <section aria-labelledby="connectivity-heading">
     <div class="section-heading"><div><p class="eyebrow">System status</p><h2 id="connectivity-heading">Connectivity and integrations</h2></div><a class="button secondary button--small" href="/admin/integrations">Configure Integrations</a></div>
-    <p class="status-line"><span class="status-badge status-badge--<%= it.connectivity.state === "healthy" ? "healthy" : "degraded" %>"><%= it.connectivity.state === "healthy" ? "Connected" : "Degraded" %></span> <%= it.connectivity.label %></p>
+    <p class="status-line"><span class="status-badge status-badge--<%= it.connectivity.state === "disconnected" ? "critical" : it.connectivity.state === "healthy" ? "healthy" : "degraded" %>"><%= it.connectivity.label %></span></p>
     <dl class="summary-grid"><div><dt>Telemetry sources</dt><dd><%= it.integrations.telemetryConfigured %></dd></div><div><dt>Brewfather</dt><dd><%= it.integrations.brewfatherConfigured ? (it.integrations.brewfatherEnabled ? (it.integrations.brewfatherApiKeyConfigured ? "Enabled" : "API key required") : "Disabled") : "Not configured" %></dd></div><div><dt>Linked beverages</dt><dd><%= it.integrations.brewfatherLinkedBeverages %></dd></div></dl>
   </section>
 

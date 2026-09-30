@@ -63,11 +63,11 @@ import {
   readDestination,
   recordFailure as recordFailureRow,
   recordSuccess as recordSuccessRow,
+  resetConnectivityState,
   resolveTargets,
   setEnabledState,
   setRetired,
   shiftDestinationDeliveries,
-  touchDestinationProfile,
   updateDestinationLabelRequired,
   type OutboundSecretDescriptorLike,
 } from "./repository.ts";
@@ -441,6 +441,13 @@ export class OutboundService implements OutboundAdmissionPort {
           input.secretHeaders ??
           currentConfig.secretHeaders.map((header) => ({ name: header.name, slot: header.slot })),
       });
+      const connectionChanged =
+        config.configJson !== readCurrentDestinationVersion(this.#database, id)?.configJson ||
+        (config.transport === "webhook" &&
+          input.webhookUrl !== undefined &&
+          (currentConfig.transport !== "webhook" ||
+            !currentConfig.endpointAvailable ||
+            endpoint !== this.#revealSecret(currentVersion.id, WEBHOOK_ENDPOINT_SLOT)));
       for (const header of config.secretHeaders) {
         const previous = currentConfig.secretHeaders.find(
           (candidate) => candidate.slot === header.slot,
@@ -462,6 +469,7 @@ export class OutboundService implements OutboundAdmissionPort {
         subscriptions: validateSubscriptions(input.subscriptions ?? current.subscriptions),
       });
       this.#copyVersionSecrets(currentVersion.id, versionId, currentConfig, config, endpoint);
+      if (connectionChanged) resetConnectivityState(this.#database, id, now);
       const store = this.#options.secrets;
       for (const previous of currentConfig.secretHeaders) {
         if (config.secretHeaders.some((header) => header.slot === previous.slot)) continue;
@@ -698,7 +706,7 @@ export class OutboundService implements OutboundAdmissionPort {
       requireSecretStore(this.#options.secrets).upsert("outbound", id, HA_TOKEN_SLOT, token, {
         now: this.#now,
       });
-      touchDestinationProfile(this.#database, id, now);
+      resetConnectivityState(this.#database, id, now);
       appendOutboundActivity(this.#database, "configuration_changed", id, now, {
         change: "token_configured",
       });
@@ -742,7 +750,7 @@ export class OutboundService implements OutboundAdmissionPort {
     const id = validateDestinationId(destinationId, "destinationId");
     const secretValue = validateHeaderSecretValue(plaintext);
     const now = iso(this.#now);
-    return this.#database.withTransaction(() => {
+    const result = this.#database.withTransaction(() => {
       const destination = this.#requireMutableDestination(id);
       const versionId = destination.currentVersion?.id;
       if (versionId === undefined) throw new Error("Outbound destination configuration is missing");
@@ -773,12 +781,14 @@ export class OutboundService implements OutboundAdmissionPort {
       requireSecretStore(this.#options.secrets).upsert("outbound", id, slot, secretValue, {
         now: this.#now,
       });
-      touchDestinationProfile(this.#database, id, now);
+      resetConnectivityState(this.#database, id, now);
       appendOutboundActivity(this.#database, "configuration_changed", id, now, {
         change: "header_secret_configured",
       });
       return this.#requireDestination(id);
     });
+    if (result.transport === "home_assistant") this.#emitLifecycle("credentials_changed", id);
+    return result;
   }
 
   removeHeaderSecret(destinationId: string, slot: string): OutboundDestination {

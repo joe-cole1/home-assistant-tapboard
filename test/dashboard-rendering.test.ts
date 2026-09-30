@@ -132,6 +132,46 @@ void test("public SSR is complete, ordered, null-safe, and escapes hostile text"
   assert.doesNotMatch(html, /Story/u);
 });
 
+for (const [connectivity, connectivityLabel] of [
+  ["healthy", "Connected"],
+  ["degraded", "Partial"],
+  ["disconnected", "Disconnected"],
+] as const) {
+  for (const populated of [false, true]) {
+    void test(`public SSR keeps Settings available with ${connectivity} connectivity and ${populated ? "populated" : "empty"} taps`, () => {
+      const view = dashboard();
+      const html = createRenderer().render("/public/dashboard", {
+        ...view,
+        header: {
+          ...view.header,
+          connectivity,
+          connectivityLabel,
+        },
+        taps: populated ? view.taps : [],
+      });
+      const header = html.match(
+        /<header\b[^>]*class="public-header"[^>]*>[\s\S]*?<\/header>/u,
+      )?.[0];
+      assert.ok(header, "The public header is rendered without a tap or integration prerequisite.");
+      const settings = header.match(/<a\b[^>]*href="\/admin\/system"[^>]*>[\s\S]*?<\/a>/gu);
+      assert.equal(settings?.length, 1);
+      assert.equal(settings[0].replace(/<[^>]*>/gu, "").trim(), "Settings");
+      assert.match(header, /<a\b[^>]*class="connectivity"[^>]*href="\/admin"/u);
+      assert.match(header, new RegExp(`data-connectivity="${connectivity}"`, "u"));
+      assert.match(header, new RegExp(`data-connectivity-label>${connectivityLabel}<`, "u"));
+
+      const emptyState = html.match(
+        /<([a-z][a-z0-9-]*)\b([^>]*\bdata-dashboard-empty\b[^>]*)>([\s\S]*?)<\/\1>/u,
+      );
+      assert.ok(emptyState, "The empty state remains available for live dashboard updates.");
+      assert.equal(/\shidden(?:\s|=|$)/u.test(emptyState[2]!), populated);
+      assert.match(emptyState[3]!, /<h[1-6]\b[^>]*>\s*No taps to display\s*<\/h[1-6]>/u);
+      assert.match(emptyState[3]!, /Admin/u);
+      assert.equal((html.match(/class="tap-card"/gu) ?? []).length, populated ? 6 : 0);
+    });
+  }
+}
+
 void test("public dashboard DTO contains no privileged integration or telemetry shape", () => {
   const serialized = JSON.stringify(dashboard());
   for (const forbidden of [

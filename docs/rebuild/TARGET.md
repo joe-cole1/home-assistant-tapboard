@@ -990,17 +990,22 @@ Header contains:
 
 * configurable Tapboard name
 * one aggregate connectivity icon
+* an explicit Settings link to Admin System, available regardless of connectivity or Tap count
 
 Connectivity:
 
-* healthy/connected → lightning-bolt style connected state
-* any enabled required integration/telemetry issue → `!`/degraded state
+* every required check confirmed healthy → green `Connected`
+* pending/unverified checks, stale inputs, or transient failures → yellow `Partial`
+* missing/unavailable credentials, required authentication failures, sustained outages, or critical input loss → red `Disconnected`
+* no monitored connections configured → red `Disconnected`, never a claim of a confirmed connection
+
+The aggregate covers enabled non-retired Tap scale checks, every enabled Brewfather account, and required outbound destinations. Disabled scale checks, optional outbound destinations, retired destinations, and deliberately disabled integrations are excluded. A required destination automatically disabled due to missing credentials remains a major failure. Required outbound network failures are partial immediately and disconnected after five minutes of continuous failure. Brewfather requires evidence from a successful request using the current configuration; cached beverage data and syncs making no requests cannot establish connectivity. Changed outbound endpoints or credentials require fresh success. Public and Admin overview labels agree, and live displays update as failures escalate or recover.
 
 The public UI does not enumerate individual failures.
 
 Tapping the connectivity icon opens Admin so kiosk browsers retain a direct administration path.
 
-There are no other Admin/settings controls on the public display.
+The Settings link uses normal Admin authentication. When no Taps are publicly visible, the dashboard explains the empty state and offers another Settings link so the operator can configure Taps or enable simulation. These entry points remain available while integrations are offline and without JavaScript.
 
 ## 27.2 Tap cards
 

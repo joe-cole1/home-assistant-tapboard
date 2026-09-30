@@ -10,6 +10,7 @@ import { previewVesselPour, stopVesselPour } from "/assets/js/vessel-fill.js";
 
 const root = document.querySelector("[data-dashboard]");
 const grid = document.querySelector("[data-tap-grid]");
+const emptyState = document.querySelector("[data-dashboard-empty]");
 const onDeckMotionQuery = matchMedia("(prefers-reduced-motion: reduce)");
 let rotationTimer;
 let rotationPage = 0;
@@ -699,7 +700,14 @@ function reconcile(dashboard) {
     if (!present.has(card.dataset.tapId)) card.remove();
   patchOnDeck(dashboard.onDeck.items);
   patchTapWars(dashboard.tapWars ?? null);
+  updateEmptyState();
   updateRotation();
+}
+
+function updateEmptyState() {
+  const hasTaps = grid.childElementCount > 0;
+  grid.hidden = !hasTaps;
+  if (emptyState) emptyState.hidden = hasTaps;
 }
 
 async function json(path) {
@@ -730,6 +738,7 @@ async function refresh(target) {
   if (response.status === 404)
     grid.querySelector(`[data-tap-id="${CSS.escape(String(target))}"]`)?.remove();
   else if (response.ok) patchTap(await response.json());
+  updateEmptyState();
   updateRotation();
 }
 
@@ -1110,4 +1119,5 @@ applyPreferences(readPreferences());
 void json("/api/public/tap-wars")
   .then((value) => patchTapWars(value?.tapWars ?? null))
   .catch(() => undefined);
+updateEmptyState();
 updateRotation();

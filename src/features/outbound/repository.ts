@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import type { DatabaseExecutor } from "../../infrastructure/database/connection.ts";
 import { EVENT_TYPES, type EventType } from "../events/types.ts";
 import {
@@ -733,6 +735,40 @@ export function touchDestinationProfile(
     .run(now, id(destinationId, "destinationId"));
 }
 
+/** Stable across health/label edits, and changes whenever logical credentials are replaced. */
+export function readDestinationCredentialRevision(
+  database: DatabaseExecutor,
+  destinationId: string,
+): string {
+  const rows = database
+    .prepare<
+      [string],
+      { readonly id: string; readonly field_name: string; readonly revision: number }
+    >(
+      `SELECT id, field_name, revision FROM encrypted_secrets
+       WHERE integration_type = 'outbound' AND record_id = ? ORDER BY field_name, id`,
+    )
+    .all(id(destinationId, "destinationId"));
+  // Hash only row identities and counters; never retrieve credential material.
+  return createHash("sha256").update(JSON.stringify(rows)).digest("hex");
+}
+
+/** Invalidate successful connection evidence without erasing outstanding failures or delivery history. */
+export function resetConnectivityState(
+  database: DatabaseExecutor,
+  destinationId: string,
+  now: string,
+): void {
+  database
+    .prepare<[string, string]>(
+      `UPDATE outbound_destination_profiles
+       SET connectivity_state = CASE WHEN connectivity_state = 'healthy' THEN 'unknown' ELSE connectivity_state END,
+           last_success_at = NULL, updated_at = ?, revision = revision + 1
+       WHERE destination_id = ?`,
+    )
+    .run(now, id(destinationId, "destinationId"));
+}
+
 export function shiftDestinationDeliveries(
   database: DatabaseExecutor,
   destinationId: string,
@@ -845,6 +881,7 @@ export function recordFailure(
   failureClass: OutboundFailureClass,
   now: string,
   expectedRevision?: number,
+  expectedVersionId?: string,
 ): boolean {
   const normalizedCode = safeErrorCode(errorCode);
   const state =
@@ -855,11 +892,25 @@ export function recordFailure(
         : "unknown";
   const idValue = id(destinationId, "destinationId");
   const result = database
-    .prepare<[string, string, string, string, string, string, number | null, number | null]>(
+    .prepare<
+      [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        number | null,
+        number | null,
+        string | null,
+        string | null,
+      ]
+    >(
       `UPDATE outbound_destination_profiles
      SET connectivity_state = ?, failure_started_at = coalesce(failure_started_at, ?),
          last_failure_at = ?, last_failure_code = ?, updated_at = ?, revision = revision + 1
-     WHERE destination_id = ? AND (? IS NULL OR revision = ?)`,
+     WHERE destination_id = ? AND (? IS NULL OR revision = ?)
+       AND (? IS NULL OR current_version_id = ?)`,
     )
     .run(
       state,
@@ -870,6 +921,8 @@ export function recordFailure(
       idValue,
       expectedRevision ?? null,
       expectedRevision ?? null,
+      expectedVersionId ?? null,
+      expectedVersionId ?? null,
     );
   return result.changes === 1;
 }
@@ -879,14 +932,16 @@ export function recordSuccess(
   destinationId: string,
   now: string,
   expectedRevision?: number,
+  expectedVersionId?: string,
 ): boolean {
   const result = database
-    .prepare<[string, string, string, number | null, number | null]>(
+    .prepare<[string, string, string, number | null, number | null, string | null, string | null]>(
       `UPDATE outbound_destination_profiles
      SET connectivity_state = 'healthy', failure_started_at = NULL,
          last_failure_at = NULL, last_failure_code = NULL, last_success_at = ?,
          updated_at = ?, revision = revision + 1
-     WHERE destination_id = ? AND (? IS NULL OR revision = ?)`,
+     WHERE destination_id = ? AND (? IS NULL OR revision = ?)
+       AND (? IS NULL OR current_version_id = ?)`,
     )
     .run(
       now,
@@ -894,6 +949,8 @@ export function recordSuccess(
       id(destinationId, "destinationId"),
       expectedRevision ?? null,
       expectedRevision ?? null,
+      expectedVersionId ?? null,
+      expectedVersionId ?? null,
     );
   return result.changes === 1;
 }

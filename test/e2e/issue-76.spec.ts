@@ -53,7 +53,7 @@ test("authoritative SSR works without JavaScript and keeps private APIs protecte
   await expect(page.locator("main")).toHaveCount(1);
   await expect(page.locator("footer")).toHaveCount(1);
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Tapboard");
-  await expect(page.getByRole("link", { name: /Connected|Degraded/u })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Connected|Partial|Disconnected/u })).toBeVisible();
   await page.keyboard.press("Tab");
   await expect(page.getByRole("link", { name: "Skip to content" })).toBeFocused();
   await expect(page.locator("[data-tap-id]")).toHaveCount(6);

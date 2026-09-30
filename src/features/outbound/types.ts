@@ -332,6 +332,8 @@ export interface OutboundTransportSendInput {
   readonly secretHeaders: Readonly<Record<string, string>>;
   readonly headers?: Readonly<Record<string, string>>;
   readonly token?: string;
+  /** Logical credential revision for persistent connection evidence. Contains no secret values. */
+  readonly bindingGeneration?: string;
   readonly endpoint?: string;
   readonly payloadFormat?: "standard" | "discord";
 }

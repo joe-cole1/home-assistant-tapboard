@@ -7,6 +7,7 @@ import {
   type DatabaseExecutor,
 } from "../src/infrastructure/database/connection.ts";
 import { createOutboundService } from "../src/features/outbound/service.ts";
+import { readDestinationCredentialRevision } from "../src/features/outbound/repository.ts";
 import { createOutboundWorker } from "../src/features/outbound/worker.ts";
 import { createSecretsService } from "../src/features/secrets/service.ts";
 import type { OutboundTransportRouter } from "../src/features/outbound/types.ts";
@@ -456,6 +457,7 @@ void test("persistent HA connection evidence drives sustained Required degradati
       worker.onHomeAssistantConnectionState({
         destinationId: DESTINATION,
         destinationVersionId: created.currentVersion!.id,
+        bindingGeneration: readDestinationCredentialRevision(database, DESTINATION),
         result,
       });
 
@@ -474,6 +476,7 @@ void test("persistent HA connection evidence drives sustained Required degradati
     worker.onHomeAssistantConnectionState({
       destinationId: DESTINATION,
       destinationVersionId: "22222222-2222-4222-8222-000000000000",
+      bindingGeneration: readDestinationCredentialRevision(database, DESTINATION),
       result: { outcome: "retryable_failure", errorCode: "stale_socket" },
     });
     assert.equal(service.get(DESTINATION)?.state, "healthy");
