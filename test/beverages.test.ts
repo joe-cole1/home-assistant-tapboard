@@ -986,8 +986,8 @@ void test("Brewfather adapter handles pagination with start_after, budget limits
   assert.ok(requestedUrls.some((u) => u.includes("start_after=batch-50")));
 
   // 2. Bounded transient retry: 500 error retries and succeeds on attempt 2
-  const transientResult = await adapter.request<{ ok: boolean }>("GET", "/transient-test");
-  assert.equal(transientResult?.ok, true);
+  const transientResult = await adapter.request("GET", "/transient-test");
+  assert.deepEqual(transientResult, { ok: true });
   assert.equal(transientAttempts, 2);
 
   // 3. 401 Authentication failure is rejected immediately without retry

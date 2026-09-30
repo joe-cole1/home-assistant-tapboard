@@ -186,6 +186,10 @@ After the normal non-destructive rebuild, verify `/healthz` reports schema 21. S
 
 After the normal rebuild without deleting the data volume, verify `/healthz` still reports schema 21. On a phone and a wall display, confirm **Settings** remains visible with populated and empty dashboards, including while Home Assistant is unavailable. In a disposable workspace, hide every tap and check **No taps to display** and **Open settings**; re-enable a tap and check the message disappears on the already-open dashboard. Follow Settings, sign in if needed, open **System**, and confirm **Enable simulation** is reachable. Repeat navigation with JavaScript disabled. The connectivity indicator must still open Admin. With a disposable required integration, verify green **Connected** after confirmed success, yellow **Partial** on a connection failure, and red **Disconnected** after five minutes; recovery must return to green when all other checks are healthy. Missing credentials or critical sensor loss must be red. An optional destination failure must not override healthy required checks.
 
+## MANUAL DEV TEST — Issue #109 Brewfather boundaries
+
+After merging, rebuild and recreate the development container without deleting its volume; confirm `/healthz` is healthy and the database remains at schema version 21. Use a development fixture or local fake Brewfather transport: defer a linked batch response, unlink or delete its Beverage, then release the response and verify the obsolete source profile/recipe is not restored. Repeat with a missing/error response and confirm a replacement link keeps its own state. Verify normal sync still updates linked data, disabled accounts do not degrade the public header, and enabled stale/error links show Partial. Oversized, malformed, stalled, and retried response checks are covered by automated fake-transport tests; no production Brewfather writes are needed.
+
 ## Canonical validation
 
 Run the complete local gate with Node 24:

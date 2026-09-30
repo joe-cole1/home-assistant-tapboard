@@ -9,6 +9,8 @@ import {
   listBeverageLinks,
   listBrewfatherAccounts,
   listCandidates,
+  readBeverage,
+  readBeverageLink,
   readBrewfatherAccount,
   readBeverageSettings,
   readPresentationOverrides,
@@ -31,6 +33,7 @@ import {
 import type {
   BeverageDensityExtensionPort,
   BrewfatherAccount,
+  BrewfatherBeverageLink,
   DensityResolution,
 } from "../types.ts";
 
@@ -50,6 +53,21 @@ function isAuthenticationFailure(error: unknown): boolean {
   return (
     error instanceof BrewfatherError &&
     (error.category === "auth" || error.category === "forbidden")
+  );
+}
+
+/** Recheck within the persistence transaction after external I/O has completed. */
+function isCurrentBeverageLink(
+  database: DatabaseExecutor,
+  expected: BrewfatherBeverageLink,
+): boolean {
+  const beverage = readBeverage(database, expected.beverageId);
+  const current = readBeverageLink(database, expected.beverageId);
+  return (
+    beverage?.ownershipType === "brewfather" &&
+    current?.accountId === expected.accountId &&
+    current.sourceBatchId === expected.sourceBatchId &&
+    current.createdAt === expected.createdAt
   );
 }
 
@@ -208,14 +226,18 @@ export class BrewfatherSyncCoordinator {
         const batchData = await adapter.getBatch(link.sourceBatchId);
         if (batchData === null) {
           // Source batch not found / 404
-          updateBeverageLinkState(
-            database,
-            link.beverageId,
-            "stale",
-            "Batch not found on Brewfather (404).",
-            nowIso,
-          );
-          linkedErrors += 1;
+          const applied = database.withTransaction(() => {
+            if (!isCurrentBeverageLink(database, link)) return false;
+            updateBeverageLinkState(
+              database,
+              link.beverageId,
+              "stale",
+              "Batch not found on Brewfather (404).",
+              nowIso,
+            );
+            return true;
+          });
+          if (applied) linkedErrors += 1;
           continue;
         }
         connectionVerified = true;
@@ -228,7 +250,8 @@ export class BrewfatherSyncCoordinator {
         const sanitizedRecipe = recipeData !== null ? sanitizeRecipeSnapshot(recipeData) : null;
 
         // Synchronously persist coherent local state for this ONE linked beverage in a transaction
-        database.withTransaction(() => {
+        const applied = database.withTransaction(() => {
+          if (!isCurrentBeverageLink(database, link)) return false;
           const settings = readBeverageSettings(database);
           const previousSourceProfile = readSourceProfile(database, link.beverageId);
           const previousDensity = previousSourceProfile
@@ -291,15 +314,21 @@ export class BrewfatherSyncCoordinator {
           }
 
           updateBeverageLinkState(database, link.beverageId, "synced", null, nowIso);
+          return true;
         });
 
-        linkedSynced += 1;
+        if (applied) linkedSynced += 1;
       } catch (error: unknown) {
+        // Authentication is account evidence even when the requested link became obsolete.
         authenticationFailed ||= isAuthenticationFailure(error);
         const rawMessage = error instanceof Error ? error.message : "Sync error";
         const errorMessage = sanitizeErrorMessage(rawMessage, 255);
-        updateBeverageLinkState(database, link.beverageId, "error", errorMessage, nowIso);
-        linkedErrors += 1;
+        const applied = database.withTransaction(() => {
+          if (!isCurrentBeverageLink(database, link)) return false;
+          updateBeverageLinkState(database, link.beverageId, "error", errorMessage, nowIso);
+          return true;
+        });
+        if (applied) linkedErrors += 1;
       }
     }
 
@@ -348,16 +377,22 @@ export class BrewfatherSyncCoordinator {
             .map((b) => (b as { _id?: string; id?: string })?._id ?? (b as { id?: string })?.id)
             .filter(Boolean),
         );
-        const existingCandidates = listCandidates(database, account.id);
-        const linkedBatchIds = new Set(allLinks.map((l) => l.sourceBatchId));
-        for (const candidate of existingCandidates) {
-          if (
-            !discoveredBatchIds.has(candidate.sourceBatchId) &&
-            !linkedBatchIds.has(candidate.sourceBatchId)
-          ) {
-            deleteCandidate(database, account.id, candidate.sourceBatchId);
+        database.withTransaction(() => {
+          const existingCandidates = listCandidates(database, account.id);
+          const linkedBatchIds = new Set(
+            listBeverageLinks(database)
+              .filter((link) => link.accountId === account.id)
+              .map((link) => link.sourceBatchId),
+          );
+          for (const candidate of existingCandidates) {
+            if (
+              !discoveredBatchIds.has(candidate.sourceBatchId) &&
+              !linkedBatchIds.has(candidate.sourceBatchId)
+            ) {
+              deleteCandidate(database, account.id, candidate.sourceBatchId);
+            }
           }
-        }
+        });
       }
     } catch (error: unknown) {
       authenticationFailed ||= isAuthenticationFailure(error);

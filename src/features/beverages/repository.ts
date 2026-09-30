@@ -1399,6 +1399,23 @@ export function listBeverageLinks(database: DatabaseExecutor): readonly Brewfath
   return rows.map(mapBrewfatherLink);
 }
 
+/** Link health only: the public header must not hydrate beverage profiles or recipes. */
+export function hasUnsyncedBrewfatherLinks(database: DatabaseExecutor): boolean {
+  return (
+    database
+      .prepare<[], { unhealthy: number }>(
+        `SELECT 1 AS unhealthy
+         FROM beverages AS beverage
+         LEFT JOIN brewfather_beverage_links AS link ON link.beverage_id = beverage.id
+         LEFT JOIN brewfather_accounts AS account ON account.id = link.account_id
+         WHERE beverage.ownership_type = 'brewfather'
+           AND (link.beverage_id IS NULL OR (account.enabled = 1 AND link.sync_state <> 'synced'))
+         LIMIT 1`,
+      )
+      .get() !== undefined
+  );
+}
+
 export function updateBeverageLinkState(
   database: DatabaseExecutor,
   beverageId: string,
