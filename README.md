@@ -267,6 +267,10 @@ Shared display defaults flow into sparse, strictly validated browser-local overr
 
 Rebuild and recreate normally without deleting `tapboard-dev_tapboard-data`, then confirm `/healthz` reports schema version 12. Check `/` with zero, one, six, and more than six enabled Taps; a disabled Tap; an unassigned Tap; and On Deck entries. Sign in at `/admin/login`, visit every Admin navigation route, submit one representative form with JavaScript disabled, and exercise shared plus local Display settings. In two tabs, verify local preference persistence, reset-to-inherit, and storage synchronization. Update a Tap while the dashboard is open, confirm the field changes without replacing its SVG graphic node, then interrupt/reconnect the event stream and confirm authoritative reconciliation. Inspect approximately 800 px, 1280×720, 1920×1080, and 3840×2160. Use disposable state for destructive fixture scenarios; never delete the persistent volume.
 
+## MANUAL DEV TEST — Issue #111 Admin HTTP boundaries
+
+After merging, rebuild and recreate the development container without deleting its volume and verify `/healthz` reports schema 21. Check signed-out Admin API access, sign in with the PIN, and save a Tap name with autosave and with JavaScript disabled. Verify invalid values remain inline errors and a conflicting edit from a second tab still offers recovery. Confirm a public Tap Wars vote works without an Admin session. The automated HTTP fixtures cover malformed/expired sessions, invalid Origin/CSRF, oversized requests, unavailable/internal errors, and safe single-event logging; no live integration calls or forced production failures are required.
+
 ## Authoritative rebuild context
 
 - [`docs/rebuild/TARGET.md`](docs/rebuild/TARGET.md)

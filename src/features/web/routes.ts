@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { APPLICATION_SCHEMA_VERSION } from "../../infrastructure/database/migrations.ts";
-import { sendJson } from "../../infrastructure/http/error-mapper.ts";
+import { sendJson, STATUS_BY_CATEGORY } from "../../infrastructure/http/error-mapper.ts";
 import { readFormBody, type ReadFormOptions } from "../../infrastructure/http/form.ts";
 import { readJsonBody } from "../../infrastructure/http/security/body.ts";
 import { redirect, sendHtml } from "../../infrastructure/http/html.ts";
@@ -16,6 +16,7 @@ import {
 import { requireMutationOrigin } from "../../infrastructure/http/security/origin.ts";
 import type { Renderer } from "../../infrastructure/rendering/renderer.ts";
 import { ApplicationError, isApplicationError } from "../../shared/errors.ts";
+import type { Logger } from "../../shared/logging.ts";
 import type { AuthService, AuthenticatedSession } from "../auth/service.ts";
 import type { BeverageService } from "../beverages/service.ts";
 import type { DashboardService } from "../dashboard/service.ts";
@@ -557,6 +558,7 @@ function telemetryEndpointUrl(canonicalOrigin: string | undefined): string {
 
 export interface WebRouteDependencies {
   readonly router: Router;
+  readonly logger: Logger;
   readonly renderer: Renderer;
   readonly canonicalOrigin?: string;
   readonly authService: AuthService;
@@ -2460,7 +2462,7 @@ async function runAdminAutosave(
   spec: AdminAutosaveSpec,
 ): Promise<void> {
   try {
-    const body = autosaveBodyRecord(await readJsonBody<unknown>(request));
+    const body = autosaveBodyRecord(await readJsonBody(request));
     const context = adminContext(request, dependencies.authService);
     const authorized = dependencies.authService.authorizeCookieMutation({
       cookieHeader: request.headers.cookie,
@@ -2498,10 +2500,10 @@ async function runAdminAutosave(
         });
         return;
       }
-      const status = error.category === "not_found" ? 404 : 403;
-      sendJson(response, status, { message: error.clientMessage });
+      sendJson(response, STATUS_BY_CATEGORY[error.category], { message: error.clientMessage });
       return;
     }
+    dependencies.logger.error("Unexpected Admin autosave error");
     sendJson(response, 500, { message: "The autosave could not be completed." });
   }
 }
@@ -2549,6 +2551,10 @@ function registerAdminAction(
       const destination = typeof handlerResult === "string" ? handlerResult : resolvedReturnPath;
       redirect(response, messageLocation(destination, "notice", successMessage));
     } catch (error) {
+      // Unknown thrown values may contain request data, so record only the safe operation.
+      if (!isApplicationError(error)) {
+        dependencies.logger.error("Unexpected Admin action error", { path });
+      }
       const message = isApplicationError(error)
         ? error.clientMessage
         : "The change could not be completed.";
@@ -2578,34 +2584,13 @@ function registerAdminNotFound(dependencies: WebRouteDependencies): void {
   });
 }
 
-function tapWarsErrorStatus(error: ApplicationError): number {
-  switch (error.category) {
-    case "validation":
-      return 400;
-    case "too_large":
-      return 413;
-    case "not_found":
-      return 404;
-    case "conflict":
-      return 409;
-    case "forbidden":
-      return 403;
-    case "unauthorized":
-      return 401;
-    case "unavailable":
-      return 503;
-    case "internal":
-      return 500;
-  }
-}
-
 function sendTapWarsVoteError(
   dependencies: WebRouteDependencies,
   response: ServerResponse,
   error: unknown,
 ): void {
   if (isApplicationError(error)) {
-    sendJson(response, tapWarsErrorStatus(error), {
+    sendJson(response, STATUS_BY_CATEGORY[error.category], {
       error: { code: error.code, message: error.clientMessage },
       tapWars: dependencies.publicTapWarsService.getVisible(),
     });

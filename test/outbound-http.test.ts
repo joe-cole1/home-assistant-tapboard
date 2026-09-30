@@ -253,6 +253,7 @@ function buildDependencies(): {
   };
   const dependencies = {
     router: new Router(logger),
+    logger,
     renderer: createRenderer(),
     canonicalOrigin: ORIGIN,
     authService,

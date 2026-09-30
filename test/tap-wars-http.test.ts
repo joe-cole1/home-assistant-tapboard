@@ -57,6 +57,7 @@ function routes(): { readonly router: Router; readonly votes: number[] } {
   const votes: number[] = [];
   registerWebRoutes({
     router,
+    logger: createLogger({ sink: () => undefined }),
     canonicalOrigin: "https://tapboard.example",
     publicTapWarsService: { getVisible: () => visible },
     tapWarsService: { vote: (_id: string, side: number) => votes.push(side) },

@@ -3,9 +3,9 @@ import type { IncomingMessage } from "node:http";
 import { sendJson } from "../../infrastructure/http/error-mapper.ts";
 import type { Router } from "../../infrastructure/http/router.ts";
 import { readJsonBody } from "../../infrastructure/http/security/body.ts";
-import { parseSessionCookie } from "../../infrastructure/http/security/cookie.ts";
 import { ApplicationError } from "../../shared/errors.ts";
 import { rejectUnknownKeys, requirePlainObject } from "../../shared/validation.ts";
+import { requireMutationAuth, requireSession } from "../auth/http.ts";
 import type { AuthService, AuthenticatedSession } from "../auth/service.ts";
 import { HEALTH_CONFIG_FIELDS } from "./config.ts";
 import type {
@@ -78,14 +78,6 @@ export interface HealthRouteDependencies {
   readonly authService: AuthService;
 }
 
-function unauthorized(): never {
-  throw new ApplicationError({
-    category: "unauthorized",
-    code: "auth.unauthorized",
-    clientMessage: "Authentication is required.",
-  });
-}
-
 function invalid(field: string, reason: string): never {
   throw new ApplicationError({
     category: "validation",
@@ -93,35 +85,6 @@ function invalid(field: string, reason: string): never {
     clientMessage: "The request contains an invalid value.",
     details: { field, reason },
   });
-}
-
-function requireSession(request: IncomingMessage, authService: AuthService): AuthenticatedSession {
-  let sessionToken: string | undefined;
-  if (request.headers.cookie !== undefined) {
-    try {
-      sessionToken = parseSessionCookie(request.headers.cookie);
-    } catch {
-      sessionToken = undefined;
-    }
-  }
-  if (sessionToken === undefined) unauthorized();
-  const session = authService.authenticateSession(sessionToken);
-  if (session === undefined) unauthorized();
-  return session;
-}
-
-function requireMutationAuth(
-  request: IncomingMessage,
-  authService: AuthService,
-): AuthenticatedSession {
-  const session = authService.authorizeCookieMutation({
-    cookieHeader: request.headers.cookie,
-    originHeader: request.headers.origin,
-    csrfHeader: request.headers["x-csrf-token"],
-    canonicalOrigin: undefined,
-  });
-  if (session === undefined) unauthorized();
-  return session;
 }
 
 function actor(session: AuthenticatedSession) {
@@ -548,7 +511,9 @@ export function registerHealthRoutes({
   });
 
   router.patch("/api/admin/health/settings", async (request, response) => {
-    const session = requireMutationAuth(request, authService);
+    const session = requireMutationAuth(request, authService, {
+      message: "Authentication is required.",
+    });
     const body = await readJsonBody(request, { maxBytes: 16 * 1024 });
     healthService.updateGlobalConfig(body, actor(session));
     sendJson(response, 200, { settings: toSettingsDto(healthService.getGlobalConfig()) });
@@ -561,7 +526,9 @@ export function registerHealthRoutes({
   });
 
   router.patch("/api/admin/taps/:tapId/health-overrides", async (request, response, params) => {
-    const session = requireMutationAuth(request, authService);
+    const session = requireMutationAuth(request, authService, {
+      message: "Authentication is required.",
+    });
     const tapId = validateTapId(params.tapId ?? "", "tapId");
     const body = requirePlainObject(
       await readJsonBody(request, { maxBytes: 16 * 1024 }),
@@ -572,7 +539,9 @@ export function registerHealthRoutes({
   });
 
   router.delete("/api/admin/taps/:tapId/health-overrides", (request, response, params) => {
-    const session = requireMutationAuth(request, authService);
+    const session = requireMutationAuth(request, authService, {
+      message: "Authentication is required.",
+    });
     const tapId = validateTapId(params.tapId ?? "", "tapId");
     const cleared = healthService.clearTapOverride(tapId, actor(session));
     sendJson(response, 200, { tapId, cleared });
@@ -592,7 +561,9 @@ export function registerHealthRoutes({
   router.post(
     "/api/admin/health/incidents/:incidentId/acknowledge",
     async (request, response, params) => {
-      const session = requireMutationAuth(request, authService);
+      const session = requireMutationAuth(request, authService, {
+        message: "Authentication is required.",
+      });
       const incidentId = validateResourceId(params.incidentId ?? "", "incidentId");
       requireEmptyJsonBody(await readJsonBody(request, { maxBytes: 16 * 1024 }));
       const incident = healthService.acknowledgeIncident(incidentId, actor(session));
@@ -603,7 +574,9 @@ export function registerHealthRoutes({
   router.patch(
     "/api/admin/health/incidents/:incidentId/cooldown",
     async (request, response, params) => {
-      const session = requireMutationAuth(request, authService);
+      const session = requireMutationAuth(request, authService, {
+        message: "Authentication is required.",
+      });
       const incidentId = validateResourceId(params.incidentId ?? "", "incidentId");
       const cooldownUntil = parseCooldownBody(await readJsonBody(request, { maxBytes: 16 * 1024 }));
       const incident = healthService.setIncidentCooldown(incidentId, cooldownUntil, actor(session));
@@ -625,7 +598,9 @@ export function registerHealthRoutes({
   });
 
   router.post("/api/admin/taps/:tapId/maintenance", async (request, response, params) => {
-    const session = requireMutationAuth(request, authService);
+    const session = requireMutationAuth(request, authService, {
+      message: "Authentication is required.",
+    });
     const tapId = validateTapId(params.tapId ?? "", "tapId");
     const record = healthService.recordMaintenance(
       tapId,

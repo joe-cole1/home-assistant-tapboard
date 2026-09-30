@@ -130,6 +130,7 @@ void test(TEST_NAME, async (context) => {
 
   const dependencies = {
     router: new Router(createLogger({ sink: () => undefined })),
+    logger: createLogger({ sink: () => undefined }),
     renderer: createRenderer(),
     canonicalOrigin: ORIGIN,
     authService: {

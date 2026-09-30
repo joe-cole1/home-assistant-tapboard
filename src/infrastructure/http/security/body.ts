@@ -142,15 +142,15 @@ export function readRequestBody(
   });
 }
 
-export async function readJsonBody<T = unknown>(
+export async function readJsonBody(
   request: IncomingMessage,
   options: ReadBodyOptions = {},
-): Promise<T> {
+): Promise<unknown> {
   validateJsonContentType(request.headers);
   const body = await readRequestBody(request, { ...options, required: options.required ?? true });
   try {
     const text = new TextDecoder("utf-8", { fatal: true }).decode(body);
-    return JSON.parse(text) as T;
+    return JSON.parse(text) as unknown;
   } catch {
     throw bodyError("http.invalid_json", "The request body is not valid JSON.");
   }

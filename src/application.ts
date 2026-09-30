@@ -817,6 +817,7 @@ class FoundationApplication implements Application {
       registerForecastRoutes({ router, forecastService, authService });
       registerWebRoutes({
         router,
+        logger: this.#logger,
         renderer: this.#renderer,
         ...(this.#config.canonicalExternalOrigin === undefined
           ? {}

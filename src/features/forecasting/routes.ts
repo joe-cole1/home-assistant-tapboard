@@ -2,9 +2,9 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { sendJson } from "../../infrastructure/http/error-mapper.ts";
 import type { Router } from "../../infrastructure/http/router.ts";
 import { readJsonBody } from "../../infrastructure/http/security/body.ts";
-import { parseSessionCookie } from "../../infrastructure/http/security/cookie.ts";
 import { ApplicationError } from "../../shared/errors.ts";
-import type { AuthService, AuthenticatedSession } from "../auth/service.ts";
+import { requireMutationAuth, requireSession } from "../auth/http.ts";
+import type { AuthService } from "../auth/service.ts";
 import type { ForecastService } from "./service.ts";
 import { decodeForecastHistoryCursor, type ForecastHistoryCursor } from "./forecast-validation.ts";
 
@@ -12,36 +12,6 @@ export interface ForecastRouteDependencies {
   readonly router: Router;
   readonly forecastService: ForecastService;
   readonly authService: AuthService;
-}
-function unauthorized(): never {
-  throw new ApplicationError({
-    category: "unauthorized",
-    code: "auth.unauthorized",
-    clientMessage: "Authentication is required.",
-  });
-}
-function requireSession(request: IncomingMessage, auth: AuthService): AuthenticatedSession {
-  let token: string | undefined;
-  try {
-    token =
-      request.headers.cookie === undefined ? undefined : parseSessionCookie(request.headers.cookie);
-  } catch {
-    token = undefined;
-  }
-  if (!token) unauthorized();
-  const session = auth.authenticateSession(token);
-  if (!session) unauthorized();
-  return session;
-}
-function requireMutation(request: IncomingMessage, auth: AuthService): AuthenticatedSession {
-  const session = auth.authorizeCookieMutation({
-    cookieHeader: request.headers.cookie,
-    originHeader: request.headers.origin,
-    csrfHeader: request.headers["x-csrf-token"],
-    canonicalOrigin: undefined,
-  });
-  if (!session) unauthorized();
-  return session;
 }
 function invalid(field: string): never {
   throw new ApplicationError({
@@ -115,7 +85,9 @@ export function registerForecastRoutes({
   router.patch(
     "/api/admin/forecast/settings",
     async (request: IncomingMessage, response: ServerResponse) => {
-      const session = requireMutation(request, authService);
+      const session = requireMutationAuth(request, authService, {
+        message: "Authentication is required.",
+      });
       const settings = forecastService.updateSettings(
         await readJsonBody(request, { maxBytes: 16 * 1024 }),
         { actorId: session.id, sessionId: session.id },

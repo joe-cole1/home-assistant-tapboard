@@ -7,7 +7,7 @@ import {
 } from "../../shared/errors.ts";
 import type { Logger } from "../../shared/logging.ts";
 
-const STATUS_BY_CATEGORY: Readonly<Record<ApplicationErrorCategory, number>> = {
+export const STATUS_BY_CATEGORY: Readonly<Record<ApplicationErrorCategory, number>> = {
   validation: 400,
   too_large: 413,
   unauthorized: 401,

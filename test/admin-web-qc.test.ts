@@ -444,6 +444,7 @@ void test("admin web pages and mutations keep projections safe and PRG-protected
 
   const dependencies = {
     router: new Router(createLogger({ sink: () => undefined })),
+    logger: createLogger({ sink: () => undefined }),
     renderer: createRenderer(),
     canonicalOrigin: ORIGIN,
     authService,
