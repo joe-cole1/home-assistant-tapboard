@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-admin-accent="<%= it.page.adminAccent || "amber" %>">
+<html lang="en" data-workspace-enabled="<%= (it.workspace || it.page.workspace)?.enabled === true %>" data-admin-accent="<%= it.page.adminAccent || "amber" %>">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -14,10 +14,17 @@
       <link rel="stylesheet" href="/assets/css/dashboard.css" />
     <% } %>
   </head>
-  <body class="admin-shell">
+  <% const workspace = it.workspace || it.page.workspace; %>
+  <body class="admin-shell"<% if (workspace) { %> data-workspace-revision="<%= workspace.revision %>" data-workspace-enabled="<%= workspace.enabled %>"<% } %>>
     <a class="skip-link" href="#main-content">Skip to content</a>
+    <% if (workspace?.enabled) { %>
+      <div class="workspace-banner" role="note" aria-label="Simulation mode">
+        <strong>SIMULATION</strong><span>Sample workspace · saved separately</span><a href="/admin/simulator">Simulator controls</a>
+      </div>
+    <% } %>
     <%~ it.body %>
     <script type="module" src="/assets/js/admin-shell.js"></script>
     <script type="module" src="/assets/js/admin-autosave.js"></script>
+    <% if (workspace) { %><script type="module" src="/assets/js/workspace.js"></script><% } %>
   </body>
 </html>

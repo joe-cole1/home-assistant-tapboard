@@ -88,6 +88,9 @@ import {
 } from "./features/outbound/transports/webhook.ts";
 import type { PublicEventContextResolver } from "./features/outbound/transport-types.ts";
 import type { SecretsService } from "./features/secrets/service.ts";
+import { BrewfatherSyncCoordinator } from "./features/beverages/brewfather/sync.ts";
+import { WorkspaceApplication } from "./features/simulation/workspace.ts";
+import type { WorkspaceRuntimeHooks } from "./features/simulation/runtime-types.ts";
 
 type ApplicationState = "new" | "starting" | "ready" | "stopping" | "stopped" | "failed";
 type DatabaseOpener = (path: string) => DatabaseConnection;
@@ -211,6 +214,7 @@ export interface Application {
 }
 
 class FoundationApplication implements Application {
+  readonly #workspaceHooks: WorkspaceRuntimeHooks;
   readonly #config: ApplicationConfig;
   readonly #logger: Logger;
   readonly #openDatabase: DatabaseOpener;
@@ -232,7 +236,8 @@ class FoundationApplication implements Application {
   #stopping: Promise<void> | undefined;
   #stopRequested = false;
 
-  constructor(options: CreateApplicationOptions) {
+  constructor(options: CreateApplicationOptions, workspaceHooks: WorkspaceRuntimeHooks) {
+    this.#workspaceHooks = workspaceHooks;
     this.#config = options.config ?? loadConfig(options.configOptions);
     this.#logger = options.logger ?? createLogger();
     this.#openDatabase = options.openDatabase ?? openDatabase;
@@ -263,24 +268,26 @@ class FoundationApplication implements Application {
       this.#database = this.#openDatabase(this.#config.databasePath);
       this.#renderer = this.#createRenderer();
 
-      const authService = createAuthService(this.#database, {
-        ...(this.#config.canonicalExternalOrigin !== undefined
-          ? { canonicalOrigin: this.#config.canonicalExternalOrigin }
-          : {}),
-        ...(this.#config.sessionInactivityMs !== undefined ||
-        this.#config.sessionAbsoluteMs !== undefined
-          ? {
-              session: {
-                ...(this.#config.sessionInactivityMs !== undefined
-                  ? { inactivityMs: this.#config.sessionInactivityMs }
-                  : {}),
-                ...(this.#config.sessionAbsoluteMs !== undefined
-                  ? { absoluteMs: this.#config.sessionAbsoluteMs }
-                  : {}),
-              },
-            }
-          : {}),
-      });
+      const authService =
+        this.#workspaceHooks.authService ??
+        createAuthService(this.#database, {
+          ...(this.#config.canonicalExternalOrigin !== undefined
+            ? { canonicalOrigin: this.#config.canonicalExternalOrigin }
+            : {}),
+          ...(this.#config.sessionInactivityMs !== undefined ||
+          this.#config.sessionAbsoluteMs !== undefined
+            ? {
+                session: {
+                  ...(this.#config.sessionInactivityMs !== undefined
+                    ? { inactivityMs: this.#config.sessionInactivityMs }
+                    : {}),
+                  ...(this.#config.sessionAbsoluteMs !== undefined
+                    ? { absoluteMs: this.#config.sessionAbsoluteMs }
+                    : {}),
+                },
+              }
+            : {}),
+        });
       const secretsService = createSecretsService(this.#database, {
         ...(this.#config.secretKey ? { rootKey: this.#config.secretKey } : {}),
       });
@@ -432,6 +439,14 @@ class FoundationApplication implements Application {
       });
       const rawBeverageService = createBeverageService(this.#database, {
         secretsService,
+        ...(this.#workspaceHooks.simulation
+          ? {
+              syncCoordinator: new BrewfatherSyncCoordinator({
+                fetchFn: () =>
+                  Promise.reject(new Error("External integrations are disabled in simulation.")),
+              }),
+            }
+          : {}),
         densityExtensionPort: {
           onEffectiveDensityChanged: (database, event) => {
             rawDetectorService.onEffectiveDensityChanged(database, event);
@@ -758,16 +773,18 @@ class FoundationApplication implements Application {
         tapWarsService: publicTapWarsService,
         outboundService,
       });
-      this.#outboundRuntime = this.#createOutboundRuntime({
-        database: this.#database,
-        secrets: secretsService,
-        outboundService,
-        publicContextResolver,
-        ...(this.#outboundTransportRouter === undefined
-          ? {}
-          : { transportRouter: this.#outboundTransportRouter }),
-        onError: () => this.#logger.error("Outbound worker failed"),
-      });
+      this.#outboundRuntime = this.#workspaceHooks.simulation
+        ? undefined
+        : this.#createOutboundRuntime({
+            database: this.#database,
+            secrets: secretsService,
+            outboundService,
+            publicContextResolver,
+            ...(this.#outboundTransportRouter === undefined
+              ? {}
+              : { transportRouter: this.#outboundTransportRouter }),
+            onError: () => this.#logger.error("Outbound worker failed"),
+          });
 
       const router = new Router(this.#logger);
       const readinessHandler = (_request: IncomingMessage, response: ServerResponse): void => {
@@ -811,6 +828,18 @@ class FoundationApplication implements Application {
         tapWarsService,
         publicTapWarsService,
         outboundService,
+      });
+      this.#workspaceHooks.onComposed({
+        database: this.#database,
+        authService,
+        beverageService,
+        kegService,
+        fillService,
+        tapService,
+        telemetryService: this.#workspaceHooks.simulation ? rawTelemetryService : telemetryService,
+        detectorService,
+        displayService,
+        liveUpdates,
       });
       // This route intentionally precedes the generic static-asset route. It
       // emits only validated, same-origin CSS so custom accents and selected
@@ -876,6 +905,8 @@ class FoundationApplication implements Application {
           { kind: "js", file: "admin-shell.js", path: "js/admin-shell.js" },
           { kind: "js", file: "admin-autosave.js", path: "js/admin-autosave.js" },
           { kind: "js", file: "admin-tap-wars.js", path: "js/admin-tap-wars.js" },
+          { kind: "js", file: "simulator.js", path: "js/simulator.js" },
+          { kind: "js", file: "workspace.js", path: "js/workspace.js" },
           { kind: "font", file: "outfit-6c18d579.woff2", path: "fonts/outfit-6c18d579.woff2" },
           { kind: "font", file: "inter-3100e775.woff2", path: "fonts/inter-3100e775.woff2" },
           { kind: "font", file: "roboto-1404ca34.woff2", path: "fonts/roboto-1404ca34.woff2" },
@@ -924,7 +955,7 @@ class FoundationApplication implements Application {
         if (this.#outboundRuntime.start !== undefined) this.#outboundRuntime.start();
         else this.#outboundRuntime.worker.start();
       }
-      beverageService.startPeriodicSync();
+      if (!this.#workspaceHooks.simulation) beverageService.startPeriodicSync();
       return address;
     } catch (error) {
       this.#state = "failed";
@@ -1082,5 +1113,8 @@ class FoundationApplication implements Application {
 }
 
 export function createApplication(options: CreateApplicationOptions = {}): Application {
-  return new FoundationApplication(options);
+  return new WorkspaceApplication(
+    options,
+    (runtimeOptions, hooks) => new FoundationApplication(runtimeOptions, hooks),
+  );
 }

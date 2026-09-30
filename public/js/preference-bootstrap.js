@@ -1,6 +1,9 @@
 (() => {
   "use strict";
-  const key = "tapboard.v2.display-preferences.v1";
+  const key =
+    document.documentElement.dataset.workspaceEnabled === "true"
+      ? "tapboard.v2.simulation.display-preferences.v1"
+      : "tapboard.v2.display-preferences.v1";
   const fields = {
     theme: ["modern_dark", "warm_pub", "cyberpunk", "light_minimal"],
     font: [

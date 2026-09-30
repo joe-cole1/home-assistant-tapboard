@@ -1,16 +1,21 @@
 # Tapboard v2 rebuild status
 
 - Architecture: **FROZEN**
-- Current phase: **Production Git-context Compose compatibility repair; locally validated and ready for PR review**
-- Current branch: `codex/fix-production-docker`
-- Current base: `ed77ebe` (merged browser-feedback PR #106)
-- Current schema: **v20** (`fill-card-badges`, following v19 outbound delivery)
-- Validation: **Canonical `npm run check` passed: formatting, lint, types, architecture/reuse checks, and 562/562 tests. The production image built and passed disposable hardened-container smoke tests on linux/amd64. Independent final diff review found no material issues. Browser/E2E and CI checks remain explicitly waived; actual VPS deployment and other architectures are unverified.**
+- Current phase: **Built-in simulation workspace implemented and locally validated; ready for PR review**
+- Current branch: `feat/builtin-simulation`
+- Current base: `628255c` (merged vessel artwork PR #115)
+- Current schema: **v21** (`builtin-simulation`, following v20 fill-card badges)
+- Current validation: **Canonical `npm run check` passed (formatting, lint, types, architecture/reuse checks, and 605/605 tests). The full Chromium Playwright suite passed 32/32 tests using the installed browser through a temporary launch configuration. Desktop/mobile screens were inspected. Independent final review findings were fixed and rereview found no remaining blockers. This change has not been deployed or tested with physical hardware.**
+- Prior packaging validation (historical): **Canonical `npm run check` passed: formatting, lint, types, architecture/reuse checks, and 562/562 tests. The production image built and passed disposable hardened-container smoke tests on linux/amd64. Independent final diff review found no material issues. Browser/E2E and CI checks remain explicitly waived; actual VPS deployment and other architectures are unverified.**
 - Prebaseline: **333 passing tests** (prebaseline evidence, not a current validation result)
 - Frozen v1 source commit: `429cf07e451b64ca1713655a34ffa5ebd376efae`
 - ADR index: [`docs/adr/README.md`](../adr/README.md)
 - V1 reuse manifest: [`docs/rebuild/v1-reuse-manifest.json`](v1-reuse-manifest.json)
 - Guardrail policy: [`docs/rebuild/ARCHITECTURE-GUARDRAILS.md`](ARCHITECTURE-GUARDRAILS.md)
+
+## Built-in Simulation
+
+The operator approved the isolated saved simulation workspace before #80/#81 on 2026-09-29. See ADR-0008 and the README manual test. Current feature validation is recorded above and in the PR; historical phase results below are not claims about this change.
 
 ## GitHub planning
 

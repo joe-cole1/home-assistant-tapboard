@@ -21,6 +21,8 @@ const origin = `http://127.0.0.1:${port}`;
 const secretKey = Buffer.alloc(32, 7).toString("base64url");
 const LIVE_MYSTERY_SECRET = "LIVE_MYSTERY_SECRET_77";
 rmSync(databasePath, { force: true });
+for (const suffix of ["", "-wal", "-shm"])
+  rmSync(`${databasePath}.simulation.sqlite3${suffix}`, { force: true });
 
 const database = openDatabase(databasePath);
 const auth = createAuthService(database, { canonicalOrigin: origin });

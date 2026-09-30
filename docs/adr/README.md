@@ -9,5 +9,6 @@ These records restate decisions that were already approved and frozen. They do n
 - [ADR-0005](0005-integrations-events-and-bounded-outbox.md) — integration boundaries, events, and bounded outbox delivery
 - [ADR-0006](0006-security-authentication-and-degraded-operation.md) — authentication, CSRF, API keys, encrypted secrets, and degraded operation
 - [ADR-0007](0007-outbound-delivery-workers-and-discord-webhook-format.md) — outbound workers, immutable destination versions, bounded webhook formats, and delivery failure semantics
+- [ADR-0008](0008-built-in-simulation-workspace.md) — built-in simulation, isolated saved data, real telemetry processing, and workspace transitions
 
 The authoritative product and architecture sources remain the documents under [`docs/rebuild`](../rebuild/).

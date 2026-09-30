@@ -164,6 +164,11 @@ export class SseHub<C extends SseClientContext = SseClientContext> {
     this.#stopped = true;
     if (this.#heartbeat) clearInterval(this.#heartbeat);
     if (this.#authTimer) clearInterval(this.#authTimer);
+    this.disconnectAll();
+  }
+
+  /** End existing streams while keeping this hub available for reconnects. */
+  disconnectAll(): void {
     for (const client of [...this.#clients]) {
       try {
         client.response.end();

@@ -100,7 +100,7 @@ void test("Featured publishes only the assigned Tap after commit and Kick requir
   taps.assignFill(tap.id, { fillId: fill.id });
   taps.createTap({ tapNumber: 2 });
   createDisplaySettingsService(database).setTapCardOverride(tap.id, { showIbu: false });
-  let router: Router | undefined;
+  let router: Pick<Router, "handle"> | undefined;
   const application = createApplication({
     config: {
       host: "127.0.0.1",

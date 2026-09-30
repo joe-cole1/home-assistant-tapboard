@@ -36,7 +36,7 @@ The defaults are:
 | `TAPBOARD_SESSION_ABSOLUTE_MS`   | `31536000000` (365 days)                                     |
 | `TAPBOARD_SECRET_KEY`            | unset; optional canonical 32-byte base64url key              |
 
-The runtime creates the database parent directory when needed. A ready process returns HTTP 200 from `GET /healthz` with `{"status":"ok","schemaVersion":20}`. This is local application/database readiness only; it does not check external integrations. Public connectivity is a deliberately aggregate dashboard projection; health administration remains authenticated.
+The runtime creates the database parent directory when needed. A ready process returns HTTP 200 from `GET /healthz` with `{"status":"ok","schemaVersion":21}`. This is local application/database readiness only; it does not check external integrations. Public connectivity is a deliberately aggregate dashboard projection; health administration remains authenticated.
 
 The Admin PIN contract is exactly four ASCII decimal digits (`[0-9]{4}`), including every value from `0000` through `9999`; input is never trimmed or Unicode-normalized. Scrypt, durable SQLite throttling, opaque sessions, CSRF, and strict Origin checks protect online/local access, but the 10,000-value space has limited offline resistance if the SQLite verifier is stolen. The PIN never derives or protects `TAPBOARD_SECRET_KEY`.
 
@@ -154,6 +154,22 @@ docker compose -f compose.dev.yaml up --force-recreate -d
 unset TAPBOARD_OLD_KEY TAPBOARD_NEW_KEY
 ```
 
+## Built-in Simulation
+
+Open **Admin → System → Enable simulation**. Tapboard creates a separate saved sample taproom and opens **Simulator**. The regular dashboard, Beverages, Kegs, Fills, Taps, display controls, and history now show that workspace, with a **SIMULATION** banner. This is an installation-wide switch, including other open displays.
+
+Open the dashboard in another tab. Wait for a sensor to say **Ready**, then pour 4, 12, 16, or a custom 1–32 US fl oz. Readings flow on the server while you browse elsewhere; the normal detector produces the pour history. **Pause sensor** stops readings and **Bring online** resumes them. **Noise** adds small scale fluctuations. Existing health thresholds determine when a paused sensor becomes stale. Remaining volume follows a Filled Keg when you move it between taps; newly created Fills start full.
+
+**Exit simulation** saves its test data and returns to normal operation. Enabling it again resumes the same samples and history. **Reset simulation** requires confirmation and replaces only the sample workspace. Normal data and integration configuration are preserved. Browser display preferences are also saved separately for each mode. Mode changes keep the initiating browser signed in and invalidate older Admin forms/sessions; other devices may need to sign in again.
+
+The sample database is stored beside the normal database with `.simulation.sqlite3` appended to its filename, inside the existing writable data volume. It uses the same schema and migrations. No additional container, port, environment flag, external service, or default Admin PIN is required. Integration management and external deliveries are unavailable in simulation. Physical senders using the telemetry API continue updating the normal installation even while its public display shows simulation.
+
+The selected mode and sample data survive application restart. Running pours stop at their last submitted volume; their remaining requested volume is not replayed. A completed pour stays in history. If saved simulation cannot open, Tapboard returns to the normal workspace and records an error in its runtime log.
+
+### MANUAL DEV TEST — built-in Simulation
+
+After the normal non-destructive rebuild, verify `/healthz` reports schema 21. Sign in with the existing PIN, enable simulation from System, and confirm six sample taps and a SIMULATION banner in Admin and the public dashboard. Pour 12 oz from a Ready sensor; watch remaining volume update, then confirm the settled remaining estimate has fallen by about 355 mL. Pause/resume another sensor and check its health after the configured stale interval. Turn on noise and confirm idle readings do not create pours. Change a sample Beverage's glass and a Display theme while readings continue. Exit and re-enter to confirm sample history persists and normal inventory returns. Restart the container and confirm the selected workspace/history survive. Finally, explicitly reset simulation and verify only the sample workspace is replaced. Never remove the normal development volume for this check.
+
 ## Canonical validation
 
 Run the complete local gate with Node 24:
@@ -173,7 +189,7 @@ npm run test:e2e
 
 CI installs Chromium and runs `npm run test:e2e` in its own Node 24 job.
 
-Schema version 20 (`fill-card-badges`) is the current supported schema. It adds a Fill-owned Featured preference after version 19's outbound destination and delivery schema, preserving existing lifecycle and outbound data. Low and New badges are derived rather than persisted; New covers UTC days 0–6 from the Fill date and respects Mystery history visibility. Browser-local overrides, live/SSE state, and effective sensory projections are never persisted in SQLite. `/healthz` reports `schemaVersion: 20` when the database is ready. An unpublished badge-only version-19 database is not a canonical upgrade source and is rejected without repair; preserve its data and obtain an explicit migration plan instead of deleting a volume or rewriting its ledger.
+Schema version 21 (`builtin-simulation`) is the current supported schema. It adds typed workspace settings, simulated sensor state, and Fill-owned physical volume. Version 20 (`fill-card-badges`), the preceding upgrade source, added a Fill-owned Featured preference after version 19's outbound destination and delivery schema, preserving existing lifecycle and outbound data. Low and New badges are derived rather than persisted; New covers UTC days 0–6 from the Fill date and respects Mystery history visibility. Browser-local overrides, live/SSE state, and effective sensory projections are never persisted in SQLite. `/healthz` reports `schemaVersion: 21` when the database is ready. An unpublished badge-only version-19 database is not a canonical upgrade source and is rejected without repair; preserve its data and obtain an explicit migration plan instead of deleting a volume or rewriting its ledger.
 
 ## MANUAL DEV TEST — vessel artwork and pour animation
 
