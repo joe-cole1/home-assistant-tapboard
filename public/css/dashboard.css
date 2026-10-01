@@ -88,6 +88,11 @@ main[data-dashboard] > section[aria-label="Current taps"] {
     align-content: start;
   }
 }
+@media (min-width: 40rem) {
+  body:has(main[data-dashboard]):has(> .workspace-banner) {
+    grid-template-rows: auto auto minmax(0, 1fr);
+  }
+}
 .tap-card {
   min-width: 0;
   min-height: 0;
