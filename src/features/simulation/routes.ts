@@ -10,7 +10,8 @@ import {
   serializeCsrfCookie,
 } from "../../infrastructure/http/security/cookie.ts";
 import type { Renderer } from "../../infrastructure/rendering/renderer.ts";
-import { ApplicationError, isApplicationError } from "../../shared/errors.ts";
+import { ApplicationError } from "../../shared/errors.ts";
+import { adminFailureMessage, reportFailure } from "../../shared/diagnostics.ts";
 import type { Logger } from "../../shared/logging.ts";
 import type { AuthService, AuthenticatedSession, SessionMaterial } from "../auth/service.ts";
 import type { SimulationController, SimulationStatus } from "./ui-types.ts";
@@ -143,9 +144,15 @@ interface Action {
 function registerAction(dependencies: SimulationRouteDependencies, action: Action): void {
   dependencies.router.post(action.path, async (request, response) => {
     const enhanced = action.enhance === true && request.headers.accept === "application/json";
+    const context = adminContext(request, dependencies.authService);
     try {
+      if (context === undefined)
+        throw new ApplicationError({
+          category: "forbidden",
+          code: "auth.mutation_forbidden",
+          clientMessage: "The form could not be authorized. Reload and try again.",
+        });
       const form = await readFormBody(request, { maxBytes: 1_024, maxFields: 4 });
-      const context = adminContext(request, dependencies.authService);
       const authorized = dependencies.authService.authorizeCookieMutation({
         cookieHeader: request.headers.cookie,
         originHeader: request.headers.origin,
@@ -173,25 +180,23 @@ function registerAction(dependencies: SimulationRouteDependencies, action: Actio
         );
       }
     } catch (error) {
-      if (!isApplicationError(error)) {
-        dependencies.logger?.error("Simulation action failed", { path: action.path });
-      }
-      const message = isApplicationError(error)
-        ? error.clientMessage
-        : "The simulation change could not be completed. Try again.";
+      if (response.headersSent) throw error;
+      const failure = reportFailure(error, {
+        operation: `admin.simulation:${action.path}`,
+        ...(dependencies.logger ? { logger: dependencies.logger } : {}),
+      });
+      const message =
+        context === undefined
+          ? "The form could not be authorized. Reload and try again."
+          : adminFailureMessage(
+              failure,
+              "The simulation change could not be completed. Try again.",
+            );
       if (enhanced) {
-        const statuses = {
-          validation: 400,
-          too_large: 413,
-          unauthorized: 401,
-          forbidden: 403,
-          not_found: 404,
-          conflict: 409,
-          unavailable: 503,
-          internal: 500,
-        } as const;
-        sendJson(response, isApplicationError(error) ? statuses[error.category] : 500, {
+        sendJson(response, failure.status, {
           message,
+          code: failure.code,
+          ...(failure.reference ? { reference: failure.reference } : {}),
         });
       } else {
         redirect(
@@ -211,29 +216,49 @@ export function registerSimulationRoutes(dependencies: SimulationRouteDependenci
       redirect(response, "/admin/login");
       return;
     }
-    const query = new URL(request.url ?? "/", "http://tapboard.local").searchParams;
-    const state = projectStatus(controller);
-    const workspace = {
-      enabled: state.enabled,
-      revision: state.revision,
-      changing: state.changing,
-    };
-    sendHtml(
-      response,
-      200,
-      dependencies.renderer.render("/admin/simulator", {
-        page: {
-          title: "Simulator",
-          path: "/admin/simulator",
-          csrfToken: context.csrfToken,
+    try {
+      const query = new URL(request.url ?? "/", "http://tapboard.local").searchParams;
+      const state = projectStatus(controller);
+      const workspace = {
+        enabled: state.enabled,
+        revision: state.revision,
+        changing: state.changing,
+      };
+      sendHtml(
+        response,
+        200,
+        dependencies.renderer.render("/admin/simulator", {
+          page: {
+            title: "Simulator",
+            path: "/admin/simulator",
+            csrfToken: context.csrfToken,
+            workspace,
+            notice: query.get("notice")?.slice(0, 240),
+            error: query.get("error")?.slice(0, 240),
+          },
           workspace,
-          notice: query.get("notice")?.slice(0, 240),
-          error: query.get("error")?.slice(0, 240),
-        },
-        workspace,
-        simulation: state,
-      }),
-    );
+          simulation: state,
+        }),
+      );
+    } catch (error) {
+      if (response.headersSent) throw error;
+      const failure = reportFailure(error, {
+        operation: "admin.simulation.page",
+        ...(dependencies.logger ? { logger: dependencies.logger } : {}),
+      });
+      sendHtml(
+        response,
+        failure.status,
+        dependencies.renderer.render("/admin/error", {
+          page: {
+            title: "Simulator unavailable",
+            path: "/admin/simulator",
+            csrfToken: context.csrfToken,
+            error: adminFailureMessage(failure, "The Simulator could not be loaded."),
+          },
+        }),
+      );
+    }
   });
 
   router.get("/api/admin/simulation", (request, response) => {
@@ -243,7 +268,22 @@ export function registerSimulationRoutes(dependencies: SimulationRouteDependenci
       });
       return;
     }
-    sendJson(response, 200, { ...projectStatus(controller) });
+    try {
+      sendJson(response, 200, { ...projectStatus(controller) });
+    } catch (error) {
+      if (response.headersSent) throw error;
+      const failure = reportFailure(error, {
+        operation: "admin.simulation.status",
+        ...(dependencies.logger ? { logger: dependencies.logger } : {}),
+      });
+      sendJson(response, failure.status, {
+        error: {
+          code: failure.code,
+          message: adminFailureMessage(failure, "The Simulator status could not be loaded."),
+          ...(failure.reference ? { reference: failure.reference } : {}),
+        },
+      });
+    }
   });
 
   registerAction(dependencies, {

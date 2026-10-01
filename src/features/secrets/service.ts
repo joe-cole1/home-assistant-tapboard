@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 
+import { ApplicationError } from "../../shared/errors.ts";
 import type { DatabaseExecutor } from "../../infrastructure/database/connection.ts";
 import { appendActivity } from "../activity/operations.ts";
 import {
@@ -43,6 +44,23 @@ export interface SecretsServiceOptions {
 export interface SecretRotationResult {
   readonly generation: number;
   readonly rotated: number;
+}
+
+function missingKey(): ApplicationError {
+  return new ApplicationError({
+    category: "unavailable",
+    code: "secrets.key_missing",
+    clientMessage:
+      "Credential storage is unavailable. Configure TAPBOARD_SECRET_KEY on the Tapboard server, then recreate the container.",
+  });
+}
+
+function concurrentChange(): ApplicationError {
+  return new ApplicationError({
+    category: "conflict",
+    code: "secrets.conflict",
+    clientMessage: "Stored credentials changed concurrently. Reload and retry the operation.",
+  });
 }
 
 function nowTimestamp(factory: (() => Date) | undefined): string {
@@ -111,7 +129,7 @@ export class SecretsService {
     plaintext: unknown,
     options: { readonly now?: () => Date } = {},
   ): SecretDescriptor {
-    if (this.#rootKey === undefined) throw new Error("Secret storage is unavailable");
+    if (this.#rootKey === undefined) throw missingKey();
     this.#requireUsableRootKey();
     const secretIdentity = identity(integrationType, recordId, fieldName);
     const now = nowTimestamp(options.now ?? this.#options.now);
@@ -154,7 +172,7 @@ export class SecretsService {
             latest.id === current.id &&
             latest.revision === current.revision &&
             updateSecretRow(this.#database, row, current.revision);
-      if (!accepted) throw new Error("Secret changed concurrently");
+      if (!accepted) throw concurrentChange();
       appendActivity(this.#database, {
         category: "integration",
         action: "secret_configured",
@@ -173,7 +191,7 @@ export class SecretsService {
     fieldName: string,
     options: { readonly now?: () => Date } = {},
   ): boolean {
-    if (this.#rootKey === undefined) throw new Error("Secret storage is unavailable");
+    if (this.#rootKey === undefined) throw missingKey();
     this.#requireUsableRootKey();
     const secretIdentity = identity(integrationType, recordId, fieldName);
     const now = nowTimestamp(options.now ?? this.#options.now);
@@ -207,7 +225,7 @@ export class SecretsService {
 
   /** Privileged adapter boundary: the only API that may return decrypted plaintext. */
   revealPrivileged(integrationType: string, recordId: string, fieldName: string): string {
-    if (this.#rootKey === undefined) throw new Error("Secret storage is unavailable");
+    if (this.#rootKey === undefined) throw missingKey();
     const secretIdentity = identity(integrationType, recordId, fieldName);
     const row = readSecretRow(
       this.#database,
@@ -215,7 +233,12 @@ export class SecretsService {
       secretIdentity.recordId,
       secretIdentity.fieldName,
     );
-    if (row === undefined) throw new Error("Secret was not found");
+    if (row === undefined)
+      throw new ApplicationError({
+        category: "not_found",
+        code: "secrets.not_found",
+        clientMessage: "The stored credential was not found.",
+      });
     return decryptSecret(rowEnvelope(row), this.#rootKey, secretIdentity);
   }
 
@@ -252,7 +275,7 @@ export class SecretsService {
     }
     this.#database.withTransaction(() => {
       if (readRotationState(this.#database).generation !== snapshotGeneration)
-        throw new Error("Secret rotation changed concurrently");
+        throw concurrentChange();
       const latest = listSecretRows(this.#database);
       if (
         latest.length !== snapshot.length ||
@@ -273,13 +296,11 @@ export class SecretsService {
           );
         })
       )
-        throw new Error("Secret rotation changed concurrently");
+        throw concurrentChange();
       for (const row of candidates) {
-        if (!updateSecretRow(this.#database, row, row.revision - 1))
-          throw new Error("Secret rotation changed concurrently");
+        if (!updateSecretRow(this.#database, row, row.revision - 1)) throw concurrentChange();
       }
-      if (!updateRotationState(this.#database, snapshotGeneration, now))
-        throw new Error("Secret rotation changed concurrently");
+      if (!updateRotationState(this.#database, snapshotGeneration, now)) throw concurrentChange();
       appendActivity(this.#database, {
         category: "integration",
         action: "secret_rotation_completed",
@@ -310,7 +331,12 @@ export class SecretsService {
       key === undefined ||
       !listSecretRows(this.#database).every((row) => this.#canDecrypt(row, key))
     ) {
-      throw new Error("Secret storage is unavailable");
+      throw new ApplicationError({
+        category: "unavailable",
+        code: "secrets.key_unusable",
+        clientMessage:
+          "Stored credentials cannot be decrypted. Restore the original server encryption key or use the supported key-rotation procedure.",
+      });
     }
   }
 }

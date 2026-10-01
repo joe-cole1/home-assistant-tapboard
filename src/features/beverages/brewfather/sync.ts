@@ -27,7 +27,6 @@ import {
   STATUS_SET,
   sanitizeBatchSummary,
   sanitizeBatchToSourceProfile,
-  sanitizeErrorMessage,
   sanitizeRecipeSnapshot,
 } from "./sanitizer.ts";
 import type {
@@ -37,7 +36,10 @@ import type {
   DensityResolution,
 } from "../types.ts";
 
+import { describeBrewfatherFailure, type BrewfatherFailure } from "./diagnostics.ts";
+
 export interface SyncResult {
+  readonly failures?: readonly BrewfatherFailure[];
   readonly accountId: string;
   readonly linkedSynced: number;
   readonly linkedErrors: number;
@@ -237,15 +239,17 @@ export class BrewfatherSyncCoordinator {
     let apiKey: string;
     try {
       apiKey = secretsService.revealPrivileged("brewfather", account.id, "api_key");
-    } catch {
+    } catch (error: unknown) {
+      const failure = describeBrewfatherFailure(error);
       return {
+        failures: [failure],
         accountId: account.id,
         linkedSynced: 0,
         linkedErrors: 0,
         candidatesFound: 0,
         durationMs: Date.now() - start,
         connectionVerified: false,
-        error: "Brewfather API key is not configured or secret decryption is unavailable.",
+        error: failure.message,
       };
     }
 
@@ -266,6 +270,18 @@ export class BrewfatherSyncCoordinator {
     adapter: BrewfatherAdapter,
     start: number,
   ): Promise<SyncResult> {
+    const safeFailures: BrewfatherFailure[] = [];
+    const captureFailure = (error: unknown): BrewfatherFailure => {
+      const failure = describeBrewfatherFailure(error);
+      if (
+        safeFailures.length < 12 &&
+        !safeFailures.some(
+          (entry) => entry.code === failure.code && entry.providerStatus === failure.providerStatus,
+        )
+      )
+        safeFailures.push(failure);
+      return failure;
+    };
     let linkedSynced = 0;
     let linkedErrors = 0;
     let authenticationFailed = false;
@@ -378,8 +394,7 @@ export class BrewfatherSyncCoordinator {
         this.#assertActive();
         // Authentication is account evidence even when the requested link became obsolete.
         authenticationFailed ||= isAuthenticationFailure(error);
-        const rawMessage = error instanceof Error ? error.message : "Sync error";
-        const errorMessage = sanitizeErrorMessage(rawMessage, 255);
+        const errorMessage = captureFailure(error).message;
         const applied = database.withTransaction(() => {
           if (!isCurrentBeverageLink(database, link)) return false;
           updateBeverageLinkState(database, link.beverageId, "error", errorMessage, nowIso);
@@ -400,7 +415,10 @@ export class BrewfatherSyncCoordinator {
       connectionVerified ||= account.discoveryStatuses.length > 0 && failures.length === 0;
       if (failures.length > 0) {
         authenticationFailed ||= failures.some((failure) => isAuthenticationFailure(failure.error));
-        candidateError = failures.map((f) => `${f.status}: ${f.error.message}`).join("; ");
+        candidateError = failures
+          .map((failure) => captureFailure(failure.error).message)
+          .filter((message, index, messages) => messages.indexOf(message) === index)
+          .join("; ");
       }
       for (const rawBatch of batches) {
         const summary = sanitizeBatchSummary(rawBatch);
@@ -455,12 +473,10 @@ export class BrewfatherSyncCoordinator {
     } catch (error: unknown) {
       this.#assertActive();
       authenticationFailed ||= isAuthenticationFailure(error);
-      candidateError = error instanceof Error ? error.message : "Candidate discovery error";
+      candidateError = captureFailure(error).message;
     }
 
-    const safeCandidateError = candidateError
-      ? sanitizeErrorMessage(candidateError, 255)
-      : undefined;
+    const safeCandidateError = candidateError?.slice(0, 255);
 
     this.#assertActive();
     appendActivity(database, {
@@ -480,6 +496,7 @@ export class BrewfatherSyncCoordinator {
     });
 
     return {
+      failures: safeFailures,
       accountId: account.id,
       linkedSynced,
       linkedErrors,
@@ -542,10 +559,10 @@ export class BrewfatherSyncCoordinator {
     let apiKey: string;
     try {
       apiKey = secretsService.revealPrivileged("brewfather", account.id, "api_key");
-    } catch {
+    } catch (error: unknown) {
       return {
         outcome: "failed",
-        message: "Brewfather credentials unavailable",
+        message: describeBrewfatherFailure(error, "complete").message,
       };
     }
 
@@ -583,9 +600,7 @@ export class BrewfatherSyncCoordinator {
         message: "Batch status updated to Completed",
       };
     } catch (error: unknown) {
-      const msg = error instanceof Error ? error.message : "Brewfather request failed";
-      const safeMsg = sanitizeErrorMessage(msg, 255);
-      return { outcome: "failed", message: safeMsg };
+      return { outcome: "failed", message: describeBrewfatherFailure(error, "complete").message };
     } finally {
       this.#releaseAdapter(account.id, adapter);
     }

@@ -87,7 +87,7 @@ void test("all cleanup attempts preserve the first failure, detach owners, and r
   );
   let database: DatabaseConnection | undefined;
   const app = createApplication({
-    config: config(context),
+    config: { ...config(context), secretKey: Buffer.alloc(32, 7).toString("base64url") },
     logger: createLogger({ sink: (line) => logs.push(line) }),
     openDatabase(path) {
       database = openDatabase(path);

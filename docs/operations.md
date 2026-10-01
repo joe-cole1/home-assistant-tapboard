@@ -80,3 +80,17 @@ Backups, snapshot consistency, key escrow, and restore rehearsal belong to the d
 Run `npm run check`, then install Chromium and run `npm run test:e2e`. `bash scripts/check-production-container.sh` builds a fresh image and checks hardened execution, clean-volume initialization, health/SSR, stdin PIN setup, persistent domain state after restart/recreate, degraded integration behavior, and graceful SIGTERM. It uses only a uniquely named disposable project/volume and removes only what it created. CI runs these as three independent gates.
 
 Actual VPS deployment, other CPU architectures, and live Brewfather/Home Assistant mutations are operator checks beyond the disposable acceptance run. They are not substitutes for the canonical, browser, migration, and container gates.
+
+## Diagnose Admin and integration failures
+
+Recoverable integration API keys remain encrypted in server SQLite. Configure the external encryption key once on the server; browsers and displays do not receive it. Startup diagnostics distinguish absent/invalid server key configuration from existing credentials that cannot be decrypted. Preserve encrypted rows and restore the matching external key or use the supported rotation procedure.
+
+Authenticated Admin operational errors carry a reference matching a structured JSON log event. Known failures explain the recovery step; unexpected exceptions use a safe fallback. The event includes a static operation identifier, error code/category, HTTP status, and bounded provider status/retry delay where available. Routine validation and authorization rejections do not create operational error noise. Brewfather background failures are reported on changes and reset suppression after verified recovery.
+
+Inspect production logs using the same deployment environment file and project:
+
+```sh
+docker compose --env-file "${TAPBOARD_ENV_FILE:-.env}" -p tapboard-prod -f compose.production.example.yaml logs -f --tail=200 tapboard
+```
+
+Diagnostics exclude credential values, request bodies and headers, raw provider responses, and exception text/stack/cause. A form error reference is sufficient to locate its corresponding event; avoid copying secret-containing input or interpolated Compose configuration into support reports. Logging is best effort and never changes mutation success, transaction rollback, or shutdown behavior.

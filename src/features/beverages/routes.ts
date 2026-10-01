@@ -5,11 +5,14 @@ import { readJsonBody, readRequestBody } from "../../infrastructure/http/securit
 import { parseSessionCookie } from "../../infrastructure/http/security/cookie.ts";
 import type { AuthService, AuthenticatedSession } from "../auth/service.ts";
 import { ApplicationError } from "../../shared/errors.ts";
+import { reportFailure } from "../../shared/diagnostics.ts";
+import type { Logger } from "../../shared/logging.ts";
 import { validateDeleteBeverageInput } from "./beverage-validation.ts";
 import type { BeverageService, BeverageDetailResult, BeverageSummaryResult } from "./service.ts";
 import type { BrewfatherAccount, BrewfatherCandidate } from "./types.ts";
 
 export interface BeverageRouteDependencies {
+  readonly logger?: Logger;
   readonly router: Router;
   readonly beverageService: BeverageService;
   readonly authService: AuthService;
@@ -283,6 +286,34 @@ export function registerBeverageRoutes(dependencies: BeverageRouteDependencies):
     async (request: IncomingMessage, response: ServerResponse) => {
       requireMutationAuth(request, authService);
       const results = await beverageService.syncBrewfather();
+      const failed = results.find(
+        (result) =>
+          result.error !== undefined ||
+          result.linkedErrors > 0 ||
+          result.authenticationFailed === true,
+      );
+      if (failed !== undefined) {
+        const failure = failed.failures?.[0];
+        reportFailure(
+          new ApplicationError({
+            category: failure?.category === "internal" ? "internal" : "unavailable",
+            code: failure?.code ?? "brewfather.sync_failed",
+            clientMessage: failure?.message ?? "Brewfather refresh did not complete successfully.",
+            ...(failure === undefined
+              ? {}
+              : {
+                  details: {
+                    providerStatus: failure.providerStatus,
+                    retryAfterMs: failure.retryAfterMs,
+                  },
+                }),
+          }),
+          {
+            operation: "api.admin.brewfather.sync",
+            ...(dependencies.logger ? { logger: dependencies.logger } : {}),
+          },
+        );
+      }
       sendJson(response, 200, { results });
     },
   );

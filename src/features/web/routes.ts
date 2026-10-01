@@ -16,6 +16,8 @@ import {
 import { requireMutationOrigin } from "../../infrastructure/http/security/origin.ts";
 import type { Renderer } from "../../infrastructure/rendering/renderer.ts";
 import { ApplicationError, isApplicationError } from "../../shared/errors.ts";
+import { adminFailureMessage, reportFailure } from "../../shared/diagnostics.ts";
+import type { Logger } from "../../shared/logging.ts";
 import { APPLICATION_VERSION } from "../../shared/version.ts";
 import type { AuthService, AuthenticatedSession } from "../auth/service.ts";
 import type { BeverageService } from "../beverages/service.ts";
@@ -558,6 +560,7 @@ function telemetryEndpointUrl(canonicalOrigin: string | undefined): string {
 }
 
 export interface WebRouteDependencies {
+  readonly logger?: Logger;
   readonly router: Router;
   readonly renderer: Renderer;
   readonly canonicalOrigin?: string;
@@ -1649,6 +1652,7 @@ function fallbackAdminTapPage(
 function safeDashboardTap(
   dashboardService: DashboardService,
   tapId: string,
+  logger?: Logger,
 ): PublicTapCardView | null {
   const candidate = dashboardService as DashboardService & {
     readonly getTap?: (id: string) => PublicTapCardView | undefined;
@@ -1657,7 +1661,11 @@ function safeDashboardTap(
   try {
     const card = candidate.getTap(tapId);
     return card === undefined ? null : card;
-  } catch {
+  } catch (error) {
+    reportFailure(error, {
+      operation: "admin.projection.dashboard_tap",
+      ...(logger ? { logger } : {}),
+    });
     return null;
   }
 }
@@ -1674,6 +1682,7 @@ function safeDashboardTapPreview(
   dashboardService: DashboardService,
   tapId: string,
   settings?: PublicTapCardMetricSettings,
+  logger?: Logger,
 ): PublicTapCardView | null {
   const candidate = dashboardService as DashboardService & {
     readonly getTapPreview?: (
@@ -1685,11 +1694,15 @@ function safeDashboardTapPreview(
     try {
       const card = candidate.getTapPreview(tapId, settings);
       return card === undefined ? null : card;
-    } catch {
+    } catch (error) {
+      reportFailure(error, {
+        operation: "admin.projection.dashboard_preview",
+        ...(logger ? { logger } : {}),
+      });
       return null;
     }
   }
-  return safeDashboardTap(dashboardService, tapId);
+  return safeDashboardTap(dashboardService, tapId, logger);
 }
 
 function previewMetricCatalog(card: PublicTapCardView | null): Readonly<Record<string, string>> {
@@ -1748,7 +1761,11 @@ function previewSampleCard(metricSettings: PublicTapCardMetricSettings): PublicT
   };
 }
 
-function safeHealthOverview(healthService: HealthService, tapId: string): Record<string, unknown> {
+function safeHealthOverview(
+  healthService: HealthService,
+  tapId: string,
+  logger?: Logger,
+): Record<string, unknown> {
   try {
     const overview = healthService.getAdminOverview(tapId) as unknown as Record<string, unknown>;
     const aggregate = overview.aggregate as Record<string, unknown> | undefined;
@@ -1782,7 +1799,11 @@ function safeHealthOverview(healthService: HealthService, tapId: string): Record
         : [],
       lineCleaning: overview.lineCleaning ?? null,
     };
-  } catch {
+  } catch (error) {
+    reportFailure(error, {
+      operation: "admin.projection.health_overview",
+      ...(logger ? { logger } : {}),
+    });
     return {
       state: "unknown",
       stateLabel: "Unknown",
@@ -1902,7 +1923,10 @@ function fallbackAdminKegPage(
   };
 }
 
-function safePublicTapCards(dashboardService: DashboardService): readonly PublicTapCardView[] {
+function safePublicTapCards(
+  dashboardService: DashboardService,
+  logger?: Logger,
+): readonly PublicTapCardView[] {
   const candidate = dashboardService as DashboardService & {
     readonly listTaps?: () => readonly PublicTapCardView[];
   };
@@ -1910,7 +1934,11 @@ function safePublicTapCards(dashboardService: DashboardService): readonly Public
   try {
     const cards = candidate.listTaps();
     return [...cards].slice(0, 1_000);
-  } catch {
+  } catch (error) {
+    reportFailure(error, {
+      operation: "admin.projection.public_cards",
+      ...(logger ? { logger } : {}),
+    });
     // The privileged Admin projection remains usable if a public preview is
     // unavailable. Public card data is enhancement-only here.
     return [];
@@ -2189,11 +2217,28 @@ function registerAdminGet(
     try {
       await handler(request, response, context, params);
     } catch (error) {
+      if (response.headersSent) throw error;
       if (isApplicationError(error) && error.category === "not_found") {
         renderAdminNotFound(dependencies, response, request, context, requestUrl(request).pathname);
         return;
       }
-      throw error;
+      const failure = reportFailure(error, {
+        operation: `admin.get:${path}`,
+        ...(dependencies.logger ? { logger: dependencies.logger } : {}),
+      });
+      sendHtml(
+        response,
+        failure.status,
+        dependencies.renderer.render("/admin/error", {
+          page: {
+            title: "Admin page unavailable",
+            path,
+            csrfToken: context.csrfToken,
+            error: adminFailureMessage(failure, "The Admin page could not be loaded."),
+          },
+          navItems: adminNavItems(),
+        }),
+      );
     }
   });
 }
@@ -2518,9 +2563,13 @@ async function runAdminAutosave(
   params: Readonly<Record<string, string>>,
   spec: AdminAutosaveSpec,
 ): Promise<void> {
+  const context = adminContext(request, dependencies.authService);
+  if (context === undefined) {
+    sendJson(response, 403, { message: "The autosave request could not be authorized." });
+    return;
+  }
   try {
     const body = autosaveBodyRecord(await readJsonBody<unknown>(request));
-    const context = adminContext(request, dependencies.authService);
     const authorized = dependencies.authService.authorizeCookieMutation({
       cookieHeader: request.headers.cookie,
       originHeader: request.headers.origin,
@@ -2534,6 +2583,11 @@ async function runAdminAutosave(
     const result = await spec.handle(body, context, params);
     sendJson(response, 200, { message: "Saved.", ...result });
   } catch (error) {
+    if (response.headersSent) throw error;
+    const failure = reportFailure(error, {
+      operation: "admin.autosave",
+      ...(dependencies.logger ? { logger: dependencies.logger } : {}),
+    });
     if (isApplicationError(error)) {
       if (error.category === "conflict") {
         let current: { readonly current: unknown; readonly revision: string | number } | undefined;
@@ -2557,11 +2611,12 @@ async function runAdminAutosave(
         });
         return;
       }
-      const status = error.category === "not_found" ? 404 : 403;
-      sendJson(response, status, { message: error.clientMessage });
-      return;
     }
-    sendJson(response, 500, { message: "The autosave could not be completed." });
+    sendJson(response, failure.status, {
+      message: adminFailureMessage(failure, "The autosave could not be completed."),
+      code: failure.code,
+      ...(failure.reference ? { reference: failure.reference } : {}),
+    });
   }
 }
 
@@ -2573,19 +2628,29 @@ function registerAdminAction(
     form: Readonly<Record<string, string>>,
     context: AdminContext,
     params: Readonly<Record<string, string>>,
-  ) => void | string | Promise<void | string>,
+  ) =>
+    | void
+    | string
+    | { readonly notice: string }
+    | Promise<void | string | { readonly notice: string }>,
   successMessage = "Saved.",
   readFormOptions: ReadFormOptions = {},
   autosave?: AdminAutosaveSpec,
 ): void {
   dependencies.router.post(path, async (request, response, params) => {
+    const context = adminContext(request, dependencies.authService);
     try {
       if (autosave !== undefined && isAutosaveRequest(request)) {
         await runAdminAutosave(dependencies, request, response, params, autosave);
         return;
       }
+      if (context === undefined)
+        throw new ApplicationError({
+          category: "forbidden",
+          code: "auth.mutation_forbidden",
+          clientMessage: "The form could not be authorized. Reload and try again.",
+        });
       const form = await readFormBody(request, readFormOptions);
-      const context = adminContext(request, dependencies.authService);
       const authorized = dependencies.authService.authorizeCookieMutation({
         cookieHeader: request.headers.cookie,
         originHeader: request.headers.origin,
@@ -2606,11 +2671,24 @@ function registerAdminAction(
       const handlerResult = await handler(form, context, params);
       const resolvedReturnPath = typeof returnPath === "function" ? returnPath(params) : returnPath;
       const destination = typeof handlerResult === "string" ? handlerResult : resolvedReturnPath;
-      redirect(response, messageLocation(destination, "notice", successMessage));
+      redirect(
+        response,
+        messageLocation(
+          destination,
+          "notice",
+          typeof handlerResult === "object" ? handlerResult.notice : successMessage,
+        ),
+      );
     } catch (error) {
-      const message = isApplicationError(error)
-        ? error.clientMessage
-        : "The change could not be completed.";
+      if (response.headersSent) throw error;
+      const failure = reportFailure(error, {
+        operation: `admin.action:${path}`,
+        ...(dependencies.logger ? { logger: dependencies.logger } : {}),
+      });
+      const message =
+        context === undefined
+          ? "The form could not be authorized. Reload and try again."
+          : adminFailureMessage(failure, "The change could not be completed.");
       const errorPath = typeof returnPath === "function" ? returnPath(params) : returnPath;
       redirect(response, messageLocation(errorPath, "error", message));
     }
@@ -2841,6 +2919,11 @@ function registerPublicRoutes(dependencies: WebRouteDependencies): void {
         }
         redirect(response, "/#tap-wars");
       } catch (error) {
+        if (response.headersSent) throw error;
+        reportFailure(error, {
+          operation: "public.tap_war.vote",
+          ...(dependencies.logger ? { logger: dependencies.logger } : {}),
+        });
         if (isApplicationError(error) && error.code === "tap_war.ineligible") {
           // vote() commits the pause before reporting this conflict, so it is a
           // real state change rather than a rejected attempt.
@@ -2926,14 +3009,25 @@ function registerAuthenticationRoutes(dependencies: WebRouteDependencies): void 
         serializeCsrfCookie(result.csrfToken, result.absoluteExpiresAt, { secure }),
       ]);
       redirect(response, "/admin/overview");
-    } catch {
+    } catch (error) {
+      if (response.headersSent) throw error;
+      reportFailure(error, {
+        operation: "auth.login",
+        ...(dependencies.logger ? { logger: dependencies.logger } : {}),
+      });
       redirect(response, messageLocation("/admin/login", "error", "Sign-in failed."));
     }
   });
   dependencies.router.post("/admin/logout", async (request, response) => {
+    const context = adminContext(request, dependencies.authService);
     try {
+      if (context === undefined)
+        throw new ApplicationError({
+          category: "forbidden",
+          code: "auth.mutation_forbidden",
+          clientMessage: "Sign-out failed.",
+        });
       const form = await readFormBody(request, { maxFields: 4, maxBytes: 1_024 });
-      const context = adminContext(request, dependencies.authService);
       const authorized = dependencies.authService.authorizeCookieMutation({
         cookieHeader: request.headers.cookie,
         originHeader: request.headers.origin,
@@ -2941,7 +3035,11 @@ function registerAuthenticationRoutes(dependencies: WebRouteDependencies): void 
         canonicalOrigin: dependencies.canonicalOrigin,
       });
       if (context === undefined || authorized?.id !== context.session.id) {
-        throw new Error("unauthorized");
+        throw new ApplicationError({
+          category: "forbidden",
+          code: "auth.mutation_forbidden",
+          clientMessage: "Sign-out failed.",
+        });
       }
       dependencies.authService.revoke(context.sessionToken);
       const secure = dependencies.canonicalOrigin?.startsWith("https://") === true;
@@ -2950,7 +3048,12 @@ function registerAuthenticationRoutes(dependencies: WebRouteDependencies): void 
         clearCsrfCookie({ secure }),
       ]);
       redirect(response, messageLocation("/admin/login", "notice", "Signed out."));
-    } catch {
+    } catch (error) {
+      if (response.headersSent) throw error;
+      reportFailure(error, {
+        operation: "auth.logout",
+        ...(dependencies.logger ? { logger: dependencies.logger } : {}),
+      });
       redirect(response, messageLocation("/admin/login", "error", "Sign-out failed."));
     }
   });
@@ -3191,6 +3294,8 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
           candidates: brewfather.totalCandidates,
           lastDataUpdateAt: brewfather.lastDataUpdateAt,
           lastDataUpdateAtLabel: adminTimestampLabel(brewfather.lastDataUpdateAt),
+          connectionState: brewfather.connectionState,
+          credentialStorage: brewfather.credentialStorage,
         },
       },
     );
@@ -3404,7 +3509,7 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
   registerAdminGet(dependencies, "/admin/keg-room", (request, response, context) => {
     const requested = adminFillPageQueryFromRequest(request);
     const page = fallbackAdminFillPage(dependencies.fillService, requested);
-    const publicCards = safePublicTapCards(dependencies.dashboardService);
+    const publicCards = safePublicTapCards(dependencies.dashboardService, dependencies.logger);
     const fills = page.items.map((fill) =>
       safeFillCard(fill, dependencies.dashboardService, publicCards),
     );
@@ -3642,7 +3747,7 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
       const availableTaps = taps
         .filter((tap) => !tap.isRetired && !tap.isOccupied)
         .map((tap) => ({ id: tap.id, tapNumber: tap.tapNumber, name: tap.name }));
-      const publicCards = safePublicTapCards(dependencies.dashboardService);
+      const publicCards = safePublicTapCards(dependencies.dashboardService, dependencies.logger);
       const card = safeFillCard(fill, dependencies.dashboardService, publicCards);
       renderAdmin(
         dependencies,
@@ -3701,8 +3806,12 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
         ? adminTapPageHref({ q: index.query, state: index.state }, index.page + 1)
         : null;
     const rows = index.items.map((item) => {
-      const publicCard = safeDashboardTap(dependencies.dashboardService, item.id);
-      const health = safeHealthOverview(dependencies.healthService, item.id);
+      const publicCard = safeDashboardTap(
+        dependencies.dashboardService,
+        item.id,
+        dependencies.logger,
+      );
+      const health = safeHealthOverview(dependencies.healthService, item.id, dependencies.logger);
       return {
         ...item,
         assignmentLabel:
@@ -3770,12 +3879,16 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
     const id = params.id ?? "";
     const tap = dependencies.tapService.getTap(id);
     const assignment = tap.activeAssignment ?? null;
-    const publicCard = safeDashboardTap(dependencies.dashboardService, id);
+    const publicCard = safeDashboardTap(dependencies.dashboardService, id, dependencies.logger);
     let mystery: ReturnType<TapService["getAssignmentMystery"]> | null = null;
     let mysteryLookupFailed = false;
     try {
       if (assignment !== null) mystery = dependencies.tapService.getAssignmentMystery(id);
-    } catch {
+    } catch (error) {
+      reportFailure(error, {
+        operation: "admin.tap.mystery",
+        ...(dependencies.logger ? { logger: dependencies.logger } : {}),
+      });
       mystery = null;
       mysteryLookupFailed = assignment !== null;
     }
@@ -3785,7 +3898,12 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
     const previewCatalogCard = mysteryLookupFailed
       ? null
       : safeMysteryPreview(
-          safeDashboardTapPreview(dependencies.dashboardService, id, ALL_TAP_CARD_METRICS),
+          safeDashboardTapPreview(
+            dependencies.dashboardService,
+            id,
+            ALL_TAP_CARD_METRICS,
+            dependencies.logger,
+          ),
           mystery?.enabled === true,
         );
     const telemetrySources = dependencies.telemetryService
@@ -3803,7 +3921,11 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
         authority === undefined
           ? "None"
           : (sourceNames.get(authority.sourceId) ?? "Configured source");
-    } catch {
+    } catch (error) {
+      reportFailure(error, {
+        operation: "admin.tap.authority",
+        ...(dependencies.logger ? { logger: dependencies.logger } : {}),
+      });
       authorityName = "Unavailable";
     }
 
@@ -3822,7 +3944,11 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
           DETECTOR_FIELD_PRESENTATION[field].unit,
         ),
       }));
-    } catch {
+    } catch (error) {
+      reportFailure(error, {
+        operation: "admin.tap.detector_config",
+        ...(dependencies.logger ? { logger: dependencies.logger } : {}),
+      });
       detectorFields = [];
     }
 
@@ -3836,10 +3962,14 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
         readonly override?: Record<string, unknown> | null;
       };
       healthConfig = { effective: value.effective, override: value.override ?? null };
-    } catch {
+    } catch (error) {
+      reportFailure(error, {
+        operation: "admin.tap.health_config",
+        ...(dependencies.logger ? { logger: dependencies.logger } : {}),
+      });
       healthConfig = null;
     }
-    const healthOverview = safeHealthOverview(dependencies.healthService, id);
+    const healthOverview = safeHealthOverview(dependencies.healthService, id, dependencies.logger);
     const healthSections =
       healthConfig === null
         ? []
@@ -3886,7 +4016,11 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
           effective: effective.settings,
           defaults: dependencies.displayService.getTapCardSettings(),
         };
-    } catch {
+    } catch (error) {
+      reportFailure(error, {
+        operation: "admin.tap.tap_card",
+        ...(dependencies.logger ? { logger: dependencies.logger } : {}),
+      });
       tapCard = null;
     }
 
@@ -3900,7 +4034,11 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
       };
       const page = candidate.getAdminMaintenancePage?.(id, { limit: 25 });
       maintenance = (page?.records ?? []) as unknown as readonly Record<string, unknown>[];
-    } catch {
+    } catch (error) {
+      reportFailure(error, {
+        operation: "admin.tap.maintenance",
+        ...(dependencies.logger ? { logger: dependencies.logger } : {}),
+      });
       maintenance = [];
     }
 
@@ -3935,7 +4073,11 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
           kegLabel: fill.kegLabel,
           label: `${fill.beverageName} — Keg ${fill.kegNumber}${fill.kegLabel ? ` — ${fill.kegLabel}` : ""}`,
         }));
-    } catch {
+    } catch (error) {
+      reportFailure(error, {
+        operation: "admin.tap.assignable_fills",
+        ...(dependencies.logger ? { logger: dependencies.logger } : {}),
+      });
       assignableFills = [];
     }
 
@@ -3951,7 +4093,11 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
     let deletionImpact: ReturnType<TapService["getTapDeletionImpact"]> | null = null;
     try {
       deletionImpact = dependencies.tapService.getTapDeletionImpact(id);
-    } catch {
+    } catch (error) {
+      reportFailure(error, {
+        operation: "admin.tap.deletion_impact",
+        ...(dependencies.logger ? { logger: dependencies.logger } : {}),
+      });
       deletionImpact = null;
     }
     let displayDefaults: Record<string, unknown> = { unitSystem: "us", remainingMode: "percent" };
@@ -3960,7 +4106,11 @@ function registerAdminPages(dependencies: WebRouteDependencies): void {
         string,
         unknown
       >;
-    } catch {
+    } catch (error) {
+      reportFailure(error, {
+        operation: "admin.tap.display_defaults",
+        ...(dependencies.logger ? { logger: dependencies.logger } : {}),
+      });
       // Keep the deterministic preview fallback for small service doubles.
     }
 
@@ -5422,7 +5572,36 @@ function registerAdminMutations(dependencies: WebRouteDependencies): void {
     "/admin/integrations/brewfather/sync",
     "/admin/integrations/brewfather",
     async (_form, _context) => {
-      await dependencies.beverageService.syncBrewfather();
+      const results = await dependencies.beverageService.syncBrewfather();
+      const failed = results.find(
+        (result) =>
+          result.error !== undefined ||
+          result.authenticationFailed ||
+          result.linkedErrors > 0 ||
+          (result.failures?.length ?? 0) > 0,
+      );
+      if (failed !== undefined) {
+        const failure = failed.failures?.[0];
+        throw new ApplicationError({
+          category: failure?.category ?? "unavailable",
+          code: failure?.code ?? "brewfather.sync_failed",
+          clientMessage: `Brewfather refresh incomplete. ${failure?.message ?? "The provider could not complete the refresh. Try again later."}`,
+          ...(failure
+            ? {
+                details: {
+                  providerStatus: failure.providerStatus,
+                  retryAfterMs: failure.retryAfterMs,
+                },
+              }
+            : {}),
+        });
+      }
+      if (results.length === 0 || results.some((result) => result.connectionVerified !== true)) {
+        return {
+          notice:
+            "Brewfather was not verified. Enable a configured account and try the refresh again.",
+        };
+      }
     },
     "Brewfather refresh completed.",
   );
@@ -5439,9 +5618,16 @@ function registerAdminMutations(dependencies: WebRouteDependencies): void {
   dependencies.router.post(
     "/admin/integrations/telemetry-sources/create",
     async (request, response) => {
+      const context = adminContext(request, dependencies.authService);
+      let committed = false;
       try {
+        if (context === undefined)
+          throw new ApplicationError({
+            category: "forbidden",
+            code: "auth.mutation_forbidden",
+            clientMessage: "The form could not be authorized. Reload and try again.",
+          });
         const form = await readFormBody(request);
-        const context = adminContext(request, dependencies.authService);
         const authorized = dependencies.authService.authorizeCookieMutation({
           cookieHeader: request.headers.cookie,
           originHeader: request.headers.origin,
@@ -5449,11 +5635,16 @@ function registerAdminMutations(dependencies: WebRouteDependencies): void {
           canonicalOrigin: dependencies.canonicalOrigin,
         });
         if (context === undefined || authorized?.id !== context.session.id)
-          throw new Error("unauthorized");
+          throw new ApplicationError({
+            category: "forbidden",
+            code: "auth.mutation_forbidden",
+            clientMessage: "The form could not be authorized. Reload and try again.",
+          });
         const issued = dependencies.telemetryService.createSource(
           { name: form.name, ...(form.label ? { label: form.label } : {}) },
           actor(context),
         );
+        committed = true;
         sendHtml(
           response,
           200,
@@ -5468,13 +5659,30 @@ function registerAdminMutations(dependencies: WebRouteDependencies): void {
             ),
           ),
         );
-      } catch {
+      } catch (error) {
+        if (response.headersSent) throw error;
+        const failure = reportFailure(error, {
+          operation: "admin.telemetry.create",
+          ...(dependencies.logger ? { logger: dependencies.logger } : {}),
+        });
         redirect(
           response,
           messageLocation(
             "/admin/integrations/telemetry",
             "error",
-            "Telemetry source could not be created.",
+            context === undefined
+              ? "The form could not be authorized. Reload and try again."
+              : committed
+                ? adminFailureMessage(
+                    {
+                      ...failure,
+                      expected: true,
+                      message:
+                        "Telemetry source and key created, but the token could not be shown. Rotate the key again to get a replacement; rotation invalidates the previous key.",
+                    },
+                    "",
+                  )
+                : adminFailureMessage(failure, "Telemetry source could not be created."),
           ),
         );
       }
@@ -5483,9 +5691,16 @@ function registerAdminMutations(dependencies: WebRouteDependencies): void {
   dependencies.router.post(
     "/admin/integrations/telemetry-sources/:id/rotate",
     async (request, response, params) => {
+      const context = adminContext(request, dependencies.authService);
+      let committed = false;
       try {
+        if (context === undefined)
+          throw new ApplicationError({
+            category: "forbidden",
+            code: "auth.mutation_forbidden",
+            clientMessage: "The form could not be authorized. Reload and try again.",
+          });
         const form = await readFormBody(request);
-        const context = adminContext(request, dependencies.authService);
         const authorized = dependencies.authService.authorizeCookieMutation({
           cookieHeader: request.headers.cookie,
           originHeader: request.headers.origin,
@@ -5493,12 +5708,17 @@ function registerAdminMutations(dependencies: WebRouteDependencies): void {
           canonicalOrigin: dependencies.canonicalOrigin,
         });
         if (context === undefined || authorized?.id !== context.session.id)
-          throw new Error("unauthorized");
+          throw new ApplicationError({
+            category: "forbidden",
+            code: "auth.mutation_forbidden",
+            clientMessage: "The form could not be authorized. Reload and try again.",
+          });
         const issued = dependencies.telemetryService.rotateSourceKey(
           params.id!,
           form.label ? { label: form.label } : {},
           actor(context),
         );
+        committed = true;
         sendHtml(
           response,
           200,
@@ -5513,13 +5733,30 @@ function registerAdminMutations(dependencies: WebRouteDependencies): void {
             ),
           ),
         );
-      } catch {
+      } catch (error) {
+        if (response.headersSent) throw error;
+        const failure = reportFailure(error, {
+          operation: "admin.telemetry.rotate",
+          ...(dependencies.logger ? { logger: dependencies.logger } : {}),
+        });
         redirect(
           response,
           messageLocation(
             "/admin/integrations/telemetry",
             "error",
-            "Telemetry key could not be rotated.",
+            context === undefined
+              ? "The form could not be authorized. Reload and try again."
+              : committed
+                ? adminFailureMessage(
+                    {
+                      ...failure,
+                      expected: true,
+                      message:
+                        "Telemetry key rotated, but the token could not be shown. Rotate the key again to get a replacement; rotation invalidates the previous key.",
+                    },
+                    "",
+                  )
+                : adminFailureMessage(failure, "Telemetry key could not be rotated."),
           ),
         );
       }
