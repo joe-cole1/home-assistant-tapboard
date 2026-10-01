@@ -163,3 +163,86 @@ test("simulation controls work with JavaScript disabled", async ({ browser }) =>
     await context.close();
   }
 });
+
+for (const javaScriptEnabled of [true, false]) {
+  test(`public simulation layout fits desktop and tablet with JavaScript ${javaScriptEnabled ? "enabled" : "disabled"}`, async ({
+    page,
+    browser,
+  }) => {
+    await page.goto("/admin/login");
+    await page.getByRole("textbox", { name: "Admin PIN" }).fill("1234");
+    await expect(page).toHaveURL(/\/admin\/overview/u);
+    await page.goto("/admin/system");
+    await page.getByRole("switch", { name: "Enable simulation" }).click();
+    await expect(page).toHaveURL(/\/admin\/simulator/u);
+    const displayContext = await browser.newContext({
+      baseURL: new URL(page.url()).origin,
+      javaScriptEnabled,
+    });
+    try {
+      const display = await displayContext.newPage();
+      for (const viewport of [
+        { width: 800, height: 900 },
+        { width: 1280, height: 720 },
+        { width: 1911, height: 910 },
+        { width: 1920, height: 1080 },
+        { width: 3840, height: 2160 },
+      ]) {
+        await display.setViewportSize(viewport);
+        await display.goto("/");
+        await expect(display.locator(".workspace-banner")).toContainText("SIMULATION");
+        await expect(display.locator(".tap-grid > .tap-card")).toHaveCount(6);
+        const layout = await display.evaluate(() => {
+          const bounds = (selector: string) => {
+            const rect = document.querySelector(selector)!.getBoundingClientRect();
+            return { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right };
+          };
+          return {
+            banner: bounds(".workspace-banner"),
+            header: bounds(".public-header"),
+            main: bounds("main[data-dashboard]"),
+            grid: bounds(".tap-grid"),
+            onDeck: bounds(".on-deck"),
+            cards: [...document.querySelectorAll(".tap-grid > .tap-card")].map((card) => {
+              const rect = card.getBoundingClientRect();
+              return { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right };
+            }),
+            scrollWidth: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth),
+            scrollHeight: Math.max(
+              document.documentElement.scrollHeight,
+              document.body.scrollHeight,
+            ),
+          };
+        });
+        const label = `${viewport.width}x${viewport.height}`;
+        expect(layout.banner.top, label).toBeGreaterThanOrEqual(0);
+        expect(layout.banner.bottom, label).toBeLessThanOrEqual(layout.header.top + 1);
+        expect(layout.header.bottom, label).toBeLessThanOrEqual(layout.main.top + 1);
+        expect(layout.header.bottom, label).toBeLessThanOrEqual(layout.grid.top + 1);
+        expect(layout.onDeck.top, label).toBeGreaterThanOrEqual(0);
+        expect(layout.onDeck.bottom, label).toBeLessThanOrEqual(viewport.height + 1);
+        expect(layout.onDeck.left, label).toBeGreaterThanOrEqual(0);
+        expect(layout.onDeck.right, label).toBeLessThanOrEqual(viewport.width + 1);
+        for (const card of layout.cards) {
+          expect(card.top, label).toBeGreaterThanOrEqual(layout.header.bottom - 1);
+          expect(card.bottom, label).toBeLessThanOrEqual(layout.onDeck.top + 1);
+          expect(card.left, label).toBeGreaterThanOrEqual(0);
+          expect(card.right, label).toBeLessThanOrEqual(viewport.width + 1);
+        }
+        expect(layout.scrollWidth, label).toBeLessThanOrEqual(viewport.width);
+        expect(layout.scrollHeight, label).toBeLessThanOrEqual(viewport.height);
+        if (javaScriptEnabled && viewport.width === 1911) {
+          await display.screenshot({
+            path: test.info().outputPath("simulation-dashboard-fixed.png"),
+            animations: "disabled",
+          });
+        }
+      }
+    } finally {
+      await displayContext.close();
+      await page.goto("/admin/simulator");
+      await page.getByRole("button", { name: "Exit simulation" }).click();
+      await expect(page).toHaveURL(/\/admin\/system/u);
+    }
+  });
+}

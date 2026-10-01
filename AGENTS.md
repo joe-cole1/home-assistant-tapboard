@@ -2,11 +2,11 @@
 
 ## Coordinator and subagent orchestration
 
-The primary coordinator is the architect, orchestrator, integrator, verifier, and final quality-control owner. Do not require a specific model version or reasoning setting to work in this repository.
+The primary coordinator uses the model and reasoning setting currently selected by the user and is the architect, orchestrator, integrator, verifier, and final quality-control owner.
 
 Use subagents whenever the approved work decomposes into bounded, non-overlapping tasks. Keep assignments focused and use resources efficiently:
 
-- Spawn workers with `fork_turns: "none"` and provide a compact, self-contained assignment containing only the necessary repository context, constraints, exact file ownership, deliverable, and verification command.
+- Use `gpt-6.1-sol` with low reasoning for every worker. Spawn workers with explicit arguments `model: "gpt-6.1-sol"`, `reasoning_effort: "low"`, and `fork_turns: "none"`. Provide a compact, self-contained assignment containing only the necessary repository context, constraints, exact file ownership, deliverable, and verification command.
 - Delegate repository inventories, reference tracing, fixture construction, isolated implementation, focused tests, documentation, and read-only diff review when the tasks are bounded.
 - Keep worker reports concise and evidence-based. Workers stop after their assigned deliverable and do not expand scope.
 - Use at most three workers concurrently so the primary coordinator remains active.
@@ -29,7 +29,7 @@ Subagents must not:
 - Edit files outside their assigned ownership or undo another worker's changes.
 - Make cross-cutting architecture decisions, weaken tests, broaden scope, or treat a focused test as final acceptance.
 
-After implementation, assign a fresh worker a read-only final diff review focused on security, privacy, transaction ordering, failure handling, migration safety, compatibility, and missing tests. The primary coordinator must independently validate every reported concern, implement or reject it with evidence, rerun verification, and retain sole authority for final QC.
+After implementation, assign a fresh `gpt-6.1-sol` worker with low reasoning a read-only final diff review focused on security, privacy, transaction ordering, failure handling, migration safety, compatibility, and missing tests. The primary coordinator must independently validate every reported concern, implement or reject it with evidence, rerun verification, and retain sole authority for final QC.
 
 Task-specific handoff prompts may define a more detailed worker split. Those assignments supplement this policy but may not weaken the coordinator, file-ownership, safety, or final-QC requirements above.
 
