@@ -325,6 +325,8 @@ void test("Unexpected Simulator errors retain safe client messages and a diagnos
   );
   assert.equal(result.status, 500);
   assert.match(result.body, /could not be completed/u);
-  assert.match(f.logs.join("\n"), /Simulation action failed/u);
+  assert.equal(f.logs.length, 1);
+  assert.match(f.logs.join("\n"), /admin\.simulation:\/admin\/simulation\/pour/u);
+  assert.match(result.body, /Reference:/u);
   assert.doesNotMatch(result.body + f.logs.join("\n"), new RegExp(secret, "u"));
 });

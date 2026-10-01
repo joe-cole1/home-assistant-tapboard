@@ -1,22 +1,8 @@
 import type { ServerResponse } from "node:http";
 
-import {
-  isApplicationError,
-  redactSafeErrorDetails,
-  type ApplicationErrorCategory,
-} from "../../shared/errors.ts";
+import { isApplicationError, redactSafeErrorDetails } from "../../shared/errors.ts";
+import { reportFailure } from "../../shared/diagnostics.ts";
 import type { Logger } from "../../shared/logging.ts";
-
-const STATUS_BY_CATEGORY: Readonly<Record<ApplicationErrorCategory, number>> = {
-  validation: 400,
-  too_large: 413,
-  unauthorized: 401,
-  forbidden: 403,
-  not_found: 404,
-  conflict: 409,
-  unavailable: 503,
-  internal: 500,
-};
 
 export function sendJson(
   response: ServerResponse,
@@ -40,6 +26,7 @@ export function sendJson(
 }
 
 export function sendHttpError(error: unknown, response: ServerResponse, logger: Logger): void {
+  const report = reportFailure(error, { operation: "http.request", logger });
   if (isApplicationError(error)) {
     const body: Record<string, unknown> = {
       error: {
@@ -48,11 +35,10 @@ export function sendHttpError(error: unknown, response: ServerResponse, logger: 
         ...(error.details === undefined ? {} : { details: redactSafeErrorDetails(error.details) }),
       },
     };
-    sendJson(response, STATUS_BY_CATEGORY[error.category], body);
+    sendJson(response, report.status, body);
     return;
   }
 
-  logger.error("Unhandled HTTP request error", { error });
   sendJson(response, 500, {
     error: {
       code: "internal.unexpected",

@@ -73,6 +73,8 @@ import { LiveUpdateService, observeCommittedCalls } from "./features/live/index.
 import { startConnectivityMonitor } from "./features/dashboard/connectivity-monitor.ts";
 import { registerWebRoutes } from "./features/web/index.ts";
 import { createLogger, type Logger } from "./shared/logging.ts";
+import { reportFailure } from "./shared/diagnostics.ts";
+import { ApplicationError } from "./shared/errors.ts";
 import { createEventEnvelope } from "./features/events/envelope.ts";
 import type { EventEnvelope, EventIdentifiers } from "./features/events/types.ts";
 import {
@@ -299,9 +301,33 @@ class FoundationApplication implements Application {
               }
             : {}),
         });
-      const secretsService = createSecretsService(this.#database, {
-        ...(this.#config.secretKey ? { rootKey: this.#config.secretKey } : {}),
-      });
+      let secretsService: SecretsService;
+      try {
+        secretsService = createSecretsService(this.#database, {
+          ...(this.#config.secretKey ? { rootKey: this.#config.secretKey } : {}),
+        });
+      } catch (error) {
+        reportFailure(error, { operation: "application.credential_storage", logger: this.#logger });
+        throw error;
+      }
+      if (!this.#workspaceHooks.simulation) {
+        const storage = secretsService.status();
+        if (!storage.configured || !storage.available) {
+          const code = !storage.configured
+            ? this.#config.secretKeyState === "invalid"
+              ? "secrets.key_invalid"
+              : "secrets.key_missing"
+            : "secrets.key_unusable";
+          reportFailure(
+            new ApplicationError({
+              category: "unavailable",
+              code,
+              clientMessage: "Encrypted integration credential storage is unavailable.",
+            }),
+            { operation: "application.credential_storage", logger: this.#logger },
+          );
+        }
+      }
       const storyServiceRef: { current?: ReturnType<typeof createPublicStoryService> } = {};
       const publicContextResolver: PublicEventContextResolver = (identifiers) => {
         if (identifiers.tap_id === undefined || identifiers.tap_id === null) return undefined;
@@ -450,6 +476,7 @@ class FoundationApplication implements Application {
       });
       const rawBeverageService = createBeverageService(this.#database, {
         secretsService,
+        logger: this.#logger,
         ...(this.#workspaceHooks.simulation
           ? {
               syncCoordinator: new BrewfatherSyncCoordinator({
@@ -825,7 +852,7 @@ class FoundationApplication implements Application {
       router.register("HEAD", "/healthz", readinessHandler);
 
       registerKegRoutes({ router, kegService, authService });
-      registerBeverageRoutes({ router, beverageService, authService });
+      registerBeverageRoutes({ router, beverageService, authService, logger: this.#logger });
       registerFillRoutes({ router, fillService, authService });
       registerTapRoutes({ router, tapService, authService, storyService });
       registerHealthRoutes({ router, healthService, authService });
@@ -834,6 +861,7 @@ class FoundationApplication implements Application {
       registerWebRoutes({
         router,
         renderer: this.#renderer,
+        logger: this.#logger,
         ...(this.#config.canonicalExternalOrigin === undefined
           ? {}
           : { canonicalOrigin: this.#config.canonicalExternalOrigin }),

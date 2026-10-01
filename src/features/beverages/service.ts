@@ -1,3 +1,6 @@
+import { reportFailure } from "../../shared/diagnostics.ts";
+import type { Logger } from "../../shared/logging.ts";
+import { describeBrewfatherFailure } from "./brewfather/diagnostics.ts";
 import { randomUUID } from "node:crypto";
 import {
   assertSynchronousCompletion,
@@ -108,6 +111,7 @@ export interface BeverageSummaryResult {
 }
 
 export interface BeverageServiceOptions {
+  readonly logger?: Logger;
   readonly now?: () => Date;
   readonly idFactory?: () => string;
   readonly secretsService?: SecretsService;
@@ -121,6 +125,11 @@ export type BrewfatherConnectionState =
   "disabled" | "unknown" | "healthy" | "partial" | "disconnected";
 
 export interface BrewfatherStatus {
+  readonly credentialStorage?: {
+    readonly configured: boolean;
+    readonly available: boolean;
+    readonly count: number;
+  };
   readonly configured: boolean;
   readonly account?: BrewfatherAccount;
   readonly apiKeyConfigured: boolean;
@@ -195,9 +204,13 @@ export class BeverageService {
   #startupTimer?: NodeJS.Timeout | undefined;
   #periodicTimer?: NodeJS.Timeout | undefined;
   #disposed = false;
+  readonly #logger: Logger | undefined;
+  #periodicFailureFingerprint: string | undefined;
+  #periodicGeneration = 0;
 
   constructor(database: DatabaseExecutor, options: BeverageServiceOptions = {}) {
     this.#database = database;
+    this.#logger = options.logger;
     this.#secretsService = options.secretsService;
     this.#syncCoordinator = options.syncCoordinator ?? new BrewfatherSyncCoordinator();
     this.#densityExtensionPort = options.densityExtensionPort ?? {
@@ -221,15 +234,82 @@ export class BeverageService {
 
     this.#startupTimer = setTimeout(() => {
       this.#startupTimer = undefined;
-      void this.syncBrewfather().catch(() => undefined);
+      void this.#runPeriodicSync(this.#periodicGeneration);
     }, initialDelay);
 
     this.#periodicTimer = setInterval(() => {
-      void this.syncBrewfather().catch(() => undefined);
+      void this.#runPeriodicSync(this.#periodicGeneration);
     }, interval);
   }
 
+  async #runPeriodicSync(generation: number): Promise<void> {
+    try {
+      const results = await this.syncBrewfather();
+      if (this.#disposed || generation !== this.#periodicGeneration) return;
+      const failures = results.flatMap(
+        (result) =>
+          (result.failures?.length ? result.failures : undefined) ??
+          (result.error !== undefined ||
+          result.linkedErrors > 0 ||
+          result.authenticationFailed === true
+            ? [describeBrewfatherFailure(undefined)]
+            : []),
+      );
+      const unique = failures
+        .filter(
+          (failure, index) =>
+            failures.findIndex(
+              (entry) =>
+                entry.code === failure.code && entry.providerStatus === failure.providerStatus,
+            ) === index,
+        )
+        .slice(0, 12);
+      const fingerprint = JSON.stringify(
+        unique.map((failure) => [failure.code, failure.providerStatus]).sort(),
+      );
+      if (unique.length === 0) {
+        if (
+          results.length > 0 &&
+          results.every(
+            (result) =>
+              result.connectionVerified === true &&
+              result.linkedErrors === 0 &&
+              result.error === undefined,
+          )
+        )
+          this.#periodicFailureFingerprint = undefined;
+        return;
+      }
+      if (fingerprint === this.#periodicFailureFingerprint) return;
+      this.#periodicFailureFingerprint = fingerprint;
+      const failure = unique[0]!;
+      reportFailure(
+        new ApplicationError({
+          category: failure.category === "internal" ? "internal" : "unavailable",
+          code: failure.code,
+          clientMessage: failure.message,
+          details: { providerStatus: failure.providerStatus, retryAfterMs: failure.retryAfterMs },
+        }),
+        {
+          operation: "brewfather.periodic_sync",
+          ...(this.#logger ? { logger: this.#logger } : {}),
+        },
+      );
+    } catch (error: unknown) {
+      if (this.#disposed || generation !== this.#periodicGeneration) return;
+      const failure = describeBrewfatherFailure(error);
+      const fingerprint = JSON.stringify([[failure.code, failure.providerStatus]]);
+      if (fingerprint === this.#periodicFailureFingerprint) return;
+      this.#periodicFailureFingerprint = fingerprint;
+      reportFailure(error, {
+        operation: "brewfather.periodic_sync",
+        ...(this.#logger ? { logger: this.#logger } : {}),
+      });
+    }
+  }
+
   stopPeriodicSync(): void {
+    this.#periodicGeneration += 1;
     if (this.#startupTimer !== undefined) {
       clearTimeout(this.#startupTimer);
       this.#startupTimer = undefined;
@@ -1516,6 +1596,9 @@ export class BeverageService {
           );
 
     return {
+      ...(typeof this.#secretsService?.status === "function"
+        ? { credentialStorage: this.#secretsService.status() }
+        : {}),
       configured: account !== undefined,
       ...(account ? { account } : {}),
       ...this.#brewfatherConnectionStatus(accountId, account, this.#refreshBrewfatherConnections()),

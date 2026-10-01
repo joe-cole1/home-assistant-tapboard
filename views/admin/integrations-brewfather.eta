@@ -8,7 +8,11 @@
   </header>
   <%~ include("/partials/admin-messages", { page: it.page }) %>
   <section class="admin-card" aria-labelledby="brewfather-status-heading">
-    <div class="section-heading"><div><h2 id="brewfather-status-heading">Connection status</h2><p class="muted">Read-only summary of the current integration.</p></div><span class="status-badge status-badge--<%= it.brewfather.configured && it.brewfather.apiKeyConfigured ? "healthy" : "muted" %>"><%= it.brewfather.configured && it.brewfather.apiKeyConfigured ? "Connected" : "Not configured" %></span></div>
+    <% const connectionLabel = !it.brewfather.configured ? "Not configured" : !it.brewfather.enabled ? "Disabled" : ({ healthy: "Connected", unknown: "Awaiting verification", partial: "Refresh incomplete", disconnected: "Disconnected", disabled: "Disabled" }[it.brewfather.connectionState] || "Awaiting verification"); %>
+    <div class="section-heading"><div><h2 id="brewfather-status-heading">Connection status</h2><p class="muted">Read-only summary of the current integration.</p></div><span class="status-badge status-badge--<%= connectionLabel === "Connected" ? "healthy" : "muted" %>"><%= connectionLabel %></span></div>
+    <% if (it.brewfather.credentialStorage && !it.brewfather.credentialStorage.available) { %>
+    <p role="alert">Credential storage is unavailable. Configure a valid TAPBOARD_SECRET_KEY on the server before saving API keys. This server key is separate from your Brewfather API key. If credentials were stored previously, restore the original server key or use the documented key rotation procedure.</p>
+    <% } %>
     <dl class="metrics metrics--compact"><div><dt>Account</dt><dd><%= it.brewfather.configured ? "Configured" : "Not configured" %></dd></div><div><dt>API key</dt><dd><%= it.brewfather.apiKeyConfigured ? "Stored" : "Not stored" %></dd></div><div><dt>Linked beverages</dt><dd><%= it.brewfather.linkedBeverages %></dd></div><div><dt>Import candidates</dt><dd><%= it.brewfather.candidates %></dd></div></dl>
   </section>
   <section class="admin-card" aria-labelledby="brewfather-settings-heading">

@@ -40,7 +40,7 @@ The runtime creates the database parent directory when needed. A ready process r
 
 The Admin PIN contract is exactly four ASCII decimal digits (`[0-9]{4}`), including every value from `0000` through `9999`; input is never trimmed or Unicode-normalized. Scrypt, durable SQLite throttling, opaque sessions, CSRF, and strict Origin checks protect online/local access, but the 10,000-value space has limited offline resistance if the SQLite verifier is stolen. The PIN never derives or protects `TAPBOARD_SECRET_KEY`.
 
-`TAPBOARD_SECRET_KEY` is an external canonical 32-byte base64url value. Missing, malformed, or incorrect key material degrades encrypted integration-secret availability only; it does not disable local authentication or domain operation and never deletes encrypted rows. Do not place it in command arguments, logs, or browser input.
+`TAPBOARD_SECRET_KEY` is an external canonical 32-byte base64url value. Missing, malformed, or incorrect key material degrades encrypted integration-secret availability only; it does not disable local authentication or domain operation and never deletes encrypted rows. Do not place it in command arguments, logs, or browser input. Brewfather API keys are encrypted in the shared server database; the root key is configured once on the server, and displays and browsers need no separate encryption setup.
 
 Local operator maintenance is stdin-only and never accepts secret positional arguments: `npm run operator:reset-pin` reads one exact PIN line, and `npm run operator:rotate-secret-key` reads exact old/new key lines. There is no browser PIN-reset workflow or default PIN. These commands print only safe revision/count metadata.
 
@@ -345,3 +345,15 @@ After both implementation PRs are merged, update main and rebuild/recreate the d
 - [`docs/rebuild/STATUS.md`](docs/rebuild/STATUS.md)
 
 If these sources appear to conflict, follow the precedence in `ARCHITECTURE-FREEZE.md` and stop on any unresolved conflict.
+
+## Admin errors and container diagnostics
+
+Authenticated Admin forms, autosaves, and pages show actionable messages for known failures. Operational errors include a reference matching one structured JSON event in the container logs. Logs identify the operation, error code, severity, and safe provider HTTP status/retry delay when available. Credentials, submitted forms, cookies, raw exception text, and provider response bodies are excluded. Unexpected failures retain a safe message and reference. Public and login responses retain their restricted messages.
+
+Brewfather saving stores credentials locally; it does not validate them with Brewfather. The integration reports Connected only after a successful request with the current settings. Manual refresh distinguishes failed, partial, skipped, and verified successful work. Background failures are logged when their classification changes; repeated unchanged failures are suppressed until a verified recovery.
+
+Follow development logs with `docker compose -f compose.dev.yaml logs -f --tail=200 tapboard`. A startup warning identifies missing/invalid server encryption setup or unreadable stored credentials. Restore the original encryption key or use supported rotation when existing credentials cannot be decrypted; preserve the data volume.
+
+## MANUAL DEV TEST — Admin errors and Brewfather diagnostics
+
+After merging, rebuild and recreate the development container without deleting its volume, then verify `/healthz` reports schema version 22. Sign in to Admin and inspect Brewfather: saved credentials alone must not show Connected, a disabled account must show Disabled, and a failed refresh must show the appropriate recovery guidance. Match an operational error's reference with its single container log event. Verify ordinary invalid forms still show field guidance and autosave retains unsaved edits after a failure. Use a disposable instance or the automated fake-transport fixtures for missing/wrong encryption keys, rejected credentials, permission errors, rate limits, and timeouts; never replace the persistent instance's key to provoke a failure. Confirm API keys, PINs, cookies, and provider payloads appear in neither UI errors nor logs.

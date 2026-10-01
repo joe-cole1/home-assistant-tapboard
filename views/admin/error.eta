@@ -1,0 +1,3 @@
+<% layout("/layouts/admin", { page: it.page }) %>
+<%~ include("/partials/admin-nav", { page: it.page, items: it.navItems || [] }) %>
+<main id="main-content"><h1>Admin page unavailable</h1><p role="alert"><%= it.page.error %></p><p><a href="/admin/overview">Back to Overview</a></p></main>

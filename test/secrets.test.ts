@@ -3,6 +3,7 @@ import { mkdtempSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
+import { ApplicationError } from "../src/shared/errors.ts";
 import { openDatabase } from "../src/infrastructure/database/connection.ts";
 import {
   createSecretsService,
@@ -117,4 +118,82 @@ void test("rotation rolls back completely when any ciphertext is corrupted", () 
       .get()?.revision,
     1,
   );
+});
+
+void test("credential failures are actionable typed errors and preserve encrypted rows", () => {
+  const database = openDatabase(":memory:");
+  const service = createSecretsService(database, { rootKey: keyText(10) });
+  service.upsert("brewfather", "one", "api_token", "private-credential");
+  const snapshot = () => database.prepare("SELECT * FROM encrypted_secrets").all();
+  const before = snapshot();
+  const missing = createSecretsService(database);
+  const wrong = createSecretsService(database, { rootKey: keyText(11) });
+  const check =
+    (code: string) =>
+    (error: unknown): boolean => {
+      assert.ok(error instanceof ApplicationError);
+      assert.equal(error.category, "unavailable");
+      assert.equal(error.code, code);
+      assert.equal(error.message.includes("private-credential"), false);
+      return true;
+    };
+  assert.throws(
+    () => missing.upsert("brewfather", "one", "api_token", "replacement"),
+    check("secrets.key_missing"),
+  );
+  assert.throws(
+    () => missing.remove("brewfather", "one", "api_token"),
+    check("secrets.key_missing"),
+  );
+  assert.throws(
+    () => missing.revealPrivileged("brewfather", "one", "api_token"),
+    check("secrets.key_missing"),
+  );
+  assert.throws(
+    () => wrong.upsert("brewfather", "one", "api_token", "replacement"),
+    check("secrets.key_unusable"),
+  );
+  assert.throws(
+    () => wrong.remove("brewfather", "one", "api_token"),
+    check("secrets.key_unusable"),
+  );
+  assert.deepEqual(snapshot(), before);
+  assert.throws(
+    () => service.revealPrivileged("brewfather", "absent", "api_token"),
+    (error: unknown) => {
+      assert.ok(error instanceof ApplicationError);
+      assert.equal(error.code, "secrets.not_found");
+      assert.equal(error.category, "not_found");
+      return true;
+    },
+  );
+  database.close();
+});
+
+void test("a concurrent credential write reports a conflict without replacing the row", () => {
+  const database = openDatabase(":memory:");
+  const rootKey = keyText(12);
+  createSecretsService(database, { rootKey }).upsert("ha", "one", "token", "original");
+  const service = createSecretsService(database, {
+    rootKey,
+    randomBytes: (size) => {
+      database
+        .prepare("UPDATE encrypted_secrets SET revision = revision + 1 WHERE record_id = 'one'")
+        .run();
+      return new Uint8Array(size).fill(1);
+    },
+  });
+  assert.throws(
+    () => service.upsert("ha", "one", "token", "replacement"),
+    (error: unknown) => {
+      assert.ok(error instanceof ApplicationError);
+      assert.equal(error.category, "conflict");
+      assert.equal(error.code, "secrets.conflict");
+      assert.match(error.clientMessage, /retry/);
+      return true;
+    },
+  );
+  assert.equal(service.revealPrivileged("ha", "one", "token"), "original");
+  assert.equal(service.list()[0]?.revision, 2);
+  database.close();
 });

@@ -354,8 +354,10 @@ async function exercise(phase, credentials) {
       results.length === 1 &&
         results[0].accountId === "default" &&
         results[0].connectionVerified === false &&
+        results[0].failures?.[0]?.code === "secrets.key_unusable" &&
+        results[0].failures[0].category === "unavailable" &&
         results[0].error ===
-          "Brewfather API key is not configured or secret decryption is unavailable.",
+          "Tapboard cannot decrypt the stored Brewfather API key. Restore the matching server secret key or rotate stored credentials using the operator tool.",
       "degraded-without-network",
     );
     const { status } = await api("/api/admin/beverages/brewfather/status", headers);
