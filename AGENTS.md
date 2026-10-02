@@ -25,7 +25,7 @@ Subagents must not:
 
 - Commit, push, merge, change branches, mutate issues/PRs, or otherwise modify external GitHub state.
 - Read or modify `.env`, expose credentials, call live external services, mutate Home Assistant, restart Home Assistant, or touch live production data unless the user has explicitly authorized that exact action and the coordinator has assigned it.
-- Rebuild or restart the local Compose service unless the coordinator explicitly assigns that exact verification after any required approval.
+- Rebuild or recreate the local development container through the native `tapboard-dev` launcher unless the coordinator explicitly assigns that exact verification after any required approval.
 - Edit files outside their assigned ownership or undo another worker's changes.
 - Make cross-cutting architecture decisions, weaken tests, broaden scope, or treat a focused test as final acceptance.
 
@@ -48,6 +48,14 @@ Before declaring an authentication blocker:
 7. Report expired/invalid authentication only after the real authenticated CLI operation and repository access both fail with an authentication-specific response. Include the commands tested and sanitized error category.
 
 A failing `gh auth status` alone is diagnostic noise, not a blocker. Continue with the verified working CLI or Git credential path when authenticated repository operations succeed.
+
+## Pre-commit localhost verification
+
+For every new branch, once the change is complete and ready to ship, finish the canonical required checks and final diff review, then automatically run `/home/joeadmin/.local/bin/tapboard-dev rebuild` and `/home/joeadmin/.local/bin/tapboard-dev health` before any commit. This local rebuild and health verification have standing user authorization; do not ask for redundant approval.
+
+Verify that the recreated development container runs the current branch's working-tree content, including uncommitted changes, and that `http://localhost:3000/healthz` is healthy. Preserve the native `tapboard-dev-data` volume and operator PIN; do not touch live integrations or production.
+
+Present `http://localhost:3000` and an issue-specific MANUAL DEV TEST so the operator can verify functionality before being asked for `ship it`. A successful rebuild or health check does not imply `ship it`. If runtime source changes afterward, repeat the rebuild and health verification before shipping. Rebuild or health failures block shipping: report the exact error and do not silently waive this gate.
 
 ## v2 implementation handoff workflow
 

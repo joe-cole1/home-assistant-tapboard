@@ -2,8 +2,8 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { sendJson } from "../../infrastructure/http/error-mapper.ts";
 import type { Router } from "../../infrastructure/http/router.ts";
 import { readJsonBody, readRequestBody } from "../../infrastructure/http/security/body.ts";
-import { parseSessionCookie } from "../../infrastructure/http/security/cookie.ts";
-import type { AuthService, AuthenticatedSession } from "../auth/service.ts";
+import { requireMutationAuth, requireSession } from "../auth/http.ts";
+import type { AuthService } from "../auth/service.ts";
 import { ApplicationError } from "../../shared/errors.ts";
 import { reportFailure } from "../../shared/diagnostics.ts";
 import type { Logger } from "../../shared/logging.ts";
@@ -16,59 +16,6 @@ export interface BeverageRouteDependencies {
   readonly router: Router;
   readonly beverageService: BeverageService;
   readonly authService: AuthService;
-}
-
-function requireSession(request: IncomingMessage, authService: AuthService): AuthenticatedSession {
-  let sessionToken: string | undefined;
-  const cookieHeader = request.headers.cookie;
-  if (cookieHeader !== undefined) {
-    try {
-      sessionToken = parseSessionCookie(cookieHeader);
-    } catch {
-      sessionToken = undefined;
-    }
-  }
-
-  if (sessionToken === undefined) {
-    throw new ApplicationError({
-      category: "unauthorized",
-      code: "auth.unauthorized",
-      clientMessage: "Authentication is required.",
-    });
-  }
-
-  const session = authService.authenticateSession(sessionToken);
-  if (session === undefined) {
-    throw new ApplicationError({
-      category: "unauthorized",
-      code: "auth.unauthorized",
-      clientMessage: "Authentication is required.",
-    });
-  }
-
-  return session;
-}
-
-function requireMutationAuth(
-  request: IncomingMessage,
-  authService: AuthService,
-): AuthenticatedSession {
-  const session = authService.authorizeCookieMutation({
-    cookieHeader: request.headers.cookie,
-    originHeader: request.headers.origin,
-    csrfHeader: request.headers["x-csrf-token"],
-    canonicalOrigin: undefined,
-  });
-
-  if (session === undefined) {
-    throw new ApplicationError({
-      category: "unauthorized",
-      code: "auth.unauthorized",
-      clientMessage: "Authentication failed.",
-    });
-  }
-
-  return session;
 }
 
 function toBeverageSummaryDto(summary: BeverageSummaryResult) {
@@ -204,7 +151,12 @@ export function registerBeverageRoutes(dependencies: BeverageRouteDependencies):
 
       // If sourceBatchId is present, it's a Brewfather linking request; otherwise Custom creation
       let result: BeverageDetailResult;
-      if (typeof (body as Record<string, unknown>).sourceBatchId === "string") {
+      if (
+        typeof body === "object" &&
+        body !== null &&
+        "sourceBatchId" in body &&
+        typeof body.sourceBatchId === "string"
+      ) {
         result = beverageService.linkBrewfatherCandidate(body, {
           actorType: "admin",
           sessionId: session.id,
