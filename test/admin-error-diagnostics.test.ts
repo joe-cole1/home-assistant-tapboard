@@ -11,6 +11,7 @@ import { createLogger } from "../src/shared/logging.ts";
 const origin = "http://localhost:3000";
 const cookie = "tapboard_admin_session=" + "s".repeat(43);
 const sentinel = "PRIVATE_EXCEPTION_TOKEN";
+const csrf = "PRIVATE_CSRF_TOKEN";
 
 void test("Admin errors authenticate before parsing, preserve statuses and correlate sanitized logs", async (t) => {
   const logs: string[] = [];
@@ -51,9 +52,7 @@ void test("Admin errors authenticate before parsing, preserve statuses and corre
         originHeader?: string;
         csrfHeader?: string;
       }) =>
-        input.cookieHeader === cookie &&
-        input.originHeader === origin &&
-        input.csrfHeader === "csrf"
+        input.cookieHeader === cookie && input.originHeader === origin && input.csrfHeader === csrf
           ? { id: "admin" }
           : undefined,
     },
@@ -100,7 +99,7 @@ void test("Admin errors authenticate before parsing, preserve statuses and corre
   t.after(() => server.stop());
   const address = await server.start("127.0.0.1", 0);
   const base = `http://127.0.0.1:${address.port}`;
-  const post = (path: string, body = "_csrf=csrf", authenticated = true) =>
+  const post = (path: string, body = `_csrf=${csrf}`, authenticated = true) =>
     fetch(base + path, {
       method: "POST",
       redirect: "manual",
@@ -144,7 +143,7 @@ void test("Admin errors authenticate before parsing, preserve statuses and corre
       headers: {
         cookie,
         origin,
-        "x-csrf-token": "csrf",
+        "x-csrf-token": csrf,
         "content-type": "application/json",
         accept: "application/json",
         "x-tapboard-enhancement": "autosave",
@@ -159,11 +158,66 @@ void test("Admin errors authenticate before parsing, preserve statuses and corre
       revision?: unknown;
     };
     assert.match(body.message, /Safe fixture failure/);
-    if (category === "validation") assert.ok(body.fields);
-    if (category === "conflict") assert.ok("current" in body && "revision" in body);
+    if (category === "validation")
+      assert.deepEqual(body, {
+        message: "Safe fixture failure.",
+        fields: { _form: "Safe fixture failure." },
+      });
+    if (category === "conflict")
+      assert.deepEqual(body, { message: "Safe fixture failure.", current: settings, revision: 1 });
   }
 
   error = new Error(sentinel);
+  const autosaveLogsBefore = logs.length;
+  const markers = [
+    sentinel,
+    "PRIVATE_STACK_MARKER",
+    "PRIVATE_BODY_MARKER",
+    "PRIVATE_COOKIE_MARKER",
+    "PRIVATE_CSRF_MARKER",
+    "PRIVATE_AUTHORIZATION_MARKER",
+  ];
+  (error as Error).stack = "PRIVATE_STACK_MARKER";
+  response = await fetch(base + "/admin/display/shared", {
+    method: "POST",
+    headers: {
+      cookie,
+      origin,
+      "x-csrf-token": csrf,
+      "content-type": "application/json",
+      accept: "application/json",
+      "x-tapboard-enhancement": "autosave",
+      authorization: "Bearer PRIVATE_AUTHORIZATION_MARKER",
+      "x-private-cookie": "PRIVATE_COOKIE_MARKER",
+      "x-private-csrf": "PRIVATE_CSRF_MARKER",
+    },
+    body: JSON.stringify({ expectedRevision: "1", tapboardName: "PRIVATE_BODY_MARKER" }),
+  });
+  assert.equal(response.status, 500);
+  const unexpected = (await response.json()) as {
+    message: string;
+    code: string;
+    reference: string;
+  };
+  assert.match(
+    unexpected.reference,
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u,
+  );
+  assert.deepEqual(unexpected, {
+    message: `The autosave could not be completed. Reference: ${unexpected.reference}.`,
+    code: "internal.unexpected",
+    reference: unexpected.reference,
+  });
+  assert.equal(logs.length, autosaveLogsBefore + 1);
+  const event = JSON.parse(logs[autosaveLogsBefore]!) as {
+    context: { operation: string; reference: string };
+  };
+  assert.equal(event.context.operation, "admin.autosave");
+  assert.equal(event.context.reference, unexpected.reference);
+  for (const marker of [...markers, cookie, csrf]) {
+    assert.equal(JSON.stringify(unexpected).includes(marker), false, marker);
+    assert.equal(logs[autosaveLogsBefore]!.includes(marker), false, marker);
+  }
   const prior = logs.length;
   response = await post("/admin/integrations/brewfather");
   assert.match(location(response), /The change could not be completed.*Reference:/);

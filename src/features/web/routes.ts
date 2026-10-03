@@ -16,7 +16,7 @@ import {
 import { requireMutationOrigin } from "../../infrastructure/http/security/origin.ts";
 import type { Renderer } from "../../infrastructure/rendering/renderer.ts";
 import { ApplicationError, isApplicationError } from "../../shared/errors.ts";
-import { adminFailureMessage, reportFailure } from "../../shared/diagnostics.ts";
+import { adminFailureMessage, errorStatus, reportFailure } from "../../shared/diagnostics.ts";
 import type { Logger } from "../../shared/logging.ts";
 import { APPLICATION_VERSION } from "../../shared/version.ts";
 import type { AuthService, AuthenticatedSession } from "../auth/service.ts";
@@ -2569,7 +2569,7 @@ async function runAdminAutosave(
     return;
   }
   try {
-    const body = autosaveBodyRecord(await readJsonBody<unknown>(request));
+    const body = autosaveBodyRecord(await readJsonBody(request));
     const authorized = dependencies.authService.authorizeCookieMutation({
       cookieHeader: request.headers.cookie,
       originHeader: request.headers.origin,
@@ -2715,34 +2715,13 @@ function registerAdminNotFound(dependencies: WebRouteDependencies): void {
   });
 }
 
-function tapWarsErrorStatus(error: ApplicationError): number {
-  switch (error.category) {
-    case "validation":
-      return 400;
-    case "too_large":
-      return 413;
-    case "not_found":
-      return 404;
-    case "conflict":
-      return 409;
-    case "forbidden":
-      return 403;
-    case "unauthorized":
-      return 401;
-    case "unavailable":
-      return 503;
-    case "internal":
-      return 500;
-  }
-}
-
 function sendTapWarsVoteError(
   dependencies: WebRouteDependencies,
   response: ServerResponse,
   error: unknown,
 ): void {
   if (isApplicationError(error)) {
-    sendJson(response, tapWarsErrorStatus(error), {
+    sendJson(response, errorStatus(error.category), {
       error: { code: error.code, message: error.clientMessage },
       tapWars: dependencies.publicTapWarsService.getVisible(),
     });

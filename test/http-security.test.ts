@@ -75,7 +75,7 @@ void test("JSON body limits and static containment are bounded", async () => {
     readableEnded: boolean;
   };
   request.headers = { "content-type": "application/json" };
-  const parsed = readJsonBody<{ ok: boolean }>(request as never);
+  const parsed = readJsonBody(request as never);
   request.end('{"ok":true}');
   assert.deepEqual(await parsed, { ok: true });
 
