@@ -683,6 +683,38 @@ void test("admin web pages and mutations keep projections safe and PRG-protected
   const cookie = `tapboard_admin_session=${SESSION_TOKEN}; tapboard_admin_csrf=${CSRF_TOKEN}`;
   const getHeaders = { cookie };
 
+  // Exercise the actual route/template pagination with a search matching filter defaults.
+  const paginatedKegService = dependencies.kegService as unknown as Record<string, unknown>;
+  paginatedKegService.listAdminPage = (query: { q: string; page: number }) => ({
+    items: [keg],
+    total: 51,
+    page: query.page,
+    pageSize: 25,
+    pageCount: 3,
+    query: query.q,
+    status: "active",
+    sort: "number",
+  });
+  try {
+    for (const q of ["active", "number", "state"]) {
+      const response = await fetch(`${base}/admin/keg-room/kegs?q=${q}&page=2`, {
+        headers: getHeaders,
+      });
+      assert.equal(response.status, 200);
+      const html = await response.text();
+      assert.ok(
+        html.includes(`href="/admin/keg-room/kegs?q=${q}&amp;page=3"`),
+        `next link retains ${q}`,
+      );
+      assert.ok(
+        html.includes(`href="/admin/keg-room/kegs?q=${q}"`),
+        `previous page 1 retains ${q}`,
+      );
+    }
+  } finally {
+    delete paginatedKegService.listAdminPage;
+  }
+
   for (const [path, heading] of [
     ["/admin/overview", "Overview"],
     ["/admin/beverages", "Beverages"],

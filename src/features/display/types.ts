@@ -40,16 +40,9 @@ export interface DisplaySettings {
   readonly updatedAt: string;
 }
 
-export interface UpdateDisplaySettingsInput {
+export type UpdateDisplaySettingsInput = Omit<DisplaySettings, "revision" | "updatedAt"> & {
   readonly expectedRevision: number;
-  readonly tapboardName: string;
-  readonly theme: DisplayTheme;
-  readonly font: DisplayFont;
-  readonly accent: DisplayAccent;
-  readonly unitSystem: DisplayUnitSystem;
-  readonly showServingTemperature: boolean;
-  readonly layoutMode: DisplayLayoutMode;
-}
+};
 
 export interface TapCardDisplaySettings {
   readonly revision: number;
@@ -62,15 +55,12 @@ export interface TapCardDisplaySettings {
   readonly updatedAt: string;
 }
 
-export interface UpdateTapCardDisplaySettingsInput {
+export type UpdateTapCardDisplaySettingsInput = Omit<
+  TapCardDisplaySettings,
+  "revision" | "updatedAt"
+> & {
   readonly expectedRevision: number;
-  readonly showAbv: boolean;
-  readonly showIbu: boolean;
-  readonly showOg: boolean;
-  readonly showFg: boolean;
-  readonly showSrm: boolean;
-  readonly remainingMode: TapCardRemainingMode;
-}
+};
 
 export interface TapCardDisplayOverride {
   readonly tapId: string;

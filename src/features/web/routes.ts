@@ -5,7 +5,6 @@ import { sendJson } from "../../infrastructure/http/error-mapper.ts";
 import { readFormBody, type ReadFormOptions } from "../../infrastructure/http/form.ts";
 import { readJsonBody } from "../../infrastructure/http/security/body.ts";
 import { redirect, sendHtml } from "../../infrastructure/http/html.ts";
-import type { Router } from "../../infrastructure/http/router.ts";
 import {
   clearCsrfCookie,
   clearSessionCookie,
@@ -14,7 +13,6 @@ import {
   serializeCsrfCookie,
 } from "../../infrastructure/http/security/cookie.ts";
 import { requireMutationOrigin } from "../../infrastructure/http/security/origin.ts";
-import type { Renderer } from "../../infrastructure/rendering/renderer.ts";
 import { ApplicationError, isApplicationError } from "../../shared/errors.ts";
 import { adminFailureMessage, errorStatus, reportFailure } from "../../shared/diagnostics.ts";
 import type { Logger } from "../../shared/logging.ts";
@@ -23,19 +21,15 @@ import type { AuthService, AuthenticatedSession } from "../auth/service.ts";
 import type { BeverageService } from "../beverages/service.ts";
 import type { DashboardService } from "../dashboard/service.ts";
 import type { PublicTapCardView } from "../dashboard/types.ts";
-import type { DisplaySettingsService } from "../display/service.ts";
 import { displayStylesheetHref } from "../display/palette.ts";
 import { fillDeletionConfirmationLabel, type FillService } from "../fills/service.ts";
 import type { AdminFillPage, AdminFillView } from "../fills/types.ts";
 import type { HealthService } from "../health/service.ts";
 import { kegDeletionConfirmationLabel, type KegService } from "../kegs/service.ts";
 import type { AdminKegPage } from "../kegs/types.ts";
-import type { LiveUpdateService } from "../live/service.ts";
-import type { PublicTapWarsService } from "../tap-wars/public.ts";
-import { tapWarPercentages, type TapWarService } from "../tap-wars/service.ts";
+import { tapWarPercentages } from "../tap-wars/service.ts";
 import type { EligibilityReason, TapWar } from "../tap-wars/types.ts";
 import { searchAdminDestinations } from "./admin-search.ts";
-import type { PublicStoryService } from "../story/service.ts";
 import type { PublicTapCardMetricSettings } from "../story/service.ts";
 import { buildSensoryRadar, VESSEL_IDS } from "../story/index.ts";
 import { getVesselDescriptor } from "../story/vessels.ts";
@@ -68,7 +62,6 @@ import {
   mergeDetectorConfig,
   type DetectorConfigOverride,
 } from "../telemetry/detector-config.ts";
-import type { DetectorService } from "../telemetry/detector-service.ts";
 import { validateCompleteDetectorConfig } from "../telemetry/detector-validation.ts";
 import type { TelemetryService } from "../telemetry/service.ts";
 import type { SystemService } from "../system/index.ts";
@@ -77,6 +70,22 @@ import {
   type HealthCheckId,
   type HealthConfigOverride,
 } from "../health/types.ts";
+
+import type { WebRouteDependencies } from "./contracts.ts";
+export type { WebRouteDependencies } from "./contracts.ts";
+import {
+  adminFillPageQueryFromRequest,
+  adminKegPageQueryFromRequest,
+  adminTapPageQueryFromRequest,
+  adminFillPageHref,
+  adminKegPageHref,
+  adminTapPageHref,
+} from "./admin/list-query.ts";
+import {
+  safeDisplayResource,
+  safeTapCardResource,
+  safeTapOverrideResource,
+} from "./presenters/display.ts";
 
 const ADMIN_NAV = [
   {
@@ -557,31 +566,6 @@ function humanizeAdminIdentifier(value: unknown, fallback = "Unknown"): string {
 function telemetryEndpointUrl(canonicalOrigin: string | undefined): string {
   const origin = (canonicalOrigin ?? "http://localhost:3000").replace(/\/+$/u, "");
   return `${origin}/api/v1/telemetry/taps/1`;
-}
-
-export interface WebRouteDependencies {
-  readonly logger?: Logger;
-  readonly router: Router;
-  readonly renderer: Renderer;
-  readonly canonicalOrigin?: string;
-  readonly authService: AuthService;
-  readonly dashboardService: DashboardService;
-  readonly storyService: PublicStoryService;
-  readonly displayService: DisplaySettingsService;
-  readonly beverageService: BeverageService;
-  readonly kegService: KegService;
-  readonly fillService: FillService;
-  readonly tapService: TapService;
-  readonly telemetryService: TelemetryService;
-  readonly detectorService: DetectorService;
-  readonly healthService: HealthService;
-  readonly liveUpdates: LiveUpdateService;
-  readonly tapWarsService: TapWarService;
-  readonly publicTapWarsService: PublicTapWarsService;
-  /** Optional until the application composition wires Issue 79 outbound UI. */
-  readonly outboundService?: OutboundService;
-  readonly systemService?: SystemService;
-  readonly isReady?: () => boolean;
 }
 
 interface AdminContext {
@@ -1486,101 +1470,6 @@ function beveragePageHref(query: string, page: number): string {
   return encoded.length === 0 ? "/admin/beverages" : `/admin/beverages?${encoded}`;
 }
 
-function adminFillPageQueryFromRequest(request: IncomingMessage): {
-  readonly q: string;
-  readonly state: string;
-  readonly sort: string;
-  readonly page: number;
-} {
-  const params = requestUrl(request).searchParams;
-  const rawPage = Number(params.get("page") ?? "1");
-  const history = params.get("history") === "1" || params.get("history") === "true";
-  return {
-    q: (params.get("q") ?? "").trim().slice(0, 80),
-    state: history ? "ended" : (params.get("state") ?? "active").trim().toLowerCase(),
-    sort: (params.get("sort") ?? "state").trim().toLowerCase(),
-    page:
-      Number.isInteger(rawPage) && Number.isFinite(rawPage)
-        ? Math.min(10_000, Math.max(1, rawPage))
-        : 1,
-  };
-}
-
-function adminKegPageQueryFromRequest(request: IncomingMessage): {
-  readonly q: string;
-  readonly status: string;
-  readonly sort: string;
-  readonly page: number;
-} {
-  const params = requestUrl(request).searchParams;
-  const rawPage = Number(params.get("page") ?? "1");
-  return {
-    q: (params.get("q") ?? "").trim().slice(0, 80),
-    status: (params.get("status") ?? "active").trim().toLowerCase(),
-    sort: (params.get("sort") ?? "number").trim().toLowerCase(),
-    page:
-      Number.isInteger(rawPage) && Number.isFinite(rawPage)
-        ? Math.min(10_000, Math.max(1, rawPage))
-        : 1,
-  };
-}
-
-function adminFillPageHref(query: Readonly<Record<string, string | number>>, page: number): string {
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(query)) {
-    if (key === "page" || value === "" || value === "active" || value === "state") continue;
-    params.set(key, String(value));
-  }
-  if (page > 1) params.set("page", String(page));
-  const encoded = params.toString();
-  return encoded.length === 0 ? "/admin/keg-room" : `/admin/keg-room?${encoded}`;
-}
-
-function adminKegPageHref(query: Readonly<Record<string, string | number>>, page: number): string {
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(query)) {
-    if (key === "page" || value === "" || value === "active" || value === "number") continue;
-    params.set(key, String(value));
-  }
-  if (page > 1) params.set("page", String(page));
-  const encoded = params.toString();
-  return encoded.length === 0 ? "/admin/keg-room/kegs" : `/admin/keg-room/kegs?${encoded}`;
-}
-
-function adminTapPageQueryFromRequest(request: IncomingMessage): {
-  readonly q: string;
-  readonly state: AdminTapPageState;
-  readonly page: number;
-} {
-  const params = requestUrl(request).searchParams;
-  const rawPage = Number(params.get("page") ?? "1");
-  const rawState = (params.get("state") ?? "all").trim().toLowerCase();
-  if (!["all", "assigned", "unassigned", "disabled", "retired"].includes(rawState)) {
-    invalidForm("Tap state must be all, assigned, unassigned, disabled, or retired.");
-  }
-  const state = rawState as AdminTapPageState;
-  return {
-    q: (params.get("q") ?? "").trim().slice(0, 80),
-    state,
-    page:
-      Number.isInteger(rawPage) && Number.isFinite(rawPage)
-        ? Math.min(10_000, Math.max(1, rawPage))
-        : 1,
-  };
-}
-
-function adminTapPageHref(
-  query: Readonly<{ readonly q: string; readonly state: AdminTapPageState }>,
-  page: number,
-): string {
-  const params = new URLSearchParams();
-  if (query.q.length > 0) params.set("q", query.q);
-  if (query.state !== "all") params.set("state", query.state);
-  if (page > 1) params.set("page", String(page));
-  const encoded = params.toString();
-  return encoded.length === 0 ? "/admin/taps" : `/admin/taps?${encoded}`;
-}
-
 function fallbackAdminTapPage(
   tapService: TapService,
   query: Readonly<{ readonly q: string; readonly state: AdminTapPageState; readonly page: number }>,
@@ -2468,71 +2357,6 @@ function safeBrewfatherResource(detail: BeverageDetailResult): Readonly<Record<s
     result[field] = value ?? "";
   }
   return result;
-}
-
-function safeDisplayResource(
-  settings: ReturnType<DisplaySettingsService["getSettings"]>,
-): Readonly<Record<string, unknown>> {
-  return {
-    tapboardName: settings.tapboardName,
-    theme: settings.theme,
-    font: settings.font,
-    accent: settings.accent,
-    unitSystem: settings.unitSystem,
-    showServingTemperature: settings.showServingTemperature,
-    layoutMode: settings.layoutMode,
-  };
-}
-
-function safeTapCardResource(
-  settings: ReturnType<DisplaySettingsService["getTapCardSettings"]>,
-): Readonly<Record<string, unknown>> {
-  return {
-    showAbv: settings.showAbv,
-    showIbu: settings.showIbu,
-    showOg: settings.showOg,
-    showFg: settings.showFg,
-    showSrm: settings.showSrm,
-    remainingMode: settings.remainingMode,
-  };
-}
-
-function safeTapOverrideResource(
-  settings: ReturnType<DisplaySettingsService["getEffectiveTapCardSettings"]>,
-): Readonly<Record<string, unknown>> {
-  const override = settings.override;
-  return {
-    showAbv:
-      override?.showAbv === null || override?.showAbv === undefined
-        ? "inherit"
-        : override.showAbv
-          ? "show"
-          : "hide",
-    showIbu:
-      override?.showIbu === null || override?.showIbu === undefined
-        ? "inherit"
-        : override.showIbu
-          ? "show"
-          : "hide",
-    showOg:
-      override?.showOg === null || override?.showOg === undefined
-        ? "inherit"
-        : override.showOg
-          ? "show"
-          : "hide",
-    showFg:
-      override?.showFg === null || override?.showFg === undefined
-        ? "inherit"
-        : override.showFg
-          ? "show"
-          : "hide",
-    showSrm:
-      override?.showSrm === null || override?.showSrm === undefined
-        ? "inherit"
-        : override.showSrm
-          ? "show"
-          : "hide",
-  };
 }
 
 function validationFieldsFor(allowedFields: readonly string[]): AutosaveValidationFields {
