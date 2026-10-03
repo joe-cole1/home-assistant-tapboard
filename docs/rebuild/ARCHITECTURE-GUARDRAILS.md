@@ -48,4 +48,4 @@ The default Dockerfile and exact runnable `compose.production.example.yaml` have
 
 Future issues may add domain, integration, browser, and feature-repository locations only within the frozen architecture. When a legitimate new topology or migration adds a boundary not represented here, that issue must deliberately update the focused allowlists and negative tests without weakening the legacy, layering, SQL-ownership, SQLite-connection, or reuse-manifest protections.
 
-The initial #66 Foundation had no feature UI and did not run browser E2E. Issue #76 introduced the Chromium tier; final v2 acceptance now requires that suite alongside canonical Node and production container checks. [STATUS](STATUS.md) records the current evidence and remaining #111–#114 follow-up.
+The initial #66 Foundation had no feature UI and did not run browser E2E. Issue #76 introduced the Chromium tier; final v2 acceptance now requires that suite alongside canonical Node and production container checks. [STATUS](STATUS.md) records validation evidence and completed #111–#114 follow-up; the [transition audit](TRANSITION-AUDIT.md) records remaining parity decisions.
