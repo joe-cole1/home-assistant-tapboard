@@ -1,3 +1,5 @@
+import type { HEALTH_EVIDENCE_KEYS } from "./evidence-contract.ts";
+
 /**
  * Stable machine identifiers for the health checks in the v2 contract.
  *
@@ -255,36 +257,7 @@ export type HealthReason =
 /** Explicit, generated evidence values only; no arbitrary payloads are allowed. */
 export type HealthEvidenceScalar = string | number | boolean | null;
 
-export type HealthEvidenceKey =
-  | "reason"
-  | "phase"
-  | "diagnosticCode"
-  | "measurementAgeMs"
-  | "authorityAgeMs"
-  | "unavailableAgeMs"
-  | "currentVolumeMl"
-  | "capacityMl"
-  | "currentPercent"
-  | "thresholdMl"
-  | "thresholdPercent"
-  | "criticalPercent"
-  | "temperatureC"
-  | "normalMinC"
-  | "normalMaxC"
-  | "criticalMinC"
-  | "criticalMaxC"
-  | "outOfRangeDurationMs"
-  | "durationMs"
-  | "lossMl"
-  | "windowMs"
-  | "sampleCount"
-  | "maxSamples"
-  | "resetMovementMl"
-  | "dueAtMs"
-  | "criticalAtMs"
-  | "ageMs"
-  | "intervalDays"
-  | "criticalAfterDays";
+export type HealthEvidenceKey = (typeof HEALTH_EVIDENCE_KEYS)[number];
 
 export type HealthEvidence = {
   readonly [K in HealthEvidenceKey]?: HealthEvidenceScalar;

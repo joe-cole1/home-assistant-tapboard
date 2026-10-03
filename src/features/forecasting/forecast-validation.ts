@@ -1,26 +1,17 @@
-import { ApplicationError } from "../../shared/errors.ts";
-import { rejectUnknownKeys, requirePlainObject } from "../../shared/validation.ts";
+import {
+  requireUuid,
+  validationError as invalid,
+  rejectUnknownKeys,
+  requirePlainObject,
+} from "../../shared/validation.ts";
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const BASE64URL = /^[A-Za-z0-9_-]+$/;
 const RFC3339_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
 export const DEFAULT_FORECAST_HISTORY_LIMIT = 50;
 export const MAX_FORECAST_HISTORY_LIMIT = 200;
 
-function invalid(field: string, reason: string): ApplicationError {
-  return new ApplicationError({
-    category: "validation",
-    code: "validation.invalid_value",
-    clientMessage: "The request contains an invalid value.",
-    details: { field, reason },
-  });
-}
-
 export function validateForecastFillId(value: unknown, field = "fillId"): string {
-  if (typeof value !== "string" || !UUID.test(value.trim())) {
-    throw invalid(field, "must be a valid UUID");
-  }
-  return value.trim().toLowerCase();
+  return requireUuid(value, field);
 }
 
 export interface UpdateForecastSettingsInput {
@@ -45,10 +36,7 @@ export interface UpdateBeveragePourSettingInput {
 }
 
 export function validateBeverageId(value: unknown, field = "beverageId"): string {
-  if (typeof value !== "string" || !UUID.test(value.trim())) {
-    throw invalid(field, "must be a valid UUID");
-  }
-  return value.trim().toLowerCase();
+  return requireUuid(value, field);
 }
 
 export function validateUpdateBeveragePourSettingInput(

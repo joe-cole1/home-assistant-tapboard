@@ -1,6 +1,6 @@
 import { ApplicationError } from "./errors.ts";
 
-function validationError(field: string, reason: string): ApplicationError {
+export function validationError(field: string, reason: string): ApplicationError {
   return new ApplicationError({
     category: "validation",
     code: "validation.invalid_value",
@@ -85,4 +85,14 @@ export function requireIntegerInRange(
   }
 
   return parsed;
+}
+
+export function requireUuid(value: unknown, field = "id"): string {
+  if (
+    typeof value !== "string" ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value.trim())
+  ) {
+    throw validationError(field, "must be a valid UUID");
+  }
+  return value.trim().toLowerCase();
 }

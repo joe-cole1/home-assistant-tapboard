@@ -1,5 +1,6 @@
-import { ApplicationError } from "../../shared/errors.ts";
 import {
+  requireUuid,
+  validationError,
   rejectUnknownKeys,
   requireIntegerInRange,
   requirePlainObject,
@@ -15,34 +16,18 @@ import type {
   UpdateTapAssignmentMysteryInput,
 } from "./types.ts";
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_TAP_NUMBER = 1_000_000;
 const MAX_NAME_LENGTH = 120;
 const MAX_GAS_TYPE_LENGTH = 64;
 const MAX_NOTES_LENGTH = 2048;
 const MAX_REASON_LENGTH = 255;
 
-function validationError(field: string, reason: string): ApplicationError {
-  return new ApplicationError({
-    category: "validation",
-    code: "validation.invalid_value",
-    clientMessage: "The request contains an invalid value.",
-    details: { field, reason },
-  });
-}
-
 export function validateTapId(value: unknown, field = "id"): string {
-  if (typeof value !== "string" || !UUID_REGEX.test(value.trim())) {
-    throw validationError(field, "must be a valid UUID");
-  }
-  return value.trim().toLowerCase();
+  return requireUuid(value, field);
 }
 
 export function validateFillId(value: unknown, field = "fillId"): string {
-  if (typeof value !== "string" || !UUID_REGEX.test(value.trim())) {
-    throw validationError(field, "must be a valid UUID");
-  }
-  return value.trim().toLowerCase();
+  return requireUuid(value, field);
 }
 
 function normalizeOptionalText(value: unknown, field: string, maxLength: number): string | null {

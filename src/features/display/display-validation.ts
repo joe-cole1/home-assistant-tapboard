@@ -1,5 +1,8 @@
-import { ApplicationError } from "../../shared/errors.ts";
-import { rejectUnknownKeys, requirePlainObject } from "../../shared/validation.ts";
+import {
+  validationError as invalid,
+  rejectUnknownKeys,
+  requirePlainObject,
+} from "../../shared/validation.ts";
 import {
   DISPLAY_FONTS,
   DISPLAY_LAYOUT_MODES,
@@ -18,14 +21,6 @@ import {
   isDisplayAccent,
 } from "./types.ts";
 
-function invalid(field: string, reason: string): ApplicationError {
-  return new ApplicationError({
-    category: "validation",
-    code: "validation.invalid_value",
-    clientMessage: "The request contains an invalid value.",
-    details: { field, reason },
-  });
-}
 function enumValue<T extends string>(value: unknown, field: string, allowed: readonly T[]): T {
   if (typeof value !== "string" || !allowed.includes(value as T))
     throw invalid(field, "has an unsupported value");
