@@ -47,6 +47,10 @@ The public header always exposes Settings independently of integration health or
 
 Small external browser modules progressively enhance only the pages that need them. The dashboard keeps every SSR Tap card and its SVG graphic node in the DOM, coalesces dirty targets with bounded concurrency, fetches narrow authoritative projections, and performs a page-scoped reconciliation after SSE reconnect. Rotation hides/pages existing cards on a fixed internal cadence, pauses for focus/visibility, and is disabled by reduced-motion preference. No server data is inserted with `innerHTML`.
 
+### Web route composition
+
+Issue #114 makes `src/features/web/routes.ts` the composition boundary for `public-routes.ts`, `authentication-routes.ts`, and the Admin domain modules `admin/{overview,beverages,keg-room,taps,integrations,display,tap-wars,system}.ts`. Registration preserves the exact original order: the Admin not-found hook, public and authentication routes, then the complete Admin page/API pass before the mutation pass, including the original interleaving of integration routes. Named `Pick` dependency contracts bound each module's inputs. `admin/http.ts` owns the GET, form-action, and autosave adapters; context, layout, and not-found modules are shared leaves, while `tap-detail.ts` isolates the Tap detail handler and focused presentation and form helpers support the domain modules.
+
 ## SQLite boundary and schema
 
 `src/infrastructure/database/connection.ts` is the sole `better-sqlite3` import and connection-construction boundary. It enables and verifies `foreign_keys=ON`, initializes and validates the schema, runs integrity checks, exposes a synchronous `BEGIN IMMEDIATE` transaction primitive, and provides idempotent close behavior. Raw application SQL is restricted to database infrastructure/migrations and feature-owned repositories by the architecture gate.
