@@ -1,3 +1,11 @@
+import { HEALTH_EVIDENCE_KEYS } from "../src/features/health/evidence-contract.ts";
+import { validateHealthEvidence } from "../src/features/health/health-validation.ts";
+import {
+  listHealthCheckStates,
+  readHealthGlobalConfig,
+} from "../src/features/health/repository.ts";
+import { resolveHealthConfig } from "../src/features/health/config.ts";
+import { toHealthTargetedUpdate } from "../src/features/health/projections.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -306,5 +314,99 @@ void test("health Admin routes enforce security, pagination, DTO privacy, and de
       ).status,
       400,
     );
+  }
+});
+
+void test("health evidence contract reaches Admin DTOs and corrupted storage stays private", async (context) => {
+  const database = openDatabase(":memory:");
+  const captured: string[] = [];
+  const requestLogger = createLogger({ sink: (line) => captured.push(line) });
+  const tap = createTapService(database, { idFactory: ids(1) }).createTap({
+    tapNumber: 1,
+    name: "Cellar",
+  });
+  const healthService = createHealthService(database, {
+    now: () => new Date(NOW),
+    idFactory: ids(100),
+  });
+  healthService.onTapCreated(database, tap.id, NOW);
+  const authService = createAuthService(database, { canonicalOrigin: ORIGIN });
+  await authService.setPin("1234");
+  const login = await authService.authenticate("1234");
+  const router = new Router(requestLogger);
+  registerHealthRoutes({ router, healthService, authService });
+  const server = new HttpServer({ router, logger: requestLogger, shutdownGraceMs: 250 });
+  context.after(async () => {
+    await server.stop();
+    database.close();
+  });
+  const address = await server.start("127.0.0.1", 0);
+  const url = `http://127.0.0.1:${address.port}/api/admin/taps/${tap.id}/health`;
+  const headers = { cookie: `tapboard_admin_session=${login.session}` };
+  const evidence = Object.fromEntries(HEALTH_EVIDENCE_KEYS.map((key, index) => [key, index]));
+  assert.equal(HEALTH_EVIDENCE_KEYS.length, 29);
+  assert.deepEqual(validateHealthEvidence(evidence), evidence);
+  database
+    .prepare("UPDATE health_check_state SET evidence_json=? WHERE tap_id=? AND check_id='low_keg'")
+    .run(JSON.stringify(evidence), tap.id);
+  const projection = healthService.getAdminDetail(tap.id);
+  assert.deepEqual(
+    projection.checks.find((check) => check.checkId === "low_keg")?.evidence,
+    evidence,
+  );
+  const response = await fetch(url, { headers });
+  assert.equal(response.status, 200);
+  const body = await json(response);
+  const health = body.health as { checks: { checkId: string; evidence: unknown }[] };
+  assert.deepEqual(health.checks.find((check) => check.checkId === "low_keg")?.evidence, evidence);
+  const global = readHealthGlobalConfig(database);
+  const resolved = resolveHealthConfig(global.config);
+  const targeted = toHealthTargetedUpdate(
+    {
+      tap,
+      global,
+      override: undefined,
+      effectiveConfig: resolved.effective,
+      inheritance: resolved.inheritance,
+      states: listHealthCheckStates(database, tap.id),
+      incidents: [],
+      maintenance: [],
+    },
+    ["low_keg"],
+  );
+  assert.equal(Object.hasOwn(targeted.checks[0]!, "evidence"), false);
+  for (const raw of ["{private_marker", '{"private_marker":"private_value"}', '{"ageMs":1e999}']) {
+    captured.length = 0;
+    database
+      .prepare(
+        "UPDATE health_check_state SET evidence_json=? WHERE tap_id=? AND check_id='low_keg'",
+      )
+      .run(raw, tap.id);
+    const corrupted = await fetch(url, { headers });
+    assert.equal(corrupted.status, 500);
+    const text = await corrupted.text();
+    assert.deepEqual(JSON.parse(text), {
+      error: {
+        code: "health.invalid_stored_evidence",
+        message: "Stored health evidence is invalid.",
+      },
+    });
+    assert.ok(
+      captured.some(
+        (line) =>
+          line.includes('"category":"internal"') &&
+          line.includes('"code":"health.invalid_stored_evidence"'),
+      ),
+    );
+    assert.doesNotMatch(
+      text + captured.join(""),
+      /private_marker|private_value|ageMs|SyntaxError|"details"|"field"|"reason"/,
+    );
+    database
+      .prepare(
+        "UPDATE health_check_state SET evidence_json='{}' WHERE tap_id=? AND check_id='low_keg'",
+      )
+      .run(tap.id);
+    assert.equal((await fetch(url, { headers })).status, 200);
   }
 });

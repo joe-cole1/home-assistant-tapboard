@@ -1,3 +1,4 @@
+import { HEALTH_EVIDENCE_KEYS } from "./evidence-contract.ts";
 import type { IncomingMessage } from "node:http";
 
 import { sendJson } from "../../infrastructure/http/error-mapper.ts";
@@ -30,7 +31,6 @@ import type {
   HealthConfig,
   HealthConfigInheritance,
   HealthConfigOverride,
-  HealthEvidenceKey,
   HealthEvidenceScalar,
 } from "./types.ts";
 import { validateTapId } from "../taps/tap-validation.ts";
@@ -39,38 +39,6 @@ const MAX_HISTORY_LIMIT = 200;
 const MAX_CURSOR_BYTES = 512;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const RFC3339_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
-
-const SAFE_EVIDENCE_KEYS: readonly HealthEvidenceKey[] = [
-  "reason",
-  "phase",
-  "diagnosticCode",
-  "measurementAgeMs",
-  "authorityAgeMs",
-  "unavailableAgeMs",
-  "currentVolumeMl",
-  "capacityMl",
-  "currentPercent",
-  "thresholdMl",
-  "thresholdPercent",
-  "criticalPercent",
-  "temperatureC",
-  "normalMinC",
-  "normalMaxC",
-  "criticalMinC",
-  "criticalMaxC",
-  "outOfRangeDurationMs",
-  "durationMs",
-  "lossMl",
-  "windowMs",
-  "sampleCount",
-  "maxSamples",
-  "resetMovementMl",
-  "dueAtMs",
-  "criticalAtMs",
-  "ageMs",
-  "intervalDays",
-  "criticalAfterDays",
-];
 
 export interface HealthRouteDependencies {
   readonly router: Router;
@@ -341,7 +309,7 @@ function toEvidenceDto(
   evidence: Readonly<Record<string, HealthEvidenceScalar | undefined>>,
 ): Record<string, HealthEvidenceScalar> {
   const result: Record<string, HealthEvidenceScalar> = {};
-  for (const key of SAFE_EVIDENCE_KEYS) {
+  for (const key of HEALTH_EVIDENCE_KEYS) {
     const value = evidence[key];
     if (value !== undefined) result[key] = value;
   }

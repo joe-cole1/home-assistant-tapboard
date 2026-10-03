@@ -361,3 +361,11 @@ After merging, rebuild and recreate the development container without deleting i
 ## MANUAL DEV TEST — #111
 
 After merge, update to current main and run `/home/joeadmin/.local/bin/tapboard-dev rebuild`, preserving `tapboard-dev-data`, then `/home/joeadmin/.local/bin/tapboard-dev health` and verify `/healthz` is healthy. Sign in to Admin, save valid form and autosave edits, reload to confirm persistence, check validation guidance, and exercise a stale revision conflict (409). Confirm ordinary forms use a 303 redirect after submission. In disposable fixtures, verify missing, malformed, and expired session cookies plus wrong or missing Origin/CSRF reject changes; provoke expected and unexpected errors and match the safe reference to one sanitized log event. Exercise anonymous public Tap Wars voting with JavaScript enabled and disabled, including the no-JavaScript 303 redirect. Use disposable state for invalid sessions and error scenarios; keep live integrations and production untouched.
+
+## MANUAL DEV TEST — #112
+
+Rebuild the reviewed #112 working tree with `/home/joeadmin/.local/bin/tapboard-dev rebuild`, then run `/home/joeadmin/.local/bin/tapboard-dev health`. Preserve the native `tapboard-dev-data` volume and operator PIN. Visit `http://localhost:3000`, confirm `/healthz` is healthy and reports schema version 22, then sign in and inspect Tap health details and incident history for unchanged valid evidence.
+
+Use disposable Simulation state for representative valid and invalid Keg, Fill, and Tap edits and shared/per-Tap Display inheritance. Confirm validation messages and nullable/default behavior, then reload to verify the saved behavior.
+
+With Node 24, run `node --test test/validation-contracts.test.ts test/health-evidence-storage.test.ts test/health-http.test.ts` for isolated corruption, 2048-byte boundary, error, and log-privacy regressions. All database corruption belongs in ephemeral test fixtures; never corrupt the normal development volume or touch live integrations or production. These are operator instructions, not a claim that the checks were run.

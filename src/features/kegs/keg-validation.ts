@@ -1,5 +1,6 @@
-import { ApplicationError } from "../../shared/errors.ts";
 import {
+  requireUuid,
+  validationError,
   rejectUnknownKeys,
   requireBoundedNonemptyString,
   requireIntegerInRange,
@@ -14,7 +15,6 @@ import type {
   UpdateKegInput,
 } from "./types.ts";
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_KEG_NUMBER = 1_000_000;
 const MAX_CAPACITY_ML = 100_000_000; // 100,000 liters
 const MAX_TARE_G = 100_000_000; // 100,000 kg
@@ -23,20 +23,8 @@ const MAX_MAINTENANCE_TYPE_LENGTH = 80;
 const MAX_NOTES_LENGTH = 2048;
 const MAX_REASON_LENGTH = 255;
 
-function validationError(field: string, reason: string): ApplicationError {
-  return new ApplicationError({
-    category: "validation",
-    code: "validation.invalid_value",
-    clientMessage: "The request contains an invalid value.",
-    details: { field, reason },
-  });
-}
-
 export function validateKegId(value: unknown, field = "id"): string {
-  if (typeof value !== "string" || !UUID_REGEX.test(value.trim())) {
-    throw validationError(field, "must be a valid UUID");
-  }
-  return value.trim().toLowerCase();
+  return requireUuid(value, field);
 }
 
 function normalizeOptionalText(value: unknown, field: string, maxLength: number): string | null {

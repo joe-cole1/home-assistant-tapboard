@@ -1,12 +1,16 @@
-import { ApplicationError } from "../../shared/errors.ts";
-import { rejectUnknownKeys, requirePlainObject } from "../../shared/validation.ts";
+import { HEALTH_EVIDENCE_KEYS } from "./evidence-contract.ts";
+export { HEALTH_EVIDENCE_KEYS } from "./evidence-contract.ts";
+import {
+  validationError as invalid,
+  rejectUnknownKeys,
+  requirePlainObject,
+} from "../../shared/validation.ts";
 import { DEFAULT_HEALTH_CONFIG, HEALTH_CONFIG_FIELDS, mergeHealthConfig } from "./config.ts";
 import {
   HEALTH_CHECK_IDS,
   type HealthConfig,
   type HealthConfigOverride,
   type HealthEvidence,
-  type HealthEvidenceKey,
   type HealthEvaluationInput,
   type HealthReason,
 } from "./types.ts";
@@ -15,15 +19,6 @@ export const MAX_HEALTH_EVIDENCE_BYTES = 2_048;
 export const MAX_HEALTH_DURATION_MS = 365 * 86_400_000;
 export const MAX_HEALTH_VOLUME_ML = 1_000_000_000;
 export const MAX_HEALTH_DAYS = 3_650;
-
-function invalid(field: string, reason: string): ApplicationError {
-  return new ApplicationError({
-    category: "validation",
-    code: "validation.invalid_value",
-    clientMessage: "The request contains an invalid value.",
-    details: { field, reason },
-  });
-}
 
 function finiteNumber(value: unknown, field: string): number {
   if (typeof value !== "number" || !Number.isFinite(value)) {
@@ -241,40 +236,6 @@ export function validateHealthConfigOverride(value: unknown): HealthConfigOverri
   return parsed;
 }
 
-const EVIDENCE_KEYS = [
-  "reason",
-  "phase",
-  "diagnosticCode",
-  "measurementAgeMs",
-  "authorityAgeMs",
-  "unavailableAgeMs",
-  "currentVolumeMl",
-  "capacityMl",
-  "currentPercent",
-  "thresholdMl",
-  "thresholdPercent",
-  "criticalPercent",
-  "temperatureC",
-  "normalMinC",
-  "normalMaxC",
-  "criticalMinC",
-  "criticalMaxC",
-  "outOfRangeDurationMs",
-  "durationMs",
-  "lossMl",
-  "windowMs",
-  "sampleCount",
-  "maxSamples",
-  "resetMovementMl",
-  "dueAtMs",
-  "criticalAtMs",
-  "ageMs",
-  "intervalDays",
-  "criticalAfterDays",
-] as const satisfies readonly HealthEvidenceKey[];
-
-export const HEALTH_EVIDENCE_KEYS = EVIDENCE_KEYS;
-
 function evidenceScalar(value: unknown, field: string): value is string | number | boolean | null {
   if (value === null || typeof value === "boolean") return true;
   if (typeof value === "number") {
@@ -293,9 +254,9 @@ function evidenceScalar(value: unknown, field: string): value is string | number
 /** Strictly validate generated evidence and reject arbitrary/source-bearing keys. */
 export function validateHealthEvidence(value: unknown): HealthEvidence {
   const object = requirePlainObject(value, "evidence");
-  rejectUnknownKeys(object, EVIDENCE_KEYS, "evidence");
+  rejectUnknownKeys(object, HEALTH_EVIDENCE_KEYS, "evidence");
   const result: Record<string, string | number | boolean | null> = {};
-  for (const key of EVIDENCE_KEYS) {
+  for (const key of HEALTH_EVIDENCE_KEYS) {
     if (!Object.hasOwn(object, key)) continue;
     const current = object[key];
     evidenceScalar(current, key);

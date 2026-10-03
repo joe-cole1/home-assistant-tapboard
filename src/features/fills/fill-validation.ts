@@ -1,5 +1,9 @@
-import { ApplicationError } from "../../shared/errors.ts";
-import { rejectUnknownKeys, requirePlainObject } from "../../shared/validation.ts";
+import {
+  requireUuid,
+  validationError,
+  rejectUnknownKeys,
+  requirePlainObject,
+} from "../../shared/validation.ts";
 import type {
   CreateFillInput,
   DeleteFillInput,
@@ -11,23 +15,10 @@ import type {
   UpdateFillSettingsInput,
 } from "./types.ts";
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_REASON_LENGTH = 255;
 
-function validationError(field: string, reason: string): ApplicationError {
-  return new ApplicationError({
-    category: "validation",
-    code: "validation.invalid_value",
-    clientMessage: "The request contains an invalid value.",
-    details: { field, reason },
-  });
-}
-
 export function validateUuid(value: unknown, field = "id"): string {
-  if (typeof value !== "string" || !UUID_REGEX.test(value.trim())) {
-    throw validationError(field, "must be a valid UUID");
-  }
-  return value.trim().toLowerCase();
+  return requireUuid(value, field);
 }
 
 export function validateFillDate(value: unknown, field = "fillDate"): string {

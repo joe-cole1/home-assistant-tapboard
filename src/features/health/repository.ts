@@ -1,3 +1,5 @@
+import { ApplicationError } from "../../shared/errors.ts";
+import { MAX_HEALTH_EVIDENCE_BYTES, validateHealthEvidence } from "./health-validation.ts";
 import type { DatabaseExecutor } from "../../infrastructure/database/connection.ts";
 import {
   HEALTH_CHECK_IDS,
@@ -365,8 +367,24 @@ function timestampMs(value: string | null, key: string): number | null {
   return parsed;
 }
 
+function parseStoredHealthEvidence(raw: unknown): HealthEvidence {
+  try {
+    if (typeof raw !== "string" || Buffer.byteLength(raw, "utf8") > MAX_HEALTH_EVIDENCE_BYTES) {
+      throw new Error("Invalid stored evidence");
+    }
+    const decoded: unknown = JSON.parse(raw);
+    return validateHealthEvidence(decoded);
+  } catch {
+    throw new ApplicationError({
+      category: "internal",
+      code: "health.invalid_stored_evidence",
+      clientMessage: "Stored health evidence is invalid.",
+    });
+  }
+}
+
 function mapCheckState(row: HealthCheckStateRow): HealthCheckStateRecord {
-  const evidence = JSON.parse(row.evidence_json) as HealthEvidence;
+  const evidence = parseStoredHealthEvidence(row.evidence_json);
   const evaluatedAtMs = timestampMs(row.evaluated_at, "evaluated_at");
   if (evaluatedAtMs === null) throw new Error("Stored health evaluated_at is invalid");
   return {
@@ -571,7 +589,7 @@ interface IncidentRow extends Record<string, unknown> {
 }
 
 function mapIncident(row: IncidentRow): HealthIncidentRecord {
-  const openEvidence = JSON.parse(row.open_evidence_json) as HealthEvidence;
+  const openEvidence = parseStoredHealthEvidence(row.open_evidence_json);
   const openedAtMs = timestampMs(row.opened_at, "opened_at");
   if (openedAtMs === null) throw new Error("Stored health incident opened_at is invalid");
   return {
@@ -847,7 +865,7 @@ function mapTransition(row: TransitionRow): HealthIncidentTransitionRecord {
     state: row.state,
     severity: row.severity,
     reason: row.reason_code,
-    evidence: JSON.parse(row.evidence_json) as HealthEvidence,
+    evidence: parseStoredHealthEvidence(row.evidence_json),
     occurredAtMs,
     actorId: row.actor_id,
     sessionId: row.session_id,

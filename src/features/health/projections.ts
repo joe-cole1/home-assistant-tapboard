@@ -1,3 +1,4 @@
+import { HEALTH_EVIDENCE_KEYS } from "./evidence-contract.ts";
 import {
   HEALTH_CHECK_IDS,
   type HealthCheckId,
@@ -5,7 +6,6 @@ import {
   type HealthConfigInheritance,
   type HealthConfigOverride,
   type HealthEvidence,
-  type HealthEvidenceKey,
   type HealthReason,
   type HealthSeverity,
   type HealthState,
@@ -158,41 +158,9 @@ export interface HealthTargetedUpdate {
 
 export type HealthTargetedUpdateProjection = HealthTargetedUpdate;
 
-const EVIDENCE_KEYS: readonly HealthEvidenceKey[] = [
-  "reason",
-  "phase",
-  "diagnosticCode",
-  "measurementAgeMs",
-  "authorityAgeMs",
-  "unavailableAgeMs",
-  "currentVolumeMl",
-  "capacityMl",
-  "currentPercent",
-  "thresholdMl",
-  "thresholdPercent",
-  "criticalPercent",
-  "temperatureC",
-  "normalMinC",
-  "normalMaxC",
-  "criticalMinC",
-  "criticalMaxC",
-  "outOfRangeDurationMs",
-  "durationMs",
-  "lossMl",
-  "windowMs",
-  "sampleCount",
-  "maxSamples",
-  "resetMovementMl",
-  "dueAtMs",
-  "criticalAtMs",
-  "ageMs",
-  "intervalDays",
-  "criticalAfterDays",
-];
-
 function safeEvidence(evidence: HealthEvidence): HealthSafeEvidence {
   const safe: Record<string, string | number | boolean | null> = {};
-  for (const key of EVIDENCE_KEYS) {
+  for (const key of HEALTH_EVIDENCE_KEYS) {
     const value = evidence[key];
     if (
       value === null ||

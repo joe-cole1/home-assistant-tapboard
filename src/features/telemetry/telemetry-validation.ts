@@ -1,5 +1,6 @@
-import { ApplicationError } from "../../shared/errors.ts";
 import {
+  requireUuid,
+  validationError,
   rejectUnknownKeys,
   requireBoundedNonemptyString,
   requireIntegerInRange,
@@ -28,7 +29,6 @@ import type {
   UpdateTelemetrySettingsInput,
 } from "./types.ts";
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_SOURCE_NAME_LENGTH = 120;
 const MAX_MACHINE_KEY_LABEL_LENGTH = 120;
 const VALID_MASS_UNITS = new Set<MassUnit>(["g", "kg", "oz", "lb"]);
@@ -38,27 +38,12 @@ const VALID_PERCENT_UNITS = new Set<string>(["percent", "pct", "%"]);
 const VALID_EXTERNAL_PERCENT_UNIT = "percent" as const;
 const MAX_EXTERNAL_BATCH_SIZE = 100;
 
-function validationError(field: string, reason: string): ApplicationError {
-  return new ApplicationError({
-    category: "validation",
-    code: "validation.invalid_value",
-    clientMessage: "The request contains an invalid value.",
-    details: { field, reason },
-  });
-}
-
 export function validateTelemetrySourceId(value: unknown, field = "id"): string {
-  if (typeof value !== "string" || !UUID_REGEX.test(value.trim())) {
-    throw validationError(field, "must be a valid UUID");
-  }
-  return value.trim().toLowerCase();
+  return requireUuid(value, field);
 }
 
 export function validateTapId(value: unknown, field = "tapId"): string {
-  if (typeof value !== "string" || !UUID_REGEX.test(value.trim())) {
-    throw validationError(field, "must be a valid UUID");
-  }
-  return value.trim().toLowerCase();
+  return requireUuid(value, field);
 }
 
 export function validateTapNumber(value: unknown, field = "tapNumber"): number {
