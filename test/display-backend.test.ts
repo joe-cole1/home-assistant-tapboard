@@ -3,7 +3,10 @@ import test from "node:test";
 
 import { listActivity } from "../src/features/activity/repository.ts";
 import { createDisplaySettingsService } from "../src/features/display/service.ts";
-import { validateUpdateDisplaySettingsInput } from "../src/features/display/display-validation.ts";
+import {
+  validateUpdateDisplaySettingsInput,
+  validateUpdateTapCardDisplaySettingsInput,
+} from "../src/features/display/display-validation.ts";
 import { openDatabase } from "../src/infrastructure/database/connection.ts";
 
 const input = (revision = 1) => ({
@@ -34,6 +37,8 @@ void test("display settings defaults, exact validation, CAS, no-op, and Activity
     });
     for (const bad of [
       { ...input(), unknown: true },
+      { ...input(), revision: 1 },
+      { ...input(), updatedAt: "server-owned" },
       { ...input(), tapboardName: " x\n" },
       { ...input(), tapboardName: "" },
       { ...input(), tapboardName: "   " },
@@ -145,5 +150,20 @@ void test("Tap card display settings support shared defaults and tri-state Tap o
     );
   } finally {
     database.close();
+  }
+});
+
+void test("Tap card updates reject server-owned fields", () => {
+  const writable = {
+    expectedRevision: 1,
+    showAbv: true,
+    showIbu: true,
+    showOg: true,
+    showFg: true,
+    showSrm: false,
+    remainingMode: "percent",
+  };
+  for (const extra of [{ revision: 1 }, { updatedAt: "server-owned" }]) {
+    assert.throws(() => validateUpdateTapCardDisplaySettingsInput({ ...writable, ...extra }));
   }
 });
