@@ -67,9 +67,9 @@ CREATE TABLE schema_migrations (
 )
 ```
 
-SQLite `user_version` is 21 and the migration machinery uses `schema_migrations` as its ordered history ledger. A clean database migrates transactionally through version 21; a canonical v19 database gains the Fill-owned `fill_display_preferences` table without changing lifecycle or outbound data; and current databases reopen only when version, ledger, exact DDL, constraints, required singleton state, and exact schema object set match. Featured is persisted as a constrained boolean, while Low and New are derived by the public projection. Future versions, unknown schemas, missing or inconsistent ledgers, corrupted canonical DDL, and unexpected objects fail closed. Failed migrations roll back schema, ledger, and `user_version` together. The unpublished badge-only v19 ledger is deliberately rejected rather than silently rewritten.
+SQLite `user_version` is 22 and the migration machinery uses `schema_migrations` as its ordered history ledger. A clean database migrates transactionally through version 22; a canonical v19 database gains Fill-owned `fill_display_preferences` in v20, isolated Simulation state in v21, and typed session-policy/outbox-retention settings in v22 without rewriting earlier lifecycle or outbound history; and current databases reopen only when version, ledger, exact DDL, constraints, required singleton state, and exact schema object set match. Featured is persisted as a constrained boolean, while Low and New are derived by the public projection. Future versions, unknown schemas, missing or inconsistent ledgers, corrupted canonical DDL, and unexpected objects fail closed. Failed migrations roll back schema, ledger, and `user_version` together. The unpublished badge-only v19 ledger is deliberately rejected rather than silently rewritten.
 
-The exact-object validation is intentionally the supported schema-version-21 baseline, not a claim that future feature-owned tables are forbidden. Later migrations must deliberately extend the validator alongside their versioned schema changes.
+The exact-object validation is intentionally the supported schema-version-22 baseline, not a claim that future feature-owned tables are forbidden. Later migrations must deliberately extend the validator alongside their versioned schema changes.
 
 ## Telemetry ingestion boundary (#72)
 
@@ -162,7 +162,7 @@ The canonical `npm run check` gate combines format, lint, type, architecture, re
 
 The complete frozen implementation covers #66–#81 plus #85 and the approved ADR-0008 Simulation extension. Canonical Node checks, complete Chromium E2E, migration/OpenAPI contracts, a disposable hardened-container gate, and a fresh security/privacy/transaction/lifecycle/migration/compatibility review establish acceptance on a specific revision. Exact evidence and unverified platform/operator boundaries are recorded in `docs/rebuild/STATUS.md` and PRs. Merge, release publication, and production deployment remain operator actions.
 
-The explicitly tracked post-rebuild order is #111 HTTP boundaries → #112 shared validation/stored Health evidence → #113 Admin helpers/pagination/presentation → #114 domain route extraction. The saved #111 branch remains separate. Public health remains an aggregate presentation rather than an evidence/detail API; deferred product capabilities remain outside the frozen initial build.
+Post-rebuild issues #111 HTTP boundaries, #112 shared validation/stored Health evidence, #113 Admin helpers/pagination/presentation, and #114 domain route extraction were delivered by merged PRs #124–#127. Public health remains an aggregate presentation rather than an evidence/detail API. The [transition audit](docs/rebuild/TRANSITION-AUDIT.md) records retained behavior, excluded capabilities, and the open decision queue; literal parity with every v1 feature is not achieved.
 
 ## Historical v1
 

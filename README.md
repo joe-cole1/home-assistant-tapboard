@@ -2,7 +2,7 @@
 
 Tapboard v2 is a Node 24 modular monolith with server-rendered public and Admin pages, a clean SQLite domain model, canonical machine telemetry, deterministic pour detection, forecasting, health, Brew Story/Mystery, Tap Wars, optional outbound integrations, saved Simulation, and System administration. `/` is the authoritative public dashboard; `/admin/*` provides ordinary authenticated forms with progressive browser enhancements.
 
-The v2 implementation is prepared as application version **2.0.0**, schema **22**. [The acceptance ledger](docs/rebuild/STATUS.md) records exact checks and review/merge status for #80, #81, and master #65. Building and testing do not publish a release or deploy a service. The remaining tracked follow-up is #111 → #112 → #113 → #114.
+The v2 implementation is prepared as application version **2.0.0**, schema **22**. [The acceptance ledger](docs/rebuild/STATUS.md) records exact checks and review/merge status for #80, #81, and master #65. Building and testing do not publish a release or deploy a service. The rebuild and follow-up issues #111–#114 are merged and closed. The [transition audit](docs/rebuild/TRANSITION-AUDIT.md) distinguishes the accepted v2 baseline from unresolved v1 parity decisions.
 
 The frozen v1 application remains available at commit `429cf07e451b64ca1713655a34ffa5ebd376efae` and through Git history. Reusable v1 evidence is indexed in [`docs/rebuild/v1-reuse-manifest.json`](docs/rebuild/v1-reuse-manifest.json); it is reference material, not an active dependency or import source for v2.
 
@@ -381,3 +381,7 @@ In disposable Simulation state, exercise shared Display settings and all five pe
 Rebuild the reviewed #114 working tree with `/home/joeadmin/.local/bin/tapboard-dev rebuild`, then run `/home/joeadmin/.local/bin/tapboard-dev health`, preserving the native `tapboard-dev-data` volume and operator PIN. Visit `http://localhost:3000` and confirm `/healthz` is healthy. Sign in at `http://127.0.0.1:3000/admin/login`, using the launcher's configured origin for Admin forms, and visit every Admin navigation page. Check that new-entity pages resolve before ID detail routes, a missing Admin page returns an HTML 404, and an unknown API route returns a JSON 404.
 
 Use disposable Simulation state for a representative form with JavaScript disabled, confirming POST→303→GET and persistence, then check enhanced autosave. Inspect public Brew Story and Mystery redaction alongside live dashboard refresh after a safe edit. Inspect Integration and System pages read-only without triggering live integration calls. These are operator instructions, not a claim that all manual checks ran.
+
+## MANUAL DEV TEST — v1 transition cleanup
+
+Run `/home/joeadmin/.local/bin/tapboard-dev rebuild`, then `/home/joeadmin/.local/bin/tapboard-dev health`, preserving `tapboard-dev-data` and the existing operator PIN. Open [localhost](http://localhost:3000) and verify `/healthz` reports schema 22. Check the public dashboard and signed-in Admin navigation. Inspect existing Simulation state and history read-only; optionally use safe sample pours in Simulation. Do not call external integrations or delete the volume. This documentation cleanup changes no runtime behavior.
