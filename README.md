@@ -2,7 +2,7 @@
 
 Tapboard v2 is a Node 24 modular monolith with server-rendered public and Admin pages, a clean SQLite domain model, canonical machine telemetry, deterministic pour detection, forecasting, health, Brew Story/Mystery, Tap Wars, optional outbound integrations, saved Simulation, and System administration. `/` is the authoritative public dashboard; `/admin/*` provides ordinary authenticated forms with progressive browser enhancements.
 
-The v2 implementation is prepared as application version **2.0.0**, schema **22**. [The acceptance ledger](docs/rebuild/STATUS.md) records exact checks and review/merge status for #80, #81, and master #65. Building and testing do not publish a release or deploy a service. The rebuild and follow-up issues #111–#114 are merged and closed. The [transition audit](docs/rebuild/TRANSITION-AUDIT.md) distinguishes the accepted v2 baseline from unresolved v1 parity decisions.
+The v2 implementation is prepared as application version **2.0.0**, schema **23**. [The acceptance ledger](docs/rebuild/STATUS.md) records exact checks and review/merge status for #80, #81, and master #65. Building and testing do not publish a release or deploy a service. The rebuild and follow-up issues #111–#114 are merged and closed. The [transition audit](docs/rebuild/TRANSITION-AUDIT.md) distinguishes the accepted v2 baseline from unresolved v1 parity decisions.
 
 The frozen v1 application remains available at commit `429cf07e451b64ca1713655a34ffa5ebd376efae` and through Git history. Reusable v1 evidence is indexed in [`docs/rebuild/v1-reuse-manifest.json`](docs/rebuild/v1-reuse-manifest.json); it is reference material, not an active dependency or import source for v2.
 
@@ -36,7 +36,7 @@ The defaults are:
 | `TAPBOARD_SESSION_ABSOLUTE_MS`   | `31536000000` (365 days)                                     |
 | `TAPBOARD_SECRET_KEY`            | unset; optional canonical 32-byte base64url key              |
 
-The runtime creates the database parent directory when needed. A ready process returns HTTP 200 from `GET /healthz` with `{"status":"ok","schemaVersion":22}`. This is local application/database readiness only; it does not check external integrations. Public connectivity is a deliberately aggregate dashboard projection; health administration remains authenticated.
+The runtime creates the database parent directory when needed. A ready process returns HTTP 200 from `GET /healthz` with `{"status":"ok","schemaVersion":23}`. This is local application/database readiness only; it does not check external integrations. Public connectivity is a deliberately aggregate dashboard projection; health administration remains authenticated.
 
 The Admin PIN contract is exactly four ASCII decimal digits (`[0-9]{4}`), including every value from `0000` through `9999`; input is never trimmed or Unicode-normalized. Scrypt, durable SQLite throttling, opaque sessions, CSRF, and strict Origin checks protect online/local access, but the 10,000-value space has limited offline resistance if the SQLite verifier is stolen. The PIN never derives or protects `TAPBOARD_SECRET_KEY`.
 
@@ -117,7 +117,36 @@ Normal rebuilds MUST NOT use `docker compose -f compose.dev.yaml down --volumes`
 
 ## Development container workflow
 
-Install Docker Desktop with the Compose v2 plugin, then create an ignored local `.env` containing an external canonical 32-byte base64url `TAPBOARD_SECRET_KEY`. No real key or default value belongs in Git. A new key can be written without printing it:
+### Current workstation: native WSL containers
+
+This workstation already has a guarded native WSL launcher at `/home/joeadmin/.local/bin/tapboard-dev`. It is not on the Bash PATH, so use the full path. Docker Desktop is not required for this local workflow. Start the existing container and check readiness:
+
+```sh
+/home/joeadmin/.local/bin/tapboard-dev start
+/home/joeadmin/.local/bin/tapboard-dev health
+```
+
+Open [localhost](http://localhost:3000). To recreate it from the current working tree, then check health:
+
+```sh
+/home/joeadmin/.local/bin/tapboard-dev rebuild
+/home/joeadmin/.local/bin/tapboard-dev health
+```
+
+Other launcher commands are:
+
+```sh
+/home/joeadmin/.local/bin/tapboard-dev status
+/home/joeadmin/.local/bin/tapboard-dev logs
+/home/joeadmin/.local/bin/tapboard-dev stop
+/home/joeadmin/.local/bin/tapboard-dev --help
+```
+
+The launcher calls `/mnt/c/Program Files/WSL/wslc.exe` and manages `tapboard-dev` at `127.0.0.1:3000`. Normal start, stop, and rebuild retain the native `tapboard-dev-data` volume and existing operator PIN. This volume is distinct from portable Compose's `tapboard-dev_tapboard-data`; do not interchange or delete them. Automatic startup after a Windows reboot is not configured, so run `start` when needed. This local workflow does not replace the Docker/Compose production acceptance gate.
+
+### Portable Docker Engine and Compose setup
+
+This alternative requires Docker Engine and the Compose v2 plugin, then an ignored local `.env` containing an external canonical 32-byte base64url `TAPBOARD_SECRET_KEY`. No real key or default value belongs in Git. A new key can be written without printing it:
 
 ```sh
 test ! -e .env && (umask 077; printf 'TAPBOARD_SECRET_KEY=' > .env; openssl rand -base64 32 | tr '+/' '-_' | tr -d '\n=' >> .env; printf '\n' >> .env)
@@ -205,6 +234,10 @@ Required outbound connection failures turn yellow immediately and red after five
 
 Open **Admin → System → Enable simulation**. Tapboard creates a separate saved sample taproom and opens **Simulator**. The regular dashboard, Beverages, Kegs, Fills, Taps, display controls, and history now show that workspace, with a **SIMULATION** banner. This is an installation-wide switch, including other open displays.
 
+New sample workspaces contain five on-tap beers: **Oktoberfest** (fixture B064), **Saison** (fixture B058), **Porter** (fixture B061), **IPA** (fixture B033), and **Bourbon Barrel Stout** (fixture B026). **Hefeweizen** (fixture B052) and **Spiced Lager** (fixture B060) are On Deck. These truthful style labels replace unavailable original names from anonymized offline history. Seven minimized recipe snapshots supply historical batch values, ingredients, and process facts for flavor guidance; simulated keg volume is independent of historical fermentation volume. No private account or external connection is created.
+
+Saved original samples upgrade only when their entire original editable profile is untouched, with no recipe, source snapshot, or manual flavor override. A wholly untouched original six-tap layout becomes five taps and two On Deck entries; its sixth tap is disabled while its sensor, settings, volume, and history remain saved. Customized profiles or layouts retain their state. This upgrade does not reset Simulation or change normal inventory, the PIN, or the development volume.
+
 Open the dashboard in another tab. Wait for a sensor to say **Ready**, then pour 4, 12, 16, or a custom 1–32 US fl oz. Readings flow on the server while you browse elsewhere; the normal detector produces the pour history. **Pause sensor** stops readings and **Bring online** resumes them. **Noise** adds small scale fluctuations. Existing health thresholds determine when a paused sensor becomes stale. Remaining volume follows a Filled Keg when you move it between taps; newly created Fills start full.
 
 **Exit simulation** saves its test data and returns to normal operation. Enabling it again resumes the same samples and history. **Reset simulation** requires confirmation and replaces only the sample workspace. Normal data and integration configuration are preserved. Browser display preferences are also saved separately for each mode. Mode changes keep the initiating browser signed in and invalidate older Admin forms/sessions; other devices may need to sign in again.
@@ -215,9 +248,23 @@ The selected mode and sample data survive application restart. Running pours sto
 
 ### MANUAL DEV TEST — built-in Simulation
 
-After the normal non-destructive rebuild, verify `/healthz` reports schema version 22. Sign in with the existing PIN, enable simulation from System, and confirm six sample taps and a SIMULATION banner in Admin and the public dashboard. Pour 12 oz from a Ready sensor; watch remaining volume update, then confirm the settled remaining estimate has fallen by about 355 mL. Pause/resume another sensor and check its health after the configured stale interval. Turn on noise and confirm idle readings do not create pours. Change a sample Beverage's glass and a Display theme while readings continue. Exit and re-enter to confirm sample history persists and normal inventory returns. Restart the container and confirm the selected workspace/history survive. Finally, explicitly reset simulation and verify only the sample workspace is replaced. Never remove the normal development volume for this check.
+After the normal non-destructive rebuild, verify `/healthz` reports schema version 23. Sign in with the existing PIN, enable simulation from System, and confirm five sample taps and two On Deck entries and a SIMULATION banner in Admin and the public dashboard. Pour 12 oz from a Ready sensor; watch remaining volume update, then confirm the settled remaining estimate has fallen by about 355 mL. Pause/resume another sensor and check its health after the configured stale interval. Turn on noise and confirm idle readings do not create pours. Change a sample Beverage's glass and a Display theme while readings continue. Exit and re-enter to confirm sample history persists and normal inventory returns. Restart the container and confirm the selected workspace/history survive. Finally, explicitly reset simulation and verify only the sample workspace is replaced. Never remove the normal development volume for this check.
 
-After a normal rebuild and recreation without deleting the development volume, enable Simulation and open its public dashboard at tablet and desktop widths (800px, 1280px, and 1911px or wider). Confirm the SIMULATION banner sits above the header, all six cards sit below the header and above the fully visible On Deck strip, and the page has no horizontal or vertical overflow. Repeat with JavaScript disabled.
+After a normal rebuild and recreation without deleting the development volume, enable Simulation and open its public dashboard at tablet and desktop widths (800px, 1280px, and 1911px or wider). Confirm the SIMULATION banner sits above the header, all five cards sit below the header and above the fully visible On Deck strip, and the page has no horizontal or vertical overflow. Repeat with JavaScript disabled.
+
+### MANUAL DEV TEST — Simulation history and flavor
+
+At [localhost](http://localhost:3000), sign in with the existing PIN and enable Simulation after the volume-preserving rebuild. In a new or untouched original sample workspace, confirm the five on-tap labels and two On Deck labels above. Inspect each sample's flavor guidance and Admin source facts; check the Bourbon Barrel Stout's completed barrel context. Set a malt or hops override to **0**, verify a real zero rather than fallback, then clear it and confirm recipe guidance returns. Pour from a Ready sensor, exit and re-enter, and verify volume and history persist. Check the five-card dashboard and two On Deck entries with JavaScript enabled and disabled. Existing customized samples or layouts must remain customized; normal inventory must return on exit. Use Simulation only and preserve the normal volume and PIN.
+
+### Public recipe sheet
+
+Ordinary Brew Story already permits anonymous HTML and JSON access. **View recipe** opens a read-only sheet of the actual cached recipe: recipe targets stay separate from batch-reported measurements, with fermentables, hops, miscellaneous additions, yeast, recorded units, complete-only mass totals, mash steps, fermentation durations in days, and water values when recorded. Missing efficiency, equipment, and water volumes are not invented. The PDF reference informs layout only; no author, logo, or PDF file is copied and no stored recipe is replaced.
+
+The sheet uses two desktop columns, stacks on phones, follows the preferred metric/US units and theme, works without JavaScript, and prints only recipes on white paper. Mystery's recipe reveal remains separate from beverage type, style, OG, FG, ABV, IBU, and SRM controls; revealing the recipe does not reveal those hidden fields. This extension adds no migration, provider call, editing route, or dependency: database schema remains 23 and recipe snapshot payload schema remains 2.
+
+### MANUAL DEV TEST — Public recipe sheet
+
+After the volume-preserving rebuild and health check, open [localhost](http://localhost:3000), select Simulation, and open Oktoberfest's **Story → View recipe**. Compare targets, ingredients, timings, and recorded measurements against that sample's actual stored recipe, rather than the reference PDF. Check metric/US, light/dark, phone stacking, JavaScript-disabled reading, and print preview. In a guest or incognito window, confirm ordinary Story HTML and JSON remain accessible without signing in. Use a disposable fixture workspace to check Mystery with recipe hidden, recipe revealed alone, and the independent beverage type/style/OG/FG/ABV/IBU/SRM reveals. Preserve existing samples, volume, and PIN; stop for review before committing or shipping.
 
 ### MANUAL DEV TEST — dashboard Settings access
 
@@ -262,7 +309,7 @@ npm run test:e2e
 
 CI runs canonical checks, the complete Chromium suite, and disposable hardened production-container validation as separate jobs. No validation command deploys or publishes the image.
 
-Schema version 22 (`system-administration-and-retention`) is the current supported schema. It adds singleton typed session-policy and terminal-outbox-retention tables, preserving the previous schema and data. Session defaults remain inherited until explicitly saved. Version 21 (`builtin-simulation`) added typed workspace settings, simulated sensor state, and Fill-owned physical volume; version 20 added Fill-owned Featured preferences after version 19's outbound delivery schema. Low and New badges are derived rather than persisted. Browser-local overrides, live/SSE state, and effective sensory projections are never persisted in SQLite. `/healthz` reports `schemaVersion: 22` when the database is ready. An unpublished badge-only version-19 database is not a canonical upgrade source and is rejected without repair; preserve its data and obtain an explicit migration plan instead of deleting a volume or rewriting its ledger.
+Schema version 23 is the current supported schema. It adds nullable malt and hops sensory overrides, preserves all previous values, and leaves effective flavor guidance derived. Recipe snapshot payload schema 2 is independent of source record revisions. Version 22 (`system-administration-and-retention`) added singleton typed session-policy and terminal-outbox-retention tables, preserving the previous schema and data. Session defaults remain inherited until explicitly saved. Version 21 (`builtin-simulation`) added typed workspace settings, simulated sensor state, and Fill-owned physical volume; version 20 added Fill-owned Featured preferences after version 19's outbound delivery schema. Low and New badges are derived rather than persisted. Browser-local overrides, live/SSE state, and effective sensory projections are never persisted in SQLite. `/healthz` reports `schemaVersion: 23` when the database is ready. An unpublished badge-only version-19 database is not a canonical upgrade source and is rejected without repair; preserve its data and obtain an explicit migration plan instead of deleting a volume or rewriting its ledger.
 
 ## MANUAL DEV TEST — Issue #110 autosave and live refresh
 
@@ -385,3 +432,9 @@ Use disposable Simulation state for a representative form with JavaScript disabl
 ## MANUAL DEV TEST — v1 transition cleanup
 
 Run `/home/joeadmin/.local/bin/tapboard-dev rebuild`, then `/home/joeadmin/.local/bin/tapboard-dev health`, preserving `tapboard-dev-data` and the existing operator PIN. Open [localhost](http://localhost:3000) and verify `/healthz` reports schema 22. Check the public dashboard and signed-in Admin navigation. Inspect existing Simulation state and history read-only; optionally use safe sample pours in Simulation. Do not call external integrations or delete the volume. This documentation cleanup changes no runtime behavior.
+
+## Recipe-informed flavor guidance
+
+Brew Story uses eight axes: malt, hops, bitterness, sweetness, body, roast, tartness and alcohol. Per-axis precedence is manual override, supported recipe calculation, reviewed exact style baseline, then unavailable. Stored manual values use 0–10; public guidance uses 0–5. Unknown is distinct from zero. Admin shows selected sources, coverage and limitations; public projections contain only bounded generic guidance and respect Mystery disclosure. This deterministic heuristic uses a local producer-fact catalog, not a trained model or measured tasting data. No additional service or API configuration is required.
+
+See [the flavor model](docs/flavor-model.md) for source normalization, formulas, snapshot enrichment and [the flavor manual test](docs/flavor-model.md#manual-dev-test--flavor-guidance). The offline 107-recipe corpus is validation evidence only; regenerate its report with Node 24 using `node scripts/report-flavor-corpus.ts`. Keep fixtures out of normal databases and public browser/log output. Historical schema-22 manual tests retain their original acceptance context; current readiness is schema 23.

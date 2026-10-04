@@ -61,7 +61,7 @@ test("Brew Story SSR and JSON redact an active Mystery Tap without JavaScript", 
   expect(storyHtml).not.toContain("Measured fixture beer");
   expect(storyHtml).not.toContain("Pale Ale");
   expect(storyHtml).toContain("← Back");
-  expect(storyHtml).toContain("Sensory profile");
+  expect(storyHtml).toContain("Flavor profile");
   expect(storyHtml).toContain("Recipe");
   expect(storyHtml).not.toContain('id="story-fill"');
   expect(storyHtml).not.toContain('id="story-history"');
@@ -93,7 +93,9 @@ test("Brew Story SSR and JSON redact an active Mystery Tap without JavaScript", 
   await expect(normalCard).toHaveAttribute("href", normalStoryPath);
   await normalCard.click();
   await expect(page).toHaveURL(/\/taps\/[^/]+\/story$/u);
-  await expect(page.getByRole("heading", { name: "Custom recipe" })).toBeVisible();
+  await expect(
+    page.locator("[data-recipe-sheet]").getByText("Custom recipe", { exact: true }),
+  ).toBeVisible();
   await expect(page.getByText("Pale <malt>", { exact: false })).toBeVisible();
   await expect(page.getByText("Mash & hold", { exact: false })).toBeVisible();
   await expect(page.getByText("safe & measured", { exact: false })).toBeVisible();

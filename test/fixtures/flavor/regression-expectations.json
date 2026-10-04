@@ -1,0 +1,118 @@
+[
+  {
+    "caseId": "B064",
+    "name": "Amber lager, estimates and stale inventory timing",
+    "required": [
+      "Use batch-reported ABV 5.3 and estimated IBU 24; FG 1.010 remains estimated, not measured.",
+      "Use recipe Magnum 15min, Liberty 10min, Willamette/Saaz 1min, not batchHops 60min.",
+      "Briess original Carapils is not a caramel-flavor ingredient.",
+      "Water pH 7.5 and mash pH 5.57 are not finished-beer sourness measurements."
+    ]
+  },
+  {
+    "caseId": "B026",
+    "name": "Bourbon barrel treatment and inconsistent dates",
+    "required": [
+      "Recognize the explicitly recorded barrel process with no required manual entry.",
+      "Do not infer reliable contact duration from contradictory dates.",
+      "Do not invent wood species, toast, spirit dose, additional ABV or a vanilla intensity.",
+      "Renaming the beer must not change the extracted treatment."
+    ]
+  },
+  {
+    "caseId": "B058",
+    "name": "Very dry saison and apparent attenuation",
+    "required": [
+      "Preserve measured FG 0.995 and batch-reported attenuation 108.1.",
+      "Recipe attenuation 1.064 is not 1.064 percent.",
+      "Keep reported and recomputed attenuation separate; never overwrite one with the other silently.",
+      "Resolve BE-134; do not turn fruit/spice descriptors into residual sugar or an infection claim."
+    ]
+  },
+  {
+    "caseId": "B055",
+    "name": "Munich identity versus color conflict",
+    "required": [
+      "Retain color 145.5 and lovibond 108 as supplied with a diagnostic.",
+      "Do not automatically classify Munich as black/roasted malt from this anomalous color.",
+      "Do not guess a corrected decimal or write back to Brewfather.",
+      "Resolve Brewzyme-D as ALDC, not glucoamylase; do not infer a low FG from its presence."
+    ]
+  },
+  {
+    "caseId": "B033",
+    "name": "Multiple dry-hop stages",
+    "required": [
+      "Retain repeated Citra/Mosaic additions as independent stages.",
+      "Preserve day 2 / day 5 separately from time 7 / time 4. Normalize their meanings only under a verified provider-format contract; never treat either as a dose multiplier.",
+      "Use recipe hop additions once, not recipe plus inventory duplicates."
+    ]
+  },
+  {
+    "caseId": "B043",
+    "name": "Mash hops plus whirlpool and dry hops",
+    "required": [
+      "Do not treat mash-hop mass as equivalent to dry-hop mass.",
+      "Use measured 26.497883 L as the documented volume proxy, not an implicit 5 gallon assumption."
+    ]
+  },
+  {
+    "caseId": "B049",
+    "name": "Thiol-oriented process and blank final measurement",
+    "required": [
+      "Resolve Cosmic Punch OYL-402 and recognize Phantasm Powder.",
+      "No fabricated measured thiol concentration or automatic arbitrary extra hop score.",
+      "FG remains estimated; enzyme identity must be verified rather than blanket all-enzyme handling."
+    ]
+  },
+  {
+    "caseId": "B053",
+    "name": "Unnamed dry hop and no yeast",
+    "required": [
+      "Keep unnamed 28.349523 g dry-hop dose in computable total if stage/units are valid.",
+      "Do not invent its variety from the beer name or earlier Citra additions.",
+      "Empty yeast list is unknown, not a known neutral fermentation."
+    ]
+  },
+  {
+    "caseId": "B042",
+    "name": "Witbier botanicals and recipe-volume fallback",
+    "required": [
+      "Recognize explicitly listed botanicals independently of style.",
+      "Use documented recipe-volume fallback 39.746824 L when measured batch size is absent.",
+      "Honor miscellaneous ingredient units; do not multiply every amount by 1000."
+    ]
+  },
+  {
+    "caseId": "B052",
+    "name": "Wheat yeast identity",
+    "required": [
+      "Resolve Wyeast 3068; derive supported yeast-character descriptors from a sourced catalog, not German style or wheat percentage alone."
+    ]
+  },
+  {
+    "caseId": "B060",
+    "name": "Style does not suppress actual cloves",
+    "required": [
+      "Preserve the explicit Cloves addition, 0.25 oz at 10 minutes.",
+      "Do not automatically suppress spice merely because style is Munich Helles."
+    ]
+  },
+  {
+    "caseId": "B063",
+    "name": "Modern hazy IPA and actual volume",
+    "required": [
+      "Use measured batch size 18.927059 L over recipe size 22.712471 L for the stated dose proxy.",
+      "Resolve Lallemand Pomona by lab/name when productId is blank.",
+      "Do not turn an antioxidant/water-treatment acid into evidence of sour fermentation."
+    ]
+  },
+  {
+    "caseId": "B007",
+    "name": "Low IBU does not imply low hop character",
+    "required": [
+      "Retain batch estimated IBU 5 independently of whirlpool/dry-hop mass.",
+      "Do not fabricate the proprietary Arctic Blend composition."
+    ]
+  }
+]

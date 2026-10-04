@@ -50,7 +50,9 @@ export const DISPLAY_ACCENT_SCHEMA_VERSION = DISPLAY_CUSTOM_ACCENT_SCHEMA_VERSIO
 export const DISPLAY_ACCENT_MIGRATION_NAME = DISPLAY_CUSTOM_ACCENT_MIGRATION_NAME;
 export const TELEMETRY_SOURCE_DISABLED_SCHEMA_VERSION = TELEMETRY_DISABLED_LIFECYCLE_SCHEMA_VERSION;
 export const TELEMETRY_SOURCE_DISABLED_MIGRATION_NAME = TELEMETRY_DISABLED_LIFECYCLE_MIGRATION_NAME;
-export const CURRENT_SCHEMA_VERSION = SYSTEM_ADMINISTRATION_SCHEMA_VERSION;
+export const FLAVOR_PROFILE_SCHEMA_VERSION = 23;
+export const FLAVOR_PROFILE_MIGRATION_NAME = "eight-axis-flavor-profile";
+export const CURRENT_SCHEMA_VERSION = FLAVOR_PROFILE_SCHEMA_VERSION;
 
 export interface MigrationDefinition {
   readonly version: number;
@@ -2045,6 +2047,14 @@ function validateBeveragesColumns(database: DatabaseExecutor): void {
     ],
     beverage_sensory_overrides: [
       { name: "beverage_id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 },
+      ...(database
+        .pragma<TableColumnRow[]>("table_info(beverage_sensory_overrides)")
+        .some((column) => column.name === "malt")
+        ? [
+            { name: "malt", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+            { name: "hops", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
+          ]
+        : []),
       { name: "bitterness", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
       { name: "sweetness", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
       { name: "body", type: "REAL", notnull: 0, dflt_value: null, pk: 0 },
@@ -3840,12 +3850,12 @@ const SYSTEM_ADMINISTRATION_SCHEMA_OBJECTS = [
   ["table", "outbox_retention"],
 ] as const;
 
-function validateSystemAdministrationSchema(database: DatabaseExecutor): void {
+function validateSystemAdministrationSchema(database: DatabaseExecutor, flavor = false): void {
   validateTelemetrySchemaDefinition(
     database,
     SYSTEM_ADMINISTRATION_SCHEMA_OBJECTS,
-    `${FORENSIC_QC_SCHEMA_SQL}\n${TELEMETRY_EPOCHS_SCHEMA_SQL}\n${FORECASTING_SCHEMA_SQL}\n${HEALTH_MAINTENANCE_SCHEMA_SQL}\n${DISPLAY_SCHEMA_SQL}\n${BREW_STORY_SENSORY_MYSTERY_SCHEMA_SQL}\n${TAP_CARD_DISPLAY_SCHEMA_SQL}\n${DISPLAY_FONT_SCHEMA_SQL}\n${TELEMETRY_DISABLED_LIFECYCLE_SCHEMA_SQL}\n${TAP_WARS_SCHEMA_SQL}\n${OUTBOUND_DESTINATIONS_SCHEMA_SQL}\n${FILL_CARD_BADGES_SCHEMA_SQL}\n${BUILTIN_SIMULATION_SCHEMA_SQL}\n${SYSTEM_ADMINISTRATION_SCHEMA_SQL}`,
-    SYSTEM_ADMINISTRATION_SCHEMA_VERSION,
+    `${FORENSIC_QC_SCHEMA_SQL}\n${TELEMETRY_EPOCHS_SCHEMA_SQL}\n${FORECASTING_SCHEMA_SQL}\n${HEALTH_MAINTENANCE_SCHEMA_SQL}\n${DISPLAY_SCHEMA_SQL}\n${BREW_STORY_SENSORY_MYSTERY_SCHEMA_SQL}\n${TAP_CARD_DISPLAY_SCHEMA_SQL}\n${DISPLAY_FONT_SCHEMA_SQL}\n${TELEMETRY_DISABLED_LIFECYCLE_SCHEMA_SQL}\n${TAP_WARS_SCHEMA_SQL}\n${OUTBOUND_DESTINATIONS_SCHEMA_SQL}\n${FILL_CARD_BADGES_SCHEMA_SQL}\n${BUILTIN_SIMULATION_SCHEMA_SQL}\n${SYSTEM_ADMINISTRATION_SCHEMA_SQL}${flavor ? FLAVOR_PROFILE_SCHEMA_SQL : ""}`,
+    flavor ? FLAVOR_PROFILE_SCHEMA_VERSION : SYSTEM_ADMINISTRATION_SCHEMA_VERSION,
     (schemaDatabase) => {
       validateBuiltinSimulationColumns(schemaDatabase);
       expectColumns(schemaDatabase, "auth_session_settings", [
@@ -3888,6 +3898,36 @@ export const SYSTEM_ADMINISTRATION_MIGRATION: MigrationDefinition = {
   },
 };
 
+export const FLAVOR_PROFILE_SCHEMA_SQL = `
+CREATE TABLE beverage_sensory_overrides (
+    beverage_id TEXT PRIMARY KEY REFERENCES beverages(id) ON DELETE CASCADE,
+    malt REAL CHECK (malt IS NULL OR (malt >= 0 AND malt <= 10)),
+    hops REAL CHECK (hops IS NULL OR (hops >= 0 AND hops <= 10)),
+    bitterness REAL CHECK (bitterness IS NULL OR (bitterness >= 0 AND bitterness <= 10)),
+    sweetness REAL CHECK (sweetness IS NULL OR (sweetness >= 0 AND sweetness <= 10)),
+    body REAL CHECK (body IS NULL OR (body >= 0 AND body <= 10)),
+    roast REAL CHECK (roast IS NULL OR (roast >= 0 AND roast <= 10)),
+    tartness REAL CHECK (tartness IS NULL OR (tartness >= 0 AND tartness <= 10)),
+    alcohol REAL CHECK (alcohol IS NULL OR (alcohol >= 0 AND alcohol <= 10)),
+    updated_at TEXT NOT NULL
+  );
+`;
+export const FLAVOR_PROFILE_MIGRATION: MigrationDefinition = {
+  version: FLAVOR_PROFILE_SCHEMA_VERSION,
+  name: FLAVOR_PROFILE_MIGRATION_NAME,
+  apply(database) {
+    database.execute(
+      FLAVOR_PROFILE_SCHEMA_SQL.replace(
+        "CREATE TABLE beverage_sensory_overrides",
+        "CREATE TABLE beverage_sensory_overrides_v23",
+      ),
+    );
+    database.execute(
+      `INSERT INTO beverage_sensory_overrides_v23 (beverage_id, bitterness, sweetness, body, roast, tartness, alcohol, updated_at) SELECT beverage_id, bitterness, sweetness, body, roast, tartness, alcohol, updated_at FROM beverage_sensory_overrides; DROP TABLE beverage_sensory_overrides; ALTER TABLE beverage_sensory_overrides_v23 RENAME TO beverage_sensory_overrides;`,
+    );
+    return undefined;
+  },
+};
 /** Canonical production migration list. Keep this array identity stable. */
 export const MIGRATIONS: readonly MigrationDefinition[] = [
   FOUNDATION_MIGRATIONS[0]!,
@@ -3912,6 +3952,7 @@ export const MIGRATIONS: readonly MigrationDefinition[] = [
   FILL_CARD_BADGES_MIGRATION,
   BUILTIN_SIMULATION_MIGRATION,
   SYSTEM_ADMINISTRATION_MIGRATION,
+  FLAVOR_PROFILE_MIGRATION,
 ];
 
 // Compatibility aliases for callers that prefer an explicit application name.
@@ -3951,7 +3992,8 @@ function applyMigration(
         migration.version === OUTBOUND_DESTINATIONS_SCHEMA_VERSION ||
         migration.version === FILL_CARD_BADGES_SCHEMA_VERSION ||
         migration.version === BUILTIN_SIMULATION_SCHEMA_VERSION ||
-        migration.version === SYSTEM_ADMINISTRATION_SCHEMA_VERSION)
+        migration.version === SYSTEM_ADMINISTRATION_SCHEMA_VERSION ||
+        migration.version === FLAVOR_PROFILE_SCHEMA_VERSION)
     ) {
       validateCanonicalSchemaAtVersion(database, migration.version);
     }
@@ -4070,6 +4112,8 @@ function validateCanonicalSchemaAtVersion(database: DatabaseExecutor, version: n
     validateFillCardBadgesSchema(database);
   } else if (version === BUILTIN_SIMULATION_SCHEMA_VERSION) {
     validateBuiltinSimulationSchema(database);
+  } else if (version === FLAVOR_PROFILE_SCHEMA_VERSION) {
+    validateSystemAdministrationSchema(database, true);
   } else if (version === SYSTEM_ADMINISTRATION_SCHEMA_VERSION) {
     validateSystemAdministrationSchema(database);
   } else {
@@ -4114,7 +4158,8 @@ export function initializeSchema(
 
   if (
     isCanonicalMigrationPrefix(migrations) &&
-    currentVersion === SYSTEM_ADMINISTRATION_SCHEMA_VERSION
+    (currentVersion === SYSTEM_ADMINISTRATION_SCHEMA_VERSION ||
+      currentVersion === FLAVOR_PROFILE_SCHEMA_VERSION)
   ) {
     validateCanonicalSchemaAtVersion(database, currentVersion);
   } else if (

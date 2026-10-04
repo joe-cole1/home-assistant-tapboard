@@ -24,7 +24,7 @@ test("simulation workspace: actual live pour, pause, persistent exit/reentry, re
   await page.goto("/admin/system");
   await page.getByRole("switch", { name: "Enable simulation" }).click();
   await expect(page).toHaveURL(/\/admin\/simulator/u);
-  await expect(page.locator("[data-simulation-sensor]")).toHaveCount(6);
+  await expect(page.locator("[data-simulation-sensor]")).toHaveCount(5);
   const sensor = page.locator("[data-simulation-sensor]").first();
   await expect(sensor.locator("[data-sensor-status-label]")).toHaveText("Ready", {
     timeout: 10_000,
@@ -47,6 +47,21 @@ test("simulation workspace: actual live pour, pause, persistent exit/reentry, re
   const before = (await (
     await context.request.get("/api/public/dashboard")
   ).json()) as PublicDashboardView;
+  expect(before.taps.map((tap) => tap.beverageName)).toEqual([
+    "Oktoberfest",
+    "Saison",
+    "Porter",
+    "IPA",
+    "Bourbon Barrel Stout",
+  ]);
+  expect(before.onDeck.items.map((fill) => fill.name)).toEqual(["Hefeweizen", "Spiced Lager"]);
+  const barrelStory = before.taps[4]!.storyPath;
+  if (!barrelStory) throw new Error("Missing history sample Story.");
+  const story = await context.newPage();
+  await story.goto(barrelStory);
+  await expect(story.locator("[data-sensory-axis]")).toHaveCount(8);
+  await expect(story.getByText("Bourbon barrel-aged", { exact: true })).toBeVisible();
+  await story.close();
   await sensor.getByRole("button", { name: "Pour 12 US fl oz from tap 1", exact: true }).click();
   await expect(sensor.locator("[data-sensor-status-label]")).toHaveText("Pouring");
   await expect
@@ -191,7 +206,7 @@ for (const javaScriptEnabled of [true, false]) {
         await display.setViewportSize(viewport);
         await display.goto("/");
         await expect(display.locator(".workspace-banner")).toContainText("SIMULATION");
-        await expect(display.locator(".tap-grid > .tap-card")).toHaveCount(6);
+        await expect(display.locator(".tap-grid > .tap-card")).toHaveCount(5);
         const layout = await display.evaluate(() => {
           const bounds = (selector: string) => {
             const rect = document.querySelector(selector)!.getBoundingClientRect();

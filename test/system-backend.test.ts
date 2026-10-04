@@ -837,7 +837,7 @@ void test("System diagnostics expose fixed counts, storage metadata and safe out
     const diagnostics = h.system.getDiagnostics();
     assert.equal(diagnostics.counts.activity, 2);
     assert.equal(diagnostics.counts.sessions, 1);
-    assert.equal(diagnostics.storage.schemaVersion, 22);
+    assert.equal(diagnostics.storage.schemaVersion, 23);
     assert.ok(diagnostics.storage.pageSizeBytes > 0);
     assert.deepEqual(diagnostics.retention, {
       running: false,

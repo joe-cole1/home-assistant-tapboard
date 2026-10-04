@@ -300,7 +300,7 @@ void test("a clean file database bootstraps the canonical v22 migration ledger",
         "SELECT version, name, applied_at FROM schema_migrations ORDER BY version",
       )
       .all();
-    assert.equal(ledger.length, 22);
+    assert.equal(ledger.length, CURRENT_SCHEMA_VERSION);
     assert.equal(ledger[0]?.version, FOUNDATION_SCHEMA_VERSION);
     assert.equal(ledger[0]?.name, FOUNDATION_INITIAL_MIGRATION_NAME);
     assert.equal(ledger[1]?.version, 2);
@@ -368,7 +368,7 @@ void test("an in-memory database bootstraps the same canonical schema", () => {
       database
         .prepare<[], { readonly count: number }>("SELECT count(*) AS count FROM schema_migrations")
         .get()?.count,
-      22,
+      CURRENT_SCHEMA_VERSION,
     );
   } finally {
     database.close();
@@ -1005,6 +1005,7 @@ void test("an exact v1 database upgrades to v22 with all ledger entries", (conte
         { version: 20, name: "fill-card-badges" },
         { version: 21, name: "builtin-simulation" },
         { version: 22, name: "system-administration-and-retention" },
+        { version: 23, name: "eight-axis-flavor-profile" },
       ],
     );
   } finally {

@@ -8,6 +8,7 @@ import { errorStatus, reportFailure } from "../../shared/diagnostics.ts";
 import { buildSensoryRadar } from "../story/index.ts";
 import { adminContext, messageLocation } from "./admin/context.ts";
 import { temperature, volume } from "./admin/presentation.ts";
+import { recipeAmount, recipeMass, recipeNumber } from "./recipe-presentation.ts";
 import { acceptsJson, oneRequestHeader } from "./admin/http.ts";
 import type {
   RegisterPublicRoutesDependencies,
@@ -56,6 +57,9 @@ export function registerPublicRoutes(dependencies: RegisterPublicRoutesDependenc
         sensoryRadar: buildSensoryRadar(story.sensory),
         temperature,
         volume,
+        recipeAmount,
+        recipeMass,
+        recipeNumber,
         story,
       }),
       { vary: "Cookie" },

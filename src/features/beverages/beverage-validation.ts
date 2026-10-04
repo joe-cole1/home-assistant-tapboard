@@ -226,12 +226,20 @@ export function validateCreateCustomBeverageInput(input: unknown): CreateCustomB
   let sensoryOverrides: CreateCustomBeverageInput["sensoryOverrides"] = null;
   if (input.sensoryOverrides !== undefined && input.sensoryOverrides !== null) {
     assertPlainObject(input.sensoryOverrides, "sensoryOverrides must be an object.");
-    assertKnownFields(
-      input.sensoryOverrides,
-      ["bitterness", "sweetness", "body", "roast", "tartness", "alcohol"],
-      "sensoryOverrides",
-    );
+    assertKnownFields(input.sensoryOverrides, BEVERAGE_SENSORY_AXES, "sensoryOverrides");
     sensoryOverrides = {
+      malt: cleanOptionalNumber(
+        input.sensoryOverrides.malt,
+        BEVERAGE_SENSORY_CANONICAL_MIN,
+        BEVERAGE_SENSORY_CANONICAL_MAX,
+        "malt",
+      ),
+      hops: cleanOptionalNumber(
+        input.sensoryOverrides.hops,
+        BEVERAGE_SENSORY_CANONICAL_MIN,
+        BEVERAGE_SENSORY_CANONICAL_MAX,
+        "hops",
+      ),
       bitterness: cleanOptionalNumber(
         input.sensoryOverrides.bitterness,
         BEVERAGE_SENSORY_CANONICAL_MIN,
@@ -436,12 +444,20 @@ export function validateUpdateCustomBeverageInput(input: unknown): UpdateCustomB
       result.sensoryOverrides = null;
     } else {
       assertPlainObject(input.sensoryOverrides, "sensoryOverrides must be an object.");
-      assertKnownFields(
-        input.sensoryOverrides,
-        ["bitterness", "sweetness", "body", "roast", "tartness", "alcohol"],
-        "sensoryOverrides",
-      );
+      assertKnownFields(input.sensoryOverrides, BEVERAGE_SENSORY_AXES, "sensoryOverrides");
       result.sensoryOverrides = {
+        malt: cleanOptionalNumber(
+          input.sensoryOverrides.malt,
+          BEVERAGE_SENSORY_CANONICAL_MIN,
+          BEVERAGE_SENSORY_CANONICAL_MAX,
+          "malt",
+        ),
+        hops: cleanOptionalNumber(
+          input.sensoryOverrides.hops,
+          BEVERAGE_SENSORY_CANONICAL_MIN,
+          BEVERAGE_SENSORY_CANONICAL_MAX,
+          "hops",
+        ),
         bitterness: cleanOptionalNumber(
           input.sensoryOverrides.bitterness,
           BEVERAGE_SENSORY_CANONICAL_MIN,
@@ -683,12 +699,20 @@ export function validateLinkBrewfatherCandidateInput(input: unknown): LinkBrewfa
   let sensoryOverrides: LinkBrewfatherCandidateInput["sensoryOverrides"] = null;
   if (input.sensoryOverrides !== undefined && input.sensoryOverrides !== null) {
     assertPlainObject(input.sensoryOverrides, "sensoryOverrides must be an object.");
-    assertKnownFields(
-      input.sensoryOverrides,
-      ["bitterness", "sweetness", "body", "roast", "tartness", "alcohol"],
-      "sensoryOverrides",
-    );
+    assertKnownFields(input.sensoryOverrides, BEVERAGE_SENSORY_AXES, "sensoryOverrides");
     sensoryOverrides = {
+      malt: cleanOptionalNumber(
+        input.sensoryOverrides.malt,
+        BEVERAGE_SENSORY_CANONICAL_MIN,
+        BEVERAGE_SENSORY_CANONICAL_MAX,
+        "malt",
+      ),
+      hops: cleanOptionalNumber(
+        input.sensoryOverrides.hops,
+        BEVERAGE_SENSORY_CANONICAL_MIN,
+        BEVERAGE_SENSORY_CANONICAL_MAX,
+        "hops",
+      ),
       bitterness: cleanOptionalNumber(
         input.sensoryOverrides.bitterness,
         BEVERAGE_SENSORY_CANONICAL_MIN,

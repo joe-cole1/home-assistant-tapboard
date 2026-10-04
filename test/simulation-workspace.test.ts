@@ -112,7 +112,7 @@ void test("simulation toggles isolated data, keeps hardware in live, rotates for
   assert.notEqual(h.getCsrf(), oldCsrf);
   const status = (await (await h.request("/api/admin/simulation")).json()) as SimulationStatus;
   assert.equal(status.enabled, true);
-  assert.equal(status.sensors.length, 6);
+  assert.equal(status.sensors.length, 5);
   const simulator = await h.request("/admin/simulator");
   assert.equal(simulator.status, 200);
   assert.match(await simulator.text(), /SIMULATION/);
@@ -168,7 +168,7 @@ void test("simulation toggles isolated data, keeps hardware in live, rotates for
   const reset = await h.post("/admin/simulation/reset", { confirm: "yes" });
   assert.match(reset.headers.get("location") ?? "", /notice=/);
   const resetStatus = (await (await h.request("/api/admin/simulation")).json()) as SimulationStatus;
-  assert.equal(resetStatus.sensors.length, 6);
+  assert.equal(resetStatus.sensors.length, 5);
   assert.ok(resetStatus.sensors.every((s: { tapId: string }) => s.tapId !== sample.tapId));
   const staleSimulationCsrf = h.getCsrf();
   await h.post("/admin/simulation/disable");

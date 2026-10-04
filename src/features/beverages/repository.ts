@@ -114,6 +114,8 @@ interface CustomRecipeStepRow {
 
 interface SensoryOverridesRow {
   readonly beverage_id: string;
+  readonly malt: number | null;
+  readonly hops: number | null;
   readonly bitterness: number | null;
   readonly sweetness: number | null;
   readonly body: number | null;
@@ -255,6 +257,8 @@ function mapCustomProfile(row: CustomProfileRow): CustomBeverageProfile {
 function mapSensoryOverrides(row: SensoryOverridesRow): BeverageSensoryOverrides {
   return {
     beverageId: row.beverage_id,
+    malt: row.malt,
+    hops: row.hops,
     bitterness: row.bitterness,
     sweetness: row.sweetness,
     body: row.body,
@@ -1086,6 +1090,8 @@ export function upsertSensoryOverrides(
   const current = readSensoryOverrides(database, beverageId);
   const updated: BeverageSensoryOverrides = {
     beverageId,
+    malt: overrides.malt !== undefined ? overrides.malt : (current?.malt ?? null),
+    hops: overrides.hops !== undefined ? overrides.hops : (current?.hops ?? null),
     bitterness:
       overrides.bitterness !== undefined ? overrides.bitterness : (current?.bitterness ?? null),
     sweetness:
@@ -1107,13 +1113,17 @@ export function upsertSensoryOverrides(
         number | null,
         number | null,
         number | null,
+        number | null,
+        number | null,
         string,
       ]
     >(
       `INSERT INTO beverage_sensory_overrides
-       (beverage_id, bitterness, sweetness, body, roast, tartness, alcohol, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       (beverage_id, malt, hops, bitterness, sweetness, body, roast, tartness, alcohol, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (beverage_id) DO UPDATE SET
+         malt = excluded.malt,
+         hops = excluded.hops,
          bitterness = excluded.bitterness,
          sweetness = excluded.sweetness,
          body = excluded.body,
@@ -1124,6 +1134,8 @@ export function upsertSensoryOverrides(
     )
     .run(
       updated.beverageId,
+      updated.malt,
+      updated.hops,
       updated.bitterness,
       updated.sweetness,
       updated.body,
@@ -1142,7 +1154,7 @@ export function readSensoryOverrides(
 ): BeverageSensoryOverrides | undefined {
   const row = database
     .prepare<[string], SensoryOverridesRow>(
-      `SELECT beverage_id, bitterness, sweetness, body, roast, tartness, alcohol, updated_at
+      `SELECT beverage_id, malt, hops, bitterness, sweetness, body, roast, tartness, alcohol, updated_at
        FROM beverage_sensory_overrides
        WHERE beverage_id = ?`,
     )

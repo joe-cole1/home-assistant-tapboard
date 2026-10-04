@@ -416,3 +416,22 @@ void test("Admin mutation guard fails closed when Auth has no configured canonic
   await assertUnauthorized(response, FAILED, "unconfigured canonical origin");
   assert.deepEqual(fillService.getSettings(), before);
 });
+
+void test("sensory Admin form preserves zero and clears only submitted axes", async () => {
+  const { sensoryOverridesFromForm, safeAdminFlavorDetails } =
+    await import("../src/features/web/admin/beverage-presentation.ts");
+  assert.deepEqual(sensoryOverridesFromForm({ malt: "0", hops: "" }), { malt: 0, hops: null });
+  assert.equal(sensoryOverridesFromForm({}), undefined);
+  assert.throws(() => sensoryOverridesFromForm({ hops: "malformed" }));
+  const safe = safeAdminFlavorDetails({
+    modelVersion: "model",
+    diagnostics: Array(100).fill("bounded"),
+    scalars: { fg: { value: Number.NaN, sourcePath: "recipe.fg", secret: "PRIVATE" } },
+    axes: { malt: { value: 1, rawNotes: "PRIVATE" } },
+    secret: "PRIVATE",
+  });
+  assert.ok(safe);
+  assert.equal(safe.diagnostics.length, 30);
+  assert.equal(safe.scalars.find((row) => row.key === "fg")?.value, null);
+  assert.ok(!JSON.stringify(safe).includes("PRIVATE"));
+});

@@ -1,10 +1,10 @@
 # Tapboard v2 rebuild status
 
 - Architecture: **FROZEN**
-- Current phase: **Merged v2 baseline accepted; #65, #66–#81, #85, and follow-up #111–#114 are closed**
-- Audited main baseline: `8e57a1012a1bdb0d270386b2c1037dd5f624c461` (merged PR #127)
+- Current phase: **Merged v2 baseline accepted; current flavor-profile and Simulation history changes are uncommitted for operator review**
+- Audited merged baseline (historical): `8e57a1012a1bdb0d270386b2c1037dd5f624c461` (merged PR #127)
 - Application version: **2.0.0**, private package; no release publication implied
-- Current schema: **v22** (`system-administration-and-retention`, additive after v21 simulation)
+- Current schema: **v23** (nullable malt/hops sensory overrides; prior values preserved)
 - Baseline CI: [run 37117485783](https://github.com/joe-cole1/home-assistant-tapboard/actions/runs/37117485783) passed all three jobs: canonical checks with **930 Node tests**, **42 Chromium tests**, and disposable production-container acceptance. This is evidence for the merged baseline, not a new cleanup-branch result.
 - Transition audit: [TRANSITION-AUDIT.md](TRANSITION-AUDIT.md) records whole-tree scope, historical issue dispositions, decision issues #128–#137, and Brewfather bug #138. Literal all-v1 parity is not achieved.
 - Historical #81 validation: revision `714b4e7de466784793a69d67fa4f94762da39c6c` passed [CI 36752327948](https://github.com/joe-cole1/home-assistant-tapboard/actions/runs/36752327948): **848 Node tests**, format/lint/types/architecture/reuse/whitespace, **40 Chromium tests**, and hardened `linux/amd64` production-container acceptance. Local canonical/browser checks and an independent final review passed without waiver. PR #121 was merged on 2026-10-01 (Asia/Seoul). Its historical branch was `feat/issue-81-final-acceptance`, based on `d417dec94079831fe14d671e0d856fb0ec345caf` after merged PR #120. #80 head `abcc34b5f99541643f6b5cb61a32651e397fdbf9` separately passed [CI 36747461541](https://github.com/joe-cole1/home-assistant-tapboard/actions/runs/36747461541): 777 Node tests plus canonical checks and 40 Chromium tests. These exact-revision results remain historical.
@@ -17,7 +17,7 @@
 
 ## Built-in Simulation
 
-The operator approved the isolated saved simulation workspace before #80/#81 on 2026-09-29. See ADR-0008 and the README manual test. Current feature validation is recorded above and in the PR; historical phase results below are not claims about this change.
+The operator approved the isolated saved simulation workspace before #80/#81 on 2026-09-29. See ADR-0008 and the README manual test. The current uncommitted history-sample extension is recorded in the flavor verification section below and [its evidence report](../reports/flavor-verification.md); historical phase results are not claims about this change.
 
 ## GitHub planning
 
@@ -88,11 +88,11 @@ Disposable container verification covered the exact external `wget --spider` pro
 - Node 24 ESM runtime with native erasable TypeScript and `tsc --noEmit` checking;
 - explicit application composition, Node HTTP lifecycle, and exactly `GET /healthz` for local application/database readiness;
 - file-based Eta rendering with default escaping plus layout/partial proof templates;
-- one controlled `better-sqlite3` connection, foreign keys, transactional versioned migrations, exact canonical schema validation through version 22, and resource closure;
+- one controlled `better-sqlite3` connection, foreign keys, transactional versioned migrations, exact canonical schema validation through version 23, and resource closure;
 - shared typed errors, centralized HTTP error mapping, explicit validation, and structured redacting logging;
 - Foundation- and #67–#74-aware architecture guardrails and negative fixtures;
 - canonical external-origin/trusted-proxy/session configuration and stdin-only operator PIN/key maintenance commands;
-- security/session, Activity/deletion-audit, stable event, secret, machine-key, and bounded-outbox primitives introduced in schema version 2 and retained through current schema version 22;
+- security/session, Activity/deletion-audit, stable event, secret, machine-key, and bounded-outbox primitives introduced in schema version 2 and retained through current schema version 23;
 - #85's coherent development-only Docker image/Compose surface, loopback binding, healthcheck, named-volume persistence, and external-secret/operator workflow;
 - #68 Physical Kegs domain inventory, capacity and tare ownership, prospective append-only tare history, append-only maintenance timeline, synchronous telemetry correction hook seam, deletion impact and audit integration, and authenticated admin HTTP API;
 - #69 Custom and Brewfather-linked Beverages domain entity, custom profile/recipe tree, dynamic effective presentation resolution, 3-state presentation overrides, density resolution precedence, candidate cache, rate-limited Brewfather sync with persistent backoff, atomic unlinking, and bounded recipe snapshots;
@@ -162,7 +162,7 @@ Issue #78 is merged; its historical implementation base was `cc804476`. It owns 
 
 ## Issue #79 outbound delivery implementation
 
-Merged issue #79 introduced schema v19 and the provider-neutral outbound boundary; the current schema is v22. `src/features/outbound/` owns typed destination configuration, immutable endpoint versions, six-event subscriptions, logical secret slots, connectivity evidence, Admin destination/history behavior, and worker lifecycle. The generic outbox remains the transactional authority: leased/CAS claims provide at-least-once delivery, allow at most one unexpired claim per logical destination, and retain total-attempt evidence separately from the bounded retry cycle. Retryable failures back off from five seconds to a one-hour cap and become terminal after 24 hours of active failure or the cycle limit; permanent failures are terminal immediately. Required destinations degrade only after five minutes of continuous failure. Disable/re-enable pauses due and failure-window clocks while preserving history; Retry is terminal-only and Dismiss is final.
+Merged issue #79 introduced schema v19 and the provider-neutral outbound boundary; the current schema is v23. `src/features/outbound/` owns typed destination configuration, immutable endpoint versions, six-event subscriptions, logical secret slots, connectivity evidence, Admin destination/history behavior, and worker lifecycle. The generic outbox remains the transactional authority: leased/CAS claims provide at-least-once delivery, allow at most one unexpired claim per logical destination, and retain total-attempt evidence separately from the bounded retry cycle. Retryable failures back off from five seconds to a one-hour cap and become terminal after 24 hours of active failure or the cycle limit; permanent failures are terminal immediately. Required destinations degrade only after five minutes of continuous failure. Disable/re-enable pauses due and failure-window clocks while preserving history; Retry is terminal-only and Dismiss is final.
 
 Home Assistant uses one injected/native WebSocket per logical destination and sends `tapboard_event`, with explicit LAN HTTP allowed and no arbitrary service calls. Webhooks use the standard envelope or one bounded Discord-message format, with public-only DNS validation, mixed/unsafe-answer rejection, address pinning, no redirects, and bounded request/response/abort limits. Endpoint material is immutable-version-bound; Home Assistant tokens and webhook secret-header values are logical slots resolved at send time, so rotation/removal applies immediately to historical retries. No secret is returned by Admin or written to logs/history. Workers perform network I/O outside SQLite transactions. Current final validation is recorded at the top of this file.
 
@@ -197,3 +197,21 @@ After the normal non-destructive rebuild (`docker compose -f compose.dev.yaml up
 `npm run check` remains the Node 24 canonical gate. `npm run test:e2e` is a separate Playwright/Chromium gate so ordinary Node tests do not require a browser binary; CI installs Chromium and runs it independently. A staged-file pre-commit formatter and hook dependency remain intentionally absent.
 
 `bash scripts/check-production-container.sh` is a separate Docker/Compose gate. Its generated credentials are disposable fixtures, not external secrets; it does not touch normal data or publish an image. All final results must name the exact tested revision. Historical evidence above does not substitute for the current gate.
+
+## Current recipe-informed flavor work
+
+The current contract extends Story to eight axes with normalized valid-first source selection, explicit-null scalar overrides, factual catalog identities separated from heuristic coefficients, and coverage-gated null/zero behavior. Snapshot payload schema 2 is distinct from source record revision; the existing bounded detail loop enriches linked snapshots with current-account/current-link guards and preserves last-good state on failure. Schema 23 adds nullable malt/hops overrides on the existing 0–10 storage scale; public guidance uses 0–5. Admin source diagnostics remain private and Mystery process context requires sensory plus recipe or description disclosure.
+
+The 107-recipe offline corpus is regression evidence, not training data or tasting ground truth. Regenerate reports with `node scripts/report-flavor-corpus.ts`; the full corpus remains in offline test/report tooling. Only the approved seven minimized anonymous Simulation snapshots ship as detached sample sources. [The flavor model guide](../flavor-model.md) records formulas and limitations; [the current evidence report](../reports/flavor-verification.md) records exact commands, corpus availability and concrete unknown/zero reasons, native source hashes, review findings and the manual test.
+
+The public recipe sheet adds an optional bounded DTO `sheet` and SSR desktop columns/mobile stacking with explicit metric/US quantities, grouped ingredients, complete-only totals, recorded mash/fermentation/water, and saved recipe targets separate from batch-reported measurements. Ordinary Story HTML/JSON remains anonymous; Mystery redacts recipe and individual type/style/OG/FG/ABV/IBU/SRM independently. The PDF informs layout only; cached B064 remains target 6.3% ABV/measured OG 1.050 rather than the reference's 4.9%. The new sheet omits source IDs, authors, and raw source notes. No stored snapshot is overwritten or additional schema change introduced beyond existing schema 23/payload 2.
+
+Current local verification is for `codex/feat-flavor-profiles`, base `d3b07d7d9b668940b735239fcbb693197db96468` plus uncommitted changes: `npm run check` passed all canonical checks and 1,027/1,027 tests; the public-recipe E2E run passed 44 with one explicit isolated skip, and the separate preview run passed 2/2 with 70 fixture/theme/width combinations. Recipe E2E covers 32 width/theme/unit combinations, guest/no-JavaScript/print behavior, targets versus measurements, and Mystery. Fresh read-only review's P2 extra-normalized-metadata crash was independently reproduced and fixed through validated role enumeration with `{}`/null regression tests; no material findings remain.
+
+Native full-path `tapboard-dev rebuild` and `health` passed on schema 23, retaining `tapboard-dev-data` and PIN. All 298 runtime hashes matched with zero mismatches; aggregate `0dbd3dc941d76e45c831c61a663ce1a7cd9fbc0aa51949a32d3bbcf06aad4450`. No runtime source changed afterward. Latest normal/Simulation before/after audits exactly match: five enabled taps/two On Deck/zero pours, unchanged settings/volumes/all six sensor IDs/sources/controls, normal integration counts zero. Native guest 1280px US/light and 390px metric/dark screens were personally inspected without overflow. Exact logs, proofs, screenshots, print evidence, and prior flavor/corpus facts are in [the evidence report](../reports/flavor-verification.md).
+
+`bash scripts/check-production-container.sh` remains unavailable: exit 1, `Production container check failed: a Docker daemon is required`. The operator explicitly waived only this unavailable local check on 2026-10-04; no passing result is claimed, and GitHub CI’s production-container job must pass before merge. WSL Docker is a Desktop shim with stopped distro and missing daemon pipe/socket; no Desktop startup/configuration changes were made. The operator uses native WSLC through the full-path outside-repository launcher; Windows reboot autostart is not configured and native health does not replace the Docker/Compose gate. This verification evidence was collected before shipping; no production action was performed.
+
+### MANUAL DEV TEST — Public recipe sheet
+
+Open [Oktoberfest Story → View recipe](http://localhost:3000/taps/b012c17e-bfe9-4ce7-9222-5a8dc7dd6e50/story#story-recipes). Check actual cached values, separate targets/measurements, desktop/phone, metric/US, themes, no JavaScript, guest access, and print. Use only disposable `http://localhost:4177` fixtures with PIN `1234` for mutating Mystery reveal combinations. Also retain the report's **MANUAL DEV TEST — Flavor profiles and Simulation**. The operator reviewed the native preview and authorized shipping on 2026-10-04. Historical issue #77 six-axis acceptance and earlier validation records remain historical evidence; merge and deployment remain separate actions.

@@ -22,16 +22,25 @@ import type {
 } from "../taps/types.ts";
 import type { DetectorService } from "../telemetry/detector-service.ts";
 import { MAX_SOURCE_JSON_BYTES, projectCustomRecipe, projectSourceRecipe } from "./recipe.ts";
-import { resolveSensoryProfile } from "./profile.ts";
+import { resolveFlavorProfile, publicFlavorGuidance } from "./profile.ts";
+import {
+  readBrewingInputs,
+  normalizeCustomBrewingInputs,
+  adaptLegacyBrewingInputs,
+} from "../beverages/brewing-inputs.ts";
+import { BEVERAGE_SENSORY_AXES } from "../beverages/types.ts";
+import type { BrewingInputs } from "../beverages/brewing-types.ts";
 import type {
   PublicBeverageGuidance,
+  AdminBeverageGuidance,
+  SensoryPredictionMap,
   PublicStoryCurrentFillView,
   PublicStoryHistoryItem,
   PublicStoryPresentationView,
   PublicStoryRecipesView,
+  PublicRecipeProjection,
   PublicStoryView,
   PublicStoryVesselView,
-  SensoryProfileInput,
 } from "./types.ts";
 import { mysteryVisibilityPolicy, type MysteryVisibilityPolicy } from "./visibility.ts";
 import { resolveDisplayColor, resolveVessel } from "./vessels.ts";
@@ -182,6 +191,90 @@ function visible(
   key: keyof MysteryVisibilityPolicy["reveal"],
 ): boolean {
   return !policy.enabled || policy.reveal[key];
+}
+
+/** Recipe visibility never overrides the separate Mystery metric reveal flags. */
+function visibleRecipe(
+  recipe: PublicRecipeProjection | null,
+  policy: MysteryVisibilityPolicy,
+): PublicRecipeProjection | null {
+  if (recipe?.sheet == null || !policy.enabled) return recipe;
+  const sheet = recipe.sheet;
+  return {
+    ...recipe,
+    sheet: {
+      ...sheet,
+      summary: {
+        ...sheet.summary,
+        method: visible(policy, "beverage_type") ? sheet.summary.method : null,
+        og: visible(policy, "og") ? sheet.summary.og : null,
+        fg: visible(policy, "fg") ? sheet.summary.fg : null,
+        abv: visible(policy, "abv") ? sheet.summary.abv : null,
+        ibu: visible(policy, "ibu") ? sheet.summary.ibu : null,
+        colorSrm: visible(policy, "srm") ? sheet.summary.colorSrm : null,
+      },
+      measurements: {
+        ...sheet.measurements,
+        og: visible(policy, "og") ? sheet.measurements.og : null,
+        fg: visible(policy, "fg") ? sheet.measurements.fg : null,
+      },
+    },
+  };
+}
+
+/** Apply only explicit operator fields; density fallbacks never become flavor inputs. */
+function effectiveBrewingInputs(detail: BeverageDetailResult, recipe: unknown): BrewingInputs {
+  const presentation = detail.effectivePresentation;
+  let inputs =
+    detail.customRecipe != null
+      ? normalizeCustomBrewingInputs(detail.customRecipe, presentation)
+      : (readBrewingInputs(recipe) ?? adaptLegacyBrewingInputs(recipe, presentation));
+  const scalars = { ...inputs.scalars };
+  const overrides = detail.presentationOverrides;
+  const fields = [
+    ["og", "og", "overrideOgPresent"],
+    ["fg", "fg", "overrideFgPresent"],
+    ["abv", "abv", "overrideAbvPresent"],
+    ["ibu", "ibu", "overrideIbuPresent"],
+    ["color", "srm", "overrideSrmPresent"],
+  ] as const;
+  let gravityChanged = false;
+  for (const [key, field, presence] of fields) {
+    const explicit = overrides?.[presence] === true;
+    // A detached profile is editable while its retained source snapshot is immutable.
+    const detachedChange =
+      detail.beverage.ownershipType === "custom" &&
+      detail.customRecipe == null &&
+      presentation[field] !== scalars[key].value;
+    if (!explicit && !detachedChange) continue;
+    scalars[key] = {
+      value: presentation[field],
+      unit: scalars[key].unit,
+      sourcePath: `operator.${field}`,
+      provenance: "operator_override",
+      limitations: [],
+    };
+    gravityChanged ||= key === "og" || key === "fg";
+  }
+  if (gravityChanged) {
+    const og = scalars.og.value,
+      fg = scalars.fg.value;
+    const value = og !== null && og > 1 && fg !== null ? (100 * (og - fg)) / (og - 1) : null;
+    scalars.apparentAttenuation = {
+      value: value !== null && Number.isFinite(value) ? value : null,
+      unit: "percent",
+      sourcePath: value === null ? null : "derived.effective_og_fg",
+      provenance: value === null ? "unavailable" : "batch_calculated",
+      limitations: ["simple_apparent_attenuation", "effective_operator_gravity"],
+    };
+  }
+  inputs = {
+    ...inputs,
+    scalars,
+    beverageType: presentation.beverageType,
+    style: { ...inputs.style, name: presentation.style },
+  };
+  return inputs;
 }
 
 const DEFAULT_TAP_CARD_METRICS = Object.freeze({
@@ -371,6 +464,30 @@ export class PublicStoryService {
    * persistence IDs, fingerprints, or source JSON.
    */
   getBeverageGuidance(beverageId: string): PublicBeverageGuidance {
+    return this.#beverageGuidance(beverageId).publicGuidance;
+  }
+
+  /** Authenticated callers receive bounded input provenance and model diagnostics. */
+  getAdminBeverageGuidance(beverageId: string): AdminBeverageGuidance {
+    const { publicGuidance, calculation, manualOverrides, detail } =
+      this.#beverageGuidance(beverageId);
+    return {
+      ...publicGuidance,
+      flavorDetails: {
+        scalars: calculation.scalars ?? {},
+        coverage: calculation.coverage,
+        axes: calculation.axes,
+        diagnostics: calculation.diagnostics,
+        manualOverrides,
+        modelVersion: calculation.modelVersion,
+        catalogVersion: calculation.catalogVersion,
+      },
+      brewingEnrichmentPending:
+        detail.beverage.ownershipType === "brewfather" && detail.brewingEnrichmentPending === true,
+    };
+  }
+
+  #beverageGuidance(beverageId: string) {
     const detail = this.#dependencies.beverageService.getBeverage(beverageId);
     const snapshots = [...this.#recipeSnapshots(detail, beverageId)].sort(
       (left, right) => right.version - left.version,
@@ -391,23 +508,19 @@ export class PublicStoryService {
         : activeSnapshot === undefined
           ? null
           : parseBoundedSourceRecipe(activeSnapshot.recipeJson);
-    const sensoryInput: SensoryProfileInput = {
-      ...detail.effectivePresentation,
-      manualOverrides: detail.sensoryOverrides
-        ? {
-            bitterness: detail.sensoryOverrides.bitterness,
-            sweetness: detail.sensoryOverrides.sweetness,
-            body: detail.sensoryOverrides.body,
-            roast: detail.sensoryOverrides.roast,
-            tartness: detail.sensoryOverrides.tartness,
-            alcohol: detail.sensoryOverrides.alcohol,
-          }
-        : null,
-      recipe: predictionRecipe,
-    };
+    const manualOverrides = detail.sensoryOverrides
+      ? (Object.fromEntries(
+          BEVERAGE_SENSORY_AXES.map((axis) => [axis, detail.sensoryOverrides![axis]]),
+        ) as SensoryPredictionMap)
+      : {};
+    const calculation = resolveFlavorProfile({
+      brewingInputs: effectiveBrewingInputs(detail, predictionRecipe),
+      manualOverrides,
+    });
 
-    return {
-      sensory: resolveSensoryProfile(sensoryInput),
+    const publicGuidance: PublicBeverageGuidance = {
+      sensory: calculation.profile,
+      flavor: publicFlavorGuidance(calculation, true),
       customRecipe,
       sourceRecipes,
       activeSourceLabel:
@@ -417,6 +530,7 @@ export class PublicStoryService {
             ? null
             : sourceLabel(safeSnapshotState(activeSnapshot.state) ?? "superseded"),
     };
+    return { publicGuidance, calculation, manualOverrides, detail };
   }
 
   #recipeSnapshots(
@@ -715,7 +829,10 @@ export class PublicStoryService {
     const runtime = this.#runtimeFor(context);
     const guidance = this.getBeverageGuidance(assignment.beverageId);
     const recipes: PublicStoryRecipesView | null = visible(policy, "recipe")
-      ? { custom: guidance.customRecipe, sources: guidance.sourceRecipes }
+      ? {
+          custom: visibleRecipe(guidance.customRecipe, policy),
+          sources: guidance.sourceRecipes.map((recipe) => visibleRecipe(recipe, policy)!),
+        }
       : null;
     const history = this.#history(fill.id, visible(policy, "history"));
     const title = policy.title ?? presentation.name;
@@ -742,6 +859,16 @@ export class PublicStoryService {
       vessel,
       currentFill,
       sensory: visible(policy, "sensory") ? guidance.sensory : null,
+      flavor:
+        visible(policy, "sensory") && guidance.flavor
+          ? {
+              ...guidance.flavor,
+              processTags:
+                visible(policy, "recipe") || visible(policy, "description")
+                  ? guidance.flavor.processTags
+                  : [],
+            }
+          : null,
       recipes,
       history,
     };

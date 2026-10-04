@@ -161,7 +161,7 @@ node "$qc_fixture" pin "$qc_private" |
 exercise create
 save_tokens_and_logs fresh
 stop_gracefully fresh-stopped
-printf 'Verified source hashes, schema 22, SSR, hardening, stdin PIN, and created domain state.\n'
+printf 'Verified source hashes, schema 23, SSR, hardening, stdin PIN, and created domain state.\n'
 
 qc_phase="restart-persistence"
 compose start tapboard >"$qc_private/start.log" 2>&1

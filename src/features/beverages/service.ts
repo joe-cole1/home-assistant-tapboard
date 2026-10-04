@@ -1,7 +1,8 @@
 import { reportFailure } from "../../shared/diagnostics.ts";
 import type { Logger } from "../../shared/logging.ts";
 import { describeBrewfatherFailure } from "./brewfather/diagnostics.ts";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { readBrewingInputs } from "./brewing-inputs.ts";
 import {
   assertSynchronousCompletion,
   type DatabaseExecutor,
@@ -41,6 +42,7 @@ import {
   readSensoryOverrides,
   readSourceProfile,
   saveCustomRecipe,
+  saveRecipeSnapshot,
   touchBeverage,
   touchBeverageIfUpdatedAt,
   unlinkBeverageTransaction,
@@ -102,6 +104,8 @@ export interface BeverageDetailResult {
   readonly presentationOverrides?: BrewfatherPresentationOverrides | undefined;
   readonly recipeSnapshot?: BeverageSourceRecipeSnapshot | undefined;
   readonly sensoryOverrides?: BeverageSensoryOverrides | undefined;
+  /** Admin diagnostic only; independent of provider connection health. */
+  readonly brewingEnrichmentPending?: boolean;
 }
 
 export interface BeverageSummaryResult {
@@ -516,6 +520,8 @@ export class BeverageService {
             this.#database,
             id,
             {
+              malt: null,
+              hops: null,
               bitterness: null,
               sweetness: null,
               body: null,
@@ -586,6 +592,8 @@ export class BeverageService {
         readSensoryOverrides(this.#database, beverageId) ??
         ({
           beverageId,
+          malt: null,
+          hops: null,
           bitterness: null,
           sweetness: null,
           body: null,
@@ -1305,6 +1313,93 @@ export class BeverageService {
     });
   }
 
+  /** Internal offline-history import; detached recipe evidence remains immutable. */
+  attachOfflineRecipeSnapshot(
+    beverageId: string,
+    input: { readonly sourceKey: string; readonly recipeJson: string },
+    actorOptions: BeverageActorOptions = {},
+  ): BeverageSourceRecipeSnapshot {
+    const invalid = () =>
+      new ApplicationError({
+        category: "validation",
+        code: "beverage.invalid_offline_snapshot",
+        clientMessage: "Offline recipe snapshot is invalid.",
+      });
+    // Same source JSON cap as public recipe projection, owned here to avoid a Story dependency.
+    const MAX_SOURCE_JSON_BYTES = 256 * 1024;
+    if (
+      typeof input.sourceKey !== "string" ||
+      !input.sourceKey.trim() ||
+      Buffer.byteLength(input.sourceKey, "utf8") > 256 ||
+      typeof input.recipeJson !== "string" ||
+      Buffer.byteLength(input.recipeJson, "utf8") > MAX_SOURCE_JSON_BYTES
+    )
+      throw invalid();
+    let envelope: unknown;
+    try {
+      envelope = JSON.parse(input.recipeJson);
+    } catch {
+      throw invalid();
+    }
+    const inputs = readBrewingInputs(envelope);
+    if (
+      !envelope ||
+      typeof envelope !== "object" ||
+      Array.isArray(envelope) ||
+      (envelope as { snapshotSchemaVersion?: unknown }).snapshotSchemaVersion !== 2 ||
+      inputs === null ||
+      inputs.format === "custom" ||
+      inputs.format === "legacy"
+    )
+      throw invalid();
+    const recipeFingerprint = createHash("sha256").update(input.recipeJson).digest("hex");
+    return this.#database.withTransaction(() => {
+      const beverage = readBeverage(this.#database, beverageId);
+      if (!beverage)
+        throw new ApplicationError({
+          category: "not_found",
+          code: "beverage.not_found",
+          clientMessage: "Beverage was not found.",
+        });
+      const conflict = () =>
+        new ApplicationError({
+          category: "conflict",
+          code: "beverage.offline_snapshot_conflict",
+          clientMessage: "Offline recipe snapshot cannot be attached to this beverage.",
+        });
+      if (
+        beverage.ownershipType !== "custom" ||
+        readCustomRecipe(this.#database, beverageId) ||
+        readBeverageLink(this.#database, beverageId)
+      )
+        throw conflict();
+      const current = readCurrentRecipeSnapshot(this.#database, beverageId);
+      if (current) {
+        if (
+          current.state === "detached" &&
+          current.recipeFingerprint === recipeFingerprint &&
+          current.sourceBatchId === input.sourceKey
+        )
+          return current;
+        throw conflict();
+      }
+      return saveRecipeSnapshot(
+        this.#database,
+        {
+          beverageId,
+          accountId: "offline-history",
+          sourceBatchId: input.sourceKey,
+          sourceRecipeId: null,
+          state: "detached",
+          recipeJson: input.recipeJson,
+          recipeFingerprint,
+          createdAt: (actorOptions.now ?? this.#now)().toISOString(),
+        },
+        this.#idFactory,
+      );
+    });
+  }
+
   getBeverage(id: string): BeverageDetailResult {
     const beverage = readBeverage(this.#database, id);
     if (beverage === undefined) {
@@ -1355,6 +1450,16 @@ export class BeverageService {
     }
     const presentationOverrides = readPresentationOverrides(this.#database, id);
     const recipeSnapshot = readCurrentRecipeSnapshot(this.#database, id);
+    let brewingEnrichmentPending = true;
+    if (recipeSnapshot) {
+      try {
+        brewingEnrichmentPending =
+          (JSON.parse(recipeSnapshot.recipeJson) as { snapshotSchemaVersion?: unknown })
+            .snapshotSchemaVersion !== 2;
+      } catch {
+        /* Legacy malformed data stays pending until scheduled refresh. */
+      }
+    }
     const effectivePresentation = resolveLinkedPresentation(
       brewfatherSourceProfile,
       presentationOverrides,
@@ -1367,6 +1472,7 @@ export class BeverageService {
       density,
       ...(brewfatherLink ? { brewfatherLink } : {}),
       brewfatherSourceProfile,
+      brewingEnrichmentPending,
       ...(presentationOverrides ? { presentationOverrides } : {}),
       ...(recipeSnapshot ? { recipeSnapshot } : {}),
       ...(sensoryOverrides ? { sensoryOverrides } : {}),

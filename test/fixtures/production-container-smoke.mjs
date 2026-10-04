@@ -181,7 +181,7 @@ async function verifyPublic(origin = baseUrl) {
   const health = await request("/healthz", {}, origin);
   check(health.status === 200, "get-health-status");
   const readiness = await health.json();
-  check(readiness.status === "ok" && readiness.schemaVersion === 22, "schema-22-readiness");
+  check(readiness.status === "ok" && readiness.schemaVersion === 23, "schema-23-readiness");
   const head = await request("/healthz", { method: "HEAD" }, origin);
   check(head.status === 200 && (await head.text()) === "", "head-health");
   for (const path of ["/", "/admin/login"]) {

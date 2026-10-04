@@ -97,8 +97,8 @@ export function registerBeveragePages(dependencies: RegisterBeveragePagesDepende
         : [];
     const impact = dependencies.beverageService.getDeletionImpact(id);
     const guidance =
-      typeof dependencies.storyService?.getBeverageGuidance === "function"
-        ? dependencies.storyService.getBeverageGuidance(id)
+      typeof dependencies.storyService?.getAdminBeverageGuidance === "function"
+        ? dependencies.storyService.getAdminBeverageGuidance(id)
         : undefined;
     const availableKegs = dependencies.kegService
       .listKegs({ isActive: true })
