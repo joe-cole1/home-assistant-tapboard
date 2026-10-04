@@ -265,7 +265,7 @@ void test("v21 upgrades additively to v22 and preserves existing security, domai
     previous.close();
   }
 
-  const upgraded = openDatabase(path);
+  const upgraded = openDatabase(path, { migrations: MIGRATIONS.slice(0, 22) });
   try {
     assert.equal(upgraded.pragma<number>("user_version", { simple: true }), 22);
     assert.equal(SYSTEM_ADMINISTRATION_SCHEMA_VERSION, 22);
@@ -297,7 +297,7 @@ void test("v21 upgrades additively to v22 and preserves existing security, domai
     upgraded.close();
   }
 
-  const reopened = openDatabase(path);
+  const reopened = openDatabase(path, { migrations: MIGRATIONS.slice(0, 22) });
   try {
     assert.deepEqual(snapshotRows(reopened, ["schema_migrations", ...newTableNames]), beforeRows);
     assert.deepEqual(readLedger(reopened).slice(0, 21), beforeLedger);
@@ -320,7 +320,7 @@ void test("v21 upgrades additively to v22 and preserves existing security, domai
 });
 
 void test("v22 session settings require paired integer durations within one year and ordered limits", () => {
-  const database = openDatabase(":memory:");
+  const database = openDatabase(":memory:", { migrations: MIGRATIONS.slice(0, 22) });
   try {
     assertDefaultSettings(database);
     const update = database.prepare<[SqlValue, SqlValue]>(
@@ -375,7 +375,7 @@ void test("v22 session settings require paired integer durations within one year
 });
 
 void test("v22 outbox retention enforces integer days from 1 to 3650", () => {
-  const database = openDatabase(":memory:");
+  const database = openDatabase(":memory:", { migrations: MIGRATIONS.slice(0, 22) });
   try {
     const update = database.prepare<[SqlValue]>(
       "UPDATE outbox_retention SET retention_days = ? WHERE id = 1",
@@ -407,7 +407,7 @@ void test("v22 outbox retention enforces integer days from 1 to 3650", () => {
 });
 
 void test("v22 settings retain singleton identities, integer revisions, and required timestamps", () => {
-  const database = openDatabase(":memory:");
+  const database = openDatabase(":memory:", { migrations: MIGRATIONS.slice(0, 22) });
   try {
     for (const table of newTableNames) {
       assert.throws(
@@ -509,12 +509,15 @@ void test("v22 fails closed on altered settings DDL, missing singletons, or sche
   for (const entry of cases) {
     await context.test(entry.name, (subcontext) => {
       const path = makeDatabasePath(subcontext);
-      const database = openDatabase(path);
+      const database = openDatabase(path, { migrations: MIGRATIONS.slice(0, 22) });
       try {
         database.execute(entry.sql);
         const beforeRows = snapshotRows(database);
         const beforeSchema = readSchema(database);
-        assert.throws(() => openDatabase(path), entry.error);
+        assert.throws(
+          () => openDatabase(path, { migrations: MIGRATIONS.slice(0, 22) }),
+          entry.error,
+        );
         assert.equal(database.pragma<number>("user_version", { simple: true }), 22);
         assert.equal(readLedger(database).length, 22);
         assert.deepEqual(snapshotRows(database), beforeRows);
@@ -538,7 +541,7 @@ void test("an incompatible v21 schema fails before any v22 tables or singleton s
         const beforeRows = snapshotRows(database);
         const beforeSchema = readSchema(database);
         assert.throws(
-          () => initializeSchema(database, MIGRATIONS),
+          () => initializeSchema(database, MIGRATIONS.slice(0, 22)),
           /required simulation_settings state is missing|schema objects do not match/,
         );
         assertNoSystemMigration(database);
@@ -573,7 +576,7 @@ void test("a failed v22 migration rolls back new tables, singleton seeds, existi
     assertNoSystemMigration(database);
     assert.deepEqual(snapshotRows(database), beforeRows);
     assert.deepEqual(readSchema(database), beforeSchema);
-    initializeSchema(database, MIGRATIONS);
+    initializeSchema(database, MIGRATIONS.slice(0, 22));
     assert.equal(database.pragma<number>("user_version", { simple: true }), 22);
     assertDefaultSettings(database);
     assert.deepEqual(snapshotRows(database, newTableNames), {

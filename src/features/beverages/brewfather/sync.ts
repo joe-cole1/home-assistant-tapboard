@@ -13,6 +13,7 @@ import {
   readBeverageLink,
   readBrewfatherAccount,
   readBeverageSettings,
+  readCurrentRecipeSnapshot,
   readPresentationOverrides,
   readSourceProfile,
   saveRecipeSnapshot,
@@ -62,10 +63,16 @@ function isAuthenticationFailure(error: unknown): boolean {
 function isCurrentBeverageLink(
   database: DatabaseExecutor,
   expected: BrewfatherBeverageLink,
+  expectedAccount?: BrewfatherAccount,
 ): boolean {
   const beverage = readBeverage(database, expected.beverageId);
   const current = readBeverageLink(database, expected.beverageId);
+  const account = expectedAccount ? readBrewfatherAccount(database, expected.accountId) : undefined;
   return (
+    (!expectedAccount ||
+      (account?.enabled === true &&
+        account.userId === expectedAccount.userId &&
+        account.updatedAt === expectedAccount.updatedAt)) &&
     beverage?.ownershipType === "brewfather" &&
     current?.accountId === expected.accountId &&
     current.sourceBatchId === expected.sourceBatchId &&
@@ -256,7 +263,16 @@ export class BrewfatherSyncCoordinator {
     const adapter = this.#getOrCreateAdapter(account, apiKey, options);
     this.#retainAdapter(adapter);
     try {
-      return await this.#syncAccountWithAdapter(database, account, nowIso, options, adapter, start);
+      return await this.#syncAccountWithAdapter(
+        database,
+        account,
+        nowIso,
+        options,
+        adapter,
+        start,
+        apiKey,
+        secretsService,
+      );
     } finally {
       this.#releaseAdapter(account.id, adapter);
     }
@@ -269,6 +285,8 @@ export class BrewfatherSyncCoordinator {
     options: SyncOptions,
     adapter: BrewfatherAdapter,
     start: number,
+    apiKey: string,
+    secretsService: SecretsService,
   ): Promise<SyncResult> {
     const safeFailures: BrewfatherFailure[] = [];
     const captureFailure = (error: unknown): BrewfatherFailure => {
@@ -287,8 +305,39 @@ export class BrewfatherSyncCoordinator {
     let authenticationFailed = false;
     let connectionVerified = false;
 
+    const currentAccount = (): boolean => {
+      const current = readBrewfatherAccount(database, account.id);
+      if (
+        !current?.enabled ||
+        current.userId !== account.userId ||
+        current.updatedAt !== account.updatedAt
+      )
+        return false;
+      try {
+        return secretsService.revealPrivileged("brewfather", account.id, "api_key") === apiKey;
+      } catch {
+        return false;
+      }
+    };
+    const currentLink = (link: BrewfatherBeverageLink): boolean =>
+      isCurrentBeverageLink(database, link, account) && currentAccount();
+
     // 2. LINKED BATCHES PRIORITY: Synchronize all active linked beverages
-    const allLinks = listBeverageLinks(database).filter((l) => l.accountId === account.id);
+    const needsEnrichment = (link: BrewfatherBeverageLink): boolean => {
+      const snapshot = readCurrentRecipeSnapshot(database, link.beverageId);
+      if (!snapshot) return true;
+      try {
+        return (
+          (JSON.parse(snapshot.recipeJson) as { snapshotSchemaVersion?: unknown })
+            .snapshotSchemaVersion !== 2
+        );
+      } catch {
+        return true;
+      }
+    };
+    const allLinks = listBeverageLinks(database)
+      .filter((l) => l.accountId === account.id)
+      .sort((a, b) => Number(needsEnrichment(b)) - Number(needsEnrichment(a)));
 
     for (const link of allLinks) {
       this.#assertActive();
@@ -298,7 +347,7 @@ export class BrewfatherSyncCoordinator {
         if (batchData === null) {
           // Source batch not found / 404
           const applied = database.withTransaction(() => {
-            if (!isCurrentBeverageLink(database, link)) return false;
+            if (!currentLink(link)) return false;
             updateBeverageLinkState(
               database,
               link.beverageId,
@@ -318,11 +367,19 @@ export class BrewfatherSyncCoordinator {
 
         // Sanitize recipe snapshot outside transaction
         const recipeData = (batchData.recipe as Record<string, unknown> | undefined) ?? null;
-        const sanitizedRecipe = recipeData !== null ? sanitizeRecipeSnapshot(recipeData) : null;
+        const sanitizedRecipe =
+          recipeData !== null ? sanitizeRecipeSnapshot(recipeData, batchData) : null;
+
+        if (recipeData !== null && sanitizedRecipe === null) {
+          throw new BrewfatherError(
+            "invalid_response",
+            "Brewfather recipe snapshot could not be safely normalized within its size limit.",
+          );
+        }
 
         // Synchronously persist coherent local state for this ONE linked beverage in a transaction
         const applied = database.withTransaction(() => {
-          if (!isCurrentBeverageLink(database, link)) return false;
+          if (!currentLink(link)) return false;
           const settings = readBeverageSettings(database);
           const previousSourceProfile = readSourceProfile(database, link.beverageId);
           const previousDensity = previousSourceProfile
@@ -396,7 +453,7 @@ export class BrewfatherSyncCoordinator {
         authenticationFailed ||= isAuthenticationFailure(error);
         const errorMessage = captureFailure(error).message;
         const applied = database.withTransaction(() => {
-          if (!isCurrentBeverageLink(database, link)) return false;
+          if (!currentLink(link)) return false;
           updateBeverageLinkState(database, link.beverageId, "error", errorMessage, nowIso);
           return true;
         });
@@ -412,6 +469,15 @@ export class BrewfatherSyncCoordinator {
         account.discoveryStatuses,
       );
       this.#assertActive();
+      if (!currentAccount())
+        return {
+          accountId: account.id,
+          linkedSynced,
+          linkedErrors,
+          candidatesFound: 0,
+          durationMs: Date.now() - start,
+          connectionVerified,
+        };
       connectionVerified ||= account.discoveryStatuses.length > 0 && failures.length === 0;
       if (failures.length > 0) {
         authenticationFailed ||= failures.some((failure) => isAuthenticationFailure(failure.error));

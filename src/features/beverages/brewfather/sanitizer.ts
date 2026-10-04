@@ -1,3 +1,5 @@
+import { normalizeBrewfatherBrewingInputs } from "./brewing.ts";
+import type { BrewingInputFormat } from "../brewing-types.ts";
 import { createHash } from "node:crypto";
 import { BEVERAGE_TYPES, type BeverageType } from "../types.ts";
 
@@ -80,11 +82,11 @@ function cleanText(value: unknown, maxBytes: number, allowNumber: boolean = fals
     .join("")
     .trim();
   if (!normalized) return null;
-  let truncated = normalized;
-  while (Buffer.byteLength(truncated, "utf8") > maxBytes) {
-    truncated = truncated.slice(0, -1);
-  }
-  return truncated.trim() || null;
+  // Bound once in bytes, then remove a partial trailing UTF-8 code point.
+  const bytes = Buffer.from(normalized, "utf8");
+  let end = Math.min(bytes.length, maxBytes);
+  if (end < bytes.length) while (end > 0 && (bytes[end]! & 0xc0) === 0x80) end--;
+  return bytes.subarray(0, end).toString("utf8").trim() || null;
 }
 
 function finiteNumber(
@@ -92,7 +94,15 @@ function finiteNumber(
   min: number = -1_000_000,
   max: number = 1_000_000,
 ): number | null {
-  if (value === null || value === undefined || value === "") return null;
+  if (
+    value === null ||
+    value === undefined ||
+    value === "" ||
+    typeof value === "boolean" ||
+    (typeof value !== "number" && typeof value !== "string") ||
+    (typeof value === "string" && !/^[-+]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(value.trim()))
+  )
+    return null;
   const parsed = typeof value === "number" ? value : Number(value);
   return Number.isFinite(parsed) && parsed >= min && parsed <= max ? parsed : null;
 }
@@ -152,8 +162,11 @@ export function sanitizeBatchSummary(
   const measuredFg = finiteNumber(s.measuredFg, 0.5, 2.0);
   const estimatedAbv = finiteNumber(s.estimatedAbv, 0, 100);
   const measuredAbv = finiteNumber(s.measuredAbv, 0, 100);
-  const estimatedIbu = finiteNumber(s.estimatedIbu ?? recipe.ibu, 0, 2000);
-  const estimatedSrm = finiteNumber(s.estimatedColor ?? recipe.color ?? recipe.srm, 0, 100);
+  const estimatedIbu = finiteNumber(s.estimatedIbu, 0, 2000) ?? finiteNumber(recipe.ibu, 0, 2000);
+  const estimatedSrm =
+    finiteNumber(s.estimatedColor, 0, 100) ??
+    finiteNumber(recipe.color, 0, 100) ??
+    finiteNumber(recipe.srm, 0, 100);
 
   const beverageType = inferBeverageType(cleanText(recipe.type ?? s.type, 32));
 
@@ -201,11 +214,23 @@ export function sanitizeBatchToSourceProfile(batchData: unknown): SanitizedSourc
   const description = cleanText(recipe.description ?? style.description, 4000);
 
   // Preference for measured values over estimated values for actual presentation
-  const abv = finiteNumber(s.measuredAbv ?? s.estimatedAbv ?? recipe.abv, 0, 100);
-  const ibu = finiteNumber(s.estimatedIbu ?? recipe.ibu, 0, 2000);
-  const og = finiteNumber(s.measuredOg ?? s.estimatedOg ?? recipe.og, 0.5, 2.0);
-  const fg = finiteNumber(s.measuredFg ?? s.estimatedFg ?? recipe.fg, 0.5, 2.0);
-  const srm = finiteNumber(s.estimatedColor ?? recipe.color ?? recipe.srm, 0, 100);
+  const abv =
+    finiteNumber(s.measuredAbv, 0, 100) ??
+    finiteNumber(s.estimatedAbv, 0, 100) ??
+    finiteNumber(recipe.abv, 0, 100);
+  const ibu = finiteNumber(s.estimatedIbu, 0, 2000) ?? finiteNumber(recipe.ibu, 0, 2000);
+  const og =
+    finiteNumber(s.measuredOg, 0.5, 2.0) ??
+    finiteNumber(s.estimatedOg, 0.5, 2.0) ??
+    finiteNumber(recipe.og, 0.5, 2.0);
+  const fg =
+    finiteNumber(s.measuredFg, 0.5, 2.0) ??
+    finiteNumber(s.estimatedFg, 0.5, 2.0) ??
+    finiteNumber(recipe.fg, 0.5, 2.0);
+  const srm =
+    finiteNumber(s.estimatedColor, 0, 100) ??
+    finiteNumber(recipe.color, 0, 100) ??
+    finiteNumber(recipe.srm, 0, 100);
 
   const beverageType = inferBeverageType(cleanText(recipe.type ?? s.type, 32));
 
@@ -290,7 +315,11 @@ function sanitizeRecipeSteps(recipe: Record<string, unknown>) {
     .filter(Boolean);
 }
 
-export function sanitizeRecipeSnapshot(recipeData: unknown): SanitizedRecipeSnapshot | null {
+export function sanitizeRecipeSnapshot(
+  recipeData: unknown,
+  batchData?: unknown,
+  options: { readonly format?: BrewingInputFormat } = {},
+): SanitizedRecipeSnapshot | null {
   if (typeof recipeData !== "object" || recipeData === null || Array.isArray(recipeData))
     return null;
   const r = recipeData as Record<string, unknown>;
@@ -301,6 +330,8 @@ export function sanitizeRecipeSnapshot(recipeData: unknown): SanitizedRecipeSnap
   const styleName = cleanText(style.name ?? r.style, 120);
 
   const sanitized = {
+    snapshotSchemaVersion: 2,
+    brewingInputs: normalizeBrewfatherBrewingInputs(r, batchData, options),
     name,
     style: styleName,
     type: cleanText(r.type, 64),
@@ -318,6 +349,7 @@ export function sanitizeRecipeSnapshot(recipeData: unknown): SanitizedRecipeSnap
   };
 
   const recipeJson = JSON.stringify(sanitized);
+  if (Buffer.byteLength(recipeJson, "utf8") > 262144) return null;
   const recipeFingerprint = sha256Hex(recipeJson);
 
   return {

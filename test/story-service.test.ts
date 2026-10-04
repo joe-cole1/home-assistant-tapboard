@@ -6,6 +6,13 @@ import { PublicStoryService } from "../src/features/story/service.ts";
 import type { PublicStoryServiceDependencies } from "../src/features/story/service.ts";
 import type { AdminTapView, TapAssignmentMysteryConfig } from "../src/features/taps/types.ts";
 
+import { sanitizeRecipeSnapshot } from "../src/features/beverages/brewfather/sanitizer.ts";
+import type {
+  BrewfatherPresentationOverrides,
+  EffectiveBeveragePresentation,
+} from "../src/features/beverages/types.ts";
+import { batchFixture } from "./fixtures/flavor/corpus.ts";
+
 const TAP_ID = "00000000-0000-4000-8000-000000000077";
 const BEVERAGE_ID = "00000000-0000-4000-8000-000000000078";
 const FILL_ID = "00000000-0000-4000-8000-000000000079";
@@ -48,6 +55,9 @@ function fixture(
     readonly tapCardMetricSettings?: TapCardMetricSettings;
     readonly displaySettingsFailure?: boolean;
     readonly now?: Date;
+    readonly flavorBatch?: Record<string, unknown>;
+    readonly presentationPatch?: Partial<EffectiveBeveragePresentation>;
+    readonly overrideFlags?: Partial<BrewfatherPresentationOverrides>;
   } = {},
 ) {
   let tap: AdminTapView = {
@@ -134,10 +144,17 @@ function fixture(
     recipeFingerprint: FINGERPRINT,
     createdAt: `2026-08-0${index + 1}T00:00:00.000Z`,
   }));
+  if (options.flavorBatch) {
+    const snapshot = sanitizeRecipeSnapshot(options.flavorBatch.recipe, options.flavorBatch, {
+      format: "brewfather-export-v3",
+    });
+    assert.ok(snapshot);
+    sourceSnapshots[0]!.recipeJson = snapshot.recipeJson;
+  }
   const beverageDetail = {
     beverage: {
       id: BEVERAGE_ID,
-      ownershipType: "custom",
+      ownershipType: options.flavorBatch ? "brewfather" : "custom",
       createdAt: "2026-08-01",
       updatedAt: "2026-08-02",
     },
@@ -154,9 +171,11 @@ function fixture(
       description: "Secret Description",
       fillGlass: null,
       manualDensityOverride: null,
+      ...options.presentationPatch,
     },
     density: { source: "fg_derived", value: 1.01 },
-    customRecipe,
+    customRecipe: options.flavorBatch ? undefined : customRecipe,
+    presentationOverrides: options.overrideFlags,
     sensoryOverrides: {
       beverageId: BEVERAGE_ID,
       bitterness: 1.25,
@@ -484,6 +503,7 @@ void test("Mystery defaults are safe across card, legacy, Story, and accessibili
   assert.equal(story.presentation.style, null);
   assert.equal(story.presentation.description, null);
   assert.equal(story.sensory, null);
+  assert.equal(story.flavor, null);
   assert.equal(story.recipes, null);
   assert.equal(story.history, null);
   assert.equal(story.currentFill.fillDate, null);
@@ -601,6 +621,81 @@ void test("each Mystery reveal controls only its allowlisted surface", () => {
   }
 });
 
+void test("public recipe sheets redact Mystery metrics before serialization without changing saved guidance", () => {
+  const { service, setMystery } = fixture({ flavorBatch: batchFixture("B064") });
+  const guidance = service.getBeverageGuidance(BEVERAGE_ID);
+  const source = guidance.sourceRecipes[0]!.sheet!;
+  assert.equal(source.summary.abv, 6.3);
+  assert.equal(source.measurements.og, 1.05);
+  const original = JSON.stringify(guidance.sourceRecipes);
+  setMystery(mystery({ enabled: true, revealRecipe: true }));
+  const story = service.getStory(TAP_ID)!;
+  assert.equal(story.title, "Mystery Tap");
+  assert.equal(story.presentation.style, null);
+  assert.equal(story.presentation.beverageType, null);
+  assert.ok(story.recipes);
+  for (const recipe of [story.recipes.custom, ...story.recipes.sources]) {
+    if (!recipe?.sheet) continue;
+    for (const key of ["og", "fg", "abv", "ibu", "colorSrm", "method"] as const)
+      assert.equal(recipe.sheet.summary[key], null, key);
+    assert.equal(recipe.sheet.measurements.og, null);
+    assert.equal(recipe.sheet.measurements.fg, null);
+  }
+  assert.equal(story.recipes.sources[0]!.sheet!.ingredients.fermentables.length, 4);
+  const serialized = JSON.stringify(story);
+  for (const forbidden of [
+    SOURCE_ID,
+    FINGERPRINT,
+    "Source recipe 0",
+    "Secret Beverage Name",
+    "Secret Style",
+  ])
+    assert.equal(serialized.includes(forbidden), false, forbidden);
+  assert.equal(JSON.stringify(service.getBeverageGuidance(BEVERAGE_ID).sourceRecipes), original);
+});
+
+void test("each Mystery metric reveal applies independently to recipe targets and measured values", () => {
+  const { service, setMystery } = fixture({ flavorBatch: batchFixture("B064") });
+  const original = service.getBeverageGuidance(BEVERAGE_ID).sourceRecipes[0]!.sheet!;
+  const cases = [
+    ["revealOg", "og"],
+    ["revealFg", "fg"],
+    ["revealAbv", "abv"],
+    ["revealIbu", "ibu"],
+    ["revealSrm", "colorSrm"],
+    ["revealBeverageType", "method"],
+  ] as const;
+  for (const [flag, field] of cases) {
+    setMystery(mystery({ enabled: true, revealRecipe: true, [flag]: true }));
+    const story = service.getStory(TAP_ID)!;
+    const sheet = story.recipes!.sources[0]!.sheet!;
+    assert.equal(sheet.summary[field], original.summary[field], flag);
+    assert.notEqual(sheet.summary[field], null, flag);
+    for (const [otherFlag, otherField] of cases)
+      if (otherFlag !== flag)
+        assert.equal(sheet.summary[otherField], null, `${flag} leaked ${otherField}`);
+    for (const measured of ["og", "fg"] as const)
+      assert.equal(
+        sheet.measurements[measured],
+        field === measured ? original.measurements[measured] : null,
+      );
+    assert.equal(story.title, "Mystery Tap");
+    assert.equal(story.presentation.style, null);
+  }
+  setMystery(
+    mystery({
+      enabled: true,
+      revealOg: true,
+      revealFg: true,
+      revealAbv: true,
+      revealIbu: true,
+      revealSrm: true,
+      revealBeverageType: true,
+    }),
+  );
+  assert.equal(service.getStory(TAP_ID)!.recipes, null);
+});
+
 void test("invalid, disabled, retired, and unassigned taps are safe", () => {
   const { service, setMystery, setTap } = fixture();
   assert.equal(service.getCard("not-a-uuid"), undefined);
@@ -622,4 +717,73 @@ void test("invalid, disabled, retired, and unassigned taps are safe", () => {
   setTap({ enabled: true, isRetired: true });
   assert.equal(service.getCard(TAP_ID), undefined);
   assert.equal(service.getTitleForAssignment(TAP_ID, ASSIGNMENT_ID), undefined);
+});
+
+void test("normalized batch guidance preserves selected source and excludes density fallback", () => {
+  const { service } = fixture({ flavorBatch: batchFixture("B058") });
+  const admin = service.getAdminBeverageGuidance(BEVERAGE_ID);
+  assert.equal(admin.flavorDetails?.scalars.fg?.value, 0.995);
+  assert.equal(admin.flavorDetails?.scalars.fg?.sourcePath, "batch.measuredFg");
+  assert.equal(admin.sensory.sweetness.value, 0);
+  assert.ok((admin.sensory.body.value ?? 0) > 0);
+  const publicJson = JSON.stringify(service.getStory(TAP_ID));
+  assert.ok(!publicJson.includes("simple_apparent_attenuation"));
+  assert.ok(!publicJson.includes("batch.measuredFg"));
+  assert.ok(!publicJson.includes("evidenceReferences"));
+});
+
+void test("explicit scalar overrides including null replace source inputs independently", () => {
+  const raw = batchFixture("B058");
+  const changed = fixture({
+    flavorBatch: raw,
+    presentationPatch: { fg: 1.02 },
+    overrideFlags: { overrideFgPresent: true },
+  }).service.getAdminBeverageGuidance(BEVERAGE_ID);
+  assert.equal(changed.flavorDetails?.scalars.fg?.value, 1.02);
+  assert.equal(changed.flavorDetails?.scalars.fg?.provenance, "operator_override");
+  assert.ok((changed.sensory.sweetness.value ?? 0) > 0);
+  const cleared = fixture({
+    flavorBatch: raw,
+    presentationPatch: { fg: null },
+    overrideFlags: { overrideFgPresent: true },
+  }).service.getAdminBeverageGuidance(BEVERAGE_ID);
+  assert.equal(cleared.flavorDetails?.scalars.fg?.value, null);
+  assert.equal(cleared.flavorDetails?.scalars.fg?.provenance, "operator_override");
+  assert.equal(cleared.flavorDetails?.scalars.apparentAttenuation?.value, null);
+  assert.equal(cleared.flavorDetails?.axes.sweetness.support, "limited");
+  assert.equal(
+    cleared.flavorDetails?.scalars.abv?.value,
+    changed.flavorDetails?.scalars.abv?.value,
+  );
+});
+
+void test("Mystery flavor redaction gates process history separately from abstract sensory output", () => {
+  const { service, setMystery } = fixture({ flavorBatch: batchFixture("B026") });
+  assert.ok(service.getStory(TAP_ID)?.flavor?.processTags.includes("Bourbon barrel-aged"));
+  setMystery(mystery({ enabled: true }));
+  assert.equal(service.getStory(TAP_ID)?.flavor, null);
+  setMystery(mystery({ enabled: true, revealSensory: true }));
+  const abstract = service.getStory(TAP_ID)!;
+  assert.ok(abstract.sensory);
+  assert.ok(abstract.flavor);
+  assert.deepEqual(abstract.flavor.processTags, []);
+  for (const forbidden of [
+    "Bourbon barrel",
+    "OYL-",
+    "batch.",
+    "sourcePath",
+    "evidenceReferences",
+    "http",
+    "Secret Beverage Name",
+    "Secret recipe",
+    SOURCE_ID,
+    FINGERPRINT,
+  ])
+    assert.equal(JSON.stringify(abstract).includes(forbidden), false, forbidden);
+  for (const extra of ["revealRecipe", "revealDescription"] as const) {
+    setMystery(mystery({ enabled: true, revealSensory: true, [extra]: true }));
+    assert.ok(service.getStory(TAP_ID)?.flavor?.processTags.includes("Bourbon barrel-aged"));
+    setMystery(mystery({ enabled: true, [extra]: true }));
+    assert.equal(service.getStory(TAP_ID)?.flavor, null);
+  }
 });

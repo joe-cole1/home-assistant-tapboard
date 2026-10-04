@@ -21,6 +21,8 @@ export const BEVERAGE_TYPES = [
 export type BeverageType = (typeof BEVERAGE_TYPES)[number];
 
 export const BEVERAGE_SENSORY_AXES = [
+  "malt",
+  "hops",
   "bitterness",
   "sweetness",
   "body",
@@ -102,6 +104,8 @@ export interface CustomRecipe {
 
 export interface BeverageSensoryOverrides {
   readonly beverageId: string;
+  readonly malt: number | null;
+  readonly hops: number | null;
   readonly bitterness: number | null;
   readonly sweetness: number | null;
   readonly body: number | null;
@@ -112,6 +116,8 @@ export interface BeverageSensoryOverrides {
 }
 
 export interface UpdateBeverageSensoryOverridesInput {
+  readonly malt?: number | null;
+  readonly hops?: number | null;
   readonly bitterness?: number | null;
   readonly sweetness?: number | null;
   readonly body?: number | null;
@@ -354,6 +360,8 @@ export interface CreateCustomBeverageInput {
     }[];
   } | null;
   readonly sensoryOverrides?: {
+    readonly malt?: number | null;
+    readonly hops?: number | null;
     readonly bitterness?: number | null;
     readonly sweetness?: number | null;
     readonly body?: number | null;
@@ -392,6 +400,8 @@ export interface UpdateCustomBeverageInput {
     }[];
   } | null;
   readonly sensoryOverrides?: {
+    readonly malt?: number | null;
+    readonly hops?: number | null;
     readonly bitterness?: number | null;
     readonly sweetness?: number | null;
     readonly body?: number | null;
@@ -407,6 +417,8 @@ export interface LinkBrewfatherCandidateInput {
   readonly sourceBatchId: string;
   readonly overrides?: UpdatePresentationOverridesInput;
   readonly sensoryOverrides?: {
+    readonly malt?: number | null;
+    readonly hops?: number | null;
     readonly bitterness?: number | null;
     readonly sweetness?: number | null;
     readonly body?: number | null;

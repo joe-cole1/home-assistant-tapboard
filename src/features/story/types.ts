@@ -1,4 +1,10 @@
 import { BEVERAGE_SENSORY_AXES } from "../beverages/types.ts";
+import type {
+  BrewingInputs,
+  BrewingScalarKey,
+  BrewingScalar,
+  BrewingIngredientRole,
+} from "../beverages/brewing-types.ts";
 
 /**
  * Public, deterministic types shared by Brew Story's pure helpers.
@@ -20,6 +26,8 @@ export interface SensoryAxisResult {
   readonly value: number | null;
   readonly source: SensorySource;
   readonly confidence: SensoryConfidence;
+  readonly band?: string;
+  readonly support?: FlavorSupport;
   /** Short, non-secret explanation suitable for a public projection. */
   readonly evidence: string;
 }
@@ -36,6 +44,7 @@ export type SensoryPredictionMap = Partial<Record<SensoryAxis, number | null>>;
  * defensive about every value it consumes.
  */
 export interface SensoryProfileInput {
+  readonly brewingInputs?: BrewingInputs | null;
   /** Canonical persisted/manual overrides use 0..10; resolver maps them to public 0..5. */
   readonly manual?: SensoryPredictionMap | null;
   /** Canonical persisted/manual overrides use 0..10; resolver maps them to public 0..5. */
@@ -103,7 +112,68 @@ export interface SafeRecipeProvenance {
   readonly capturedAt: string | null;
 }
 
+/** Additive public-only recipe sheet DTO. No recipe title/author/style/source IDs or raw metadata. */
+export interface PublicRecipeSheetIngredient {
+  readonly name: string;
+  readonly supplier: string | null;
+  readonly amount: number | null;
+  readonly unit: string | null;
+  readonly grams: number | null;
+  readonly percent: number | null;
+  readonly colorLovibond: number | null;
+  readonly alphaPercent: number | null;
+  readonly stage: string | null;
+  readonly time: number | null;
+  readonly timeUnit: "min" | "day" | null;
+  readonly temperatureC: number | null;
+  readonly note: string | null;
+}
+export interface PublicRecipeSheetStep {
+  readonly name: string;
+  readonly temperatureC: number | null;
+  readonly time: number | null;
+  readonly timeUnit: "min" | "day" | null;
+  readonly note: string | null;
+}
+export interface PublicRecipeSheet {
+  readonly summary: {
+    readonly method: string | null;
+    readonly batchSizeL: number | null;
+    readonly boilTimeMinutes: number | null;
+    readonly og: number | null;
+    readonly fg: number | null;
+    readonly abv: number | null;
+    readonly ibu: number | null;
+    readonly colorSrm: number | null;
+    readonly carbonationVolumes: number | null;
+  };
+  readonly ingredients: Readonly<
+    Record<
+      "fermentables" | "hops" | "miscs" | "yeasts" | "other",
+      readonly PublicRecipeSheetIngredient[]
+    >
+  >;
+  readonly totals: { readonly fermentablesGrams: number | null; readonly hopsGrams: number | null };
+  readonly mash: readonly PublicRecipeSheetStep[];
+  readonly fermentation: readonly PublicRecipeSheetStep[];
+  readonly otherSteps: readonly PublicRecipeSheetStep[];
+  readonly water: {
+    readonly mashPh: number | null;
+    readonly ions: readonly {
+      readonly label: "Ca" | "Mg" | "Na" | "Cl" | "SO4" | "HCO3";
+      readonly mgPerL: number;
+    }[];
+    readonly sulfateChlorideRatio: number | null;
+  };
+  readonly measurements: {
+    readonly og: number | null;
+    readonly fg: number | null;
+    readonly fermenterVolumeL: number | null;
+  };
+}
+
 export interface PublicRecipeProjection {
+  readonly sheet?: PublicRecipeSheet | null;
   readonly kind: RecipeProjectionKind;
   readonly status: RecipeProjectionStatus;
   readonly ingredients: readonly PublicRecipeIngredient[];
@@ -297,6 +367,7 @@ export interface PublicStoryView {
   readonly vessel: PublicStoryVesselView;
   readonly currentFill: PublicStoryCurrentFillView;
   readonly sensory: SensoryProfile | null;
+  readonly flavor?: PublicFlavorGuidance | null;
   readonly recipes: PublicStoryRecipesView | null;
   readonly history: readonly PublicStoryHistoryItem[] | null;
 }
@@ -307,8 +378,69 @@ export interface PublicStoryView {
  * source JSON.
  */
 export interface PublicBeverageGuidance {
+  readonly flavor?: PublicFlavorGuidance;
   readonly sensory: SensoryProfile;
   readonly customRecipe: PublicRecipeProjection | null;
   readonly sourceRecipes: readonly PublicRecipeProjection[];
   readonly activeSourceLabel: string | null;
+}
+
+export type FlavorSupport = "supported" | "limited" | "unavailable";
+export interface FlavorAxisResult {
+  readonly value: number | null;
+  readonly source: SensorySource;
+  readonly support: FlavorSupport;
+  readonly reasons: readonly string[];
+  readonly evidenceReferences: readonly string[];
+  readonly limitations: readonly string[];
+  readonly modelVersion: string;
+}
+export interface FlavorDescriptor {
+  readonly label: string;
+  readonly role: BrewingIngredientRole;
+  readonly evidenceReferences: readonly string[];
+}
+export interface FlavorCoverage {
+  readonly present: boolean;
+  readonly complete: boolean;
+  readonly acceptedCount: number;
+  readonly resolvedCount: number;
+  readonly eligibleMassG: number;
+  readonly resolvedMassG: number;
+  readonly classifiedFraction: number | null;
+}
+export interface FlavorCalculation {
+  readonly profile: SensoryProfile;
+  readonly processFacts: BrewingInputs["processFacts"];
+  readonly axes: Readonly<Record<SensoryAxis, FlavorAxisResult>>;
+  readonly descriptors: readonly FlavorDescriptor[];
+  readonly processTags: readonly string[];
+  readonly coverage: Readonly<Record<BrewingIngredientRole, FlavorCoverage>>;
+  readonly scalars: BrewingInputs["scalars"] | null;
+  readonly diagnostics: readonly string[];
+  readonly modelVersion: string;
+  readonly catalogVersion: string;
+  readonly fingerprint: string;
+}
+export interface PublicFlavorGuidance {
+  readonly descriptors: readonly { readonly label: string; readonly role: BrewingIngredientRole }[];
+  readonly processTags: readonly string[];
+  readonly summary: string | null;
+  readonly modelVersion: string;
+  readonly catalogVersion: string;
+  readonly incomplete: boolean;
+}
+export interface AdminFlavorGuidance {
+  readonly scalars: Partial<Readonly<Record<BrewingScalarKey, BrewingScalar>>>;
+  readonly coverage: FlavorCalculation["coverage"];
+  readonly axes: FlavorCalculation["axes"];
+  readonly diagnostics: readonly string[];
+  readonly manualOverrides: SensoryPredictionMap;
+  readonly modelVersion: string;
+  readonly catalogVersion: string;
+}
+
+export interface AdminBeverageGuidance extends PublicBeverageGuidance {
+  readonly flavorDetails?: AdminFlavorGuidance;
+  readonly brewingEnrichmentPending?: boolean;
 }

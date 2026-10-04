@@ -1,6 +1,7 @@
 import { VESSEL_IDS } from "../../story/index.ts";
 import { getVesselDescriptor } from "../../story/vessels.ts";
 import {
+  BEVERAGE_SENSORY_AXES,
   BEVERAGE_SENSORY_CANONICAL_MAX,
   BEVERAGE_SENSORY_CANONICAL_MIN,
   type BeverageListRecord,
@@ -45,20 +46,20 @@ export function sensoryOverridesFromForm(
   form: Readonly<Record<string, string>>,
 ): UpdateCustomBeverageInput["sensoryOverrides"] | undefined {
   if (!ADMIN_BEVERAGE_SENSORY_AXES.some((axis) => form[axis] !== undefined)) return undefined;
-  const bitterness = nullableNumber(form.bitterness);
-  const sweetness = nullableNumber(form.sweetness);
-  const body = nullableNumber(form.body);
-  const roast = nullableNumber(form.roast);
-  const tartness = nullableNumber(form.tartness);
-  const alcohol = nullableNumber(form.alcohol);
-  return {
-    ...(bitterness === undefined ? {} : { bitterness }),
-    ...(sweetness === undefined ? {} : { sweetness }),
-    ...(body === undefined ? {} : { body }),
-    ...(roast === undefined ? {} : { roast }),
-    ...(tartness === undefined ? {} : { tartness }),
-    ...(alcohol === undefined ? {} : { alcohol }),
-  };
+  return Object.fromEntries(
+    ADMIN_BEVERAGE_SENSORY_AXES.flatMap((axis) => {
+      const value = nullableNumber(form[axis]);
+      if (
+        value !== undefined &&
+        value !== null &&
+        (!Number.isFinite(value) ||
+          value < BEVERAGE_SENSORY_CANONICAL_MIN ||
+          value > BEVERAGE_SENSORY_CANONICAL_MAX)
+      )
+        invalidForm("Sensory overrides must be numbers from 0 to 10.", axis);
+      return value === undefined ? [] : [[axis, value]];
+    }),
+  );
 }
 
 export function vesselFromForm(
@@ -115,14 +116,7 @@ export function fillGlassOptions() {
   }));
 }
 
-export const ADMIN_BEVERAGE_SENSORY_AXES = [
-  "bitterness",
-  "sweetness",
-  "body",
-  "roast",
-  "tartness",
-  "alcohol",
-] as const;
+export const ADMIN_BEVERAGE_SENSORY_AXES = BEVERAGE_SENSORY_AXES;
 
 export function boundedAdminString(value: unknown, maxBytes: number): string | null {
   if (typeof value !== "string" || value.length === 0) return null;
@@ -187,6 +181,76 @@ export function safeAdminRecipe(value: unknown): {
   };
 }
 
+function object(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+function boundedStrings(value: unknown, limit = 20): string[] {
+  return Array.isArray(value)
+    ? value.slice(0, limit).flatMap((item) => {
+        const text = boundedAdminString(item, 240);
+        return text === null ? [] : [text];
+      })
+    : [];
+}
+export function safeAdminFlavorDetails(value: unknown) {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  const raw = object(value);
+  const scalars = object(raw.scalars);
+  const coverage = object(raw.coverage);
+  const axes = object(raw.axes);
+  return {
+    modelVersion: boundedAdminString(raw.modelVersion, 80),
+    catalogVersion: boundedAdminString(raw.catalogVersion, 80),
+    scalars: [
+      "og",
+      "fg",
+      "abv",
+      "ibu",
+      "color",
+      "volume",
+      "carbonation",
+      "reportedAttenuation",
+      "recipeAttenuation",
+      "apparentAttenuation",
+    ].map((key) => {
+      const item = object(scalars[key]);
+      return {
+        key,
+        value: boundedAdminNumber(item.value),
+        unit: boundedAdminString(item.unit, 24),
+        provenance: boundedAdminString(item.provenance, 40),
+        sourcePath: boundedAdminString(item.sourcePath, 160),
+        limitations: boundedStrings(item.limitations, 5),
+      };
+    }),
+    coverage: ["fermentables", "hops", "yeasts", "miscs"].map((key) => {
+      const item = object(coverage[key]);
+      return {
+        key,
+        present: item.present === true,
+        complete: item.complete === true,
+        acceptedCount: boundedAdminNumber(item.acceptedCount),
+        resolvedCount: boundedAdminNumber(item.resolvedCount),
+        classifiedFraction: boundedAdminNumber(item.classifiedFraction),
+      };
+    }),
+    axes: ADMIN_BEVERAGE_SENSORY_AXES.map((key) => {
+      const item = object(axes[key]);
+      return {
+        key,
+        value: boundedAdminNumber(item.value),
+        source: boundedAdminString(item.source, 40),
+        support: boundedAdminString(item.support, 24),
+        reasons: boundedStrings(item.reasons, 8),
+        limitations: boundedStrings(item.limitations, 8),
+      };
+    }),
+    diagnostics: boundedStrings(raw.diagnostics, 30),
+  };
+}
+
 export function safeAdminGuidance(value: unknown): {
   readonly sensory: Readonly<
     Record<
@@ -202,6 +266,8 @@ export function safeAdminGuidance(value: unknown): {
   readonly customRecipe: ReturnType<typeof safeAdminRecipe>;
   readonly sourceRecipes: readonly unknown[];
   readonly activeSourceLabel: string | null;
+  readonly flavorDetails: ReturnType<typeof safeAdminFlavorDetails>;
+  readonly brewingEnrichmentPending: boolean;
 } | null {
   if (typeof value !== "object" || value === null) return null;
   const record = value as Record<string, unknown>;
@@ -293,6 +359,8 @@ export function safeAdminGuidance(value: unknown): {
     customRecipe: safeAdminRecipe(record.customRecipe),
     sourceRecipes,
     activeSourceLabel: boundedAdminString(record.activeSourceLabel, 120),
+    flavorDetails: safeAdminFlavorDetails(record.flavorDetails),
+    brewingEnrichmentPending: record.brewingEnrichmentPending === true,
   };
 }
 

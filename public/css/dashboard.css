@@ -853,6 +853,7 @@ main[data-dashboard] > section[aria-label="Current taps"] {
   }
 }
 .story-page {
+  overflow-wrap: anywhere;
   max-width: 64rem;
   margin-inline: auto;
   padding: 1rem clamp(0.75rem, 3vw, 3rem) 3rem;
@@ -893,7 +894,7 @@ main[data-dashboard] > section[aria-label="Current taps"] {
 }
 .story-page dl {
   display: grid;
-  grid-template-columns: minmax(9rem, 0.4fr) 1fr;
+  grid-template-columns: minmax(9rem, 0.4fr) minmax(0, 1fr);
   gap: 0.35rem 1rem;
 }
 .story-page dt {
@@ -912,13 +913,20 @@ main[data-dashboard] > section[aria-label="Current taps"] {
 }
 .story-sensory-layout {
   display: grid;
-  grid-template-columns: minmax(15rem, 0.9fr) minmax(0, 1.1fr);
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
   align-items: center;
-  gap: 1.5rem;
+}
+.story-sensory-layout--radar {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+.sensory-radar-figure {
+  margin: 0;
+  min-width: 0;
 }
 .sensory-radar {
   display: block;
-  width: min(100%, 25rem);
+  width: min(100%, 27rem);
   margin-inline: auto;
   overflow: visible;
 }
@@ -933,15 +941,10 @@ main[data-dashboard] > section[aria-label="Current taps"] {
   stroke-dasharray: 2 3;
 }
 .sensory-radar-data {
-  fill: color-mix(in srgb, var(--accent) 35%, transparent);
+  fill: color-mix(in srgb, var(--accent) 30%, transparent);
   stroke: var(--accent-strong);
   stroke-width: 3;
   stroke-linejoin: round;
-}
-.sensory-radar-point {
-  fill: var(--accent-strong);
-  stroke: var(--background);
-  stroke-width: 2;
 }
 .sensory-radar-label {
   fill: var(--text);
@@ -949,24 +952,110 @@ main[data-dashboard] > section[aria-label="Current taps"] {
   font-weight: 700;
   text-anchor: middle;
 }
-.sensory-values {
+.story-page .sensory-values {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.55rem 1rem;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.5rem;
   margin: 0;
+  min-width: 0;
 }
-.sensory-values div {
-  padding-block: 0.4rem;
+.sensory-row {
+  display: grid;
+  grid-template-columns: minmax(7.8rem, 0.8fr) minmax(0, 1.5fr);
+  gap: 0.6rem;
+  align-items: center;
+  padding-block: 0.35rem;
   border-bottom: 1px solid var(--border);
 }
-.sensory-values dt {
-  color: var(--muted);
-  font-size: 0.82rem;
-  text-transform: capitalize;
+.sensory-row dt {
+  font-size: 0.9rem;
+  font-weight: 650;
+  overflow-wrap: anywhere;
 }
-.sensory-values dd {
-  margin: 0.15rem 0 0;
-  font-weight: 750;
+.sensory-row dd {
+  display: grid;
+  grid-template-columns: minmax(2rem, 1fr) minmax(5.5rem, 1fr);
+  gap: 0.65rem;
+  align-items: center;
+  margin: 0;
+  min-width: 0;
+}
+.sensory-bar {
+  display: block;
+  width: 100%;
+  height: 0.65rem;
+  border: 1px solid var(--muted);
+  border-radius: 0.2rem;
+  background: var(--surface);
+  position: relative;
+  overflow: hidden;
+}
+.sensory-bar-fill {
+  display: block;
+  min-height: 100%;
+  fill: var(--accent-strong);
+}
+.sensory-band {
+  font-size: 0.84rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.sensory-row--unknown .sensory-bar {
+  border-style: dashed;
+  height: 0.9rem;
+}
+.sensory-bar-unknown {
+  display: block;
+  text-align: center;
+  font-size: 0.7rem;
+  line-height: 0.8rem;
+  color: var(--muted);
+}
+.flavor-notes,
+.flavor-process-tags {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0;
+  margin: 0.5rem 0 1rem;
+}
+.flavor-notes li,
+.flavor-process-tags li {
+  border: 1px solid var(--border);
+  padding: 0.25rem 0.6rem;
+  border-radius: 0.4rem;
+  overflow-wrap: anywhere;
+}
+.flavor-character h3 {
+  margin-bottom: 0.5rem;
+  font-size: 1rem;
+}
+.flavor-disclosure {
+  margin-top: 1rem;
+}
+.flavor-disclosure summary {
+  cursor: pointer;
+  font-weight: 650;
+}
+.flavor-disclosure p {
+  max-width: 65ch;
+}
+@media (max-width: 767px) {
+  .story-sensory-layout--radar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sensory-radar-figure {
+    display: none;
+  }
+  .sensory-row {
+    grid-template-columns: minmax(7rem, 0.9fr) minmax(0, 1.5fr);
+    gap: 0.4rem;
+  }
+  .sensory-row dd {
+    grid-template-columns: minmax(1.25rem, 0.65fr) minmax(4.6rem, 1fr);
+    gap: 0.4rem;
+  }
 }
 .story-operations {
   margin-top: 2rem;
@@ -1068,5 +1157,179 @@ html[data-unit-system="us"] [data-unit="metric"] {
   }
   .sensory-radar {
     max-width: 20rem;
+  }
+}
+
+.story-navigation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 1.5rem;
+}
+.recipe-sheet {
+  min-width: 0;
+  padding-block: 0.5rem;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+.recipe-sheet + .recipe-sheet {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 2px solid var(--border);
+}
+.recipe-sheet-header {
+  border-bottom: 2px solid var(--border);
+  padding-bottom: 0.75rem;
+}
+.recipe-sheet-header h3 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+.recipe-sheet-header p {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+}
+.recipe-sheet-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1.5rem;
+}
+.recipe-sheet-column {
+  min-width: 0;
+}
+.story-page .recipe-sheet-section {
+  margin: 0;
+  padding: 0.85rem 0;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+}
+.recipe-sheet h4 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+.recipe-sheet-total {
+  font-size: 0.85em;
+  font-weight: 400;
+}
+.story-page .recipe-sheet dl {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.3rem 0.75rem;
+  margin: 0;
+}
+.recipe-sheet-ingredients {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.recipe-sheet-ingredients li + li,
+.recipe-sheet-steps li + li {
+  margin-top: 0.65rem;
+}
+.recipe-sheet-ingredient {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.5rem;
+}
+.recipe-sheet-amount {
+  font-variant-numeric: tabular-nums;
+}
+.recipe-sheet-detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.75rem;
+  color: var(--muted);
+  font-size: 0.9em;
+}
+.recipe-sheet-row-note,
+.recipe-sheet-section > p {
+  margin: 0.25rem 0 0;
+}
+.recipe-sheet-steps {
+  padding-left: 1.25rem;
+  margin: 0;
+}
+@media (max-width: 42rem) {
+  .recipe-sheet-columns {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+}
+@media print {
+  body:has(.story-page [data-recipe-sheet]) {
+    --text: #111;
+    --muted: #444;
+    --border: #aaa;
+    --surface: #fff;
+    --accent-readable: #111;
+    color: #111;
+    background: #fff;
+  }
+  body:has(.story-page [data-recipe-sheet]) :is(.public-header, .workspace-banner, .skip-link),
+  body:has(.story-page [data-recipe-sheet]) .story-page > :is(.story-navigation, .story-header),
+  body:has(.story-page [data-recipe-sheet]) .story-page > section:not(:has([data-recipe-sheet])) {
+    display: none;
+  }
+  body:has(.story-page [data-recipe-sheet]) .story-page {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+  }
+  body:has(.story-page [data-recipe-sheet]) .story-page > section:has([data-recipe-sheet]) {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: #fff;
+  }
+  body:has(.story-page [data-recipe-sheet]) #story-recipes {
+    color: #111;
+  }
+  body:has(.story-page [data-recipe-sheet]) .recipe-sheet {
+    color: #111;
+    background: #fff;
+    font-size: 9pt;
+    line-height: 1.25;
+  }
+  body:has(.story-page [data-recipe-sheet]) .recipe-sheet-header,
+  body:has(.story-page [data-recipe-sheet]) .story-page .recipe-sheet-section {
+    border-color: #aaa;
+  }
+  body:has(.story-page [data-recipe-sheet]) .recipe-sheet-header p,
+  body:has(.story-page [data-recipe-sheet]) .recipe-sheet-detail,
+  body:has(.story-page [data-recipe-sheet]) .recipe-sheet .muted {
+    color: #444;
+  }
+  body:has(.story-page [data-recipe-sheet]) .recipe-sheet-columns {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 1.5rem;
+  }
+  body:has(.story-page [data-recipe-sheet]) .recipe-sheet-header,
+  body:has(.story-page [data-recipe-sheet]) .recipe-sheet-ingredients li,
+  body:has(.story-page [data-recipe-sheet]) .recipe-sheet-steps li {
+    break-inside: avoid;
+  }
+  body:has(.story-page [data-recipe-sheet]) .story-page .recipe-sheet-section {
+    padding-block: 0.4rem;
+  }
+  body:has(.story-page [data-recipe-sheet]) .recipe-sheet-ingredients li + li,
+  body:has(.story-page [data-recipe-sheet]) .recipe-sheet-steps li + li {
+    margin-top: 0.35rem;
+  }
+  body:has(.story-page [data-recipe-sheet]) .recipe-sheet h4 {
+    font-size: 10pt;
+    margin-bottom: 0.25rem;
+    break-after: avoid;
+  }
+  body:has(.story-page [data-recipe-sheet]) .recipe-sheet-header {
+    padding-bottom: 0.4rem;
+  }
+  body:has(.story-page [data-recipe-sheet]) .recipe-sheet-header h3 {
+    font-size: 1.25rem;
+  }
+  body:has(.story-page [data-recipe-sheet]) .recipe-sheet-header p,
+  body:has(.story-page [data-recipe-sheet]) .recipe-sheet-row-note,
+  body:has(.story-page [data-recipe-sheet]) .recipe-sheet-section > p {
+    margin-top: 0.15rem;
   }
 }

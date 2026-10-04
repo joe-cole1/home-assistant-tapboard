@@ -1,0 +1,51 @@
+{
+  "format": "tapboard-sensory-text-contract-cases-1",
+  "note": "Small synthetic classifier tests, not user process records or tasting observations.",
+  "barrel_process_cases": [
+    {
+      "text": "Added to bourbon barrel to age.",
+      "expected": "bourbon_barrel_recorded"
+    },
+    {
+      "text": "Racked into an oak barrel.",
+      "expected": "oak_barrel_recorded_not_bourbon"
+    },
+    {
+      "text": "No bourbon or barrel aging for this batch.",
+      "expected": "no_positive_treatment"
+    },
+    {
+      "text": "Might barrel age the next batch.",
+      "expected": "no_positive_treatment"
+    },
+    {
+      "text": "Tank 7 is dry hopped at .078 kg per barrel.",
+      "expected": "no_positive_treatment"
+    },
+    {
+      "text": "Bourbon County Stout",
+      "field": "recipe.name",
+      "expected": "no_positive_treatment"
+    },
+    {
+      "text": "Soaked oak cubes in bourbon and added the drained cubes.",
+      "expected": "wood_and_spirit_contact_not_full_barrel_no_spirit_dose"
+    },
+    {
+      "text": "Added 100 ml bourbon after fermentation.",
+      "expected": "spirit_addition_not_barrel_aging_no_abv_without_proof"
+    },
+    {
+      "text": "No oak. Added vanilla extract only.",
+      "expected": "vanilla_addition_not_oak_or_bourbon"
+    }
+  ],
+  "additional_contracts": [
+    "Explicit zero is distinct from null and missing.",
+    "Boolean true/false must not become numeric 1/0.",
+    "A truncated grist must not support no-roast-expected.",
+    "Changing a display-unit preference does not reconvert already metric provider amounts.",
+    "Clove metadata from a yeast product is not an actual Cloves ingredient.",
+    "A recipe title, copied recipe note or tasting note is not a completed batch process event."
+  ]
+}

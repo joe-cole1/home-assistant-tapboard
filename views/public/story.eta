@@ -5,7 +5,7 @@
     <p><a class="story-back" href="/">← Back</a></p>
     <section aria-labelledby="story-not-found"><h1 id="story-not-found">Story unavailable</h1><p>This tap story is not available.</p></section>
   <% } else { const story = it.story; const presentation = story.presentation; const current = story.currentFill; %>
-    <a class="story-back" href="/">← Back</a>
+    <nav class="story-navigation" aria-label="Story navigation"><a class="story-back" href="/">← Back</a><% if (story.recipes && (story.recipes.custom || story.recipes.sources.length > 0)) { %><a class="story-back" href="#story-recipes">View recipe</a><% } %></nav>
     <header class="story-header">
       <h1>Tap <%= story.tapNumber %> · <%= story.title %></h1>
     </header>
@@ -25,33 +25,36 @@
         <% if (presentation.description) { %><p><%= presentation.description %></p><% } %>
       </div>
     </section>
-    <section aria-labelledby="story-sensory">
-      <h2 id="story-sensory">Sensory profile</h2>
-      <% if (it.sensoryRadar) { const radar = it.sensoryRadar; %>
-        <div class="story-sensory-layout">
-          <figure>
-            <svg class="sensory-radar" viewBox="0 0 360 360" role="img" aria-labelledby="sensory-radar-title sensory-radar-description">
-              <title id="sensory-radar-title">Sensory profile for <%= story.title %></title>
-              <desc id="sensory-radar-description"><%= radar.description %></desc>
+    <section class="story-flavor" aria-labelledby="story-sensory">
+      <h2 id="story-sensory">Flavor profile</h2>
+      <% if (it.sensoryRadar && story.sensory) { const radar = it.sensoryRadar; const flavor = story.flavor; %>
+        <p class="muted">Estimated from the recipe and batch data. Manual values take precedence.</p>
+        <% if (flavor && flavor.descriptors.length > 0) { %><div class="flavor-character"><h3>Expected character</h3><ul class="flavor-notes"><% for (const note of flavor.descriptors) { %><li><%= note.label %></li><% } %></ul></div><% } %>
+        <% if (flavor && flavor.processTags.length > 0) { %><ul class="flavor-process-tags" aria-label="Recorded process context"><% for (const tag of flavor.processTags) { %><li><%= tag %></li><% } %></ul><% } %>
+        <div class="story-sensory-layout <%= radar.eligible ? "story-sensory-layout--radar" : "story-sensory-layout--bars" %>">
+          <% if (radar.eligible) { %><figure class="sensory-radar-figure">
+            <svg class="sensory-radar" viewBox="0 0 400 400" role="img" aria-labelledby="sensory-radar-title sensory-radar-description">
+              <title id="sensory-radar-title">Flavor intensity profile</title>
+              <desc id="sensory-radar-description"><%= radar.description %> All eight values are listed alongside the chart.</desc>
               <% for (const gridPath of radar.gridPaths) { %><path class="sensory-radar-grid" d="<%= gridPath %>" /><% } %>
-              <% for (const axis of radar.axes) { %><path class="sensory-radar-axis" d="<%= axis.axisPath %>" /><text class="sensory-radar-label" x="<%= axis.labelX %>" y="<%= axis.labelY %>"><%= axis.label %></text><% if (axis.valuePoint) { const [x, y] = axis.valuePoint.split(" "); %><circle class="sensory-radar-point" cx="<%= x %>" cy="<%= y %>" r="4" /><% } %><% } %>
-              <% if (radar.dataPath) { %><path class="sensory-radar-data" d="<%= radar.dataPath %>" /><% } %>
+              <% for (const axis of radar.axes) { %><path class="sensory-radar-axis" d="<%= axis.axisPath %>" /><text class="sensory-radar-label" x="<%= axis.labelX %>" y="<%= axis.labelY %>"><%= axis.label %></text><% } %>
+              <path class="sensory-radar-data" d="<%= radar.dataPath %>" />
             </svg>
-            <figcaption><%= radar.description %> Values are shown below with their source.</figcaption>
-          </figure>
-          <dl class="sensory-values">
-            <% for (const axis of radar.axes) { %><div><dt><%= axis.label %></dt><dd><% if (axis.value === null) { %>Unavailable<% } else { %><%= axis.value %> / 5<% } %> · <%= axis.source %><% if (axis.confidence) { %> · <%= axis.confidence %> confidence<% } %></dd></div><% } %>
+          </figure><% } %>
+          <dl class="sensory-values" aria-label="Flavor intensities on a zero to five scale">
+            <% for (const axis of radar.axes) { %><div class="sensory-row <%= axis.value === null ? "sensory-row--unknown" : "" %>" data-sensory-axis="<%= axis.key %>"><dt><%= axis.label %></dt><dd><% if (axis.percent !== null) { %><svg class="sensory-bar" viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true"><rect class="sensory-bar-fill" x="0" y="0" width="<%= axis.percent %>" height="10" /></svg><% } else { %><span class="sensory-bar" aria-hidden="true"><span class="sensory-bar-unknown">?</span></span><% } %><span class="sensory-band"><%= axis.band %><span class="sr-only"><%= axis.value === null ? ", value unknown" : `, ${Math.round(axis.value * 10) / 10} out of five` %><%= axis.source === "manual" ? ", manual override" : "" %></span></span></dd></div><% } %>
           </dl>
         </div>
-      <% } else { %><p>Sensory profile unavailable.</p><% } %>
+        <% if (!radar.eligible) { %><p class="muted flavor-incomplete">Some inputs are incomplete or limited. Available estimates are shown without filling unknown values.</p><% } %>
+        <details class="flavor-disclosure"><summary>How this is estimated</summary><p>Recipe and batch inputs support a deterministic estimate of intensity and expected character. These are recipe-informed expectations, not tasting measurements or quality ratings. Unknown means there is not enough usable information; none expected requires supporting recipe information.</p></details>
+      <% } else { %><p>Flavor profile unavailable.</p><% } %>
     </section>
     <section aria-labelledby="story-recipes">
       <h2 id="story-recipes">Recipe</h2>
       <% if (!story.recipes) { %><p>Recipe unavailable.</p><% } else if (!story.recipes.custom && story.recipes.sources.length === 0) { %><p>No recipe details are available.</p><% } else { %>
-        <% if (story.recipes.custom) { const recipe = story.recipes.custom; %>
-          <article><h3>Custom recipe</h3><% if (recipe.notes) { %><p><%= recipe.notes %></p><% } %><% if (recipe.ingredients.length > 0) { %><h4>Ingredients</h4><ul class="story-recipe-list"><% for (const ingredient of recipe.ingredients) { %><li><%= ingredient.name %><% if (ingredient.amount !== null) { %> — <%= ingredient.amount %><% } %><% if (ingredient.unit) { %> <%= ingredient.unit %><% } %><% if (ingredient.note) { %> (<%= ingredient.note %>)<% } %></li><% } %></ul><% } %><% if (recipe.steps.length > 0) { %><h4>Steps</h4><ol class="story-recipe-steps"><% for (const step of recipe.steps) { %><li><%= step.name || step.text %><% if (step.temperatureC !== null) { %> · <%= step.temperatureC %> °C<% } %><% if (step.timeMinutes !== null) { %> · <%= step.timeMinutes %> min<% } %><% if (step.note) { %> — <%= step.note %><% } %></li><% } %></ol><% } %></article>
+        <% const recipes = [...(story.recipes.custom ? [story.recipes.custom] : []), ...story.recipes.sources]; for (const recipe of recipes) { %>
+          <%~ include("/partials/recipe-sheet", { recipe, title: story.title, style: presentation.style, color: presentation.srm, recipeAmount: it.recipeAmount, recipeMass: it.recipeMass, recipeNumber: it.recipeNumber, volume: it.volume, temperature: it.temperature }) %>
         <% } %>
-        <% for (const recipe of story.recipes.sources) { %><article><h3><%= recipe.provenance?.label || "Source recipe" %></h3><p><%= recipe.status %></p><% if (recipe.notes) { %><p><%= recipe.notes %></p><% } %><% if (recipe.ingredients.length > 0) { %><ul class="story-recipe-list"><% for (const ingredient of recipe.ingredients) { %><li><%= ingredient.name %><% if (ingredient.amount !== null) { %> — <%= ingredient.amount %><% } %><% if (ingredient.unit) { %> <%= ingredient.unit %><% } %></li><% } %></ul><% } %></article><% } %>
       <% } %>
     </section>
     <% if (it.isAdmin === true) { %>
