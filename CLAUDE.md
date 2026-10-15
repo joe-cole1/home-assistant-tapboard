@@ -1,62 +1,126 @@
-# Tapboard Repository Instructions
+# Tapboard — instructions for Claude Code
 
-## Coordinator and subagent orchestration
+Tapboard is a self-hosted taproom display for one homebrewing household: Node 24, SQLite, and
+server-rendered HTML. It shows what is on tap, detects pours from keg-scale telemetry, syncs
+recipes from Brewfather, computes deterministic flavor guidance, and raises health incidents that
+can be delivered to any configured destination.
 
-The primary coordinator uses the model and reasoning setting currently selected by the user and is the architect, orchestrator, integrator, verifier, and final quality-control owner.
+**Source code and executable configuration are the source of truth.** If documentation disagrees
+with the code, trust the code and fix or flag the document. `docs/rebuild/` and `docs/adr/`
+record how the v2 rebuild was designed; read them for background, not as requirements.
 
-Use subagents whenever the approved work decomposes into bounded, non-overlapping tasks. Keep assignments focused and use resources efficiently:
+## Product principles
 
-- Use `gpt-6.1-sol` with low reasoning for every worker. Spawn workers with explicit arguments `model: "gpt-6.1-sol"`, `reasoning_effort: "low"`, and `fork_turns: "none"`. Provide a compact, self-contained assignment containing only the necessary repository context, constraints, exact file ownership, deliverable, and verification command.
-- Delegate repository inventories, reference tracing, fixture construction, isolated implementation, focused tests, documentation, and read-only diff review when the tasks are bounded.
-- Keep worker reports concise and evidence-based. Workers stop after their assigned deliverable and do not expand scope.
-- Use at most three workers concurrently so the primary coordinator remains active.
+- Hands-off: prefer automation over features that need regular manual data entry.
+- No single hard dependency: Tapboard keeps working when Home Assistant, Brewfather, or a
+  destination is down. Integrations are optional edges, never the core.
+- Flexible edges: any device can post to the telemetry API, and any event (including health
+  incidents) can go to any destination. Routing and filtering belong in receivers (Home
+  Assistant, n8n, Node-RED), not in Tapboard.
+- Real data runs on the operator's VPS: every change must upgrade existing databases safely.
 
-The primary coordinator must personally:
+## Commands
 
-1. Read all applicable repository instructions, skills, handoffs, and issue requirements completely before delegating.
-2. Inspect the repository, establish the baseline, own the architecture and plan, and resolve cross-cutting decisions.
-3. Define explicit, non-overlapping file ownership before worker edits.
-4. Sequence all work that touches shared integration surfaces. Prefer sequential ownership over concurrent edits to the same file.
-5. Review every worker report and every changed line; never accept a worker success claim without inspection.
-6. Integrate the complete result, resolve conflicts, run focused and full verification, inspect the final diff, and perform final security/reliability QC.
-7. Decide whether the task's acceptance criteria are actually satisfied and produce the final completion report.
+- Install: `npm ci` (Node 24; `better-sqlite3` may need a C/C++ toolchain to build).
+- Run: `npm start` → http://127.0.0.1:3000, where `GET /healthz` is readiness. The database
+  defaults to `data/tapboard-v2.sqlite3`; set `TAPBOARD_DATABASE_PATH` for a throwaway one.
+- Full gate: `npm run check` (format, lint, types, architecture guardrails, unit tests).
+- One test file: `node --test test/<name>.test.ts`.
+- Browser tests: `npm run test:e2e`. Locally, run `npx playwright install chromium` once. Cloud
+  sessions use the preinstalled Chromium through `TAPBOARD_E2E_CHROMIUM_PATH`, which the
+  SessionStart hook sets; don't run `playwright install` there.
+- Format: `npm run format`.
 
-Subagents must not:
+## Where things live
 
-- Commit, push, merge, change branches, mutate issues/PRs, or otherwise modify external GitHub state.
-- Read or modify `.env`, expose credentials, call live external services, mutate Home Assistant, restart Home Assistant, or touch live production data unless the user has explicitly authorized that exact action and the coordinator has assigned it.
-- Rebuild or recreate the local development container through the native `tapboard-dev` launcher unless the coordinator explicitly assigns that exact verification after any required approval.
-- Edit files outside their assigned ownership or undo another worker's changes.
-- Make cross-cutting architecture decisions, weaken tests, broaden scope, or treat a focused test as final acceptance.
+- `src/application.ts`: the composition root. It builds services and wires cross-feature
+  callbacks explicitly; don't add a DI container, service locator, or event bus.
+- `src/features/<feature>/`: `service.ts` (behavior), `repository.ts` or `repositories/` (all
+  SQL), `*-validation.ts`, `types.ts`, `routes.ts`.
+- Telemetry in: `telemetry/` (`/api/v1/telemetry`, contract in `openapi/telemetry-v1.json`) →
+  `telemetry/detector.ts` (pure pour detector) → pours, forecasts, and `health/` incidents.
+- Events out: `events/` (envelope) → `outbox/` → `outbound/` (Home Assistant and webhook
+  transports).
+- Brewfather: `beverages/brewfather/`. Flavor: `story/flavor/` (pure functions).
+- `src/features/web/` and `views/`: server-rendered Admin and public pages (Eta). `public/js/` is
+  progressive enhancement only; pages must work without JavaScript.
+- `src/infrastructure/database/`: the SQLite connection and append-only migrations.
+- `src/features/simulation/`: the built-in sample workspace on a second database. It's the main
+  development tool while hardware is unavailable; don't break it.
 
-After implementation, assign a fresh `gpt-6.1-sol` worker with low reasoning a read-only final diff review focused on security, privacy, transaction ordering, failure handling, migration safety, compatibility, and missing tests. The primary coordinator must independently validate every reported concern, implement or reject it with evidence, rerun verification, and retain sole authority for final QC.
+## Rules that matter
 
-Task-specific handoff prompts may define a more detailed worker split. Those assignments supplement this policy but may not weaken the coordinator, file-ownership, safety, or final-QC requirements above.
+- SQL only in `repository.ts`, `repositories/*.ts`, and `src/infrastructure/database/`;
+  `better-sqlite3` only in `connection.ts`. `npm run check:architecture` enforces both.
+- Never do network I/O inside `withTransaction`. After any `await`, re-check that what you're
+  about to write, or act on remotely, is still current.
+- Migrations: append a new version in `migrations.ts`; never edit, reorder, or squash shipped
+  migrations.
+- Never send a stored credential to a host other than the one it was entered for.
+- Public pages and JSON show only what their public projection selects: never secrets, raw
+  provider payloads, Admin-only fields, or Mystery-hidden fields.
+- External contracts: `/api/v1/telemetry`, `/api/public/*`, and the outbound event envelope
+  (`schema_version` 1). Change them only deliberately and backward-compatibly.
+- No new runtime dependency, framework, bundler, database, or background service without
+  explicit approval.
 
-## GitHub CLI authentication checks in WSL
+## Keep it simple
 
-Do not report that GitHub authentication is expired or ask the user to reauthenticate based only on `gh auth status`. In this repository's WSL environment, that command can return a stale/cache/config false negative even while the usable GitHub CLI credentials and Git credential flow are valid.
+- Make the smallest change that fully solves the task. Reuse existing helpers first.
+- No speculative abstractions, configuration options, plugin points, or "future integration"
+  seams. Add generality only when a second real use exists.
+- No alias exports, duplicate method names, or "backward-compatible" synonyms for internal code.
+  Rename and update the callers.
+- One canonical input shape per internal API (no camelCase and snake_case variants).
+- If existing code is needlessly complex, say so and propose a simplification instead of copying
+  the pattern. "Too complex for its value" is a valid reason to revisit a design.
+- In the PR description, justify any new table, background job, or abstraction by the concrete
+  requirement it serves.
 
-Before declaring an authentication blocker:
+## Tests
 
-1. Identify the CLI actually being invoked with `type -a gh` and `gh --version`.
-2. Test a real, read-only authenticated CLI operation, such as `gh api user --jq .login`.
-3. Test repository access with a read-only command such as `gh repo view --json nameWithOwner,defaultBranchRef` or the exact `gh pr` read needed for the task.
-4. If WSL exposes more than one `gh` executable/config context, test the usable CLI context before concluding the credentials are invalid. Distinguish a WSL cache/config-path problem from an actual GitHub authentication rejection.
-5. Distinguish authentication errors from sandbox, DNS, proxy, network, and GitHub-service failures. Retry an important command with the required sandbox escalation when the failure may be environmental.
-6. Never run a command that prints an authentication token, and never expose credential/config contents while diagnosing the CLI.
-7. Report expired/invalid authentication only after the real authenticated CLI operation and repository access both fail with an authentication-specific response. Include the commands tested and sanitized error category.
+- Test behavior: pure calculations, data transformations, HTTP, telemetry, and event contracts,
+  and privacy guarantees. Avoid asserting incidental markup or class names.
+- Never delete, skip, or weaken a test to make a change pass. Change a test only when behavior
+  intentionally changes, and say so in the PR.
+- Every bug fix gets a regression test that fails without the fix.
 
-A failing `gh auth status` alone is diagnostic noise, not a blocker. Continue with the verified working CLI or Git credential path when authenticated repository operations succeed.
+## Documentation
 
-## Pre-commit localhost verification
+- When behavior, setup, configuration, or commands change, update `README.md`, `architecture.md`,
+  `docs/operations.md`, or `openapi/` in the same change. Docs describe the current state;
+  history belongs in git and PR descriptions.
+- Every implementation PR description includes a `## MANUAL DEV TEST` section: short,
+  issue-specific steps the operator runs against a rebuilt development container. Never add these
+  steps to README or other docs.
 
-For every new branch, once the change is complete and ready to ship, finish the canonical required checks and final diff review, then automatically run `/home/joeadmin/.local/bin/tapboard-dev rebuild` and `/home/joeadmin/.local/bin/tapboard-dev health` before any commit. This local rebuild and health verification have standing user authorization; do not ask for redundant approval.
+## Safety
 
-Verify that the recreated development container runs the current branch's working-tree content, including uncommitted changes, and that `http://localhost:3000/healthz` is healthy. Preserve the native `tapboard-dev-data` volume and operator PIN; do not touch live integrations or production.
+- Never read or print `.env`, keys, tokens, or the Admin PIN.
+- Never call live Brewfather or Home Assistant, touch the VPS, or delete Docker volumes
+  (`down --volumes`) or development databases.
+- Ask before dependency changes, schema migrations, feature removals, or deployment changes.
 
-Present `http://localhost:3000` and an issue-specific MANUAL DEV TEST so the operator can verify functionality before being asked for `ship it`. A successful rebuild or health check does not imply `ship it`. If runtime source changes afterward, repeat the rebuild and health verification before shipping. Rebuild or health failures block shipping: report the exact error and do not silently waive this gate.
+## Before asking to ship
 
-## v2 implementation handoff workflow
+- Run `npm run check`, plus `npm run test:e2e` when UI or routes changed.
+- For changes to migrations, auth, secrets, outbound, telemetry ingest, or transactions, run
+  `/code-review` and `/security-review` on the diff and address or rebut every finding.
+- Use plan mode before migrations, feature removals, or changes to `src/application.ts` wiring.
+- Subagents are optional. Use them for broad read-only searches or independent pieces of work,
+  and review every change they make yourself.
+- Cloud sessions (claude.ai/code) have no WSL launcher or Docker daemon; say what couldn't be
+  verified.
 
-After each completed and merged v2 implementation issue, the operator updates main, rebuilds and recreates the development container without deleting its volume, verifies /healthz, and manually exercises the delivered behavior. Every future implementation handoff must include a short issue-specific heading MANUAL DEV TEST describing what the operator should test after the rebuild.
+## Operator workstation (WSL): only when `/home/joeadmin/.local/bin/tapboard-dev` exists
+
+- Once the change is ready and `npm run check` passes, run `tapboard-dev rebuild` and then
+  `tapboard-dev health` from that path before any commit (standing authorization). The recreated
+  container must run the current working tree, including uncommitted changes, and report healthy
+  at http://localhost:3000/healthz. Preserve the `tapboard-dev-data` volume and the PIN.
+- A rebuild or health failure blocks shipping; report the exact error. On success, present
+  http://localhost:3000 and the MANUAL DEV TEST, then wait for "ship it" before committing. A
+  passing health check is not "ship it". If runtime code changes afterwards, rebuild again.
+- `gh auth status` can falsely fail in WSL. Before reporting an auth problem, confirm with
+  `gh api user --jq .login` and a read-only repository command such as `gh repo view`. Never
+  print tokens or credential files.
