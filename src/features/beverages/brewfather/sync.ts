@@ -13,6 +13,7 @@ import {
   readBeverageLink,
   readBrewfatherAccount,
   readBeverageSettings,
+  readBeverageUsage,
   readCurrentRecipeSnapshot,
   readPresentationOverrides,
   readSourceProfile,
@@ -78,6 +79,26 @@ function isCurrentBeverageLink(
     current.sourceBatchId === expected.sourceBatchId &&
     current.createdAt === expected.createdAt
   );
+}
+
+/**
+ * Recheck completion eligibility after the batch read and immediately before the
+ * PATCH; there is no await between this check and request dispatch.
+ */
+function completionStillEligible(
+  database: DatabaseExecutor,
+  secretsService: SecretsService,
+  link: BrewfatherBeverageLink,
+  account: BrewfatherAccount,
+  apiKey: string,
+): boolean {
+  if (!isCurrentBeverageLink(database, link, account)) return false;
+  if (readBeverageUsage(database, link.beverageId).current > 0) return false;
+  try {
+    return secretsService.revealPrivileged("brewfather", account.id, "api_key") === apiKey;
+  } catch {
+    return false;
+  }
 }
 
 export interface SyncOptions {
@@ -658,7 +679,16 @@ export class BrewfatherSyncCoordinator {
         };
       }
 
-      // Step 2: PATCH batch status -> "Completed"
+      // Step 2: the link, account, key, or active Fills may have changed during the read.
+      if (!completionStillEligible(database, secretsService, link, account, apiKey)) {
+        return {
+          outcome: "not_applicable",
+          message:
+            "Brewfather completion was skipped because the Beverage link, account, or active Fills changed.",
+        };
+      }
+
+      // Step 3: PATCH batch status -> "Completed"
       await adapter.updateBatchStatus(link.sourceBatchId, "Completed");
       this.#assertActive();
       return {

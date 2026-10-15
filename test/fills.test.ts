@@ -740,6 +740,74 @@ void test("Brewfather completion coordination: never, ask, completed, and error 
   }
 });
 
+void test("Brewfather completion sends nothing when eligibility changes during the batch read", async () => {
+  for (const mutation of ["unlink", "disabled account", "new active Fill"] as const) {
+    const { database, kegService, beverageService } = setupTestEnvironment();
+    try {
+      let duringRead = (): void => undefined;
+      let patches = 0;
+      const customFetch: typeof fetch = async (input, init) => {
+        const url =
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+        if (url.includes("/v2/batches/batch-123") && init?.method === "GET") {
+          duringRead();
+          await Promise.resolve();
+          return new Response(
+            JSON.stringify({ _id: "batch-123", name: "BF Batch", status: "Fermenting" }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        if (init?.method === "PATCH") {
+          patches += 1;
+          return new Response("Updated", { status: 200 });
+        }
+        return new Response("Not found", { status: 404 });
+      };
+      const fillService = new FillService(database, { beverageService, fetchFn: customFetch });
+      beverageService.configureBrewfatherAccount({
+        accountId: "default",
+        userId: "bf-user-1",
+        apiKey: "bf-api-key-secret-123",
+        enabled: true,
+      });
+      database.execute(`
+        INSERT INTO brewfather_candidate_cache (
+          id, account_id, source_batch_id, batch_name, batch_number, status, brewer,
+          recipe_name, style, brew_date, estimated_og, estimated_fg, estimated_abv,
+          estimated_ibu, estimated_srm, raw_summary_json, summary_fingerprint, synced_at
+        ) VALUES (
+          'c1111111-1111-4111-8111-111111111111', 'default', 'batch-123', 'BF Batch', '1', 'Fermenting', 'Brewer',
+          'BF Recipe', 'IPA', '2026-08-01', 1.050, 1.010, 5.2, 40, 6, '{}', '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef', '2026-08-14T00:00:00.000Z'
+        );
+      `);
+      const beverageId = beverageService.linkBrewfatherCandidate({
+        accountId: "default",
+        sourceBatchId: "batch-123",
+      }).beverage.id;
+      const keg1 = kegService.createKeg({ kegNumber: 1, capacityMl: 19000 });
+      const keg2 = kegService.createKeg({ kegNumber: 2, capacityMl: 19000 });
+      const fill = fillService.createFill({ beverageId, kegId: keg1.id });
+      beverageService.updateSettings({ brewfatherCompletionPolicy: "completed" });
+      duringRead = () => {
+        if (mutation === "unlink") beverageService.unlinkBeverage(beverageId);
+        else if (mutation === "disabled account")
+          beverageService.configureBrewfatherAccount({
+            accountId: "default",
+            userId: "bf-user-1",
+            enabled: false,
+          });
+        else fillService.createFill({ beverageId, kegId: keg2.id });
+      };
+
+      const kicked = await fillService.kickFill(fill.id);
+      assert.equal(kicked.brewfatherOutcome, "not_applicable", mutation);
+      assert.equal(patches, 0, mutation);
+    } finally {
+      database.close();
+    }
+  }
+});
+
 void test("Fill deletion impact and isolated beverage auto-deletion", () => {
   const { database, kegService, beverageService, fillService } = setupTestEnvironment();
   try {
