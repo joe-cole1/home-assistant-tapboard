@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { DatabaseExecutor } from "../../infrastructure/database/connection.ts";
+import { ApplicationError } from "../../shared/errors.ts";
 import { appendActivity } from "../activity/operations.ts";
 import { createEventEnvelope } from "../events/envelope.ts";
 import type { EventEnvelope, EventType } from "../events/types.ts";
@@ -47,6 +48,7 @@ import {
 import {
   admitOutboxIntent,
   deliveryBelongsToDestination,
+  dismissDestinationDeliveries,
   insertDestinationBase,
   insertVersionConfig,
   listDeliveryHistory,
@@ -120,6 +122,25 @@ function secretAvailable(
       row.configured &&
       row.available,
   );
+}
+
+/** Stored destination secrets belong to the transport and origin they were entered for. */
+function credentialOrigin(transport: string, url: string | undefined): string | undefined {
+  if (url === undefined) return undefined;
+  try {
+    return `${transport} ${new URL(url).origin}`;
+  } catch {
+    return undefined;
+  }
+}
+
+function credentialsRequiredForNewAddress(): ApplicationError {
+  return new ApplicationError({
+    category: "validation",
+    code: "outbound.credentials_required",
+    clientMessage:
+      "Re-enter the token and secret header values when changing where this destination sends.",
+  });
 }
 
 function requireSecretStore(secrets: OutboundSecretStore | undefined): OutboundSecretStore {
@@ -379,6 +400,7 @@ export class OutboundService implements OutboundAdmissionPort {
     const id = validateDestinationId(destinationId, "destinationId");
     const now = iso(this.#now);
     let removedSecretSlot = false;
+    let credentialsCleared = false;
     let versioned = false;
     let previousTransport: OutboundDestination["transport"] | undefined;
     const result = this.#database.withTransaction(() => {
@@ -457,6 +479,11 @@ export class OutboundService implements OutboundAdmissionPort {
         }
       }
       this.#assertHistoricalSecretSlots(id, config.secretHeaders);
+      const credentialsMoved = this.#credentialOriginChanged(
+        currentVersion,
+        config.transport,
+        config.transport === "home_assistant" ? config.baseUrl : endpoint,
+      );
       versioned = true;
       updateDestinationLabelRequired(this.#database, id, label, required, now);
       const versionId = this.#ids();
@@ -477,15 +504,34 @@ export class OutboundService implements OutboundAdmissionPort {
         store?.remove("outbound", id, previous.slot, { now: this.#now });
       }
       if (removedSecretSlot) setEnabledState(this.#database, id, false, now, "secret_missing");
+      // Secrets never follow a destination to a new origin, and queued deliveries
+      // for the old address are dropped so they cannot resolve replacement secrets.
+      let dismissedDeliveries = 0;
+      if (credentialsMoved) {
+        this.#removeDestinationSecrets(id);
+        dismissedDeliveries = dismissDestinationDeliveries(this.#database, id, now);
+        if (config.transport === "home_assistant") {
+          credentialsCleared = true;
+          setEnabledState(this.#database, id, false, now, "token_missing");
+          markTokenMissing(this.#database, id, now);
+        } else if (config.secretHeaders.length > 0) {
+          credentialsCleared = true;
+          setEnabledState(this.#database, id, false, now, "secret_missing");
+        }
+      }
       appendOutboundActivity(this.#database, "configuration_changed", id, now, {
         change: "versioned",
         version: nextVersionNumber(this.#database, id) - 1,
         subscriptions_changed: subscriptionsChanged,
+        ...(credentialsMoved
+          ? { origin_changed: true, deliveries_dismissed: dismissedDeliveries }
+          : {}),
       });
       return this.#requireDestination(id);
     });
     if (
       removedSecretSlot ||
+      credentialsCleared ||
       (previousTransport === "home_assistant" && result.transport !== "home_assistant")
     ) {
       this.#emitLifecycle("disabled", id);
@@ -558,10 +604,16 @@ export class OutboundService implements OutboundAdmissionPort {
     validateSubscriptions(editInput.subscriptions ?? before.subscriptions);
     const replacements = normalizedHeaderReplacements(headerSecrets);
     const replacementValues = this.#resolveReplacementSlots(config.secretHeaders, replacements);
+    // edit() discards stored secrets when the origin changes; only submitted values survive.
+    const credentialsMoved = this.#credentialOriginChanged(
+      currentVersion,
+      config.transport,
+      config.transport === "home_assistant" ? config.baseUrl : endpoint,
+    );
     const finalHeaderValues = new Map(replacementValues);
     for (const header of config.secretHeaders) {
       if (finalHeaderValues.has(header.slot)) continue;
-      if (secretAvailable(this.#options.secrets, id, header.slot)) {
+      if (!credentialsMoved && secretAvailable(this.#options.secrets, id, header.slot)) {
         finalHeaderValues.set(header.slot, this.#revealSecret(id, header.slot));
       }
     }
@@ -569,11 +621,20 @@ export class OutboundService implements OutboundAdmissionPort {
     const submittedToken = token === undefined ? undefined : validateHomeAssistantToken(token);
     const finalTokenAvailable =
       submittedToken !== undefined ||
-      (transport === "home_assistant" && secretAvailable(this.#options.secrets, id, HA_TOKEN_SLOT));
+      (!credentialsMoved &&
+        transport === "home_assistant" &&
+        secretAvailable(this.#options.secrets, id, HA_TOKEN_SLOT));
     if (token !== undefined && transport !== "home_assistant") {
       throw new Error("Only Home Assistant destinations have tokens");
     }
     if (enabled) {
+      if (
+        credentialsMoved &&
+        ((transport === "home_assistant" && submittedToken === undefined) ||
+          config.secretHeaders.some((header) => !replacementValues.has(header.slot)))
+      ) {
+        throw credentialsRequiredForNewAddress();
+      }
       if (transport === "home_assistant" && !finalTokenAvailable) {
         throw new Error("Home Assistant token is required before enabling");
       }
@@ -584,12 +645,15 @@ export class OutboundService implements OutboundAdmissionPort {
         throw new Error("Every configured secret header requires a value before enabling");
       }
       const finalSlots = new Set(config.secretHeaders.map((header) => header.slot));
-      const unavailableHistoricalSlot = listUnfinishedSecretSlots(this.#database, id).find(
-        (slot) =>
-          (currentConfig.secretHeaders.some((header) => header.slot === slot) &&
-            !finalSlots.has(slot)) ||
-          (!replacementValues.has(slot) && !secretAvailable(this.#options.secrets, id, slot)),
-      );
+      // A changed origin dismisses pending deliveries, so none can need old slots.
+      const unavailableHistoricalSlot = credentialsMoved
+        ? undefined
+        : listUnfinishedSecretSlots(this.#database, id).find(
+            (slot) =>
+              (currentConfig.secretHeaders.some((header) => header.slot === slot) &&
+                !finalSlots.has(slot)) ||
+              (!replacementValues.has(slot) && !secretAvailable(this.#options.secrets, id, slot)),
+          );
       if (unavailableHistoricalSlot !== undefined) {
         throw new Error("Pending delivery requires a removed secret header value");
       }
@@ -1258,6 +1322,41 @@ export class OutboundService implements OutboundAdmissionPort {
       recordId,
       fieldName,
     );
+  }
+
+  /**
+   * Whether an edit points the destination's stored secrets at a different
+   * transport or origin. A first webhook endpoint binds secrets entered before
+   * it; an endpoint that exists but cannot be read fails closed.
+   */
+  #credentialOriginChanged(
+    currentVersion: NonNullable<OutboundDestination["currentVersion"]>,
+    transport: OutboundConfig["transport"],
+    url: string | undefined,
+  ): boolean {
+    const current = currentVersion.config;
+    if (current.transport !== transport) return true;
+    let previousUrl: string | undefined;
+    if (current.transport === "home_assistant") previousUrl = current.baseUrl;
+    else if (current.endpointConfigured) {
+      if (!current.endpointAvailable) return true;
+      previousUrl = this.#revealSecret(currentVersion.id, WEBHOOK_ENDPOINT_SLOT);
+    } else return false;
+    return credentialOrigin(current.transport, previousUrl) !== credentialOrigin(transport, url);
+  }
+
+  /** Remove every destination-scoped secret (Home Assistant token and header values). */
+  #removeDestinationSecrets(destinationId: string): void {
+    const store = this.#options.secrets;
+    if (store === undefined) return;
+    for (const descriptor of safeSecretDescriptors(store)) {
+      if (
+        descriptor.integrationType === "outbound" &&
+        descriptor.recordId === destinationId &&
+        descriptor.configured
+      )
+        store.remove("outbound", destinationId, descriptor.fieldName, { now: this.#now });
+    }
   }
 
   #assertHistoricalSecretSlots(

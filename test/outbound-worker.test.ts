@@ -580,7 +580,7 @@ void test("shutdown leaves an in-flight delivery leased without recording a fake
   }
 });
 
-void test("historical delivery keeps v1 endpoint while logical header rotation applies immediately", async () => {
+void test("same-origin historical delivery keeps v1 endpoint while logical header rotation applies immediately", async () => {
   const database = openDatabase(":memory:");
   const secrets = createSecretsService(database, { rootKey: ROOT_KEY });
   let sequence = 10;
@@ -610,7 +610,7 @@ void test("historical delivery keeps v1 endpoint while logical header rotation a
     service.admit(database, event("33333333-3333-4333-8333-333333333336"));
 
     const v2 = service.edit(DESTINATION, {
-      webhookUrl: "https://new.example.test/hook",
+      webhookUrl: "https://old.example.test/v2-hook",
       subscriptions: ["fill.assigned"],
     });
     service.setHeaderSecret(DESTINATION, slot, "Bearer rotated");
@@ -660,8 +660,67 @@ void test("historical delivery keeps v1 endpoint while logical header rotation a
     }
     const current = sent.find((input) => input.envelope.event_id.endsWith("338"));
     assert.equal(current?.version.id, v2.currentVersion!.id);
-    assert.equal(current?.endpoint, "https://new.example.test/hook");
+    assert.equal(current?.endpoint, "https://old.example.test/v2-hook");
     assert.equal(current?.headers?.Authorization, "Bearer rotated");
+  } finally {
+    database.close();
+  }
+});
+
+void test("moving a destination to another origin never sends its secrets to the old origin", async () => {
+  const database = openDatabase(":memory:");
+  const secrets = createSecretsService(database, { rootKey: ROOT_KEY });
+  let sequence = 10;
+  const service = createOutboundService(database, {
+    secrets,
+    now: () => new Date(NOW),
+    idFactory: () => `22222222-2222-4222-8222-${(sequence++).toString(16).padStart(12, "0")}`,
+  });
+  const sent: Parameters<OutboundTransportRouter["send"]>[0][] = [];
+  const router: OutboundTransportRouter = {
+    send: (input) => {
+      sent.push(input);
+      return { outcome: "success" };
+    },
+  };
+  try {
+    const v1 = service.create({
+      id: DESTINATION,
+      label: "Moved hook",
+      transport: "webhook",
+      webhookUrl: "https://old.example.test/hook",
+      secretHeaders: [{ name: "Authorization" }],
+    });
+    const slot = v1.currentVersion!.config.secretHeaders[0]!.slot;
+    service.setHeaderSecret(DESTINATION, slot, "Bearer old");
+    service.enable(DESTINATION);
+    service.admit(database, event("33333333-3333-4333-8333-333333333346"));
+
+    const moved = service.edit(DESTINATION, { webhookUrl: "https://new.example.test/hook" });
+    assert.equal(moved.enabled, false);
+    assert.equal(moved.disabledReason, "secret_missing");
+    assert.throws(() => secrets.revealPrivileged("outbound", DESTINATION, slot));
+    assert.equal(delivery(database, "33333333-3333-4333-8333-333333333346").state, "dismissed");
+
+    service.setHeaderSecret(DESTINATION, slot, "Bearer new");
+    service.enable(DESTINATION);
+    service.admit(database, event("33333333-3333-4333-8333-333333333347"));
+    const worker = createOutboundWorker({
+      database,
+      transports: router,
+      secrets,
+      owner: "test-worker",
+      clock: { now: () => new Date(NOW) },
+    });
+    for (let poll = 0; poll < 3; poll += 1) await worker.pollOnce();
+
+    assert.equal(
+      sent.some((input) => input.endpoint === "https://old.example.test/hook"),
+      false,
+    );
+    const current = sent.find((input) => input.envelope.event_id.endsWith("347"));
+    assert.equal(current?.endpoint, "https://new.example.test/hook");
+    assert.equal(current?.headers?.Authorization, "Bearer new");
   } finally {
     database.close();
   }

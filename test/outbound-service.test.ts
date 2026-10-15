@@ -8,6 +8,7 @@ import {
 import { createSecretsService } from "../src/features/secrets/service.ts";
 import { createOutboundService, type OutboundService } from "../src/features/outbound/service.ts";
 import { readActivities } from "../src/features/activity/operations.ts";
+import { ApplicationError } from "../src/shared/errors.ts";
 
 const ROOT_KEY = Buffer.alloc(32, 9).toString("base64url");
 const NOW = "2026-08-17T12:00:00.000Z";
@@ -50,6 +51,29 @@ function harness(): {
       now = value;
     },
   };
+}
+
+function deliveryState(database: DatabaseConnection, eventId: string): string | undefined {
+  return database
+    .prepare<[string], { readonly state: string }>(
+      "SELECT state FROM outbound_deliveries WHERE event_id = ?",
+    )
+    .get(eventId)?.state;
+}
+
+function pourCompleted(eventId: string) {
+  return {
+    schema_version: 1,
+    event_id: eventId,
+    event_type: "pour.completed",
+    occurred_at: NOW,
+    identifiers: { tap_id: TAP, fill_id: FILL },
+    data: { volume_ml: 355 },
+  } as const;
+}
+
+function credentialsRequired(error: unknown): boolean {
+  return error instanceof ApplicationError && error.code === "outbound.credentials_required";
 }
 
 function rowCount(database: DatabaseConnection, table: string): number {
@@ -319,6 +343,125 @@ void test("complete Admin create and edit commands are locally atomic", () => {
       secrets.revealPrivileged("outbound", DESTINATION, "webhook_token"),
       "restored-header",
     );
+  } finally {
+    database.close();
+  }
+});
+
+void test("a new Home Assistant origin requires the token again and drops queued deliveries", () => {
+  const { database, service, secrets, lifecycleCalls } = harness();
+  try {
+    service.create({
+      id: DESTINATION,
+      label: "Home",
+      transport: "home_assistant",
+      baseUrl: "http://ha.test:8123",
+      secret: "original-token",
+    });
+    service.admit(database, pourCompleted("33333333-3333-4333-8333-333333333401"));
+    const versionBefore = service.get(DESTINATION)?.currentVersion?.id;
+
+    assert.throws(
+      () =>
+        service.updateConfigured(DESTINATION, {
+          baseUrl: "http://other-ha.test:8123",
+          enabled: true,
+        }),
+      credentialsRequired,
+    );
+    assert.equal(service.get(DESTINATION)?.currentVersion?.id, versionBefore);
+    assert.equal(
+      secrets.revealPrivileged("outbound", DESTINATION, "token_current"),
+      "original-token",
+    );
+    assert.equal(deliveryState(database, "33333333-3333-4333-8333-333333333401"), "pending");
+
+    lifecycleCalls.length = 0;
+    // A scheme change is an origin change too.
+    const moved = service.edit(DESTINATION, { baseUrl: "https://ha.test:8123" });
+    assert.equal(moved.enabled, false);
+    assert.equal(moved.disabledReason, "token_missing");
+    assert.throws(() => secrets.revealPrivileged("outbound", DESTINATION, "token_current"));
+    assert.equal(deliveryState(database, "33333333-3333-4333-8333-333333333401"), "dismissed");
+    assert.deepEqual(lifecycleCalls, [`disabled:${DESTINATION}`]);
+
+    const restored = service.updateConfigured(DESTINATION, {
+      enabled: true,
+      token: "replacement-token",
+    });
+    assert.equal(restored.enabled, true);
+    assert.equal(
+      secrets.revealPrivileged("outbound", DESTINATION, "token_current"),
+      "replacement-token",
+    );
+  } finally {
+    database.close();
+  }
+});
+
+void test("switching a destination's transport discards its stored Home Assistant token", () => {
+  const { database, service, secrets } = harness();
+  try {
+    service.create({
+      id: DESTINATION,
+      label: "Home",
+      transport: "home_assistant",
+      baseUrl: "http://ha.test:8123",
+      secret: "original-token",
+    });
+    const switched = service.edit(DESTINATION, {
+      transport: "webhook",
+      webhookUrl: "https://hooks.example.test/a",
+    });
+    assert.equal(switched.transport, "webhook");
+    assert.throws(() => secrets.revealPrivileged("outbound", DESTINATION, "token_current"));
+  } finally {
+    database.close();
+  }
+});
+
+void test("webhook secrets follow same-origin edits but must be re-entered for a new origin", () => {
+  const { database, service, secrets } = harness();
+  try {
+    const created = service.createConfigured({
+      id: DESTINATION,
+      label: "Hook",
+      transport: "webhook",
+      webhookUrl: "https://hooks.example.test/a",
+      secretHeaders: [{ name: "Authorization" }],
+      headerSecrets: [{ name: "Authorization", value: "Bearer kept" }],
+    });
+    const slot = created.currentVersion!.config.secretHeaders[0]!.slot;
+    assert.equal(created.enabled, true);
+    service.admit(database, pourCompleted("33333333-3333-4333-8333-333333333402"));
+
+    const samePath = service.updateConfigured(DESTINATION, {
+      webhookUrl: "https://hooks.example.test/b",
+      enabled: true,
+    });
+    assert.equal(samePath.enabled, true);
+    assert.equal(secrets.revealPrivileged("outbound", DESTINATION, slot), "Bearer kept");
+    assert.equal(deliveryState(database, "33333333-3333-4333-8333-333333333402"), "pending");
+
+    assert.throws(
+      () =>
+        service.updateConfigured(DESTINATION, {
+          webhookUrl: "https://elsewhere.example.test/b",
+          enabled: true,
+        }),
+      credentialsRequired,
+    );
+    assert.equal(secrets.revealPrivileged("outbound", DESTINATION, slot), "Bearer kept");
+
+    const moved = service.updateConfigured(DESTINATION, {
+      webhookUrl: "https://elsewhere.example.test/b",
+      enabled: true,
+      headerSecrets: [{ name: "Authorization", value: "Bearer moved" }],
+    });
+    assert.equal(moved.enabled, true);
+    assert.equal(secrets.revealPrivileged("outbound", DESTINATION, slot), "Bearer moved");
+    // Dismissed by the move (and possibly pruned by a later admission): never left to resend.
+    assert.notEqual(deliveryState(database, "33333333-3333-4333-8333-333333333402"), "pending");
   } finally {
     database.close();
   }
