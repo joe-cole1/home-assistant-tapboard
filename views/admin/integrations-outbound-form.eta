@@ -33,14 +33,14 @@
   <% if (selectedTransport === "home_assistant") { %>
     <fieldset class="outbound-fieldset">
       <legend>Home Assistant</legend>
-      <p class="muted">Use an <code>http://</code> or <code>https://</code> Home Assistant base URL. The token is write-only.</p>
+      <p class="muted">Use an <code>http://</code> or <code>https://</code> Home Assistant base URL. The token is write-only. Changing the scheme, host, or port discards the saved token and queued deliveries, so enter the token again.</p>
       <label>Base URL <input name="baseUrl" type="url" maxlength="2048" placeholder="<%= editing ? "Enter to replace; leave blank to retain current value" : "http://homeassistant.lan:8123" %>"<% if (!editing) { %> required<% } %> autocomplete="off" /></label>
       <label>Token <input name="token" type="password" maxlength="4096" placeholder="<%= editing ? "Leave blank to retain current token" : "Paste token" %>" autocomplete="new-password" /></label>
     </fieldset>
   <% } else { %>
     <fieldset class="outbound-fieldset">
       <legend>Webhook</legend>
-      <p class="muted">Only public HTTP(S) endpoints are eligible for delivery. Redirects are not followed.</p>
+      <p class="muted">Only public HTTP(S) endpoints are eligible for delivery. Redirects are not followed. Changing the endpoint's scheme, host, or port discards saved secret header values and queued deliveries, so enter the values again.</p>
       <label>Endpoint <input name="webhookUrl" type="url" maxlength="2048" placeholder="<%= editing ? "Enter to replace; leave blank to retain current endpoint" : "https://example.invalid/events" %>"<% if (!editing) { %> required<% } %> autocomplete="off" /></label>
       <label>Payload format <select name="payloadFormat"><option value="standard"<% if (!editing || config.payloadFormat === "standard") { %> selected<% } %>>Standard Tapboard JSON</option><option value="discord"<% if (editing && config.payloadFormat === "discord") { %> selected<% } %>>Discord webhook JSON</option></select></label>
     </fieldset>

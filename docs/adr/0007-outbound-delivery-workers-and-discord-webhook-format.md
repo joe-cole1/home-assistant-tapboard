@@ -27,3 +27,5 @@ Workers are lifecycle-owned by the application composition boundary and use inje
 - At-least-once delivery, lease expiry, CAS completion, bounded retry, and one in-flight claim per destination make duplicate sends and terminal outcomes explicit rather than pretending to provide exactly-once delivery.
 - Discord remains a bounded webhook serialization choice, not a new integration subsystem.
 - Public SSR and Admin projections expose safe summaries and status only; secret values and network diagnostics remain privileged and bounded.
+
+**Amendment (2026-10-15, #141, security):** logical secrets are bound to the destination's transport and origin. Changing a destination's scheme, host, or port discards its stored token and secret-header values and dismisses its unfinished deliveries; send-time slot resolution still applies to retries for the same origin.
