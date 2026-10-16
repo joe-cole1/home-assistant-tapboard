@@ -1,5 +1,7 @@
 # Tapboard Rebuild Architecture Decisions
 
+> **Historical record.** Archived in October 2026, after the v2 rebuild was complete. This document is no longer maintained and does not constrain current work: the code, its executable configuration, and [`architecture.md`](../../../architecture.md) are the source of truth.
+
 ## Status
 
 This document records the intended architecture for the Tapboard rebuild.

@@ -1,5 +1,7 @@
 # Tapboard v2 Architecture Freeze
 
+> **Historical record.** Archived in October 2026, after the v2 rebuild was complete. This document is no longer maintained and does not constrain current work: the code, its executable configuration, and [`architecture.md`](../../../architecture.md) are the source of truth.
+
 ## Status
 
 **FROZEN — Approved for rebuild initialization**
@@ -914,4 +916,4 @@ No unresolved architecture blocker exists at freeze.
 
 # 28. Approved extension — built-in Simulation (2026-09-29)
 
-The operator explicitly approved a System toggle and Simulator Admin page for recurring QC without hardware. [ADR-0008](../adr/0008-built-in-simulation-workspace.md) records the isolated saved workspace, shared normal authentication, real telemetry processing, disabled simulation transports, and transition/reset boundaries. This authorizes the feature before the remaining #80/#81 work and the additional connection for a separate simulation database inside the same deployable application. All existing domain ownership, lifecycle, API, security, and deployment boundaries remain applicable.
+The operator explicitly approved a System toggle and Simulator Admin page for recurring QC without hardware. [ADR-0008](../../adr/0008-built-in-simulation-workspace.md) records the isolated saved workspace, shared normal authentication, real telemetry processing, disabled simulation transports, and transition/reset boundaries. This authorizes the feature before the remaining #80/#81 work and the additional connection for a separate simulation database inside the same deployable application. All existing domain ownership, lifecycle, API, security, and deployment boundaries remain applicable.

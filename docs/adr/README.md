@@ -1,6 +1,6 @@
 # Tapboard v2 architecture decision records
 
-These records restate decisions that were already approved and frozen. They do not reopen design choices.
+These records explain the decisions behind the v2 rebuild. They are background, not requirements: the code and [`architecture.md`](../../architecture.md) are the source of truth, and a decision can be revisited when the code calls for it.
 
 - [ADR-0001](0001-clean-rebuild-modular-monolith-native-typescript.md) — clean rebuild, modular monolith, native TypeScript, and repository strategy
 - [ADR-0002](0002-core-domain-and-sqlite-ownership.md) — Beverage, Physical Keg, Fill, Tap, and normalized SQLite ownership
@@ -11,4 +11,4 @@ These records restate decisions that were already approved and frozen. They do n
 - [ADR-0007](0007-outbound-delivery-workers-and-discord-webhook-format.md) — outbound workers, immutable destination versions, bounded webhook formats, and delivery failure semantics
 - [ADR-0008](0008-built-in-simulation-workspace.md) — built-in simulation, isolated saved data, real telemetry processing, and workspace transitions
 
-The authoritative product and architecture sources remain the documents under [`docs/rebuild`](../rebuild/).
+The rebuild's original planning and acceptance documents are archived under [`docs/history/rebuild`](../history/rebuild/).

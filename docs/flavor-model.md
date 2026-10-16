@@ -81,7 +81,7 @@ node scripts/report-flavor-corpus.ts
 node scripts/report-flavor-corpus.ts /tmp/flavor-corpus.json
 ```
 
-The report records availability, source, bands, resolution coverage, diagnostics and fingerprints. Report output is model evidence, not tasting accuracy. Current acceptance results belong in [the status ledger](rebuild/STATUS.md); historical audits and frozen rebuild decisions retain their original scope.
+The report records availability, source, bands, resolution coverage, diagnostics and fingerprints. Report output is model evidence, not tasting accuracy. Acceptance results for a change belong in its PR description; the archived [rebuild status ledger](history/rebuild/STATUS.md) keeps the earlier results.
 
 ### MANUAL DEV TEST — flavor guidance
 

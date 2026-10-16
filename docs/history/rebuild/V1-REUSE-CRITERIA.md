@@ -1,5 +1,7 @@
 # Tapboard v1 Reuse Criteria
 
+> **Historical record.** Archived in October 2026, after the v2 rebuild was complete. This document is no longer maintained and does not constrain current work: the code, its executable configuration, and [`architecture.md`](../../../architecture.md) are the source of truth.
+
 ## 1. Purpose
 
 Tapboard v1 contains a mixture of:

@@ -1,5 +1,7 @@
 # Rebuild architecture guardrails
 
+> **Historical record.** Archived in October 2026, after the v2 rebuild was complete. This document is no longer maintained and does not constrain current work: the code, its executable configuration, and [`architecture.md`](../../../architecture.md) are the source of truth.
+
 ## Active v2 architecture and deployment gate
 
 `scripts/check-architecture.sh` permits the package manifest and `src/` runtime introduced by issue #66, the exact coherent development container set introduced by #85, the production Dockerfile/ignore pair restored for existing external Compose users, the v2-safe `.env.example` reference, and the hardened runnable production Compose contract finalized in #81 while enforcing topology- and content-aware boundaries:
@@ -44,7 +46,7 @@ The event registry is explicit and rejects provider-specific fields. Outbox capa
 
 ## Deployment and follow-up boundaries
 
-The default Dockerfile and exact runnable `compose.production.example.yaml` have v2 content checks; `.dockerignore`, `docker-compose.yml`, and unapproved top-level variants remain banned. Final #81 acceptance includes the separate disposable container gate; review and testing do not authorize a merge, image publication, or deployment. Backup tooling and v1 data migration remain operator-owned work. The narrow `PORT`, `DATA_DIR`, and `TAPBOARD_PUBLIC_ORIGIN` config aliases are explicitly authorized deployment compatibility; removing them requires migration of supported external consumers and a breaking-change review. See [operations](../operations.md) for external configuration, proxy, update, and recovery procedures.
+The default Dockerfile and exact runnable `compose.production.example.yaml` have v2 content checks; `.dockerignore`, `docker-compose.yml`, and unapproved top-level variants remain banned. Final #81 acceptance includes the separate disposable container gate; review and testing do not authorize a merge, image publication, or deployment. Backup tooling and v1 data migration remain operator-owned work. The narrow `PORT`, `DATA_DIR`, and `TAPBOARD_PUBLIC_ORIGIN` config aliases are explicitly authorized deployment compatibility; removing them requires migration of supported external consumers and a breaking-change review. See [operations](../../operations.md) for external configuration, proxy, update, and recovery procedures.
 
 Future issues may add domain, integration, browser, and feature-repository locations only within the frozen architecture. When a legitimate new topology or migration adds a boundary not represented here, that issue must deliberately update the focused allowlists and negative tests without weakening the legacy, layering, SQL-ownership, SQLite-connection, or reuse-manifest protections.
 
