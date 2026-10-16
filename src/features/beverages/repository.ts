@@ -1971,8 +1971,7 @@ function deleteBeverageWithAuditInternal(
   return database.withTransaction(() => {
     const impact = calculateBeverageDeletionImpact(database, beverageId);
     if (requireConfirmation) {
-      const confirmationName =
-        input.confirmationName ?? input.confirmName ?? input.expectedName ?? undefined;
+      const confirmationName = input.confirmationName;
       if (confirmationName === undefined || confirmationName !== impact.name) {
         throw new ApplicationError({
           category: "validation",

@@ -470,10 +470,6 @@ export class TelemetryService {
     });
   }
 
-  revokeSource(sourceIdRaw: string, options: TelemetryActorOptions = {}): TelemetrySource {
-    return this.disableSource(sourceIdRaw, options);
-  }
-
   getSourceById(sourceIdRaw: string): TelemetrySource | undefined {
     const sourceId = validateTelemetrySourceId(sourceIdRaw);
     const row = readTelemetrySourceById(this.database, sourceId);

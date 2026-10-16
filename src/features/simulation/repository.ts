@@ -142,13 +142,6 @@ export function updateSensor(database: DatabaseExecutor, value: SimulationSensor
   if (result.changes !== 1) throw new Error("Simulation sensor is missing");
 }
 
-export function deleteSensor(database: DatabaseExecutor, tapId: string): boolean {
-  return (
-    database.prepare<[string]>("DELETE FROM simulation_sensors WHERE tap_id = ?").run(tapId)
-      .changes === 1
-  );
-}
-
 function validateSensor(value: SimulationSensor): void {
   if (!Number.isFinite(value.remainingMl) || value.remainingMl < 0)
     throw new RangeError("Simulation remaining volume must be non-negative");

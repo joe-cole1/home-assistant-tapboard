@@ -5,7 +5,7 @@ import { listActivity } from "../src/features/activity/repository.ts";
 import { createDisplaySettingsService } from "../src/features/display/service.ts";
 import {
   validateUpdateDisplaySettingsInput,
-  validateUpdateTapCardDisplaySettingsInput,
+  validateTapCardDisplaySettingsInput,
 } from "../src/features/display/display-validation.ts";
 import { openDatabase } from "../src/infrastructure/database/connection.ts";
 
@@ -164,6 +164,6 @@ void test("Tap card updates reject server-owned fields", () => {
     remainingMode: "percent",
   };
   for (const extra of [{ revision: 1 }, { updatedAt: "server-owned" }]) {
-    assert.throws(() => validateUpdateTapCardDisplaySettingsInput({ ...writable, ...extra }));
+    assert.throws(() => validateTapCardDisplaySettingsInput({ ...writable, ...extra }));
   }
 });

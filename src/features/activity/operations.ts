@@ -45,8 +45,6 @@ export function readActivities(
   return listActivity(database, options);
 }
 
-export const listActivities = readActivities;
-
 export function setActivityRetention(
   database: DatabaseExecutor,
   retentionDays: number,

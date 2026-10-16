@@ -67,9 +67,6 @@ export async function runResetPin(options: ResetPinCommandOptions = {}): Promise
   }
 }
 
-export const resetOperatorPinCommand = runResetPin;
-export const runResetPinCommand = runResetPin;
-
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   void runResetPin().then((code) => {
     process.exitCode = code;

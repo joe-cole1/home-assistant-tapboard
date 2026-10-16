@@ -57,9 +57,6 @@ export async function runRotateSecretKey(
   }
 }
 
-export const rotateSecretKeyCommand = runRotateSecretKey;
-export const runRotateSecretKeyCommand = runRotateSecretKey;
-
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   void runRotateSecretKey().then((code) => {
     process.exitCode = code;

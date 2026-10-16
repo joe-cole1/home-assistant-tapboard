@@ -145,9 +145,6 @@ export class SseHub<C extends SseClientContext = SseClientContext> {
     const frame = `event: ${name}\ndata: ${json}\n\n`;
     for (const client of [...this.#clients]) this.#send(client, frame, options.dirtyKey);
   }
-  broadcast(name: string, value: unknown, options: SsePublishOptions = {}): void {
-    this.publish(name, value, options);
-  }
   stats(): SseHubStats {
     let queuedEvents = 0;
     let queuedBytes = 0;

@@ -140,13 +140,9 @@ export function appendDeletionAudit(
   return publicRecord;
 }
 
-export const recordDeletionAudit = appendDeletionAudit;
-
 export function readDeletionAudits(
   database: Parameters<typeof listDeletionAuditRows>[0],
   limit?: number,
 ): DeletionAuditRecord[] {
   return listDeletionAuditRows(database, limit);
 }
-
-export const listDeletionAudits = readDeletionAudits;

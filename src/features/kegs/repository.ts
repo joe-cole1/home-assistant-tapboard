@@ -1,9 +1,9 @@
 import type { DatabaseExecutor } from "../../infrastructure/database/connection.ts";
+import type { ActivityActorType } from "../activity/types.ts";
 import type {
   AdminKegPageSort,
   AdminKegPageStatus,
   AdminKegSummaryView,
-  ActorType,
   KegDeletionImpact,
   KegMaintenanceRecord,
   KegTareHistoryRecord,
@@ -109,7 +109,7 @@ function mapTareHistoryRow(row: TareHistoryRow): KegTareHistoryRecord {
     newTareG: row.new_tare_g,
     recordedAt: row.recorded_at,
     reason: row.reason,
-    actorType: row.actor_type as ActorType,
+    actorType: row.actor_type as ActivityActorType,
     actorId: row.actor_id,
   };
 }
@@ -121,7 +121,7 @@ function mapMaintenanceRow(row: MaintenanceRow): KegMaintenanceRecord {
     maintenanceType: row.maintenance_type,
     notes: row.notes,
     recordedAt: row.recorded_at,
-    actorType: row.actor_type as ActorType,
+    actorType: row.actor_type as ActivityActorType,
     actorId: row.actor_id,
   };
 }

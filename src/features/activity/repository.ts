@@ -156,8 +156,6 @@ export function insertActivity(database: DatabaseExecutor, record: ActivityRecor
     );
 }
 
-export const appendActivityRecord = insertActivity;
-
 export function listActivity(
   database: DatabaseExecutor,
   options: ActivityListOptions = {},

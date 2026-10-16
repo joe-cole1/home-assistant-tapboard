@@ -1,5 +1,4 @@
 import { lstat, realpath } from "node:fs/promises";
-import { lstatSync, realpathSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 
 import { ApplicationError } from "../../../shared/errors.ts";
@@ -76,23 +75,3 @@ export async function resolveContainedPath(
     throw pathError();
   }
 }
-
-export function resolveContainedPathSync(
-  root: string,
-  requestPath: string,
-  options: ResolveContainedPathOptions = {},
-): string {
-  const candidate = containedStaticPath(root, requestPath);
-  try {
-    const rootReal = realpathSync(root);
-    const candidateReal = realpathSync(candidate);
-    if (!isContainedPath(rootReal, candidateReal)) throw pathError();
-    if (options.allowSymlink !== true && lstatSync(candidate).isSymbolicLink()) throw pathError();
-    return candidateReal;
-  } catch (error) {
-    if (error instanceof ApplicationError) throw error;
-    throw pathError();
-  }
-}
-
-export const safeStaticPath = containedStaticPath;

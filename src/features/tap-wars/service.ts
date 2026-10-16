@@ -81,14 +81,8 @@ export class TapWarService implements TapWarLifecyclePort {
   getCurrentUnfinished() {
     return currentWar(this.#database);
   }
-  getCurrent() {
-    return this.getCurrentUnfinished();
-  }
   getPublishedResult() {
     return publishedWar(this.#database);
-  }
-  getPublished() {
-    return this.getPublishedResult();
   }
   getVisible() {
     return this.getCurrentUnfinished() ?? this.getPublishedResult();

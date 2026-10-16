@@ -44,12 +44,6 @@ export const BUILTIN_SIMULATION_SCHEMA_VERSION = 21;
 export const BUILTIN_SIMULATION_MIGRATION_NAME = "builtin-simulation";
 export const SYSTEM_ADMINISTRATION_SCHEMA_VERSION = 22;
 export const SYSTEM_ADMINISTRATION_MIGRATION_NAME = "system-administration-and-retention";
-
-// Compatibility aliases for callers that use the shorter domain names.
-export const DISPLAY_ACCENT_SCHEMA_VERSION = DISPLAY_CUSTOM_ACCENT_SCHEMA_VERSION;
-export const DISPLAY_ACCENT_MIGRATION_NAME = DISPLAY_CUSTOM_ACCENT_MIGRATION_NAME;
-export const TELEMETRY_SOURCE_DISABLED_SCHEMA_VERSION = TELEMETRY_DISABLED_LIFECYCLE_SCHEMA_VERSION;
-export const TELEMETRY_SOURCE_DISABLED_MIGRATION_NAME = TELEMETRY_DISABLED_LIFECYCLE_MIGRATION_NAME;
 export const FLAVOR_PROFILE_SCHEMA_VERSION = 23;
 export const FLAVOR_PROFILE_MIGRATION_NAME = "eight-axis-flavor-profile";
 export const CURRENT_SCHEMA_VERSION = FLAVOR_PROFILE_SCHEMA_VERSION;
@@ -3954,10 +3948,6 @@ export const MIGRATIONS: readonly MigrationDefinition[] = [
   SYSTEM_ADMINISTRATION_MIGRATION,
   FLAVOR_PROFILE_MIGRATION,
 ];
-
-// Compatibility aliases for callers that prefer an explicit application name.
-export const DATABASE_MIGRATIONS = MIGRATIONS;
-export const APPLICATION_SCHEMA_VERSION = CURRENT_SCHEMA_VERSION;
 
 function recordMigration(database: DatabaseExecutor, migration: MigrationDefinition): void {
   database

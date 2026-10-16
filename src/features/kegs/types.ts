@@ -1,6 +1,5 @@
 import type { DatabaseExecutor } from "../../infrastructure/database/connection.ts";
-
-export type ActorType = "admin" | "operator" | "system" | "machine";
+import type { ActivityActorType } from "../activity/types.ts";
 
 export interface PhysicalKeg {
   readonly id: string;
@@ -20,7 +19,7 @@ export interface KegTareHistoryRecord {
   readonly newTareG: number;
   readonly recordedAt: string;
   readonly reason: string | null;
-  readonly actorType: ActorType;
+  readonly actorType: ActivityActorType;
   readonly actorId: string | null;
 }
 
@@ -30,7 +29,7 @@ export interface KegMaintenanceRecord {
   readonly maintenanceType: string;
   readonly notes: string | null;
   readonly recordedAt: string;
-  readonly actorType: ActorType;
+  readonly actorType: ActivityActorType;
   readonly actorId: string | null;
 }
 
@@ -77,7 +76,7 @@ export interface DeleteKegInput {
 }
 
 export interface KegActorOptions {
-  readonly actorType?: ActorType;
+  readonly actorType?: ActivityActorType;
   readonly actorId?: string;
   readonly sessionId?: string;
   readonly now?: () => Date;

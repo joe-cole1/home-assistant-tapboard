@@ -116,8 +116,6 @@ export function validateTapCardDisplaySettingsInput(
   };
 }
 
-export const validateUpdateTapCardDisplaySettingsInput = validateTapCardDisplaySettingsInput;
-
 const TAP_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 type MutableTapCardDisplayOverridePatch = {
   -readonly [Key in keyof TapCardDisplayOverridePatch]?: TapCardDisplayOverridePatch[Key];
@@ -137,8 +135,6 @@ export function validateTapCardDisplayOverridePatch(input: unknown): TapCardDisp
   }
   return result;
 }
-
-export const validateTapCardDisplayOverrideInput = validateTapCardDisplayOverridePatch;
 
 export function validateTapCardId(value: unknown, field = "tapId"): string {
   if (typeof value !== "string" || !TAP_UUID.test(value.trim())) {

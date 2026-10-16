@@ -86,7 +86,7 @@ const THEMES: Readonly<
   },
 };
 
-const FONT_FILES: Readonly<
+export const FONT_FILES: Readonly<
   Record<
     Exclude<DisplayFont, "system">,
     {
@@ -306,5 +306,3 @@ export function displayStylesheetHref(
 ): string {
   return `/assets/css/display.css?v=${DISPLAY_STYLESHEET_VERSION}&theme=${encodeURIComponent(theme)}&accent=${encodeURIComponent(accent)}&font=${encodeURIComponent(font)}`;
 }
-
-export const displayFontFiles = FONT_FILES;

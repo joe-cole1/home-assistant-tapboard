@@ -4,7 +4,7 @@ import { join } from "node:path";
 import test, { type TestContext } from "node:test";
 
 import { createApplication } from "../src/application.ts";
-import { appendActivity, listActivities } from "../src/features/activity/index.ts";
+import { appendActivity, readActivities } from "../src/features/activity/index.ts";
 import { createAuthService, type AuthService } from "../src/features/auth/index.ts";
 import {
   openDatabase,
@@ -499,7 +499,7 @@ void test("System revokes selected and current sessions without revoking other b
   await assertSignedOut(f, selected);
   assert.equal((await get(f, "/admin/system", current)).status, 200);
   assert.equal((await get(f, "/admin/system", other)).status, 200);
-  const audit = listActivities(f.database).find(
+  const audit = readActivities(f.database).find(
     (row) => row.entityId === selected.id && row.action === "session_revoked",
   );
   assert.equal(audit?.sessionId, current.id);

@@ -92,7 +92,6 @@ export interface CompletedPour {
   readonly completedAt: string;
   readonly createdAt: string;
 }
-export type CreateCompletedPour = CompletedPour;
 export interface EffectiveDetectorConfig {
   readonly config: DetectorConfig;
   readonly globalConfigRevision: number;

@@ -129,19 +129,6 @@ export interface DeleteTapInput {
 
 export type AdminTapPageState = "all" | "assigned" | "unassigned" | "disabled" | "retired";
 
-export interface AdminTapPageQuery {
-  readonly q?: unknown;
-  readonly state?: unknown;
-  readonly page?: unknown;
-}
-
-/** Normalized query consumed by the bounded SQL Tap administration projection. */
-export interface ValidatedAdminTapPageQuery {
-  readonly q: string;
-  readonly state: AdminTapPageState;
-  readonly page: number;
-}
-
 /** Safe assignment summary used by the compact Admin Tap list. */
 export interface AdminTapPageAssignment {
   readonly id: string;
@@ -258,22 +245,6 @@ export interface TapActorOptions {
   readonly now?: () => Date;
 }
 
-export const MYSTERY_REVEAL_FIELDS = [
-  "revealBeverageType",
-  "revealStyle",
-  "revealAbv",
-  "revealIbu",
-  "revealOg",
-  "revealFg",
-  "revealSrm",
-  "revealDescription",
-  "revealRecipe",
-  "revealSensory",
-  "revealHistory",
-] as const;
-
-export type MysteryRevealField = (typeof MYSTERY_REVEAL_FIELDS)[number];
-
 export interface TapAssignmentMysteryConfig {
   readonly enabled: boolean;
   readonly revealBeverageType: boolean;
@@ -288,8 +259,6 @@ export interface TapAssignmentMysteryConfig {
   readonly revealSensory: boolean;
   readonly revealHistory: boolean;
 }
-
-export type UpdateTapAssignmentMysteryInput = TapAssignmentMysteryConfig;
 
 export interface UpdateTapAssignmentMysteryResult {
   readonly config: TapAssignmentMysteryConfig;

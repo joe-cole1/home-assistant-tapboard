@@ -535,24 +535,6 @@ export function closeAssignmentLifecycle(
   return result.changes > 0;
 }
 
-export function closeActiveAssignmentByFillId(
-  database: DatabaseExecutor,
-  fillId: string,
-  endedAt: string,
-  endReason: string,
-): boolean {
-  const result = database
-    .prepare<[string, string, string]>(
-      `UPDATE tap_assignment_lifecycles
-       SET ended_at = ?,
-           end_reason = ?
-       WHERE fill_id = ? AND ended_at IS NULL`,
-    )
-    .run(endedAt, endReason, fillId);
-
-  return result.changes > 0;
-}
-
 export function findActiveAssignmentByTapId(
   database: DatabaseExecutor,
   tapId: string,
@@ -609,21 +591,6 @@ export function findFirstAssignmentByFillId(
        LIMIT 1`,
     )
     .get(fillId);
-
-  return row === undefined ? undefined : mapLifecycleRow(row);
-}
-
-export function findAssignmentLifecycleById(
-  database: DatabaseExecutor,
-  id: string,
-): TapAssignmentLifecycle | undefined {
-  const row = database
-    .prepare<[string], LifecycleRow>(
-      `SELECT id, tap_id, fill_id, assigned_at, ended_at, end_reason, created_at
-       FROM tap_assignment_lifecycles
-       WHERE id = ?`,
-    )
-    .get(id);
 
   return row === undefined ? undefined : mapLifecycleRow(row);
 }

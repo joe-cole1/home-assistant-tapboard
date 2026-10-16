@@ -15,7 +15,6 @@ export const DISPLAY_FONTS = [
 export const DISPLAY_ACCENTS = ["amber", "sky", "rose", "cyan", "tan", "orange", "blue"] as const;
 export const DISPLAY_UNIT_SYSTEMS = ["us", "metric"] as const;
 export const DISPLAY_LAYOUT_MODES = ["scroll", "rotation"] as const;
-export const TAP_CARD_DISPLAY_METRICS = ["abv", "ibu", "og", "fg", "srm"] as const;
 export const TAP_CARD_REMAINING_MODES = ["percent", "pints", "pours", "volume"] as const;
 
 export type DisplayTheme = (typeof DISPLAY_THEMES)[number];
@@ -25,7 +24,6 @@ export type DisplayCustomAccent = `#${string}`;
 export type DisplayAccent = (typeof DISPLAY_ACCENTS)[number] | DisplayCustomAccent;
 export type DisplayUnitSystem = (typeof DISPLAY_UNIT_SYSTEMS)[number];
 export type DisplayLayoutMode = (typeof DISPLAY_LAYOUT_MODES)[number];
-export type TapCardDisplayMetric = (typeof TAP_CARD_DISPLAY_METRICS)[number];
 export type TapCardRemainingMode = (typeof TAP_CARD_REMAINING_MODES)[number];
 
 export interface DisplaySettings {

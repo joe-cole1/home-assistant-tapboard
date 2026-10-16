@@ -3,19 +3,6 @@ import type { ServerResponse } from "node:http";
 import type { AuthService } from "../auth/service.ts";
 import { SseHub, type SseClientContext, type SseHubStats } from "../../infrastructure/sse/hub.ts";
 
-export const LIVE_EVENT_NAMES = [
-  "tap.updated",
-  "fill.updated",
-  "telemetry.updated",
-  "health.updated",
-  "ondeck.updated",
-  "integration_status.updated",
-  "display.updated",
-  "tap_wars.updated",
-] as const;
-
-export type LiveEventName = (typeof LIVE_EVENT_NAMES)[number];
-
 export type PublicLiveEvent =
   | {
       readonly name: "tap.updated" | "fill.updated" | "telemetry.updated" | "health.updated";

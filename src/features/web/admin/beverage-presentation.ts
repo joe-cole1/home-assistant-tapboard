@@ -45,9 +45,9 @@ export function recipeFromForm(
 export function sensoryOverridesFromForm(
   form: Readonly<Record<string, string>>,
 ): UpdateCustomBeverageInput["sensoryOverrides"] | undefined {
-  if (!ADMIN_BEVERAGE_SENSORY_AXES.some((axis) => form[axis] !== undefined)) return undefined;
+  if (!BEVERAGE_SENSORY_AXES.some((axis) => form[axis] !== undefined)) return undefined;
   return Object.fromEntries(
-    ADMIN_BEVERAGE_SENSORY_AXES.flatMap((axis) => {
+    BEVERAGE_SENSORY_AXES.flatMap((axis) => {
       const value = nullableNumber(form[axis]);
       if (
         value !== undefined &&
@@ -115,8 +115,6 @@ export function fillGlassOptions() {
     graphic: getVesselDescriptor(id),
   }));
 }
-
-export const ADMIN_BEVERAGE_SENSORY_AXES = BEVERAGE_SENSORY_AXES;
 
 export function boundedAdminString(value: unknown, maxBytes: number): string | null {
   if (typeof value !== "string" || value.length === 0) return null;
@@ -236,7 +234,7 @@ export function safeAdminFlavorDetails(value: unknown) {
         classifiedFraction: boundedAdminNumber(item.classifiedFraction),
       };
     }),
-    axes: ADMIN_BEVERAGE_SENSORY_AXES.map((key) => {
+    axes: BEVERAGE_SENSORY_AXES.map((key) => {
       const item = object(axes[key]);
       return {
         key,
@@ -284,7 +282,7 @@ export function safeAdminGuidance(value: unknown): {
       readonly evidence: string;
     }
   > = {};
-  for (const axis of ADMIN_BEVERAGE_SENSORY_AXES) {
+  for (const axis of BEVERAGE_SENSORY_AXES) {
     const raw = rawSensory[axis];
     const result = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : {};
     sensory[axis] = {
@@ -473,7 +471,7 @@ export function adminBeverageDetailDto(
       detail.sensoryOverrides === undefined
         ? null
         : Object.fromEntries(
-            ADMIN_BEVERAGE_SENSORY_AXES.map((axis) => [
+            BEVERAGE_SENSORY_AXES.map((axis) => [
               axis,
               safeSensoryOverride(detail.sensoryOverrides?.[axis]),
             ]),

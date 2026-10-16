@@ -13,7 +13,6 @@ import type {
 import { TELEMETRY_NORMALIZATION_VERSION as NORMALIZATION_VERSION } from "./types.ts";
 
 export { canonicalizeJson };
-export { TELEMETRY_NORMALIZATION_VERSION } from "./types.ts";
 export type { MassUnit, VolumeUnit, TemperatureUnit, PercentageUnit, NormalizedTelemetrySample };
 
 const CANONICAL_DECIMAL_PLACES = 6;

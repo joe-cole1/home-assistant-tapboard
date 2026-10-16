@@ -139,13 +139,6 @@ export interface DeleteFillInput {
 export type AdminFillPageState = "active" | "available" | "on_deck" | "on_tap" | "ended" | "all";
 export type AdminFillPageSort = "state" | "name" | "fill_date" | "updated" | "keg";
 
-export interface AdminFillPageQuery {
-  readonly q?: unknown;
-  readonly state?: unknown;
-  readonly sort?: unknown;
-  readonly page?: unknown;
-}
-
 export interface AdminFillPage {
   readonly items: readonly AdminFillView[];
   readonly total: number;
