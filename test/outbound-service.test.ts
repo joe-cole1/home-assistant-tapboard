@@ -7,6 +7,7 @@ import {
 } from "../src/infrastructure/database/connection.ts";
 import { createSecretsService } from "../src/features/secrets/service.ts";
 import { createOutboundService, type OutboundService } from "../src/features/outbound/service.ts";
+import { applyDeliveryResult, claimDue } from "../src/features/outbox/repository.ts";
 import { readActivities } from "../src/features/activity/operations.ts";
 import { ApplicationError } from "../src/shared/errors.ts";
 
@@ -396,6 +397,88 @@ void test("a new Home Assistant origin requires the token again and drops queued
     );
   } finally {
     database.close();
+  }
+});
+
+void test("a failed delivery for an old origin cannot be retried with the new origin's secrets", () => {
+  const cases = [
+    {
+      transport: "home_assistant",
+      create: (service: OutboundService) =>
+        service.create({
+          id: DESTINATION,
+          label: "Home",
+          transport: "home_assistant",
+          baseUrl: "http://ha.test:8123",
+          secret: "original-token",
+        }),
+      move: (service: OutboundService) =>
+        service.updateConfigured(DESTINATION, {
+          baseUrl: "http://other-ha.test:8123",
+          enabled: true,
+          token: "replacement-token",
+        }),
+    },
+    {
+      transport: "webhook",
+      create: (service: OutboundService) =>
+        service.createConfigured({
+          id: DESTINATION,
+          label: "Hook",
+          transport: "webhook",
+          webhookUrl: "https://hooks.example.test/a",
+          secretHeaders: [{ name: "Authorization" }],
+          headerSecrets: [{ name: "Authorization", value: "Bearer original" }],
+        }),
+      move: (service: OutboundService) =>
+        service.updateConfigured(DESTINATION, {
+          webhookUrl: "https://elsewhere.example.test/b",
+          enabled: true,
+          headerSecrets: [{ name: "Authorization", value: "Bearer replacement" }],
+        }),
+    },
+  ] as const;
+  for (const { transport, create, move } of cases) {
+    const { database, service } = harness();
+    try {
+      create(service);
+      const eventId = "33333333-3333-4333-8333-333333333403";
+      service.admit(database, pourCompleted(eventId));
+      // Deliver anything admitted earlier, then fail the pour delivery permanently.
+      let failedDeliveryId: string | undefined;
+      for (let attempt = 0; attempt < 5 && failedDeliveryId === undefined; attempt += 1) {
+        const [claim] = claimDue(database, "worker", NOW, 5_000, 1);
+        assert.ok(claim, transport);
+        const target = claim.eventId === eventId;
+        assert.equal(
+          applyDeliveryResult(database, {
+            deliveryId: claim.deliveryId,
+            owner: "worker",
+            revision: claim.revision,
+            outcome: target ? "permanent" : "success",
+            now: NOW,
+          }),
+          true,
+          transport,
+        );
+        if (target) failedDeliveryId = claim.deliveryId;
+      }
+      assert.ok(failedDeliveryId, transport);
+      assert.equal(deliveryState(database, eventId), "terminal", transport);
+
+      move(service);
+      assert.equal(deliveryState(database, eventId), "dismissed", transport);
+      assert.equal(service.retryDelivery(DESTINATION, failedDeliveryId), false, transport);
+      assert.equal(
+        claimDue(database, "worker", NOW, 5_000, 10).some(
+          (item) => item.deliveryId === failedDeliveryId,
+        ),
+        false,
+        transport,
+      );
+    } finally {
+      database.close();
+    }
   }
 });
 
