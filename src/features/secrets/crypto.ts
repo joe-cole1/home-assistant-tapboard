@@ -56,12 +56,6 @@ export function parseRootKey(value: unknown): Uint8Array | undefined {
   return new Uint8Array(decoded);
 }
 
-export function requireRootKey(value: unknown): Uint8Array {
-  const parsed = parseRootKey(value);
-  if (parsed === undefined) throw unavailable();
-  return parsed;
-}
-
 export function validateIdentityPart(value: unknown, _field = "identity"): string {
   if (typeof value !== "string" || value.length === 0 || value.trim() !== value)
     throw invalidSecret();
@@ -86,8 +80,6 @@ export function associatedData(identity: SecretIdentity): Buffer {
     "utf8",
   );
 }
-
-export const buildAssociatedData = associatedData;
 
 function plaintextBytes(value: unknown): Buffer {
   if (typeof value !== "string" || value.length === 0) throw invalidSecret();

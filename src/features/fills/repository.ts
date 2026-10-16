@@ -201,22 +201,6 @@ function mapFillRow(row: FillRow): Fill {
   };
 }
 
-interface FillDisplayPreferenceRow {
-  readonly featured: number;
-}
-
-/** Read one fill's sparse public-card preference without loading other fills. */
-export function readFillFeatured(database: DatabaseExecutor, fillId: string): boolean {
-  const row = database
-    .prepare<[string], FillDisplayPreferenceRow>(
-      `SELECT featured
-       FROM fill_display_preferences
-       WHERE fill_id = ?`,
-    )
-    .get(fillId);
-  return row?.featured === 1;
-}
-
 /** Persist only enabled Featured state; false returns the row to the default. */
 export function upsertFillFeatured(
   database: DatabaseExecutor,
@@ -270,33 +254,6 @@ export function insertFill(database: DatabaseExecutor, fill: Fill): void {
       fill.createdAt,
       fill.updatedAt,
     );
-}
-
-export function updateFill(database: DatabaseExecutor, fill: Fill): boolean {
-  const result = database
-    .prepare<[string, string, string, number | null, string | null, string | null, string, string]>(
-      `UPDATE fills
-       SET beverage_id = ?,
-           keg_id = ?,
-           fill_date = ?,
-           on_deck_order = ?,
-           ended_at = ?,
-           end_reason = ?,
-           updated_at = ?
-       WHERE id = ?`,
-    )
-    .run(
-      fill.beverageId,
-      fill.kegId,
-      fill.fillDate,
-      fill.onDeckOrder,
-      fill.endedAt,
-      fill.endReason,
-      fill.updatedAt,
-      fill.id,
-    );
-
-  return result.changes > 0;
 }
 
 export function findFillById(database: DatabaseExecutor, id: string): Fill | undefined {
@@ -396,18 +353,6 @@ export function listAdminFillPage(
 export function deleteFillById(database: DatabaseExecutor, id: string): boolean {
   const result = database.prepare<[string]>(`DELETE FROM fills WHERE id = ?`).run(id);
   return result.changes > 0;
-}
-
-export function countFillsByKegId(database: DatabaseExecutor, kegId: string): number {
-  const row = database
-    .prepare<[string], CountRow>(
-      `SELECT COUNT(*) AS count
-       FROM fills
-       WHERE keg_id = ?`,
-    )
-    .get(kegId);
-
-  return row?.count ?? 0;
 }
 
 export function countFillsByBeverageId(database: DatabaseExecutor, beverageId: string): number {

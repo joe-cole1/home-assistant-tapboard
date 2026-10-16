@@ -68,7 +68,7 @@ function labelValue(value: unknown): string {
   return value;
 }
 
-function tokenParts(
+export function parseMachineKeyToken(
   value: unknown,
 ): { readonly publicId: string; readonly secret: string } | undefined {
   if (typeof value !== "string") return undefined;
@@ -88,8 +88,6 @@ function tokenParts(
   }
   return { publicId, secret };
 }
-
-export const parseMachineKeyToken = tokenParts;
 
 function tokenDigest(token: string): Buffer {
   return createHash("sha256").update(token, "ascii").digest();
@@ -250,7 +248,7 @@ export class MachineKeyService {
     token: unknown,
     options: { readonly now?: () => Date } = {},
   ): MachineKeyVerification | undefined {
-    const parsed = tokenParts(token);
+    const parsed = parseMachineKeyToken(token);
     const candidateDigest = tokenDigest(
       typeof token === "string" && parsed !== undefined ? token : DUMMY_TOKEN,
     );

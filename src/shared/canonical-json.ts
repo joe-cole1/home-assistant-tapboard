@@ -166,5 +166,3 @@ export function canonicalizeJson(value: unknown, options: CanonicalJsonOptions =
   if (bytes > normalized.maxBytes) throw invalid("maximum serialized byte count exceeded");
   return encoded;
 }
-
-export const canonicalJson = canonicalizeJson;

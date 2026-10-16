@@ -34,8 +34,7 @@ export const ACTIVITY_ACTIONS = {
   system: ["operator_pin_reset"],
 } as const satisfies Readonly<Record<ActivityCategory, readonly string[]>>;
 
-type ActionValues = (typeof ACTIVITY_ACTIONS)[ActivityCategory][number];
-export type ActivityAction = ActionValues;
+export type ActivityAction = (typeof ACTIVITY_ACTIONS)[ActivityCategory][number];
 
 export type ActivityActorType = "admin" | "operator" | "system" | "machine";
 
@@ -114,22 +113,11 @@ export interface DeletionAuditRecord {
   readonly deletedAt: string;
 }
 
-export const ACTIVITY_REGISTRY: Readonly<Record<ActivityCategory, readonly ActivityAction[]>> =
-  ACTIVITY_ACTIONS;
-
 export function isActivityCategory(value: string): value is ActivityCategory {
   return (ACTIVITY_CATEGORIES as readonly string[]).includes(value);
-}
-
-export function isActivityAction(value: string): value is ActivityAction {
-  return Object.values(ACTIVITY_ACTIONS).some((actions) =>
-    (actions as readonly string[]).includes(value),
-  );
 }
 
 export function isValidActivityPair(category: string, action: string): action is ActivityAction {
   if (!isActivityCategory(category)) return false;
   return (ACTIVITY_ACTIONS[category] as readonly string[]).includes(action);
 }
-
-export const isActivityCategoryActionPair = isValidActivityPair;

@@ -1,6 +1,6 @@
 import BetterSqlite3 from "better-sqlite3";
 
-import { DATABASE_MIGRATIONS, initializeSchema, type MigrationDefinition } from "./migrations.ts";
+import { MIGRATIONS, initializeSchema, type MigrationDefinition } from "./migrations.ts";
 
 export interface StatementResult {
   readonly changes: number;
@@ -146,7 +146,7 @@ export function openDatabase(path: string, options: OpenDatabaseOptions = {}): D
     connection = new ControlledDatabaseConnection(new BetterSqlite3(path));
     verifyForeignKeys(connection);
     verifyDatabaseIntegrity(connection);
-    initializeSchema(connection, options.migrations ?? DATABASE_MIGRATIONS);
+    initializeSchema(connection, options.migrations ?? MIGRATIONS);
     verifyDatabaseIntegrity(connection);
     return connection;
   } catch (error) {

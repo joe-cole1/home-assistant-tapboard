@@ -269,12 +269,6 @@ export function countTapTelemetryAuthoritiesForSource(
   );
 }
 
-/**
- * Compatibility alias for callers of the original repository API. Key
- * descriptors are intentionally resolved outside the telemetry repository.
- */
-export const listTelemetrySourcesWithKeyDetails = listTelemetrySources;
-
 // --- Tap Authority ---
 
 export function readTapTelemetryAuthority(

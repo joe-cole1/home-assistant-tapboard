@@ -20,6 +20,3 @@ export function applySecurityHeaders(response: ServerResponse): void {
   if (response.headersSent || response.destroyed) return;
   for (const [name, value] of Object.entries(SECURITY_HEADERS)) response.setHeader(name, value);
 }
-
-export const setSecurityHeaders = applySecurityHeaders;
-export const getSecurityHeaders = securityResponseHeaders;

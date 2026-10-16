@@ -64,10 +64,6 @@ export class SimulationRunner {
     this.#onSampleCommitted = options.onSampleCommitted;
   }
 
-  get isRunning(): boolean {
-    return this.#running;
-  }
-
   start(): void {
     if (this.#running) return;
     const { database, telemetryService } = this.#dependencies;

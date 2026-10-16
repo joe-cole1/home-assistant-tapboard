@@ -345,6 +345,16 @@ void test("beverage deletion requires exact current effective name", () => {
       () => beverageService.deleteBeverage(created.beverage.id, { confirmationName: "wrong" }),
       /exact current beverage name/i,
     );
+    // Only `confirmationName` confirms a deletion; the old synonyms are unknown fields.
+    for (const synonym of ["confirmName", "expectedName"]) {
+      assert.throws(
+        () =>
+          beverageService.deleteBeverage(created.beverage.id, {
+            [synonym]: "Delete Confirmation",
+          }),
+        new RegExp(`Unknown field '${synonym}'`),
+      );
+    }
     assert.equal(
       beverageService.deleteBeverage(created.beverage.id, {
         confirmationName: "Delete Confirmation",

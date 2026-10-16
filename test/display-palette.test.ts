@@ -3,7 +3,7 @@ import test from "node:test";
 
 import {
   contrastRatio,
-  displayFontFiles,
+  FONT_FILES,
   displayStylesheetHref,
   generateDisplayStylesheet,
   resolveDisplayPaletteRoles,
@@ -37,7 +37,7 @@ void test("display stylesheet output is deterministic, same-origin, and font-sel
   assert.equal(selected.etag, selectedAgain.etag);
   assert.match(selected.css, /@font-face/u);
   assert.match(selected.css, /assets\/fonts\/outfit-[0-9a-f]+\.woff2/u);
-  for (const font of Object.keys(displayFontFiles).filter((font) => font !== "outfit")) {
+  for (const font of Object.keys(FONT_FILES).filter((font) => font !== "outfit")) {
     assert.doesNotMatch(selected.css, new RegExp(`assets/fonts/${font}-`, "u"));
   }
   assert.doesNotMatch(selected.css, /https?:/u);
@@ -54,15 +54,15 @@ void test("display stylesheet output is deterministic, same-origin, and font-sel
   assert.ok(previewPalette.startsWith(`${rootPalette};`));
   assert.match(previewPalette, /--surface:#ffffff;/u);
   assert.match(previewPalette, /--text:#0f172a;/u);
-  for (const font of Object.keys(displayFontFiles)) {
+  for (const font of Object.keys(FONT_FILES)) {
     assert.match(all.css, new RegExp(`assets/fonts/${font}-[0-9a-f]+\\.woff2`, "u"));
     assert.ok(all.css.includes(`data-preview-font="${font}"`));
   }
 
-  for (const font of Object.keys(displayFontFiles) as Array<Exclude<DisplayFont, "system">>) {
+  for (const font of Object.keys(FONT_FILES) as Array<Exclude<DisplayFont, "system">>) {
     const css = generateDisplayStylesheet("modern_dark", "amber", font).css;
     assert.match(css, new RegExp(`assets/fonts/${font}-[0-9a-f]+\\.woff2`, "u"));
-    for (const other of Object.keys(displayFontFiles).filter((candidate) => candidate !== font)) {
+    for (const other of Object.keys(FONT_FILES).filter((candidate) => candidate !== font)) {
       assert.doesNotMatch(css, new RegExp(`assets/fonts/${other}-`, "u"));
     }
   }

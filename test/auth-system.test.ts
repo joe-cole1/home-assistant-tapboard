@@ -6,7 +6,7 @@ import test from "node:test";
 import { openDatabase } from "../src/infrastructure/database/connection.ts";
 import { createAuthService } from "../src/features/auth/index.ts";
 import { insertSession, revokeSession } from "../src/features/auth/repository.ts";
-import { listActivities } from "../src/features/activity/index.ts";
+import { readActivities } from "../src/features/activity/index.ts";
 import { ApplicationError } from "../src/shared/errors.ts";
 
 const START = "2026-09-30T12:00:00.123Z";
@@ -144,7 +144,7 @@ void test("selected-session and self revocation preserve other sessions and audi
     assert.equal(auth.validateSession(selected.session), undefined);
     assert.ok(auth.validateSession(current.session));
     assert.ok(auth.validateSession(other.session));
-    const audit = listActivities(database).find((row) => row.action === "session_revoked");
+    const audit = readActivities(database).find((row) => row.action === "session_revoked");
     assert.equal(audit?.actorType, "admin");
     assert.equal(audit?.actorId, "local-admin");
     assert.equal(audit?.sessionId, current.sessionId);
@@ -160,10 +160,10 @@ void test("selected-session and self revocation preserve other sessions and audi
       assert.ok(secret);
       assert.ok(!serialized.includes(secret));
     }
-    const count = listActivities(database).length;
+    const count = readActivities(database).length;
     assert.equal(auth.revokeSessionById(selected.sessionId), false);
     assert.equal(auth.revokeSessionById(id(999)), false);
-    assert.equal(listActivities(database).length, count);
+    assert.equal(readActivities(database).length, count);
     assert.throws(() => auth.revokeSessionById("' OR 1=1 --"), ApplicationError);
     assert.throws(() => auth.revokeSessionById(current.session), ApplicationError);
     assert.equal(auth.revokeSessionById(current.sessionId, { sessionId: current.sessionId }), true);
@@ -185,7 +185,7 @@ void test("session policy validates exact input, uses revision CAS and audits at
     assert.ok(login.sessionId);
     const input = { inactivityMs: MINUTE, absoluteMs: 3 * MINUTE, expectedRevision: 0 };
     const baseline = auth.getSessionPolicy();
-    const activityCount = listActivities(database).length;
+    const activityCount = readActivities(database).length;
     const accessor = Object.defineProperty({ ...input }, "absoluteMs", {
       get: () => {
         throw new Error("accessor must not run");
@@ -211,13 +211,13 @@ void test("session policy validates exact input, uses revision CAS and audits at
       assert.throws(() => auth.updateSessionPolicy(invalid), ApplicationError);
     }
     assert.deepEqual(auth.getSessionPolicy(), baseline);
-    assert.equal(listActivities(database).length, activityCount);
+    assert.equal(readActivities(database).length, activityCount);
     const saved = auth.updateSessionPolicy(input, {
       actorId: "local-admin",
       sessionId: login.sessionId,
     });
     assert.equal(saved.revision, 1);
-    const audit = listActivities(database).find(
+    const audit = readActivities(database).find(
       (row) => row.entityType === "auth_session_settings",
     );
     assert.equal(audit?.actorId, "local-admin");
@@ -231,9 +231,9 @@ void test("session policy validates exact input, uses revision CAS and audits at
       () => auth.updateSessionPolicy(input),
       (error: unknown) => error instanceof ApplicationError && error.category === "conflict",
     );
-    const countAfterSave = listActivities(database).length;
+    const countAfterSave = readActivities(database).length;
     assert.deepEqual(auth.updateSessionPolicy({ ...input, expectedRevision: 1 }), saved);
-    assert.equal(listActivities(database).length, countAfterSave);
+    assert.equal(readActivities(database).length, countAfterSave);
     const sessionBefore = auth.validateSession(login.session);
     assert.throws(() =>
       auth.updateSessionPolicy(
@@ -245,7 +245,7 @@ void test("session policy validates exact input, uses revision CAS and audits at
     assert.deepEqual(auth.validateSession(login.session), sessionBefore);
     assert.throws(() => auth.revokeSessionById(login.sessionId, { actorId: "" }));
     assert.ok(auth.validateSession(login.session));
-    assert.equal(listActivities(database).length, countAfterSave);
+    assert.equal(readActivities(database).length, countAfterSave);
   } finally {
     database.close();
   }

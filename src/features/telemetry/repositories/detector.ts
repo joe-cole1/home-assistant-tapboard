@@ -9,7 +9,6 @@ import {
 import { waitingDetectorState } from "../detector.ts";
 import type {
   CompletedPour,
-  CreateCompletedPour,
   CreateTelemetryEpoch,
   DetectorArbitrationGroup,
   DetectorArbitrationMember,
@@ -281,25 +280,6 @@ export function listOpenTelemetryEpochs(db: DatabaseExecutor): TelemetryEpoch[] 
       `SELECT ${epochCols} FROM telemetry_epochs WHERE ended_at IS NULL ORDER BY started_at_epoch_ms,id`,
     )
     .all()
-    .map(epoch);
-}
-export function listOpenTelemetryEpochsForFill(
-  db: DatabaseExecutor,
-  fillId: string,
-): TelemetryEpoch[] {
-  return db
-    .prepare<[string], Record<string, unknown>>(
-      `SELECT ${epochCols} FROM telemetry_epochs WHERE fill_id=? AND ended_at IS NULL ORDER BY started_at_epoch_ms,id`,
-    )
-    .all(fillId)
-    .map(epoch);
-}
-export function listTelemetryEpochsForFill(db: DatabaseExecutor, fillId: string): TelemetryEpoch[] {
-  return db
-    .prepare<[string], Record<string, unknown>>(
-      `SELECT ${epochCols} FROM telemetry_epochs WHERE fill_id=? ORDER BY started_at_epoch_ms,id`,
-    )
-    .all(fillId)
     .map(epoch);
 }
 export function listOpenTelemetryEpochsForKeg(
@@ -582,7 +562,7 @@ const pourCols =
   "id,effect_key,fill_id,tap_id,assignment_id,epoch_id,detector_session_id,canonical_volume_ml,started_at,completed_at,created_at";
 export function insertCompletedPourIdempotently(
   db: DatabaseExecutor,
-  p: CreateCompletedPour,
+  p: CompletedPour,
 ): { pour: CompletedPour; created: boolean } {
   const old = readCompletedPourByEffectKey(db, p.effectKey);
   if (old) return { pour: old, created: false };
@@ -619,18 +599,6 @@ export function readCompletedPourByEffectKey(
   const r = db
     .prepare<[string], Record<string, unknown>>(`SELECT ${pourCols} FROM pours WHERE effect_key=?`)
     .get(key);
-  return r && pour(r);
-}
-export function readCompletedPourByEpochSession(
-  db: DatabaseExecutor,
-  epochId: string,
-  detectorSessionId: string,
-): CompletedPour | undefined {
-  const r = db
-    .prepare<[string, string], Record<string, unknown>>(
-      `SELECT ${pourCols} FROM pours WHERE epoch_id=? AND detector_session_id=?`,
-    )
-    .get(epochId, detectorSessionId);
   return r && pour(r);
 }
 
@@ -701,11 +669,4 @@ export function listCompletedPourHistoryPageForFill(
     )
     .all(fillId, cursor.completedAt, cursor.completedAt, cursor.id, limit + 1)
     .map(pour);
-}
-export function countCompletedPoursForFill(db: DatabaseExecutor, fillId: string): number {
-  return (
-    db
-      .prepare<[string], { count: number }>("SELECT COUNT(*) AS count FROM pours WHERE fill_id=?")
-      .get(fillId)?.count ?? 0
-  );
 }

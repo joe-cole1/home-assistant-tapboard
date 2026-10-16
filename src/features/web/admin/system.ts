@@ -1,4 +1,4 @@
-import { APPLICATION_SCHEMA_VERSION } from "../../../infrastructure/database/migrations.ts";
+import { CURRENT_SCHEMA_VERSION } from "../../../infrastructure/database/migrations.ts";
 import { ApplicationError } from "../../../shared/errors.ts";
 import { APPLICATION_VERSION } from "../../../shared/version.ts";
 import type { SystemService } from "../../system/index.ts";
@@ -38,7 +38,7 @@ export function registerSystemPages(dependencies: RegisterSystemPagesDependencie
         system: {
           version: APPLICATION_VERSION,
           ready: dependencies.isReady?.() ?? true,
-          schemaVersion: APPLICATION_SCHEMA_VERSION,
+          schemaVersion: CURRENT_SCHEMA_VERSION,
           liveClients: dependencies.liveUpdates.stats(),
           connectivity: dependencies.dashboardService.getHeader().connectivityLabel,
           diagnostics,

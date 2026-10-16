@@ -4,9 +4,7 @@ export const TELEMETRY_NORMALIZATION_VERSION = 1;
 
 export type TelemetryPrimaryKind = "total_weight" | "remaining_volume" | "fill_percentage";
 export type MassUnit = "g" | "kg" | "oz" | "lb";
-export type TotalWeightUnit = MassUnit;
 export type VolumeUnit = "ml" | "l" | "us_fl_oz" | "us_gal";
-export type RemainingVolumeUnit = VolumeUnit;
 export type TemperatureUnit = "c" | "f";
 export type PercentageUnit = "percent" | "pct" | "%";
 

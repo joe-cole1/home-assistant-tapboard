@@ -5,8 +5,8 @@ import { openDatabase } from "../src/infrastructure/database/connection.ts";
 import {
   appendActivity,
   appendDeletionAudit,
-  listActivities,
-  listDeletionAudits,
+  readActivities,
+  readDeletionAudits,
   pruneActivity,
   setActivityRetention,
 } from "../src/features/activity/index.ts";
@@ -36,7 +36,7 @@ void test("activity validates pairs, scalar details, appends and lists typed rec
       details: { ok: true, note: "é" },
     });
     assert.deepEqual(record.details, { note: "é", ok: true });
-    assert.deepEqual(listActivities(database), [record]);
+    assert.deepEqual(readActivities(database), [record]);
     assert.throws(
       () =>
         database
@@ -88,7 +88,7 @@ void test("activity retention prunes only bounded old Activity rows", () => {
       pruneActivity(database, { now: () => new Date("2026-08-13T00:00:00.000Z"), batchSize: 1 }),
       1,
     );
-    assert.equal(listActivities(database).length, 1);
+    assert.equal(readActivities(database).length, 1);
     assert.throws(() => pruneActivity(database, { batchSize: 1_001 }), /batch/i);
   } finally {
     database.close();
@@ -110,7 +110,7 @@ void test("deletion audit is typed, immutable, and independent of unrelated reco
       deletedAt: "2026-08-13T12:00:00.000Z",
     });
     database.prepare<[string]>("DELETE FROM unrelated WHERE id = ?").run(ID_3);
-    assert.deepEqual(listDeletionAudits(database), [record]);
+    assert.deepEqual(readDeletionAudits(database), [record]);
     assert.throws(
       () =>
         database

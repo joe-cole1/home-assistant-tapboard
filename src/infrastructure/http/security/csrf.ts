@@ -15,8 +15,6 @@ export interface CookieMutationSession {
   readonly credentialRevision: number;
 }
 
-export type CookieMutationAuthorization = CookieMutationSession;
-
 function canonicalToken(value: string): boolean {
   if (!/^[A-Za-z0-9_-]{43}$/.test(value)) return false;
   try {
@@ -50,7 +48,7 @@ export function authorizeCookieMutation(
   input: CookieMutationInput,
   authenticate: (sessionToken: string) => CookieMutationSession | undefined,
   expectedCsrfDigest: (session: CookieMutationSession) => Uint8Array,
-): CookieMutationAuthorization | undefined {
+): CookieMutationSession | undefined {
   try {
     const token = parseSessionCookie(input.cookieHeader);
     if (token === undefined) return undefined;
@@ -67,5 +65,3 @@ export function authorizeCookieMutation(
     return undefined;
   }
 }
-
-export const authorizeMutation = authorizeCookieMutation;

@@ -23,7 +23,6 @@ export {
   listSourceTapStatusesForTap,
   listTapTelemetryAuthorities,
   listTelemetrySources,
-  listTelemetrySourcesWithKeyDetails,
   TELEMETRY_PRUNE_BATCH_SIZE,
   pruneMeasurementsOlderThan,
   pruneReceiptsOlderThan,

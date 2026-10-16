@@ -7,8 +7,6 @@ import type { ForecastService } from "../forecasting/service.ts";
 import type { OutboxRetentionSettings } from "../outbox/repository.ts";
 import type { TelemetryService } from "../telemetry/service.ts";
 
-export type { OutboxRetentionSettings } from "../outbox/repository.ts";
-
 export const SYSTEM_ACTIVITY_PAGE_SIZE = 50;
 
 export const SYSTEM_ACTIVITY_ENTITY_TYPES = [

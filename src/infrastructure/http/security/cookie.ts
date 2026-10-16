@@ -90,8 +90,6 @@ export function clearCsrfCookie(options: Pick<CookieSerializeOptions, "secure"> 
   ].join("; ");
 }
 
-export const serializeClearSessionCookie = clearSessionCookie;
-
 function headerValue(header: string | readonly string[] | undefined): string | undefined {
   if (header === undefined) return undefined;
   if (Array.isArray(header)) {
@@ -152,7 +150,3 @@ export function parseCsrfCookie(
   const token = parseCookieHeader(header).get(ADMIN_CSRF_COOKIE);
   return token !== undefined && canonicalToken(token) ? token : undefined;
 }
-
-export const parseCookies = parseCookieHeader;
-export const parseCookie = parseCookieHeader;
-export const serializeCookie = serializeSessionCookie;

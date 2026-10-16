@@ -1,8 +1,6 @@
 import type { ActivityActorType } from "../activity/types.ts";
 import type { DatabaseExecutor } from "../../infrastructure/database/connection.ts";
 
-export type ActorType = ActivityActorType;
-
 export type BeverageOwnershipType = "custom" | "brewfather";
 
 export const BEVERAGE_TYPES = [
@@ -324,9 +322,6 @@ export interface BeverageDeletionImpact {
 export interface DeleteBeverageInput {
   /** Exact, case-sensitive current effective name required for permanence. */
   readonly confirmationName?: string;
-  /** Backward-compatible aliases accepted by older callers during rollout. */
-  readonly confirmName?: string;
-  readonly expectedName?: string;
   readonly reason?: string | null;
 }
 
@@ -463,7 +458,7 @@ export interface ConfigureBrewfatherAccountInput {
 }
 
 export interface BeverageActorOptions {
-  readonly actorType?: ActorType;
+  readonly actorType?: ActivityActorType;
   readonly actorId?: string;
   readonly sessionId?: string;
   readonly now?: () => Date;

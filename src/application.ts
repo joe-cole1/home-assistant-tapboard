@@ -9,7 +9,7 @@ import {
   type DatabaseConnection,
   type DatabaseExecutor,
 } from "./infrastructure/database/connection.ts";
-import { APPLICATION_SCHEMA_VERSION } from "./infrastructure/database/migrations.ts";
+import { CURRENT_SCHEMA_VERSION } from "./infrastructure/database/migrations.ts";
 import { sendJson } from "./infrastructure/http/error-mapper.ts";
 import {
   HttpServer,
@@ -845,7 +845,7 @@ class FoundationApplication implements Application {
         }
         sendJson(response, 200, {
           status: "ok",
-          schemaVersion: APPLICATION_SCHEMA_VERSION,
+          schemaVersion: CURRENT_SCHEMA_VERSION,
         });
       };
       router.get("/healthz", readinessHandler);

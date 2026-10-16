@@ -13,7 +13,7 @@ import type {
   MoveTapInput,
   RetireTapInput,
   UpdateTapInput,
-  UpdateTapAssignmentMysteryInput,
+  TapAssignmentMysteryConfig,
 } from "./types.ts";
 
 const MAX_TAP_NUMBER = 1_000_000;
@@ -303,7 +303,7 @@ export function adminTapPageSize(): number {
 
 export function validateUpdateTapAssignmentMysteryInput(
   input: unknown,
-): UpdateTapAssignmentMysteryInput {
+): TapAssignmentMysteryConfig {
   const object = requirePlainObject(input, "body");
   const fields = [
     "enabled",

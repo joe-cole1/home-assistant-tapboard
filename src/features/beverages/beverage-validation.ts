@@ -842,21 +842,13 @@ export function validateDeleteBeverageInput(input: unknown): DeleteBeverageInput
     return {};
   }
   assertPlainObject(input, "Delete beverage input must be an object.");
-  assertKnownFields(
-    input,
-    ["confirmationName", "confirmName", "expectedName", "reason"],
-    "delete beverage input",
-  );
+  assertKnownFields(input, ["confirmationName", "reason"], "delete beverage input");
 
   const reason = cleanOptionalString(input.reason, 255, "reason");
-  const names = [input.confirmationName, input.confirmName, input.expectedName].filter(
-    (value): value is string => value !== undefined,
-  );
-  if (names.length > 1 && names.some((value) => value !== names[0])) {
-    invalidRequest("Delete confirmation fields must agree.");
-  }
   const confirmationName =
-    names.length === 0 ? undefined : cleanString(names[0], 160, "confirmationName");
+    input.confirmationName === undefined
+      ? undefined
+      : cleanString(input.confirmationName, 160, "confirmationName");
   return {
     ...(confirmationName !== undefined ? { confirmationName } : {}),
     ...(reason !== null ? { reason } : {}),
