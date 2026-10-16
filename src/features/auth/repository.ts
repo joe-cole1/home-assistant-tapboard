@@ -384,10 +384,6 @@ export interface ReservedAttempt extends ThrottleRecord {
   readonly allowed: boolean;
 }
 
-export interface LoginReservation extends ReservedAttempt {
-  readonly credentialRevision: number | null;
-}
-
 export function reserveAttempt(database: DatabaseExecutor, now: string): ReservedAttempt {
   const current = readThrottle(database);
   const nowMs = Date.parse(now);
@@ -436,12 +432,6 @@ export function reserveAttempt(database: DatabaseExecutor, now: string): Reserve
     blockedUntil,
     allowed,
   };
-}
-
-export function reserveLoginAttempt(database: DatabaseExecutor, now: string): LoginReservation {
-  const credential = readCredential(database);
-  const reservation = reserveAttempt(database, now);
-  return { ...reservation, credentialRevision: credential?.revision ?? null };
 }
 
 export function resetThrottle(database: DatabaseExecutor, generation: number): boolean {

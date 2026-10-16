@@ -68,15 +68,11 @@ export interface EventEnvelope {
 }
 
 export interface EventEnvelopeInput {
-  readonly eventType?: string;
   readonly event_type?: string;
   readonly identifiers?: EventIdentifiers;
   readonly data: unknown;
-  readonly eventId?: string;
   readonly event_id?: string;
-  readonly occurredAt?: Date | string;
   readonly occurred_at?: Date | string;
-  readonly coalescingKey?: string;
   readonly coalescing_key?: string;
 }
 
@@ -146,5 +142,3 @@ export function isEventType(value: string): value is EventType {
 export function getEventDefinition(value: string): EventDefinition | undefined {
   return isEventType(value) ? EVENT_REGISTRY[value] : undefined;
 }
-
-export const lookupEventDefinition = getEventDefinition;

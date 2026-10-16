@@ -16,7 +16,7 @@ import {
   getCapacityStatus,
   listDeliveries,
   listOverflowIncidents,
-  manualRetry,
+  retryDelivery,
   mutateAndAdmit,
   recoverCapacity,
   setDestinationEnabled,
@@ -590,7 +590,7 @@ void test("claim, CAS success, retry, terminal, manual retry, and dismiss", () =
       true,
     );
     assert.equal(dismissDelivery(database, reclaimed.deliveryId, NOW), false);
-    assert.equal(manualRetry(database, reclaimed.deliveryId, NOW), false);
+    assert.equal(retryDelivery(database, reclaimed.deliveryId, NOW), false);
     const delivery = listDeliveries(database).find((row) => row.id === reclaimed.deliveryId);
     assert.equal(delivery?.attempt_count, 2);
     assert.equal(dismissDelivery(database, reclaimed.deliveryId, NOW), false);
@@ -715,7 +715,7 @@ void test("cycle-limit failure becomes terminal and manual retry preserves total
         assert.equal(row?.state, "terminal");
       }
     }
-    assert.equal(manualRetry(database, deliveryId, due), true);
+    assert.equal(retryDelivery(database, deliveryId, due), true);
     const retried = listDeliveries(database).find((item) => item.id === deliveryId);
     assert.equal(retried?.attempt_count, 8);
     assert.equal(retried?.cycle_attempt_count, 0);
@@ -733,7 +733,7 @@ void test("cycle-limit failure becomes terminal and manual retry preserves total
       true,
     );
     assert.equal(dismissDelivery(database, deliveryId, due), true);
-    assert.equal(manualRetry(database, deliveryId, due), false);
+    assert.equal(retryDelivery(database, deliveryId, due), false);
   } finally {
     database.close();
   }

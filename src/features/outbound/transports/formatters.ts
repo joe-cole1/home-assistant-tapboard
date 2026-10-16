@@ -49,9 +49,6 @@ export function formatStandardEvent(input: EventEnvelopeInput): string {
   return serializeEventEnvelope(input);
 }
 
-export const formatStandardEnvelope = formatStandardEvent;
-export const formatTapboardEvent = formatStandardEvent;
-
 function boundedText(
   value: unknown,
   maximumBytes: number,
@@ -195,5 +192,3 @@ export function formatDiscordEvent(
     { maxBytes: 4_096, maxDepth: 4, maxKeys: 4, maxArrayItems: 4 },
   );
 }
-
-export const formatDiscordPayload = formatDiscordEvent;

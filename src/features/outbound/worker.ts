@@ -46,7 +46,7 @@ function now(clock: OutboundWorkerClock | undefined): Date {
 function descriptors(
   secrets: OutboundSecretStore | undefined,
 ): readonly OutboundSecretDescriptorLike[] {
-  const rows = secrets?.listDescriptors?.() ?? secrets?.list?.() ?? [];
+  const rows = secrets?.list?.() ?? [];
   return rows.map((row) => ({
     integrationType: row.integrationType,
     recordId: row.recordId,
@@ -434,8 +434,7 @@ export class OutboundWorker {
 
   async #probeHomeAssistant(destinationId: string, generation: number): Promise<void> {
     if (!this.#isCurrent(generation)) return;
-    if (this.#transports.ensureHealthy === undefined && this.#transports.connect === undefined)
-      return;
+    if (this.#transports.ensureHealthy === undefined) return;
     const destination = listDestinations(this.#database, {
       secrets: descriptors(this.#secrets),
       now: now(this.#clock),
@@ -474,10 +473,7 @@ export class OutboundWorker {
         secretHeaders: {},
         endpoint: version.config.baseUrl,
       };
-      result =
-        this.#transports.ensureHealthy === undefined
-          ? await promiseLike(this.#transports.connect!(input))
-          : await promiseLike(this.#transports.ensureHealthy(input));
+      result = await promiseLike(this.#transports.ensureHealthy(input));
     } catch {
       result = { outcome: "retryable_failure", errorCode: "ha_probe_failed" };
     }

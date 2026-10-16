@@ -5,8 +5,6 @@ import type { TransportAttemptResult } from "./transport-types.ts";
 /** The two provider-neutral outbound transports supported by v2. */
 export type OutboundTransport = "home_assistant" | "webhook";
 
-export const OUTBOUND_TRANSPORTS = ["home_assistant", "webhook"] as const;
-
 export type OutboundFailureClass = "authentication" | "connectivity" | "unknown";
 export type OutboundDestinationState =
   "healthy" | "degraded" | "disabled" | "unknown" | "failing" | "needs_attention";
@@ -167,19 +165,8 @@ export interface OutboundDestinationPatch {
   readonly secretHeaders?: readonly { readonly name: string; readonly slot?: string }[];
 }
 
-export interface OutboundStatusProjection {
-  readonly state: OutboundDestinationState;
-  readonly required: boolean;
-  readonly enabled: boolean;
-  readonly destinationIds: readonly string[];
-  readonly degradedRequiredDestinationIds: readonly string[];
-}
-
 export interface OutboundAdmissionPort {
-  admit(
-    database: DatabaseExecutor,
-    event: EventEnvelope | OutboundEventInput,
-  ): OutboundAdmissionResult;
+  admit(database: DatabaseExecutor, event: EventEnvelope): OutboundAdmissionResult;
   assignmentOpened(
     database: DatabaseExecutor,
     context: AssignmentOpenedEventContext,
@@ -201,10 +188,6 @@ export interface OutboundAdmissionPort {
     database: DatabaseExecutor,
     context: IntegrationStatusEventContext,
   ): OutboundAdmissionResult;
-}
-
-export interface OutboundEventInput {
-  readonly event: EventEnvelope;
 }
 
 export interface AssignmentOpenedEventContext {
@@ -280,13 +263,6 @@ export type OutboundAdmissionResult =
     };
 
 export interface OutboundSecretStore {
-  listDescriptors?(): readonly {
-    readonly integrationType: string;
-    readonly recordId: string;
-    readonly fieldName: string;
-    readonly configured: boolean;
-    readonly available: boolean;
-  }[];
   list?(): readonly {
     readonly integrationType: string;
     readonly recordId: string;
@@ -353,12 +329,6 @@ export interface OutboundTransportRouter {
     | PromiseLike<TransportAttemptResult | OutboundTransportOutcome>;
   /** Optional HA-only startup/re-enable authentication probe. Never used for webhooks. */
   ensureHealthy?(
-    input: Omit<OutboundTransportSendInput, "envelope">,
-  ):
-    | TransportAttemptResult
-    | OutboundTransportOutcome
-    | PromiseLike<TransportAttemptResult | OutboundTransportOutcome>;
-  connect?(
     input: Omit<OutboundTransportSendInput, "envelope">,
   ):
     | TransportAttemptResult

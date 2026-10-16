@@ -17,8 +17,8 @@ const DEFAULT_DESTINATION_ROWS = 2_000;
 const DEFAULT_DESTINATION_BYTES = 16 * 1024 * 1024;
 const MAX_ENVELOPE_BYTES = 16_384;
 const MAX_ERROR_BYTES = 120;
-export const MAX_CYCLE_ATTEMPTS = 1_000;
-export const ACTIVE_FAILURE_WINDOW_MS = 24 * 60 * 60 * 1_000;
+const MAX_CYCLE_ATTEMPTS = 1_000;
+const ACTIVE_FAILURE_WINDOW_MS = 24 * 60 * 60 * 1_000;
 const MAX_RETRY_BACKOFF_MS = 3_600_000;
 
 export interface OutboundDestinationDescriptor {
@@ -53,22 +53,11 @@ export interface DestinationVersionInput {
 export interface OutboxTarget {
   readonly destinationId: string;
   readonly destinationVersionId: string;
-  readonly versionId?: string;
 }
 
 export interface OutboxIntent {
-  readonly event?: EventEnvelopeInput | EventEnvelope;
-  readonly envelope?: EventEnvelopeInput | EventEnvelope;
-  readonly eventType?: string;
-  readonly event_type?: string;
-  readonly data?: unknown;
-  readonly identifiers?: EventEnvelopeInput["identifiers"];
-  readonly occurredAt?: Date | string;
-  readonly occurred_at?: Date | string;
-  readonly eventId?: string;
-  readonly event_id?: string;
+  readonly event: EventEnvelopeInput | EventEnvelope;
   readonly coalescingKey?: string;
-  readonly coalescing_key?: string;
   readonly targets?: readonly OutboxTarget[];
 }
 
@@ -207,19 +196,14 @@ function normalizeTargets(intent: OutboxIntent): OutboxTarget[] {
     }
     const target = raw as Record<string, unknown>;
     const keys = Object.keys(target).sort();
-    if (
-      keys.some(
-        (key) => key !== "destinationId" && key !== "destinationVersionId" && key !== "versionId",
-      ) ||
-      (target.destinationVersionId !== undefined && target.versionId !== undefined)
-    ) {
-      throw invalid(`targets[${index}]`, "contains unknown or duplicate fields");
+    if (keys.some((key) => key !== "destinationId" && key !== "destinationVersionId")) {
+      throw invalid(`targets[${index}]`, "contains unknown fields");
     }
     if (typeof target.destinationId !== "string") {
       throw invalid(`targets[${index}].destinationId`, "must be a canonical UUID");
     }
     const destinationId = uuid(target.destinationId, `targets[${index}].destinationId`, () => "");
-    const versionId = target.destinationVersionId ?? target.versionId;
+    const versionId = target.destinationVersionId;
     if (typeof versionId !== "string") {
       throw invalid(`targets[${index}].destinationVersionId`, "must be a canonical UUID");
     }
@@ -239,58 +223,14 @@ function normalizeTargets(intent: OutboxIntent): OutboxTarget[] {
 }
 
 function envelopeInput(intent: OutboxIntent): EventEnvelopeInput {
-  const allowed = new Set([
-    "event",
-    "envelope",
-    "eventType",
-    "event_type",
-    "data",
-    "identifiers",
-    "occurredAt",
-    "occurred_at",
-    "eventId",
-    "event_id",
-    "coalescingKey",
-    "coalescing_key",
-    "targets",
-  ]);
+  const allowed = new Set(["event", "coalescingKey", "targets"]);
   if (Object.keys(intent).some((key) => !allowed.has(key))) {
     throw invalid("intent", "contains unknown fields");
   }
-  const aliases = [
-    ["event", "envelope"],
-    ["eventType", "event_type"],
-    ["occurredAt", "occurred_at"],
-    ["eventId", "event_id"],
-    ["coalescingKey", "coalescing_key"],
-  ] as const;
-  for (const [first, second] of aliases) {
-    if (Object.hasOwn(intent, first) && Object.hasOwn(intent, second)) {
-      throw invalid("intent", `duplicate aliases ${first}/${second} are not allowed`);
-    }
-  }
-  const direct = intent.event ?? intent.envelope;
-  if (direct !== undefined) {
-    const key = intent.coalescingKey ?? intent.coalescing_key;
-    return key === undefined ? direct : { ...direct, coalescing_key: key };
-  }
-  const eventType = intent.eventType ?? intent.event_type;
-  if (eventType === undefined) throw invalid("event", "is required");
-  const result = {
-    event_type: eventType,
-    data: intent.data,
-    ...(intent.identifiers === undefined ? {} : { identifiers: intent.identifiers }),
-    ...(intent.occurredAt === undefined && intent.occurred_at === undefined
-      ? {}
-      : { occurred_at: intent.occurredAt ?? intent.occurred_at }),
-    ...(intent.eventId === undefined && intent.event_id === undefined
-      ? {}
-      : { event_id: intent.eventId ?? intent.event_id }),
-    ...(intent.coalescingKey === undefined && intent.coalescing_key === undefined
-      ? {}
-      : { coalescing_key: intent.coalescingKey ?? intent.coalescing_key }),
-  } satisfies EventEnvelopeInput;
-  return result;
+  const direct = intent.event;
+  if (direct === undefined) throw invalid("event", "is required");
+  const key = intent.coalescingKey;
+  return key === undefined ? direct : { ...direct, coalescing_key: key };
 }
 
 function buildEnvelope(
@@ -298,7 +238,7 @@ function buildEnvelope(
   options: OutboxClockOptions,
 ): { envelope: EventEnvelope; json: string; bytes: number } {
   const input = envelopeInput(intent);
-  const direct = intent.event ?? intent.envelope;
+  const direct = intent.event;
   if (
     direct !== undefined &&
     typeof direct === "object" &&
@@ -322,8 +262,6 @@ function buildEnvelope(
   const buildOptions: { now?: () => Date; idFactory?: () => string; eventId?: string } = {};
   if (options.now !== undefined) buildOptions.now = options.now;
   if (options.idFactory !== undefined) buildOptions.idFactory = options.idFactory;
-  const eventId = intent.eventId ?? intent.event_id;
-  if (eventId !== undefined) buildOptions.eventId = eventId;
   const envelope = createEventEnvelope(input, buildOptions);
   const json = serializeEventEnvelope(envelope);
   const bytes = Buffer.byteLength(json, "utf8");
@@ -683,8 +621,6 @@ export function createDestination(
   return { id, label, enabled: input.enabled !== false, createdAt: now, updatedAt: now };
 }
 
-export const createOutboundDestination = createDestination;
-
 export function setDestinationEnabled(
   database: DatabaseExecutor,
   destinationId: string,
@@ -704,8 +640,6 @@ export function setDestinationEnabled(
   return result;
 }
 
-export const enableDestination = setDestinationEnabled;
-
 export function createDestinationVersion(
   database: DatabaseExecutor,
   input: DestinationVersionInput,
@@ -724,9 +658,7 @@ export function createDestinationVersion(
   return { id, destinationId, versionNumber: input.versionNumber, createdAt };
 }
 
-export const createOutboundDestinationVersion = createDestinationVersion;
-
-export function readDestination(
+function readDestination(
   database: DatabaseExecutor,
   id: string,
 ): OutboundDestinationDescriptor | undefined {
@@ -751,14 +683,6 @@ export function readDestination(
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       };
-}
-
-export function deleteDestinationVersion(database: DatabaseExecutor, versionId: string): boolean {
-  const id = uuid(versionId, "destinationVersionId", randomUUID);
-  return (
-    database.prepare<[string]>("DELETE FROM outbound_destination_versions WHERE id = ?").run(id)
-      .changes === 1
-  );
 }
 
 export function getCapacityStatus(database: DatabaseExecutor): {
@@ -941,11 +865,9 @@ export function mutateAndAdmit(
 
 function getCoalescingKey(intent: OutboxIntent): string | undefined {
   if (intent.coalescingKey !== undefined) return intent.coalescingKey;
-  if (intent.coalescing_key !== undefined) return intent.coalescing_key;
-  const event = intent.event ?? intent.envelope;
-  if (event === undefined || typeof event !== "object" || event === null) return undefined;
-  const candidate = event as unknown as Record<string, unknown>;
-  const value = candidate.coalescingKey ?? candidate.coalescing_key;
+  const event: unknown = intent.event;
+  if (typeof event !== "object" || event === null) return undefined;
+  const value = (event as Record<string, unknown>)["coalescing_key"];
   return typeof value === "string" ? value : undefined;
 }
 
@@ -1001,8 +923,6 @@ export function recoverCapacity(
     return true;
   });
 }
-
-export const recoverOutboxCapacity = recoverCapacity;
 
 function validateLease(owner: string, ttlMs: number, limit: number): void {
   boundedText(owner, "lease owner", 120);
@@ -1253,8 +1173,6 @@ export function applyDeliveryResult(
   });
 }
 
-export const completeDelivery = applyDeliveryResult;
-
 export function retryDelivery(
   database: DatabaseExecutor,
   deliveryId: string,
@@ -1273,8 +1191,6 @@ export function retryDelivery(
       .run(timestamp, timestamp, deliveryId).changes === 1
   );
 }
-
-export const manualRetry = retryDelivery;
 
 export function dismissDelivery(
   database: DatabaseExecutor,

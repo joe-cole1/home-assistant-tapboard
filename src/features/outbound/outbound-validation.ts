@@ -99,8 +99,6 @@ export function validateOutboundId(value: unknown, field = "id"): string {
   return value.trim().toLowerCase();
 }
 
-export const validateDestinationId = validateOutboundId;
-
 function bounded(value: unknown, field: string, maxBytes: number): string {
   if (typeof value !== "string") fail(field, "must be text");
   const normalized = value.trim();
