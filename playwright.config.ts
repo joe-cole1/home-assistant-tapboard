@@ -2,6 +2,8 @@ import { defineConfig, devices } from "@playwright/test";
 
 const e2ePort = process.env.TAPBOARD_E2E_PORT ?? "4176";
 const e2eOrigin = `http://127.0.0.1:${e2ePort}`;
+// An already installed Chromium, such as the one in Claude Code cloud sessions.
+const chromiumPath = process.env.TAPBOARD_E2E_CHROMIUM_PATH || undefined;
 
 export default defineConfig({
   testDir: "./test/e2e",
@@ -17,6 +19,7 @@ export default defineConfig({
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     ...devices["Desktop Chrome"],
+    ...(chromiumPath === undefined ? {} : { launchOptions: { executablePath: chromiumPath } }),
   },
   ...(process.env.TAPBOARD_E2E_EXTERNAL_SERVER === "1"
     ? {}

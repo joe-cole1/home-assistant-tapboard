@@ -307,6 +307,8 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
+To use an existing Chromium instead, skip the install and set `TAPBOARD_E2E_CHROMIUM_PATH` to its executable. In Claude Code cloud sessions, the SessionStart hook in `.claude/` sets it and activates Node 24.
+
 CI runs canonical checks, the complete Chromium suite, and disposable hardened production-container validation as separate jobs. No validation command deploys or publishes the image.
 
 Schema version 23 is the current supported schema. It adds nullable malt and hops sensory overrides, preserves all previous values, and leaves effective flavor guidance derived. Recipe snapshot payload schema 2 is independent of source record revisions. Version 22 (`system-administration-and-retention`) added singleton typed session-policy and terminal-outbox-retention tables, preserving the previous schema and data. Session defaults remain inherited until explicitly saved. Version 21 (`builtin-simulation`) added typed workspace settings, simulated sensor state, and Fill-owned physical volume; version 20 added Fill-owned Featured preferences after version 19's outbound delivery schema. Low and New badges are derived rather than persisted. Browser-local overrides, live/SSE state, and effective sensory projections are never persisted in SQLite. `/healthz` reports `schemaVersion: 23` when the database is ready. An unpublished badge-only version-19 database is not a canonical upgrade source and is rejected without repair; preserve its data and obtain an explicit migration plan instead of deleting a volume or rewriting its ledger.
