@@ -10,14 +10,9 @@ import type {
   PublicFlavorGuidance,
   FlavorCalculation,
 } from "./types.ts";
-import {
-  resolveFlavorProfile as calculate,
-  styleBaseline,
-  STYLE_BASELINES,
-} from "./flavor/engine.ts";
+import { resolveFlavorProfile as calculate, styleBaseline } from "./flavor/engine.ts";
 import { finite } from "./flavor/math.ts";
-export { interpolateCurve } from "./flavor/math.ts";
-export { MODEL_VERSION, sensoryBand } from "./flavor/engine.ts";
+export { sensoryBand } from "./flavor/engine.ts";
 export function canonicalSensoryToPublic(value: number): number | null {
   return finite(value) && value >= 0 && value <= 10 ? value / 2 : null;
 }
@@ -63,7 +58,6 @@ export function publicFlavorGuidance(
 export function styleBaselineFor(style: unknown, _strength?: unknown): SensoryPredictionMap {
   return styleBaseline(style);
 }
-export const STYLE_BASELINE_RULES = STYLE_BASELINES;
 export function deriveAttenuation(ogOrInput: unknown, finalGravity?: unknown): number | null {
   const object =
     typeof ogOrInput === "object" && ogOrInput !== null
@@ -73,28 +67,5 @@ export function deriveAttenuation(ogOrInput: unknown, finalGravity?: unknown): n
     fg = object?.["fg"] ?? finalGravity;
   return finite(og) && og > 1 && finite(fg) ? (100 * (og - fg)) / (og - 1) : null;
 }
-function axis(input: unknown, key: SensoryAxis): number | null {
-  return resolveFlavorProfile(
-    typeof input === "object" && input !== null ? (input as SensoryProfileInput) : {},
-  ).axes[key].value;
-}
-export const predictBitterness = (input: unknown) => axis(input, "bitterness");
-export const predictSweetness = (input: unknown) => axis(input, "sweetness");
-export const predictBody = (input: unknown) => axis(input, "body");
-export const predictRoast = (input: unknown) => axis(input, "roast");
-export const predictTartness = (input: unknown) => axis(input, "tartness");
-export const predictAlcohol = (input: unknown) => axis(input, "alcohol");
-export const calculateSensoryProfile = resolveSensoryProfile;
-export const deriveSensoryProfile = resolveSensoryProfile;
-export const predictSensoryProfile = resolveSensoryProfile;
-export const computeSensoryProfile = resolveSensoryProfile;
-export const resolveSensory = resolveSensoryProfile;
 export const resolveSensoryAxis = (input: SensoryProfileInput, axisKey: SensoryAxis) =>
   resolveSensoryProfile(input)[axisKey];
-export const calculateBitterness = predictBitterness;
-export const calculateSweetness = predictSweetness;
-export const calculateBody = predictBody;
-export const calculateRoast = predictRoast;
-export const calculateTartness = predictTartness;
-export const calculateAlcohol = predictAlcohol;
-export type { SensoryAxis, SensoryProfile, SensoryProfileInput };

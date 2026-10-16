@@ -23,7 +23,7 @@ import { HISTORY_BEERS } from "../src/features/simulation/history-beers.ts";
 import { LEGACY_BEERS } from "../src/features/simulation/legacy-samples.ts";
 import type { SimulationDependencies, SimulationSensor } from "../src/features/simulation/types.ts";
 import { resolveFlavorProfile } from "../src/features/story/profile.ts";
-import { FILL_GLASS_IDS } from "../src/features/story/vessels.ts";
+import { VESSEL_IDS } from "../src/features/story/vessels.ts";
 import { createTapService, tapDeletionConfirmationLabel } from "../src/features/taps/service.ts";
 import { DetectorService } from "../src/features/telemetry/detector-service.ts";
 import { TelemetryService } from "../src/features/telemetry/service.ts";
@@ -168,7 +168,7 @@ void test("simulation seeds five ordinary assignments and two On Deck once, with
         h.beverageService.getBeverage(assignment!.beverageId).effectivePresentation.fillGlass,
     );
     assert.equal(new Set(glasses).size, 5);
-    assert.ok(glasses.every((glass) => FILL_GLASS_IDS.some((known) => known === glass)));
+    assert.ok(glasses.every((glass) => VESSEL_IDS.some((known) => known === glass)));
     assert.deepEqual(h.seed(), first);
     assert.equal(count(h.database, "taps"), 5);
     assert.equal(count(h.database, "beverages"), 7);

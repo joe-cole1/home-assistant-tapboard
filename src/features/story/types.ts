@@ -14,9 +14,7 @@ import type {
  */
 
 /** The beverage domain owns the supported-axis catalog. */
-export const SENSORY_AXES = BEVERAGE_SENSORY_AXES;
-
-export type SensoryAxis = (typeof SENSORY_AXES)[number];
+export type SensoryAxis = (typeof BEVERAGE_SENSORY_AXES)[number];
 
 export type SensorySource = "manual" | "recipe_prediction" | "style_baseline" | "unavailable";
 
@@ -33,7 +31,6 @@ export interface SensoryAxisResult {
 }
 
 export type SensoryProfile = Readonly<Record<SensoryAxis, SensoryAxisResult>>;
-export type StorySensoryProfile = SensoryProfile;
 
 /** A loose public recipe prediction map. Values are still validated at runtime. */
 export type SensoryPredictionMap = Partial<Record<SensoryAxis, number | null>>;
@@ -182,8 +179,6 @@ export interface PublicRecipeProjection {
   readonly provenance: SafeRecipeProvenance | null;
 }
 
-export type PublicRecipe = PublicRecipeProjection;
-
 export const VESSEL_IDS = [
   "corny_keg",
   "pint_glass",
@@ -205,7 +200,6 @@ export const VESSEL_IDS = [
 ] as const;
 
 export type VesselId = (typeof VESSEL_IDS)[number];
-export type FillGlassId = VesselId;
 
 export interface VesselDetailPath {
   readonly d: string;
@@ -258,21 +252,6 @@ export const MYSTERY_REVEAL_KEYS = [
 
 export type MysteryRevealKey = (typeof MYSTERY_REVEAL_KEYS)[number];
 
-export const MYSTERY_ALWAYS_VISIBLE_KEYS = [
-  "tap_number",
-  "display_color",
-  "fill_glass",
-  "remaining_amount",
-  "fill_percent",
-  "forecast",
-  "days",
-  "servings",
-  "servings_remaining",
-  "serving_temperature",
-] as const;
-
-export type MysteryAlwaysVisibleKey = (typeof MYSTERY_ALWAYS_VISIBLE_KEYS)[number];
-
 export interface MysteryRevealConfig {
   readonly beverage_type?: boolean;
   readonly style?: boolean;
@@ -296,14 +275,6 @@ export interface MysteryRevealConfig {
   readonly revealRecipe?: boolean;
   readonly revealSensory?: boolean;
   readonly revealHistory?: boolean;
-}
-
-export interface MysteryVisibilityInput {
-  readonly enabled?: boolean;
-  readonly mystery?: boolean;
-  readonly reveal?: Partial<Record<MysteryRevealKey, boolean>> | null;
-  readonly config?: MysteryRevealConfig | null;
-  readonly [key: string]: unknown;
 }
 
 export interface MysteryVisibilityPolicy {

@@ -1101,36 +1101,3 @@ export function evaluateAllHealthChecks(
   const checks = HEALTH_CHECK_IDS.map((id) => evaluateHealthCheck(id, input, config));
   return { evaluatedAtMs: input.nowMs, checks };
 }
-
-export const evaluateHealth = evaluateAllHealthChecks;
-export const evaluateAll = evaluateAllHealthChecks;
-export const evaluateHealthChecks = evaluateAllHealthChecks;
-export const evaluateLowKegCheck = evaluateLowKeg;
-export const evaluateScaleAvailabilityCheck = evaluateScaleAvailability;
-export const evaluateSuspectedLeakCheck = evaluateSuspectedLeak;
-export const evaluateServingTemperatureCheck = evaluateServingTemperature;
-export const evaluateLineCleaningDueCheck = evaluateLineCleaningDue;
-
-export class HealthEngine {
-  readonly config: HealthConfig;
-
-  constructor(config: HealthConfig | HealthConfigOverride = DEFAULT_HEALTH_CONFIG) {
-    this.config = validConfig(config);
-  }
-
-  evaluateCheck(id: HealthCheckId, input: HealthEvaluationInput): HealthEvaluation {
-    return evaluateHealthCheck(id, input, this.config);
-  }
-
-  evaluate(input: HealthEvaluationInput): HealthEvaluationSet {
-    return evaluateAllHealthChecks(input, this.config);
-  }
-
-  evaluateAll(input: HealthEvaluationInput): HealthEvaluationSet {
-    return this.evaluate(input);
-  }
-}
-
-export const createHealthEngine = (
-  config: HealthConfig | HealthConfigOverride = DEFAULT_HEALTH_CONFIG,
-): HealthEngine => new HealthEngine(config);

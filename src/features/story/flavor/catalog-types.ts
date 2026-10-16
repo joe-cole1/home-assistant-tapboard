@@ -1,4 +1,4 @@
-import type { BrewingIngredient, BrewingIngredientRole } from "../../beverages/brewing-types.ts";
+import type { BrewingIngredientRole } from "../../beverages/brewing-types.ts";
 export type FermentableFamily =
   | "pilsner"
   | "pale"
@@ -63,7 +63,3 @@ export interface IngredientFact {
   readonly bodyClass: IngredientResolution["bodyClass"];
   readonly roastClass: IngredientResolution["roastClass"];
 }
-export type IngredientResolver = (
-  role: BrewingIngredientRole,
-  ingredient: BrewingIngredient,
-) => IngredientResolution;

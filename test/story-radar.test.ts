@@ -1,11 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { buildSensoryRadar, sensoryBand } from "../src/features/story/radar.ts";
-import {
-  SENSORY_AXES,
-  type SensoryAxisResult,
-  type SensoryProfile,
-} from "../src/features/story/types.ts";
+import { BEVERAGE_SENSORY_AXES } from "../src/features/beverages/types.ts";
+import type { SensoryAxisResult, SensoryProfile } from "../src/features/story/types.ts";
 const resolution = (value: number | null): SensoryAxisResult => ({
   value,
   source: value === null ? "unavailable" : "manual",
@@ -15,7 +12,7 @@ const resolution = (value: number | null): SensoryAxisResult => ({
 });
 const profile = (values: readonly (number | null)[]): SensoryProfile =>
   Object.fromEntries(
-    SENSORY_AXES.map((axis, index) => [axis, resolution(values[index] ?? null)]),
+    BEVERAGE_SENSORY_AXES.map((axis, index) => [axis, resolution(values[index] ?? null)]),
   ) as SensoryProfile;
 void test("radar plots eight fixed axes with supported values and fixed scale", () => {
   const radar = buildSensoryRadar(profile([5, 4, 3, 2, 1, 0, 2, 0]));
@@ -26,7 +23,7 @@ void test("radar plots eight fixed axes with supported values and fixed scale", 
   assert.match(radar.dataPath ?? "", /^M/u);
   assert.deepEqual(
     radar.axes.map((axis) => axis.key),
-    SENSORY_AXES,
+    BEVERAGE_SENSORY_AXES,
   );
   assert.equal(radar.axes.find((axis) => axis.key === "alcohol")?.value, 0);
   assert.equal(radar.axes[2]?.axisPath, "M200 200 L320 200");
@@ -43,7 +40,7 @@ void test("missing invalid limited and style-only profiles never get a polygon",
   assert.equal(buildSensoryRadar(null), null);
   const full = profile([1, 2, 3, 4, 1, 2, 3, 4]);
   const style = Object.fromEntries(
-    SENSORY_AXES.map((axis) => [
+    BEVERAGE_SENSORY_AXES.map((axis) => [
       axis,
       { ...full[axis], source: "style_baseline", support: "limited" },
     ]),

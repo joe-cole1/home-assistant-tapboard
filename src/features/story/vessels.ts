@@ -786,9 +786,6 @@ export function getVesselDescriptor(value: unknown): VesselGeometryDescriptor {
   return GEOMETRY[id];
 }
 
-export const vesselGeometry = getVesselDescriptor;
-export const getSafeVesselGeometry = getVesselDescriptor;
-
 /** Resolve explicit fill-glass selection, then style evidence, then pint. */
 export function resolveVessel(input: unknown): VesselResolution {
   const explicit = candidateExplicit(input);
@@ -805,11 +802,6 @@ export function resolveVessel(input: unknown): VesselResolution {
 export function resolveVesselId(input: unknown): VesselId {
   return resolveVessel(input).id;
 }
-
-export const chooseVessel = resolveVesselId;
-export const resolveFillGlass = resolveVesselId;
-export const suggestVessel = resolveVesselId;
-export const FILL_GLASS_IDS = VESSEL_IDS;
 
 export const SRM_COLOR_PALETTE: readonly { readonly srm: number; readonly color: string }[] = [
   { srm: 0, color: "#EAF6FF" },
@@ -900,8 +892,4 @@ export function resolveDisplayColor(input: unknown, srmValue?: unknown): string 
   return displayColorForSrm(srm) ?? SAFE_DISPLAY_COLOR;
 }
 
-export const safeDisplayColor = resolveDisplayColor;
-export const resolveColor = resolveDisplayColor;
-
 export { VESSEL_IDS };
-export type { VesselGeometryDescriptor, VesselId, VesselResolution };

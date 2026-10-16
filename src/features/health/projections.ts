@@ -156,8 +156,6 @@ export interface HealthTargetedUpdate {
   readonly evaluatedAtMs: number | null;
 }
 
-export type HealthTargetedUpdateProjection = HealthTargetedUpdate;
-
 function safeEvidence(evidence: HealthEvidence): HealthSafeEvidence {
   const safe: Record<string, string | number | boolean | null> = {};
   for (const key of HEALTH_EVIDENCE_KEYS) {
@@ -371,7 +369,7 @@ export function toAdminHealthMaintenanceDetail(
 export function toHealthTargetedUpdate(
   context: HealthProjectionContext,
   changedCheckIds: readonly HealthCheckId[],
-): HealthTargetedUpdateProjection {
+): HealthTargetedUpdate {
   const overview = baseOverview(context);
   const changed = new Set(changedCheckIds);
   const checks = overview.checks
@@ -387,10 +385,3 @@ export function toHealthTargetedUpdate(
     evaluatedAtMs: overview.aggregate.lastEvaluatedAtMs,
   };
 }
-
-// Compatibility aliases used by route adapters and tests that prefer noun-first names.
-export const projectAdminHealthOverview = toAdminHealthOverview;
-export const projectAdminHealthDetail = toAdminHealthDetail;
-export const projectAdminHealthIncidentPage = toAdminHealthIncidentPage;
-export const projectAdminHealthMaintenancePage = toAdminHealthMaintenancePage;
-export const projectHealthTargetedUpdate = toHealthTargetedUpdate;

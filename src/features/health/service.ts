@@ -48,7 +48,6 @@ import {
   latestHealthLineCleaning,
   listHealthCheckStates,
   listHealthIncidentPage,
-  listHealthIncidentTransitions,
   listHealthIncidents,
   listHealthLeakSampleRecords,
   listHealthMaintenancePage,
@@ -71,7 +70,6 @@ import {
   type HealthCheckStateRecord,
   type HealthGlobalConfig,
   type HealthIncidentRecord,
-  type HealthIncidentTransitionRecord,
   type HealthLeakSampleRecord,
   type HealthMaintenanceCursor,
   type HealthMaintenanceRecordWithSession,
@@ -87,7 +85,7 @@ import {
   type AdminHealthMaintenancePageProjection,
   type AdminHealthOverviewProjection,
   type HealthProjectionContext,
-  type HealthTargetedUpdateProjection,
+  type HealthTargetedUpdate,
 } from "./projections.ts";
 import {
   HEALTH_CHECK_IDS,
@@ -124,7 +122,7 @@ export interface HealthServiceOptions {
     db: DatabaseExecutor,
     record: HealthMaintenanceRecordWithSession,
   ) => void;
-  readonly onTargetedUpdate?: (update: HealthTargetedUpdateProjection) => void;
+  readonly onTargetedUpdate?: (update: HealthTargetedUpdate) => void;
   /** Transaction-local notification for semantic health state/severity changes. */
   readonly onHealthTransition?: (
     database: DatabaseExecutor,
@@ -369,14 +367,6 @@ export class HealthService
     return readHealthGlobalConfig(this.#database);
   }
 
-  getConfig(): HealthGlobalConfig {
-    return this.getGlobalConfig();
-  }
-
-  getTapOverride(tapId: string) {
-    return readHealthTapOverride(this.#database, tapId);
-  }
-
   getEffectiveConfig(tapId: string) {
     const tap = this.#requireTap(tapId);
     const global = readHealthGlobalConfig(this.#database);
@@ -398,10 +388,6 @@ export class HealthService
     });
     if (result.changed) this.runSweepOnce(at);
     return result.current.config;
-  }
-
-  setGlobalConfig(input: unknown, actor: HealthActorOptions = {}): HealthConfig {
-    return this.updateGlobalConfig(input, actor);
   }
 
   updateTapOverride(
@@ -443,10 +429,6 @@ export class HealthService
     });
     if (changedCheckIds.length > 0) this.#emitTargeted(tapId, changedCheckIds);
     return result;
-  }
-
-  setTapOverride(tapId: unknown, input: unknown, actor: HealthActorOptions = {}) {
-    return this.updateTapOverride(tapId, input, actor);
   }
 
   clearTapOverride(tapIdValue: unknown, actor: HealthActorOptions = {}): boolean {
@@ -700,31 +682,10 @@ export class HealthService
     seedHealthCheckStates(database, tapId, iso(asMs(at, "at")));
   }
 
-  /** Explicit name for composition code that initializes a newly inserted Tap. */
-  initializeTapInTransaction(
-    database: DatabaseExecutor,
-    tapId: string,
-    at: Date | string | number,
-  ): void {
-    this.onTapCreated(database, tapId, at);
-  }
-
   onTapRetired(database: DatabaseExecutor, tapId: string, at: Date | string | number): void {
     const tap = findTapById(database, tapId);
     if (tap === undefined) notFound("health.tap_not_found", "tapId", tapId);
     this.#retireInTransaction(database, tap, asMs(at, "at"));
-  }
-
-  /** Explicit transaction-local retirement hook for TapService composition. */
-  retireTapInTransaction(
-    database: DatabaseExecutor,
-    tapId: string,
-    at: Date | string | number,
-    actor: HealthActorOptions = {},
-  ): void {
-    const tap = findTapById(database, tapId);
-    if (tap === undefined) notFound("health.tap_not_found", "tapId", tapId);
-    this.#retireInTransaction(database, tap, asMs(at, "at"), actor);
   }
 
   onKegCorrection(database: DatabaseExecutor, event: KegCorrectionEvent): void {
@@ -845,10 +806,6 @@ export class HealthService
     return record;
   }
 
-  createMaintenance(tapId: unknown, input: unknown, actor: HealthActorOptions = {}) {
-    return this.recordMaintenance(tapId, input, actor);
-  }
-
   getMaintenanceHistory(
     tapIdValue: unknown,
     options: { readonly limit?: number; readonly cursor?: HealthMaintenanceCursor } = {},
@@ -911,14 +868,6 @@ export class HealthService
     };
   }
 
-  listIncidentTransitions(
-    incidentId: string,
-    limit = 200,
-  ): readonly HealthIncidentTransitionRecord[] {
-    this.getIncident(incidentId);
-    return listHealthIncidentTransitions(this.#database, incidentId, limit);
-  }
-
   acknowledgeIncident(incidentId: string, actor: HealthActorOptions = {}): HealthIncidentRecord {
     const at = clock(actor.now ?? this.#now).getTime();
     return this.#database.withTransaction(() =>
@@ -971,10 +920,6 @@ export class HealthService
       occurredAt: iso(acknowledgedAtMs),
     });
     return updated;
-  }
-
-  acknowledge(incidentId: string, actor: HealthActorOptions = {}) {
-    return this.acknowledgeIncident(incidentId, actor);
   }
 
   setIncidentCooldown(
@@ -1051,30 +996,11 @@ export class HealthService
     return incident;
   }
 
-  setCooldown(
-    incidentId: string,
-    until: Date | string | number | null,
-    actor: HealthActorOptions = {},
-  ) {
-    return this.setIncidentCooldown(incidentId, until, actor);
-  }
-
   pruneResolvedIncidents(at?: Date | string | number): number {
     const nowMs = at === undefined ? clock(this.#now).getTime() : asMs(at, "at");
     return this.#database.withTransaction(() =>
       pruneResolvedHealthIncidents(this.#database, iso(nowMs - INCIDENT_RETENTION_MS)),
     );
-  }
-
-  listEvaluationTapIds(limit = MAX_SWEEP_TAPS, cursor?: string) {
-    if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_SWEEP_TAPS)
-      invalid("limit", "must be 1..100");
-    const page = listHealthTapIdPage(this.#database, limit, cursor);
-    return {
-      ids: page.ids,
-      nextCursor: page.ids.at(-1) ?? null,
-      hasMore: page.hasMore,
-    };
   }
 
   startMaintenance(options: { readonly onError?: (error: unknown) => void } = {}): void {
@@ -1094,18 +1020,10 @@ export class HealthService
     }, this.#intervalMs);
   }
 
-  startSweep(options: { readonly onError?: (error: unknown) => void } = {}): void {
-    this.startMaintenance(options);
-  }
-
   stopMaintenance(): void {
     if (this.#timer !== undefined) clearInterval(this.#timer);
     this.#timer = undefined;
     this.#sweepPending = false;
-  }
-
-  stopSweep(): void {
-    this.stopMaintenance();
   }
 
   runSweepOnce(at?: Date | string | number) {
@@ -1184,14 +1102,6 @@ export class HealthService
     const tapId = this.#requireTapId(tapIdValue);
     this.#requireTap(tapId);
     return toAdminHealthMaintenancePage(this.getMaintenanceHistory(tapId, options));
-  }
-
-  getHealthOverview(tapId: unknown) {
-    return this.getAdminOverview(tapId);
-  }
-
-  getHealthDetail(tapId: unknown) {
-    return this.getAdminDetail(tapId);
   }
 
   #requireTapId(value: unknown): string {
@@ -1557,5 +1467,3 @@ export function createHealthService(
 ): HealthService {
   return new HealthService(database, options);
 }
-
-export type HealthServicePort = HealthService;

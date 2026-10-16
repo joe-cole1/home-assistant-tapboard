@@ -361,7 +361,7 @@ export function registerTapMutations(dependencies: RegisterTapMutationsDependenc
         dependencies.healthService.clearTapOverride(params.id!, actor(context));
         return;
       }
-      dependencies.healthService.setTapOverride(params.id!, override, actor(context));
+      dependencies.healthService.updateTapOverride(params.id!, override, actor(context));
     },
     "Health override updated.",
   );

@@ -99,10 +99,6 @@ export const DEFAULT_HEALTH_CONFIG: HealthConfig = {
   },
 };
 
-/** Compatibility name used by the older draft-health implementation. */
-export const DEFAULT_DRAFT_HEALTH_CONFIG = DEFAULT_HEALTH_CONFIG;
-export const HEALTH_DEFAULT_CONFIG = DEFAULT_HEALTH_CONFIG;
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -279,18 +275,6 @@ export function healthConfigsEqual(left: HealthConfig, right: HealthConfig): boo
   );
 }
 
-export const healthConfigEquals = healthConfigsEqual;
-export const configEquals = healthConfigsEqual;
-
-export function healthConfigOverridesEqual(
-  left: HealthConfigOverride | null | undefined,
-  right: HealthConfigOverride | null | undefined,
-): boolean {
-  const leftEffective = mergeHealthConfig(left);
-  const rightEffective = mergeHealthConfig(right);
-  return healthConfigsEqual(leftEffective, rightEffective);
-}
-
 /** True when a patch has no effective change (all null/undefined is a no-op). */
 export function isNoopHealthConfigOverride(
   override: HealthConfigOverride | null | undefined,
@@ -299,17 +283,10 @@ export function isNoopHealthConfigOverride(
   return healthConfigsEqual(mergeHealthConfig(base, override), base);
 }
 
-export const healthConfigOverrideIsNoop = isNoopHealthConfigOverride;
-export const isHealthConfigNoop = isNoopHealthConfigOverride;
-export const isHealthConfigOverrideNoop = isNoopHealthConfigOverride;
-
 /** Canonical clear operation for a per-Tap override row. */
 export function clearHealthConfigOverride(): null {
   return null;
 }
-
-/** Historical alias for callers that use a noun for the clear operation. */
-export const clearHealthOverride = clearHealthConfigOverride;
 
 /** Resolve a maintenance interval without consulting a clock or persistence. */
 export function lineCleaningDueAtMs(
@@ -342,8 +319,6 @@ export function calculateLineCleaningDue(
   const dueAtMs = lineCleaningDueAtMs(cleanedAtMs, config);
   return { cleanedAtMs, dueAtMs, criticalAtMs: lineCleaningCriticalAtMs(dueAtMs, config) };
 }
-
-export const deriveLineCleaningDue = calculateLineCleaningDue;
 
 // Keep the default object structurally immutable for service callers.
 for (const id of HEALTH_CHECK_IDS) Object.freeze(DEFAULT_HEALTH_CONFIG[id]);
