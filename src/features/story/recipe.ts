@@ -6,7 +6,6 @@ import type {
   PublicRecipeSheetStep,
 } from "./types.ts";
 import type {
-  PublicRecipe,
   PublicRecipeIngredient,
   PublicRecipeProjection,
   PublicRecipeStep,
@@ -14,8 +13,8 @@ import type {
   SafeRecipeProvenance,
 } from "./types.ts";
 
-const MAX_INGREDIENTS = 50;
-const MAX_STEPS = 30;
+export const MAX_PUBLIC_RECIPE_INGREDIENTS = 50;
+export const MAX_PUBLIC_RECIPE_STEPS = 30;
 export const MAX_SOURCE_JSON_BYTES = 256 * 1024;
 const MAX_INGREDIENT_NAME = 120;
 const MAX_INGREDIENT_TYPE = 40;
@@ -181,17 +180,17 @@ function projectArrays(
   let ingredientLimit = false;
   let stepLimit = false;
   const ingredients: PublicRecipeIngredient[] = [];
-  for (const value of ingredientValues.slice(0, MAX_INGREDIENTS)) {
+  for (const value of ingredientValues.slice(0, MAX_PUBLIC_RECIPE_INGREDIENTS)) {
     const projected = safeIngredient(value);
     if (projected !== null) ingredients.push(projected);
   }
-  if (ingredientValues.length > MAX_INGREDIENTS) ingredientLimit = true;
+  if (ingredientValues.length > MAX_PUBLIC_RECIPE_INGREDIENTS) ingredientLimit = true;
   const steps: PublicRecipeStep[] = [];
-  for (const value of stepValues.slice(0, MAX_STEPS)) {
+  for (const value of stepValues.slice(0, MAX_PUBLIC_RECIPE_STEPS)) {
     const projected = safeStep(value);
     if (projected !== null) steps.push(projected);
   }
-  if (stepValues.length > MAX_STEPS) stepLimit = true;
+  if (stepValues.length > MAX_PUBLIC_RECIPE_STEPS) stepLimit = true;
   return {
     kind,
     status: ingredientLimit || stepLimit ? "partial" : "available",
@@ -354,44 +353,6 @@ export function projectSourceRecipe(
   };
 }
 
-export function parseSourceRecipe(
-  sourceJson: unknown,
-  safeProvenance?: unknown,
-): PublicRecipeProjection {
-  return projectSourceRecipe(sourceJson, safeProvenance);
-}
-
-export const projectFrozenSourceRecipe = projectSourceRecipe;
-export const toPublicSourceRecipe = projectSourceRecipe;
-export const toPublicCustomRecipe = projectCustomRecipe;
-export const sanitizeSourceRecipe = projectSourceRecipe;
-export const sanitizeCustomRecipe = projectCustomRecipe;
-export const projectFrozenRecipe = projectSourceRecipe;
-
-/** Dispatch a bounded recipe DTO to the appropriate public projector. */
-export function projectRecipe(input: unknown, safeProvenance?: unknown): PublicRecipeProjection {
-  const value = record(input);
-  if (value === null) return emptyProjection("custom", "unavailable", safeProvenance);
-  const kind = value["kind"] === "source" || value["source"] !== undefined ? "source" : "custom";
-  if (kind === "source")
-    return projectSourceRecipe(
-      value["sourceJson"] ?? value["recipeJson"] ?? value["source"],
-      safeProvenance,
-    );
-  return projectCustomRecipe(value["recipe"] ?? value, safeProvenance);
-}
-
-export const MAX_PUBLIC_RECIPE_INGREDIENTS = MAX_INGREDIENTS;
-export const MAX_PUBLIC_RECIPE_STEPS = MAX_STEPS;
-
-export type {
-  PublicRecipe,
-  PublicRecipeIngredient,
-  PublicRecipeProjection,
-  PublicRecipeStep,
-  SafeRecipeProvenance,
-};
-
 function blankSheet(): PublicRecipeSheet {
   return {
     summary: {
@@ -487,8 +448,8 @@ function sheetCountLimited(inputs: BrewingInputs | null): boolean {
     ((["fermentables", "hops", "miscs", "yeasts"] as const).reduce(
       (n, role) => n + inputs.ingredients[role].items.length,
       0,
-    ) > MAX_INGREDIENTS ||
-      inputs.mash.length + inputs.fermentation.length > MAX_STEPS ||
+    ) > MAX_PUBLIC_RECIPE_INGREDIENTS ||
+      inputs.mash.length + inputs.fermentation.length > MAX_PUBLIC_RECIPE_STEPS ||
       (["fermentables", "hops", "miscs", "yeasts"] as const).some((role) => {
         const c = inputs.ingredients[role];
         return c.truncated || c.rejectedCount > 0 || c.originalCount > c.items.length;
@@ -549,7 +510,7 @@ function normalizedSheet(source: AnyRecord, inputs: BrewingInputs): PublicRecipe
     yeasts: [],
     other: [],
   };
-  let remaining = MAX_INGREDIENTS;
+  let remaining = MAX_PUBLIC_RECIPE_INGREDIENTS;
   for (const role of ["fermentables", "hops", "miscs", "yeasts"] as const) {
     groups[role] = inputs.ingredients[role].items
       .slice(0, remaining)
@@ -570,9 +531,11 @@ function normalizedSheet(source: AnyRecord, inputs: BrewingInputs): PublicRecipe
       return null;
     return groups[role].reduce((n, row) => n + row.grams!, 0);
   };
-  const mash = inputs.mash.slice(0, MAX_STEPS).map((row) => normalizedStep(row, "Mash step"));
+  const mash = inputs.mash
+    .slice(0, MAX_PUBLIC_RECIPE_STEPS)
+    .map((row) => normalizedStep(row, "Mash step"));
   const fermentation = inputs.fermentation
-    .slice(0, MAX_STEPS - mash.length)
+    .slice(0, MAX_PUBLIC_RECIPE_STEPS - mash.length)
     .map((row) => normalizedStep(row, "Fermentation step"));
   const labels = {
     calcium: "Ca",

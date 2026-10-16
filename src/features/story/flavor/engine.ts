@@ -1,13 +1,13 @@
 import { createHash } from "node:crypto";
 import type { BrewingInputs } from "../../beverages/brewing-types.ts";
-import {
-  SENSORY_AXES,
-  type SensoryAxis,
-  type SensoryProfileInput,
-  type FlavorAxisResult,
-  type FlavorCalculation,
-  type FlavorDescriptor,
-  type SensoryAxisResult,
+import { BEVERAGE_SENSORY_AXES } from "../../beverages/types.ts";
+import type {
+  SensoryAxis,
+  SensoryProfileInput,
+  FlavorAxisResult,
+  FlavorCalculation,
+  FlavorDescriptor,
+  SensoryAxisResult,
 } from "../types.ts";
 import { CATALOG_VERSION } from "./catalog.ts";
 import { composition, resolveFeatures, ROLES, type ResolvedRow } from "./features.ts";
@@ -197,11 +197,11 @@ function predictions(
   features: ReturnType<typeof resolveFeatures>,
 ): Record<SensoryAxis, FlavorAxisResult> {
   const axes = Object.fromEntries(
-    SENSORY_AXES.map((axis) => [axis, result(null, ["missing_relevant_inputs"])]),
+    BEVERAGE_SENSORY_AXES.map((axis) => [axis, result(null, ["missing_relevant_inputs"])]),
   ) as Record<SensoryAxis, FlavorAxisResult>;
   if (inputs.beverageType.toLowerCase() !== "beer")
     return Object.fromEntries(
-      SENSORY_AXES.map((axis) => [axis, result(null, ["non_beer_model_not_applicable"])]),
+      BEVERAGE_SENSORY_AXES.map((axis) => [axis, result(null, ["non_beer_model_not_applicable"])]),
     ) as Record<SensoryAxis, FlavorAxisResult>;
   const fg = scalar(inputs, "fg"),
     og = scalar(inputs, "og"),
@@ -530,12 +530,12 @@ export function resolveFlavorProfile(input: SensoryProfileInput): FlavorCalculat
   const axes =
     inputs === null || features === null
       ? (Object.fromEntries(
-          SENSORY_AXES.map((axis) => [axis, result(null, ["missing_normalized_inputs"])]),
+          BEVERAGE_SENSORY_AXES.map((axis) => [axis, result(null, ["missing_normalized_inputs"])]),
         ) as Record<SensoryAxis, FlavorAxisResult>)
       : predictions(inputs, features);
   const beer = inputs?.beverageType.toLowerCase() === "beer";
   const baseline = beer ? styleBaseline(inputs.style.name) : {};
-  for (const axis of SENSORY_AXES) {
+  for (const axis of BEVERAGE_SENSORY_AXES) {
     let manual: unknown = null;
     let present = false;
     for (const map of [
@@ -588,7 +588,7 @@ export function resolveFlavorProfile(input: SensoryProfileInput): FlavorCalculat
     vanilla_addition_recorded: "Vanilla addition recorded",
   };
   const profile = Object.fromEntries(
-    SENSORY_AXES.map((axis) => {
+    BEVERAGE_SENSORY_AXES.map((axis) => {
       const item = axes[axis];
       const band = sensoryBand(axis, item.value, item.source === "manual");
       const publicAxis: SensoryAxisResult = {

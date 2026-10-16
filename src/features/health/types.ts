@@ -16,14 +16,8 @@ export const HEALTH_CHECK_IDS = [
 
 export type HealthCheckId = (typeof HEALTH_CHECK_IDS)[number];
 
-export const HEALTH_IDS = HEALTH_CHECK_IDS;
-export const DRAFT_HEALTH_CHECKS = HEALTH_CHECK_IDS;
-
 export type HealthState = "not_configured" | "healthy" | "degraded" | "active";
 export type HealthSeverity = "none" | "info" | "warning" | "critical";
-
-export const HEALTH_STATES = ["not_configured", "healthy", "degraded", "active"] as const;
-export const HEALTH_SEVERITIES = ["none", "info", "warning", "critical"] as const;
 
 export type HealthDiagnosticCode =
   "ok" | "below_tare" | "negative_volume" | "above_capacity" | "implausible_jump" | null;
@@ -38,14 +32,12 @@ export interface LowKegHealthConfig {
   readonly fixedThresholdMl: number;
   readonly settlingMs: number;
 }
-export type LowKegConfig = LowKegHealthConfig;
 
 export interface ScaleAvailabilityHealthConfig {
   readonly enabled: boolean;
   readonly degradedAfterMs: number;
   readonly activeAfterMs: number;
 }
-export type ScaleAvailabilityConfig = ScaleAvailabilityHealthConfig;
 
 export interface SuspectedLeakHealthConfig {
   readonly enabled: boolean;
@@ -56,7 +48,6 @@ export interface SuspectedLeakHealthConfig {
   readonly resetMovementMl: number;
   readonly maxSamples: number;
 }
-export type SuspectedLeakConfig = SuspectedLeakHealthConfig;
 
 export interface ServingTemperatureHealthConfig {
   readonly enabled: boolean;
@@ -66,14 +57,12 @@ export interface ServingTemperatureHealthConfig {
   readonly criticalMaxC: number;
   readonly durationMs: number;
 }
-export type ServingTemperatureConfig = ServingTemperatureHealthConfig;
 
 export interface LineCleaningDueHealthConfig {
   readonly enabled: boolean;
   readonly intervalDays: number;
   readonly criticalGraceDays: number;
 }
-export type LineCleaningDueConfig = LineCleaningDueHealthConfig;
 
 export interface HealthConfig {
   readonly low_keg: LowKegHealthConfig;
@@ -129,7 +118,6 @@ export interface HealthAuthoritativeMeasurement {
   /** Canonical Celsius value.  Null means that this sample has no temperature. */
   readonly tempC: number | null;
 }
-export type HealthMeasurement = HealthAuthoritativeMeasurement;
 
 export interface HealthCurrentEpochEvidence {
   readonly epochId: string;
@@ -143,7 +131,6 @@ export interface HealthCurrentEpochEvidence {
   /** Compatibility alias for the persisted epoch-state projection. */
   readonly lastStabilizedVolumeMl?: number | null;
 }
-export type HealthEpochEvidence = HealthCurrentEpochEvidence;
 
 export interface HealthLeakSample {
   readonly epochId: string;
@@ -283,39 +270,10 @@ export interface HealthEvaluation {
   readonly nextTimers: HealthEvaluationTimers;
   readonly nextLeakSamples: readonly HealthLeakSample[];
 }
-export type HealthCheckEvaluation = HealthEvaluation;
 
 export interface HealthEvaluationSet {
   readonly evaluatedAtMs: number;
   readonly checks: readonly HealthEvaluation[];
-}
-
-export type HealthIncidentState = "open" | "recovered";
-
-export interface HealthIncident {
-  readonly id: string;
-  readonly tapId: string;
-  readonly checkId: HealthCheckId;
-  readonly incidentKey: string;
-  readonly state: HealthIncidentState;
-  readonly severity: HealthSeverity;
-  readonly reason: HealthReason;
-  readonly openedAtMs: number;
-  readonly recoveredAtMs: number | null;
-  readonly evidence: HealthEvidence;
-  readonly createdAtMs: number;
-  readonly updatedAtMs: number;
-}
-
-export interface HealthCurrentRecord {
-  readonly tapId: string;
-  readonly checkId: HealthCheckId;
-  readonly state: HealthState;
-  readonly severity: HealthSeverity;
-  readonly reason: HealthReason;
-  readonly incidentKey: string | null;
-  readonly evaluatedAtMs: number;
-  readonly evidence: HealthEvidence;
 }
 
 export type HealthMaintenanceType =
@@ -336,12 +294,6 @@ export interface HealthMaintenanceRecord {
   readonly actorId: string | null;
 }
 
-export interface HealthMaintenanceCreateInput {
-  readonly maintenanceType: HealthMaintenanceType;
-  readonly performedAtMs: number;
-  readonly notes?: string | null;
-}
-
 export interface HealthIncidentTransition {
   readonly id: string;
   readonly incidentId: string;
@@ -352,39 +304,4 @@ export interface HealthIncidentTransition {
   readonly reason: HealthReason | null;
   readonly evidence: HealthEvidence;
   readonly occurredAtMs: number;
-}
-
-export type AdminHealthIncidentDto = HealthIncident;
-export type AdminHealthCurrentDto = HealthCurrentRecord;
-export type AdminHealthMaintenanceDto = HealthMaintenanceRecord;
-
-export interface AdminHealthSnapshotDto {
-  readonly tapId: string;
-  readonly checks: readonly AdminHealthCurrentDto[];
-  readonly incidents: readonly AdminHealthIncidentDto[];
-  readonly maintenance: readonly AdminHealthMaintenanceDto[];
-}
-
-/** One projection-safe changed check; composed into the targeted refresh contract. */
-export interface HealthTargetedCheckUpdate {
-  readonly tapId: string;
-  readonly checkId: HealthCheckId;
-  readonly state: HealthState;
-  readonly severity: HealthSeverity;
-  readonly reason: HealthReason;
-  readonly incidentKey: string | null;
-  readonly evaluatedAtMs: number;
-  readonly dueAtMs?: number | null;
-  readonly criticalAtMs?: number | null;
-}
-
-export type AdminHealthTargetedCheckUpdateDto = HealthTargetedCheckUpdate;
-export type HealthCurrentDto = AdminHealthCurrentDto;
-export type HealthIncidentDto = AdminHealthIncidentDto;
-export type HealthMaintenanceDto = AdminHealthMaintenanceDto;
-
-export interface LineCleaningDueResult {
-  readonly cleanedAtMs: number;
-  readonly dueAtMs: number;
-  readonly criticalAtMs: number;
 }

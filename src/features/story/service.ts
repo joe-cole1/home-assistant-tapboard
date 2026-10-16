@@ -41,8 +41,9 @@ import type {
   PublicRecipeProjection,
   PublicStoryView,
   PublicStoryVesselView,
+  MysteryVisibilityPolicy,
 } from "./types.ts";
-import { mysteryVisibilityPolicy, type MysteryVisibilityPolicy } from "./visibility.ts";
+import { mysteryVisibilityPolicy } from "./visibility.ts";
 import { resolveDisplayColor, resolveVessel } from "./vessels.ts";
 
 const MAX_SOURCE_SNAPSHOTS = 5;

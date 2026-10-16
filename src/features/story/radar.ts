@@ -1,6 +1,7 @@
 import { sensoryBand } from "./profile.ts";
 export { sensoryBand } from "./profile.ts";
-import { SENSORY_AXES, type SensoryAxis, type SensoryProfile } from "./types.ts";
+import { BEVERAGE_SENSORY_AXES } from "../beverages/types.ts";
+import type { SensoryAxis, SensoryProfile } from "./types.ts";
 const CENTER = 200;
 const RADIUS = 120;
 const MAX = 5;
@@ -36,7 +37,7 @@ export interface SensoryRadarView {
   readonly description: string;
 }
 function point(index: number, radius: number): [number, number] {
-  const angle = -Math.PI / 2 + (index * 2 * Math.PI) / SENSORY_AXES.length;
+  const angle = -Math.PI / 2 + (index * 2 * Math.PI) / BEVERAGE_SENSORY_AXES.length;
   return [
     Math.round((CENTER + Math.cos(angle) * radius) * 100) / 100,
     Math.round((CENTER + Math.sin(angle) * radius) * 100) / 100,
@@ -53,7 +54,7 @@ function validValue(value: unknown): number | null {
 /** Only finite, supported, complete profiles can form a fixed eight-axis polygon. */
 export function buildSensoryRadar(profile: SensoryProfile | null): SensoryRadarView | null {
   if (profile === null) return null;
-  const axes = SENSORY_AXES.map((key, index): SensoryRadarAxisView => {
+  const axes = BEVERAGE_SENSORY_AXES.map((key, index): SensoryRadarAxisView => {
     const result = profile[key];
     const value = validValue(result?.value);
     const [x, y] = point(index, RADIUS);
@@ -75,7 +76,7 @@ export function buildSensoryRadar(profile: SensoryProfile | null): SensoryRadarV
   const complete = axes.every((axis) => axis.value !== null);
   const eligible =
     complete &&
-    SENSORY_AXES.every(
+    BEVERAGE_SENSORY_AXES.every(
       (key) =>
         profile[key].source === "manual" ||
         (profile[key].source === "recipe_prediction" && profile[key].support === "supported"),
@@ -86,7 +87,9 @@ export function buildSensoryRadar(profile: SensoryProfile | null): SensoryRadarV
     complete,
     eligible,
     gridPaths: Array.from({ length: MAX }, (_, index) =>
-      path(SENSORY_AXES.map((_, axisIndex) => point(axisIndex, (RADIUS * (index + 1)) / MAX))),
+      path(
+        BEVERAGE_SENSORY_AXES.map((_, axisIndex) => point(axisIndex, (RADIUS * (index + 1)) / MAX)),
+      ),
     ),
     dataPath: eligible
       ? path(axes.map((axis, index) => point(index, (RADIUS * (axis.value ?? 0)) / MAX)))

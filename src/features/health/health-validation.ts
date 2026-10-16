@@ -1,5 +1,4 @@
 import { HEALTH_EVIDENCE_KEYS } from "./evidence-contract.ts";
-export { HEALTH_EVIDENCE_KEYS } from "./evidence-contract.ts";
 import {
   validationError as invalid,
   rejectUnknownKeys,
@@ -12,7 +11,6 @@ import {
   type HealthConfigOverride,
   type HealthEvidence,
   type HealthEvaluationInput,
-  type HealthReason,
 } from "./types.ts";
 
 export const MAX_HEALTH_EVIDENCE_BYTES = 2_048;
@@ -290,9 +288,6 @@ export function serializeHealthEvidence(value: HealthEvidence): string {
   return json;
 }
 
-export const serializedHealthEvidenceBytes = healthEvidenceSizeBytes;
-export const isBoundedHealthEvidence = isHealthEvidenceWithinLimit;
-
 /** Input validation is strict at the contract boundary; evaluators still fail closed for bad snapshots. */
 export function validateHealthEvaluationInput(value: unknown): HealthEvaluationInput {
   const object = requirePlainObject(value, "healthInput");
@@ -340,47 +335,4 @@ export function validateHealthEvaluationInput(value: unknown): HealthEvaluationI
   if (object.authorityChangedAtMs !== null)
     finiteNumber(object.authorityChangedAtMs, "authorityChangedAtMs");
   return value as HealthEvaluationInput;
-}
-
-/** Narrow helper for reason DTOs without permitting arbitrary user text. */
-export function validateHealthReason(value: unknown): HealthReason {
-  if (typeof value !== "string") throw invalid("reason", "must be a reason code");
-  const reasons: readonly HealthReason[] = [
-    "tap_retired",
-    "check_disabled",
-    "no_authority",
-    "no_active_epoch",
-    "missing_measurement",
-    "invalid_measurement",
-    "stale_measurement",
-    "capacity_inconsistent",
-    "detector_waiting",
-    "detector_warning",
-    "detector_activity",
-    "threshold_settling",
-    "below_threshold",
-    "above_threshold",
-    "scale_fresh",
-    "scale_degraded",
-    "scale_unavailable",
-    "temperature_normal",
-    "temperature_invalid",
-    "temperature_stale",
-    "temperature_out_of_range",
-    "temperature_critical",
-    "temperature_continuity_reset",
-    "leak_baseline",
-    "leak_window_settling",
-    "leak_threshold",
-    "leak_movement_reset",
-    "leak_epoch_reset",
-    "leak_suppressed",
-    "line_cleaned_missing",
-    "line_cleaning_current",
-    "line_cleaning_due",
-    "line_cleaning_critical",
-  ];
-  if (!reasons.includes(value as HealthReason))
-    throw invalid("reason", "must be a known reason code");
-  return value as HealthReason;
 }

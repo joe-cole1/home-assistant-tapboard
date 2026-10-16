@@ -4,7 +4,7 @@ import { readBrewingInputs } from "../../../src/features/beverages/brewing-input
 import { sanitizeRecipeSnapshot } from "../../../src/features/beverages/brewfather/sanitizer.ts";
 import { resolveIngredient } from "../../../src/features/story/flavor/catalog.ts";
 import { resolveFlavorProfile } from "../../../src/features/story/profile.ts";
-import { SENSORY_AXES } from "../../../src/features/story/types.ts";
+import { BEVERAGE_SENSORY_AXES } from "../../../src/features/beverages/types.ts";
 
 export interface FlavorFixture {
   readonly caseId: string;
@@ -82,7 +82,7 @@ export function corpusReport() {
           }),
       ),
       axes: Object.fromEntries(
-        SENSORY_AXES.map((axis) => [
+        BEVERAGE_SENSORY_AXES.map((axis) => [
           axis,
           {
             value: calculation.profile[axis].value,
@@ -111,7 +111,7 @@ export function corpusReport() {
     },
     maximumSnapshotBytes: Math.max(...cases.map((item) => item.snapshotBytes)),
     perAxis: Object.fromEntries(
-      SENSORY_AXES.map((axis) => {
+      BEVERAGE_SENSORY_AXES.map((axis) => {
         const results = cases.map((item) => item.axes[axis]!);
         const countBy = (key: "source" | "band" | "support") =>
           Object.fromEntries(
@@ -143,7 +143,7 @@ export function corpusReport() {
         coverage: item.coverage,
         unresolvedIngredients: item.unresolvedIngredients,
         axes: Object.fromEntries(
-          SENSORY_AXES.filter(
+          BEVERAGE_SENSORY_AXES.filter(
             (axis) => item.axes[axis]!.value === null || item.axes[axis]!.value === 0,
           ).map((axis) => [axis, item.axes[axis]]),
         ),

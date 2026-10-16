@@ -8,7 +8,6 @@ import {
   type HealthConfigOverride,
   type HealthEvidence,
   type HealthIncidentTransition,
-  type HealthLeakSample,
   type HealthMaintenanceRecord,
   type HealthMaintenanceType,
   type HealthReason,
@@ -456,9 +455,6 @@ export function seedHealthCheckStates(
   }
 }
 
-/** Idempotent lifecycle hook used when a Tap is created after v11 migration. */
-export const ensureHealthCheckStates = seedHealthCheckStates;
-
 export interface WriteHealthCheckState {
   readonly tapId: string;
   readonly checkId: HealthCheckId;
@@ -639,15 +635,6 @@ export function readOpenHealthIncident(
   return row === undefined ? undefined : mapIncident(row);
 }
 
-export const readOpenIncident = readOpenHealthIncident;
-
-export function deleteHealthIncident(database: DatabaseExecutor, incidentId: string): boolean {
-  return (
-    database.prepare<[string]>("DELETE FROM health_incidents WHERE id=?").run(incidentId).changes >
-    0
-  );
-}
-
 export function listHealthIncidents(
   database: DatabaseExecutor,
   tapId: string,
@@ -701,47 +688,6 @@ export function listHealthIncidentPage(
     )
     .all(tapId, cursor.openedAt, cursor.openedAt, cursor.id, safeLimit + 1)
     .map(mapIncident);
-}
-
-export function listOpenHealthIncidents(
-  database: DatabaseExecutor,
-  tapId?: string,
-): HealthIncidentRecord[] {
-  const rows =
-    tapId === undefined
-      ? database
-          .prepare<[], IncidentRow>(
-            `SELECT ${INCIDENT_COLUMNS}
-           FROM health_incidents
-           WHERE resolved_at IS NULL
-           ORDER BY opened_at ASC,id ASC`,
-          )
-          .all()
-      : database
-          .prepare<[string], IncidentRow>(
-            `SELECT ${INCIDENT_COLUMNS}
-           FROM health_incidents
-           WHERE tap_id=? AND resolved_at IS NULL
-           ORDER BY opened_at ASC,id ASC`,
-          )
-          .all(tapId);
-  return rows.map(mapIncident);
-}
-
-export function countOpenHealthIncidents(database: DatabaseExecutor, tapId?: string): number {
-  const row =
-    tapId === undefined
-      ? database
-          .prepare<[], { count: number }>(
-            "SELECT COUNT(*) AS count FROM health_incidents WHERE resolved_at IS NULL",
-          )
-          .get()
-      : database
-          .prepare<[string], { count: number }>(
-            "SELECT COUNT(*) AS count FROM health_incidents WHERE tap_id=? AND resolved_at IS NULL",
-          )
-          .get(tapId);
-  return row?.count ?? 0;
 }
 
 export function insertHealthIncident(
@@ -1004,18 +950,6 @@ export function listHealthLeakSampleRecords(
     .map(mapLeakSample);
 }
 
-export function listHealthLeakSamples(
-  database: DatabaseExecutor,
-  tapId: string,
-  limit = 64,
-): HealthLeakSample[] {
-  return listHealthLeakSampleRecords(database, tapId, limit).map(({ epochId, atMs, volumeMl }) => ({
-    epochId,
-    atMs,
-    volumeMl,
-  }));
-}
-
 export function replaceHealthLeakSamples(
   database: DatabaseExecutor,
   tapId: string,
@@ -1057,35 +991,6 @@ export function insertHealthLeakSample(
       sample.volumeMl,
       sample.createdAt,
     );
-}
-
-export function deleteHealthLeakSample(
-  database: DatabaseExecutor,
-  tapId: string,
-  measurementId: string,
-): boolean {
-  return (
-    database
-      .prepare<[string, string]>(
-        "DELETE FROM health_leak_samples WHERE tap_id=? AND measurement_id=?",
-      )
-      .run(tapId, measurementId).changes > 0
-  );
-}
-
-export function deleteHealthLeakSamplesForEpoch(
-  database: DatabaseExecutor,
-  tapId: string,
-  epochId: string,
-): number {
-  return database
-    .prepare<[string, string]>("DELETE FROM health_leak_samples WHERE tap_id=? AND epoch_id=?")
-    .run(tapId, epochId).changes;
-}
-
-export function clearHealthLeakSamples(database: DatabaseExecutor, tapId: string): number {
-  return database.prepare<[string]>("DELETE FROM health_leak_samples WHERE tap_id=?").run(tapId)
-    .changes;
 }
 
 export interface HealthMaintenanceRecordWithSession extends HealthMaintenanceRecord {
@@ -1280,8 +1185,3 @@ export function listHealthTapIdPage(
           .all(cursor, cursor, cursor, safeLimit + 1);
   return { ids: rows.slice(0, safeLimit).map((row) => row.id), hasMore: rows.length > safeLimit };
 }
-
-/** Compatibility aliases for callers that name this operation as a sweep. */
-export const listHealthTapIds = listHealthTapIdPage;
-export const listHealthEvaluationTapIds = listHealthTapIdPage;
-export const deleteResolvedHealthIncidentsOlderThan = pruneResolvedHealthIncidents;

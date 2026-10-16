@@ -7,7 +7,7 @@ import {
   styleBaselineFor,
   deriveAttenuation,
 } from "../src/features/story/profile.ts";
-import { SENSORY_AXES } from "../src/features/story/types.ts";
+import { BEVERAGE_SENSORY_AXES } from "../src/features/beverages/types.ts";
 void test("manual canonical scale remains independent per axis and invalid values fail closed", () => {
   const profile = resolveSensoryProfile({
     manualOverrides: { bitterness: 8, sweetness: Number.NaN, body: 0 },
@@ -22,8 +22,8 @@ void test("manual canonical scale remains independent per axis and invalid value
 });
 void test("fixed eight axes are available as explicit unknown results", () => {
   const result = resolveSensoryProfile(null);
-  assert.deepEqual(Object.keys(result), SENSORY_AXES);
-  for (const axis of SENSORY_AXES) {
+  assert.deepEqual(Object.keys(result), BEVERAGE_SENSORY_AXES);
+  for (const axis of BEVERAGE_SENSORY_AXES) {
     assert.equal(result[axis].value, null);
     assert.equal(result[axis].source, "unavailable");
   }
