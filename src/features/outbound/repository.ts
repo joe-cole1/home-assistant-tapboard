@@ -859,6 +859,20 @@ export function dismissDestinationDeliveries(
   return result.changes;
 }
 
+/** Make failed deliveries final so Retry cannot send them to an old origin with new secrets. */
+export function dismissFailedDestinationDeliveries(
+  database: DatabaseExecutor,
+  destinationId: string,
+  now: string,
+): void {
+  database
+    .prepare<[string, string]>(
+      `UPDATE outbound_deliveries SET state = 'dismissed', revision = revision + 1, updated_at = ?
+       WHERE destination_id = ? AND state = 'terminal'`,
+    )
+    .run(now, id(destinationId, "destinationId"));
+}
+
 export function setRetired(database: DatabaseExecutor, destinationId: string, now: string): void {
   const idValue = id(destinationId, "destinationId");
   database

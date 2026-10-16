@@ -20,6 +20,7 @@ import {
   mutateAndAdmit,
   recoverCapacity,
   setDestinationEnabled,
+  type OutboxQuotaOptions,
 } from "../src/features/outbox/repository.ts";
 
 const DESTINATION_ID = "11111111-1111-4111-8111-111111111111";
@@ -102,6 +103,25 @@ function addIndexedDestination(
     { now: () => new Date(NOW) },
   );
   return { destinationId: destination, versionId: version };
+}
+
+function seedSucceededDelivery(database: DatabaseConnection): void {
+  assert.equal(
+    mutateAndAdmit(database, () => undefined, intent(), { now: () => new Date(NOW) }).status,
+    "queued",
+  );
+  const [claim] = claimDue(database, "worker", NOW, 5_000, 1);
+  assert.ok(claim);
+  assert.equal(
+    applyDeliveryResult(database, {
+      deliveryId: claim.deliveryId,
+      owner: "worker",
+      revision: claim.revision,
+      outcome: "success",
+      now: NOW,
+    }),
+    true,
+  );
 }
 
 function indexedIntent(eventIndex: number, targetIndex: number) {
@@ -281,6 +301,99 @@ void test("terminal pruning is bounded and runs before admission", () => {
     assert.equal(replacement.pruned, 2);
     assert.equal(scalar(database, "SELECT count(*) AS count FROM outbound_events", "count"), 1);
     assert.equal(scalar(database, "SELECT count(*) AS count FROM outbound_deliveries", "count"), 1);
+  } finally {
+    database.close();
+  }
+});
+
+void test("admission keeps terminal delivery history while the outbox is under capacity", () => {
+  const { database } = setup();
+  try {
+    seedSucceededDelivery(database);
+    // The first later event shares the delivered event's coalescing key; history never coalesces.
+    for (const [id, key] of [
+      ["99999999-9999-4999-8999-999999999999", "integration-a"],
+      ["aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "later-b"],
+    ] as const) {
+      const later = mutateAndAdmit(database, () => undefined, intent(id, key), {
+        now: () => new Date(NOW),
+      });
+      assert.equal(later.status, "queued");
+      assert.equal(later.pruned, 0);
+      assert.equal(later.coalesced, false);
+    }
+    assert.equal(
+      database
+        .prepare<[string], { state: string }>(
+          "SELECT state FROM outbound_deliveries WHERE event_id = ?",
+        )
+        .get(EVENT_ID)?.state,
+      "succeeded",
+    );
+    assert.equal(scalar(database, "SELECT count(*) AS count FROM outbound_events", "count"), 3);
+  } finally {
+    database.close();
+  }
+});
+
+void test("admission prunes terminal history when the new event would exceed any bound", () => {
+  // Every intent() envelope serializes to the same size, so these bounds leave room for the new
+  // event only after the succeeded delivery and its event are pruned.
+  const bounds: readonly (readonly [string, (bytes: number) => OutboxQuotaOptions])[] = [
+    ["global rows", () => ({ globalMaxRows: 3 })],
+    ["global bytes", (bytes) => ({ globalMaxBytes: 4 * bytes - 1 })],
+    ["destination rows", () => ({ destinationMaxRows: 1 })],
+    ["destination bytes", (bytes) => ({ destinationMaxBytes: 2 * bytes - 1 })],
+  ];
+  for (const [bound, quota] of bounds) {
+    const { database } = setup();
+    try {
+      seedSucceededDelivery(database);
+      const { bytes } = database
+        .prepare<[], { bytes: number }>("SELECT envelope_bytes AS bytes FROM outbound_events")
+        .get()!;
+      const result = mutateAndAdmit(
+        database,
+        () => undefined,
+        intent("99999999-9999-4999-8999-999999999999", "replacement"),
+        { now: () => new Date(NOW), ...quota(bytes) },
+      );
+      assert.equal(result.status, "queued", bound);
+      assert.equal(result.pruned, 2, bound);
+      assert.equal(
+        scalar(
+          database,
+          "SELECT count(*) AS count FROM outbound_deliveries WHERE state = 'succeeded'",
+          "count",
+        ),
+        0,
+        bound,
+      );
+    } finally {
+      database.close();
+    }
+  }
+});
+
+void test("pressure pruning removes events it leaves without deliveries", () => {
+  const { database } = setup();
+  try {
+    seedSucceededDelivery(database);
+    const result = mutateAndAdmit(
+      database,
+      () => undefined,
+      intent("99999999-9999-4999-8999-999999999999", "replacement"),
+      { now: () => new Date(NOW), destinationMaxRows: 1, pruneBatch: 1 },
+    );
+    assert.equal(result.status, "queued");
+    assert.equal(result.pruned, 2);
+    assert.deepEqual(
+      database
+        .prepare<[], { id: string }>("SELECT id FROM outbound_events")
+        .all()
+        .map((row) => row.id),
+      ["99999999-9999-4999-8999-999999999999"],
+    );
   } finally {
     database.close();
   }

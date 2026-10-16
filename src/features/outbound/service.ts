@@ -49,6 +49,7 @@ import {
   admitOutboxIntent,
   deliveryBelongsToDestination,
   dismissDestinationDeliveries,
+  dismissFailedDestinationDeliveries,
   insertDestinationBase,
   insertVersionConfig,
   listDeliveryHistory,
@@ -504,12 +505,14 @@ export class OutboundService implements OutboundAdmissionPort {
         store?.remove("outbound", id, previous.slot, { now: this.#now });
       }
       if (removedSecretSlot) setEnabledState(this.#database, id, false, now, "secret_missing");
-      // Secrets never follow a destination to a new origin, and queued deliveries
-      // for the old address are dropped so they cannot resolve replacement secrets.
+      // Secrets never follow a destination to a new origin. Queued deliveries for the
+      // old address are dropped and failed ones made final (no Retry), so they cannot
+      // resolve replacement secrets.
       let dismissedDeliveries = 0;
       if (credentialsMoved) {
         this.#removeDestinationSecrets(id);
         dismissedDeliveries = dismissDestinationDeliveries(this.#database, id, now);
+        dismissFailedDestinationDeliveries(this.#database, id, now);
         if (config.transport === "home_assistant") {
           credentialsCleared = true;
           setEnabledState(this.#database, id, false, now, "token_missing");
