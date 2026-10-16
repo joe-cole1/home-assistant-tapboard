@@ -7,7 +7,6 @@ import {
   claimDue,
   mutateAndAdmit,
   type DeliveryClaim,
-  type DeliveryResultInput,
   type MutateAndAdmitOptions,
   type OutboxIntent,
   type QueueResult,
@@ -24,15 +23,10 @@ import type {
   OutboundSecretHeader,
   OutboundTransport,
 } from "./types.ts";
-import { type NormalizedDestinationConfig, validateDestinationId } from "./outbound-validation.ts";
+import { type NormalizedDestinationConfig, validateOutboundId } from "./outbound-validation.ts";
 
 const MAX_HISTORY = 100;
 const FAILURE_CODE = /^[a-z0-9][a-z0-9_.:-]{0,119}$/u;
-
-export interface OutboundRepositoryClock {
-  readonly now?: () => Date;
-  readonly idFactory?: () => string;
-}
 
 export interface DestinationBaseInput {
   readonly id: string;
@@ -112,7 +106,7 @@ function invalid(field: string, reason: string): never {
 }
 
 function id(value: string, field: string): string {
-  return validateDestinationId(value, field);
+  return validateOutboundId(value, field);
 }
 
 function jsonObject(value: string, field: string): Record<string, unknown> {
@@ -723,18 +717,6 @@ export function setEnabledState(
   }
 }
 
-export function touchDestinationProfile(
-  database: DatabaseExecutor,
-  destinationId: string,
-  now: string,
-): void {
-  database
-    .prepare<[string, string]>(
-      "UPDATE outbound_destination_profiles SET updated_at = ?, revision = revision + 1 WHERE destination_id = ?",
-    )
-    .run(now, id(destinationId, "destinationId"));
-}
-
 /** Stable across health/label edits, and changes whenever logical credentials are replaced. */
 export function readDestinationCredentialRevision(
   database: DatabaseExecutor,
@@ -1163,10 +1145,4 @@ export function admitOutboxIntent(
   return mutateAndAdmit(database, () => undefined, intent, options);
 }
 
-export {
-  applyDeliveryResult,
-  claimDue,
-  mutateAndAdmit,
-  type DeliveryClaim,
-  type DeliveryResultInput,
-};
+export { applyDeliveryResult, claimDue, type DeliveryClaim };

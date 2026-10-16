@@ -32,10 +32,6 @@ export function isPin(value: unknown): value is string {
   return typeof value === "string" && PIN_PATTERN.test(value);
 }
 
-export const isValidPin = isPin;
-export const validatePin = isPin;
-export type PinVerifierRecord = PinVerifier;
-
 function invalidPin(): ApplicationError {
   return new ApplicationError({
     category: "validation",
@@ -48,8 +44,6 @@ export function requirePin(value: unknown): string {
   if (!isPin(value)) throw invalidPin();
   return value;
 }
-
-export const assertPin = requirePin;
 
 function bytes(value: Uint8Array): Buffer {
   return Buffer.from(value.buffer, value.byteOffset, value.byteLength);

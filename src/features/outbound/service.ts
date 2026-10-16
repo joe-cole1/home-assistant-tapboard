@@ -23,7 +23,6 @@ import type {
   OutboundDestination,
   OutboundDestinationListItem,
   OutboundDestinationPatch,
-  OutboundEventInput,
   OutboundHeaderSecretReplacement,
   OutboundSecretStore,
   OutboundServiceOptions,
@@ -37,7 +36,7 @@ import {
   configuredHeaderBytes,
   normalizeCreateInput,
   normalizeDestinationConfig,
-  validateDestinationId,
+  validateOutboundId,
   validateDestinationLabel,
   validateOutboundTransport,
   validateHeaderSecretValue,
@@ -95,7 +94,7 @@ function iso(factory: (() => Date) | undefined): string {
 function safeSecretDescriptors(
   secrets: OutboundSecretStore | undefined,
 ): readonly OutboundSecretDescriptorLike[] {
-  const rows = secrets?.listDescriptors?.() ?? secrets?.list?.() ?? [];
+  const rows = secrets?.list?.() ?? [];
   return rows.map((row) => ({
     integrationType: row.integrationType,
     recordId: row.recordId,
@@ -107,7 +106,7 @@ function safeSecretDescriptors(
 
 function canonicalId(value: string | undefined, factory: () => string): string {
   const result = value ?? factory();
-  return validateDestinationId(result, "destinationId");
+  return validateOutboundId(result, "destinationId");
 }
 
 function secretAvailable(
@@ -292,10 +291,6 @@ export class OutboundService implements OutboundAdmissionPort {
     this.#ids = options.idFactory ?? randomUUID;
   }
 
-  get database(): DatabaseExecutor {
-    return this.#database;
-  }
-
   create(input: CreateOutboundDestinationInput): OutboundDestination {
     const normalized = normalizeCreateInput(input);
     const now = iso(this.#now);
@@ -393,12 +388,8 @@ export class OutboundService implements OutboundAdmissionPort {
     );
   }
 
-  createDestination(input: CreateOutboundDestinationInput): OutboundDestination {
-    return this.create(input);
-  }
-
   edit(destinationId: string, input: EditOutboundDestinationInput): OutboundDestination {
-    const id = validateDestinationId(destinationId, "destinationId");
+    const id = validateOutboundId(destinationId, "destinationId");
     const now = iso(this.#now);
     let removedSecretSlot = false;
     let credentialsCleared = false;
@@ -544,16 +535,12 @@ export class OutboundService implements OutboundAdmissionPort {
     return result;
   }
 
-  editDestination(destinationId: string, input: EditOutboundDestinationInput): OutboundDestination {
-    return this.edit(destinationId, input);
-  }
-
   /** Apply one complete Admin edit submission atomically, including secrets and enabled state. */
   updateConfigured(
     destinationId: string,
     input: UpdateConfiguredOutboundDestinationInput,
   ): OutboundDestination {
-    const id = validateDestinationId(destinationId, "destinationId");
+    const id = validateOutboundId(destinationId, "destinationId");
     if (typeof input.enabled !== "boolean") throw new TypeError("enabled must be boolean");
     const { enabled, token, headerSecrets, ...editInput } = input;
     const before = this.#requireMutableDestination(id);
@@ -692,7 +679,7 @@ export class OutboundService implements OutboundAdmissionPort {
 
   patch(destinationId: string, input: OutboundDestinationPatch): OutboundDestination {
     const current = this.#requireMutableDestination(
-      validateDestinationId(destinationId, "destinationId"),
+      validateOutboundId(destinationId, "destinationId"),
     );
     return this.updateConfigured(destinationId, {
       ...input,
@@ -702,7 +689,7 @@ export class OutboundService implements OutboundAdmissionPort {
 
   setRequired(destinationId: string, required: boolean): OutboundDestination {
     if (typeof required !== "boolean") throw new TypeError("required must be boolean");
-    const id = validateDestinationId(destinationId, "destinationId");
+    const id = validateOutboundId(destinationId, "destinationId");
     const now = iso(this.#now);
     return this.#database.withTransaction(() => {
       this.#requireMutableDestination(id);
@@ -734,7 +721,7 @@ export class OutboundService implements OutboundAdmissionPort {
   }
 
   retire(destinationId: string): OutboundDestination {
-    const id = validateDestinationId(destinationId, "destinationId");
+    const id = validateOutboundId(destinationId, "destinationId");
     const now = iso(this.#now);
     const result = this.#database.withTransaction(() => {
       const before = this.#requireMutableDestination(id);
@@ -758,12 +745,8 @@ export class OutboundService implements OutboundAdmissionPort {
     return result;
   }
 
-  retireDestination(destinationId: string): OutboundDestination {
-    return this.retire(destinationId);
-  }
-
   setToken(destinationId: string, plaintext: string): OutboundDestination {
-    const id = validateDestinationId(destinationId, "destinationId");
+    const id = validateOutboundId(destinationId, "destinationId");
     const token = validateHomeAssistantToken(plaintext);
     const now = iso(this.#now);
     const result = this.#database.withTransaction(() => {
@@ -784,7 +767,7 @@ export class OutboundService implements OutboundAdmissionPort {
   }
 
   removeToken(destinationId: string): OutboundDestination {
-    const id = validateDestinationId(destinationId, "destinationId");
+    const id = validateOutboundId(destinationId, "destinationId");
     const now = iso(this.#now);
     const result = this.#database.withTransaction(() => {
       const destination = this.#requireMutableDestination(id);
@@ -814,7 +797,7 @@ export class OutboundService implements OutboundAdmissionPort {
   }
 
   setHeaderSecret(destinationId: string, slot: string, plaintext: string): OutboundDestination {
-    const id = validateDestinationId(destinationId, "destinationId");
+    const id = validateOutboundId(destinationId, "destinationId");
     const secretValue = validateHeaderSecretValue(plaintext);
     const now = iso(this.#now);
     const result = this.#database.withTransaction(() => {
@@ -859,7 +842,7 @@ export class OutboundService implements OutboundAdmissionPort {
   }
 
   removeHeaderSecret(destinationId: string, slot: string): OutboundDestination {
-    const id = validateDestinationId(destinationId, "destinationId");
+    const id = validateOutboundId(destinationId, "destinationId");
     const now = iso(this.#now);
     const result = this.#database.withTransaction(() => {
       const destination = this.#requireMutableDestination(id);
@@ -898,10 +881,6 @@ export class OutboundService implements OutboundAdmissionPort {
     });
   }
 
-  listDestinations(): readonly OutboundDestination[] {
-    return this.list();
-  }
-
   listPage(): readonly OutboundDestinationListItem[] {
     return listDestinationPage(this.#database, {
       secrets: safeSecretDescriptors(this.#options.secrets),
@@ -910,14 +889,10 @@ export class OutboundService implements OutboundAdmissionPort {
   }
 
   get(destinationId: string): OutboundDestination | undefined {
-    return readDestination(this.#database, validateDestinationId(destinationId, "destinationId"), {
+    return readDestination(this.#database, validateOutboundId(destinationId, "destinationId"), {
       secrets: safeSecretDescriptors(this.#options.secrets),
       now: clock(this.#now),
     });
-  }
-
-  getDestination(destinationId: string): OutboundDestination | undefined {
-    return this.get(destinationId);
   }
 
   listDeliveries(destinationId: string, limit = 100) {
@@ -925,7 +900,7 @@ export class OutboundService implements OutboundAdmissionPort {
   }
 
   retryDelivery(destinationId: string, deliveryId: string): boolean {
-    const id = validateDestinationId(destinationId, "destinationId");
+    const id = validateOutboundId(destinationId, "destinationId");
     const now = clock(this.#now);
     return this.#database.withTransaction(() => {
       this.#requireMutableDestination(id);
@@ -935,7 +910,7 @@ export class OutboundService implements OutboundAdmissionPort {
   }
 
   dismissDelivery(destinationId: string, deliveryId: string): boolean {
-    const id = validateDestinationId(destinationId, "destinationId");
+    const id = validateOutboundId(destinationId, "destinationId");
     const now = clock(this.#now);
     return this.#database.withTransaction(() => {
       this.#requireMutableDestination(id);
@@ -962,7 +937,7 @@ export class OutboundService implements OutboundAdmissionPort {
     errorCode: string,
     failureClass: "authentication" | "connectivity" | "unknown" = "unknown",
   ): OutboundDestination | undefined {
-    const id = validateDestinationId(destinationId, "destinationId");
+    const id = validateOutboundId(destinationId, "destinationId");
     const now = iso(this.#now);
     return this.#database.withTransaction(() => {
       this.#requireMutableDestination(id);
@@ -979,7 +954,7 @@ export class OutboundService implements OutboundAdmissionPort {
   }
 
   recordSuccess(destinationId: string): OutboundDestination | undefined {
-    const id = validateDestinationId(destinationId, "destinationId");
+    const id = validateOutboundId(destinationId, "destinationId");
     const now = iso(this.#now);
     return this.#database.withTransaction(() => {
       this.#requireMutableDestination(id);
@@ -989,11 +964,7 @@ export class OutboundService implements OutboundAdmissionPort {
     });
   }
 
-  admit(
-    database: DatabaseExecutor,
-    input: EventEnvelope | OutboundEventInput,
-  ): OutboundAdmissionResult {
-    const event = "event" in input ? input.event : input;
+  admit(database: DatabaseExecutor, event: EventEnvelope): OutboundAdmissionResult {
     const targets = resolveTargets(database, event.event_type);
     if (targets.length === 0) return { status: "no_targets" };
     return this.#admitEnvelope(database, event, targets);
@@ -1152,7 +1123,7 @@ export class OutboundService implements OutboundAdmissionPort {
   }
 
   #setEnabled(destinationId: string, enabled: boolean): OutboundDestination {
-    const id = validateDestinationId(destinationId, "destinationId");
+    const id = validateOutboundId(destinationId, "destinationId");
     const now = iso(this.#now);
     const result = this.#database.withTransaction(() => {
       const current = this.#requireMutableDestination(id);
@@ -1233,7 +1204,7 @@ export class OutboundService implements OutboundAdmissionPort {
       !deliveryBelongsToDestination(
         this.#database,
         destinationId,
-        validateDestinationId(deliveryId, "deliveryId"),
+        validateOutboundId(deliveryId, "deliveryId"),
       )
     ) {
       throw new Error("Outbound delivery was not found");
@@ -1434,5 +1405,3 @@ export function createOutboundService(
 ): OutboundService {
   return new OutboundService(database, options);
 }
-
-export type { OutboundAdmissionPort };

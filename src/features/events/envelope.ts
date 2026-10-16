@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 
 import { canonicalizeJson } from "../../shared/canonical-json.ts";
 import {
-  EVENT_REGISTRY,
   getEventDefinition,
   isEventType,
   type EventData,
@@ -105,15 +104,11 @@ function timestamp(value: Date | string | undefined, now: () => Date): string {
 function normalizeInputObject(input: EventEnvelopeInput): Record<string, unknown> {
   const object = plainObject(input, "input");
   const allowed = [
-    "eventType",
     "event_type",
     "identifiers",
     "data",
-    "eventId",
     "event_id",
-    "occurredAt",
     "occurred_at",
-    "coalescingKey",
     "coalescing_key",
   ];
   if (Object.keys(object).some((key) => !allowed.includes(key))) {
@@ -122,18 +117,8 @@ function normalizeInputObject(input: EventEnvelopeInput): Record<string, unknown
   return object;
 }
 
-function optionalAlias(
-  object: Record<string, unknown>,
-  first: string,
-  second: string,
-  field: string,
-): unknown {
-  const hasFirst = Object.hasOwn(object, first);
-  const hasSecond = Object.hasOwn(object, second);
-  if (hasFirst && hasSecond) throw invalid(field, "duplicate aliases are not allowed");
-  if (hasFirst) return ownValue(object, first, field);
-  if (hasSecond) return ownValue(object, second, field);
-  return undefined;
+function optionalOwnValue(object: Record<string, unknown>, key: string): unknown {
+  return Object.hasOwn(object, key) ? ownValue(object, key, key) : undefined;
 }
 
 function normalizeIdentifiers(value: unknown, definition: EventDefinition): EventIdentifiers {
@@ -263,7 +248,7 @@ function coalescingKey(
   input: Record<string, unknown>,
   definition: EventDefinition,
 ): string | undefined {
-  const value = optionalAlias(input, "coalescingKey", "coalescing_key", "coalescing_key");
+  const value = optionalOwnValue(input, "coalescing_key");
   if (value === undefined) {
     if (definition.requiresCoalescingKey) throw invalid("coalescing_key", "is required");
     return undefined;
@@ -278,7 +263,7 @@ export function createEventEnvelope(
   options: EventEnvelopeBuildOptions = {},
 ): EventEnvelope {
   const inputObject = normalizeInputObject(input);
-  const eventTypeValue = optionalAlias(inputObject, "eventType", "event_type", "event_type");
+  const eventTypeValue = optionalOwnValue(inputObject, "event_type");
   if (typeof eventTypeValue !== "string" || !isEventType(eventTypeValue)) {
     throw invalid("event_type", "is not registered");
   }
@@ -286,18 +271,16 @@ export function createEventEnvelope(
   if (definition === undefined) throw invalid("event_type", "is not registered");
   // Validate the admission key even though it is intentionally not part of the wire envelope.
   coalescingKey(inputObject, definition);
-  const suppliedEventId = optionalAlias(inputObject, "eventId", "event_id", "event_id");
+  const suppliedEventId = optionalOwnValue(inputObject, "event_id");
   const eventIdValue = suppliedEventId ?? options.eventId ?? (options.idFactory ?? randomUUID)();
   const eventId = uuid(eventIdValue, "event_id");
-  const occurredAtValue = optionalAlias(inputObject, "occurredAt", "occurred_at", "occurred_at");
+  const occurredAtValue = optionalOwnValue(inputObject, "occurred_at");
   const occurredAt = timestamp(
     occurredAtValue as Date | string | undefined,
     options.now ?? (() => new Date()),
   );
   const identifiers = normalizeIdentifiers(
-    Object.hasOwn(inputObject, "identifiers")
-      ? ownValue(inputObject, "identifiers", "identifiers")
-      : undefined,
+    optionalOwnValue(inputObject, "identifiers"),
     definition,
   );
   const data = normalizeData(eventTypeValue, ownValue(inputObject, "data", "data"));
@@ -334,13 +317,4 @@ export function serializeEventEnvelope(envelope: EventEnvelope): string {
       : {}),
   });
   return canonicalizeJson(validated, { maxBytes: 16_384 });
-}
-
-export const encodeEventEnvelope = serializeEventEnvelope;
-export const buildEventEnvelope = createEventEnvelope;
-export const createEvent = createEventEnvelope;
-export const serializeEvent = serializeEventEnvelope;
-
-export function getEventCoalescingKeyRequirement(eventType: string): boolean {
-  return EVENT_REGISTRY[eventType as EventType]?.requiresCoalescingKey === true;
 }

@@ -416,12 +416,6 @@ export class HomeAssistantConnectionManager {
     }
   }
 
-  deliver = this.sendEvent.bind(this);
-  fireEvent = this.sendEvent.bind(this);
-  send = this.sendEvent.bind(this);
-  authenticate = this.ensureAuthenticated.bind(this);
-  ensureHealthy = this.ensureAuthenticated.bind(this);
-
   closeDestination(destinationId: string): void {
     let id: string;
     try {
@@ -442,10 +436,6 @@ export class HomeAssistantConnectionManager {
       this.#connections.delete(id);
       this.#closeConnection(connection, "ha_stopped");
     }
-  }
-
-  close(): void {
-    this.stop();
   }
 
   #createConnection(destination: BoundDestination): Connection {
@@ -796,10 +786,4 @@ export class HomeAssistantConnectionManager {
     this.#rejectPending(connection, failureResult("retryable_failure", errorCode));
     this.#closeSocket(connection);
   }
-}
-
-export function createHomeAssistantConnectionManager(
-  options: HomeAssistantTransportOptions = {},
-): HomeAssistantConnectionManager {
-  return new HomeAssistantConnectionManager(options);
 }

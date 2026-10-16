@@ -12,23 +12,23 @@ const ID_2 = "123e4567-e89b-12d3-a456-426614174001";
 
 void test("every registered event type validates into a stable envelope", () => {
   const base = {
-    occurredAt: "2026-08-13T12:00:00.000Z",
-    eventId: ID,
+    occurred_at: "2026-08-13T12:00:00.000Z",
+    event_id: ID,
     identifiers: { tap_id: ID_2 },
   };
   const inputs = [
-    { eventType: "fill.assigned", data: { assignment_id: ID } },
-    { eventType: "fill.ended", data: { reason: "manual" } },
-    { eventType: "pour.completed", data: { volume_ml: 12.5 } },
-    { eventType: "keg.low", data: { remaining_percent: 10, threshold_percent: 20 } },
+    { event_type: "fill.assigned", data: { assignment_id: ID } },
+    { event_type: "fill.ended", data: { reason: "manual" } },
+    { event_type: "pour.completed", data: { volume_ml: 12.5 } },
+    { event_type: "keg.low", data: { remaining_percent: 10, threshold_percent: 20 } },
     {
-      eventType: "health.transitioned",
+      event_type: "health.transitioned",
       data: { check_id: "low_keg", state: "degraded", severity: "warning" },
     },
     {
-      eventType: "integration.status_changed",
+      event_type: "integration.status_changed",
       data: { integration_type: "home_assistant", state: "healthy", reason_code: null },
-      coalescingKey: "home_assistant",
+      coalescing_key: "home_assistant",
       identifiers: {},
     },
   ] as const;
@@ -43,15 +43,15 @@ void test("every registered event type validates into a stable envelope", () => 
 
 void test("event validation rejects malformed identities, times, fields, and bounds", () => {
   assert.throws(
-    () => createEventEnvelope({ eventType: "unknown", data: {}, identifiers: { tap_id: ID } }),
+    () => createEventEnvelope({ event_type: "unknown", data: {}, identifiers: { tap_id: ID } }),
     /registered/i,
   );
   assert.throws(
     () =>
       createEventEnvelope({
-        eventType: "fill.assigned",
-        eventId: ID,
-        occurredAt: "2026-08-13T07:00:00-05:00",
+        event_type: "fill.assigned",
+        event_id: ID,
+        occurred_at: "2026-08-13T07:00:00-05:00",
         identifiers: { tap_id: ID_2 },
         data: { assignment_id: ID },
       }),
@@ -60,9 +60,9 @@ void test("event validation rejects malformed identities, times, fields, and bou
   assert.throws(
     () =>
       createEventEnvelope({
-        eventType: "pour.completed",
-        eventId: ID,
-        occurredAt: "2026-08-13T12:00:00.000Z",
+        event_type: "pour.completed",
+        event_id: ID,
+        occurred_at: "2026-08-13T12:00:00.000Z",
         identifiers: { tap_id: ID_2 },
         data: { volume_ml: Number.NaN },
       }),
@@ -71,9 +71,9 @@ void test("event validation rejects malformed identities, times, fields, and bou
   assert.throws(
     () =>
       createEventEnvelope({
-        eventType: "fill.ended",
-        eventId: ID,
-        occurredAt: "2026-08-13T12:00:00.000Z",
+        event_type: "fill.ended",
+        event_id: ID,
+        occurred_at: "2026-08-13T12:00:00.000Z",
         identifiers: { tap_id: ID_2 },
         data: { reason: "manual", extra: true },
       }),
@@ -82,13 +82,23 @@ void test("event validation rejects malformed identities, times, fields, and bou
   assert.throws(
     () =>
       createEventEnvelope({
-        eventType: "fill.ended",
-        eventId: ID,
-        occurredAt: "2026-08-13T12:00:00.000Z",
+        event_type: "fill.ended",
+        event_id: ID,
+        occurred_at: "2026-08-13T12:00:00.000Z",
         identifiers: { tap_id: ID_2 },
         data: { reason: "manual" },
-        coalescingKey: "not_allowed",
+        coalescing_key: "not_allowed",
       }),
     /not allowed/i,
+  );
+  // The builder accepts only the snake_case envelope spelling.
+  assert.throws(
+    () =>
+      createEventEnvelope({
+        eventType: "fill.ended",
+        identifiers: { tap_id: ID_2 },
+        data: { reason: "manual" },
+      } as never),
+    /unknown fields/i,
   );
 });

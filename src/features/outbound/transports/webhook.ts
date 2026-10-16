@@ -257,8 +257,6 @@ export function isPublicNetworkAddress(value: string): boolean {
   return isPublicIpv6(normalized);
 }
 
-export const isPublicAddress = isPublicNetworkAddress;
-
 function networkFamily(value: string): 4 | 6 | undefined {
   const normalized = value.startsWith("[") && value.endsWith("]") ? value.slice(1, -1) : value;
   if (parseIpv4(normalized) !== undefined) return 4;
@@ -313,8 +311,6 @@ function normalizeUrl(input: string): URL {
 export function normalizeWebhookUrl(input: string): string {
   return normalizeUrl(input).toString();
 }
-
-export const normalizeWebhookEndpoint = normalizeWebhookUrl;
 
 function validateHeaders(
   input: Readonly<Record<string, string>> | undefined,
@@ -527,19 +523,12 @@ export class WebhookTransport {
     return this.#requestBody(url, requestOptions, body, controller);
   }
 
-  deliver = this.sendEvent.bind(this);
-  send = this.sendEvent.bind(this);
-
   stop(): void {
     if (this.#stopped) return;
     this.#stopped = true;
     for (const active of this.#active) {
       this.#settle(active, failureResult("retryable_failure", "webhook_stopped"));
     }
-  }
-
-  close(): void {
-    this.stop();
   }
 
   async #lookupWithTimeout(
@@ -708,8 +697,4 @@ class WebhookTimeout extends Error {
     this.name = "WebhookTimeout";
     this.code = boundedErrorCode(code, "webhook_timeout");
   }
-}
-
-export function createWebhookTransport(options: WebhookTransportOptions = {}): WebhookTransport {
-  return new WebhookTransport(options);
 }

@@ -13,8 +13,6 @@ export interface TransportAttemptResult {
   readonly errorCode?: string;
   readonly status?: number;
 }
-export type DeliveryAttemptResult = TransportAttemptResult;
-export type TransportResult = TransportAttemptResult;
 
 export interface PublicEventContext {
   readonly tapNumber?: number;
@@ -30,11 +28,7 @@ export type PublicEventContextResolver = (
   data: EventData,
 ) => PublicEventContext | undefined;
 
-export type EventContextResolver = PublicEventContextResolver;
-
 export type EventEnvelopeInput = EventEnvelope | string;
-
-export const MAX_TRANSPORT_ERROR_CODE_BYTES = 64;
 export const MAX_TRANSPORT_ERROR_STATUS = 599;
 
 const SAFE_ERROR_CODE = /^[a-z0-9][a-z0-9_.-]{0,63}$/;
