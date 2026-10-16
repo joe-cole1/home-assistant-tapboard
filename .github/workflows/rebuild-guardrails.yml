@@ -20,7 +20,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
+          # HEAD^ is the whitespace check's fallback base.
+          fetch-depth: 2
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -40,6 +41,12 @@ jobs:
             diff_base="$(git rev-parse HEAD^)"
           else
             diff_base="$(git hash-object -t tree /dev/null)"
+          fi
+
+          # The shallow checkout may not contain the base (an older PR base or
+          # a multi-commit push); fetch just that commit.
+          if ! git cat-file -e "$diff_base"; then
+            git fetch --no-tags --depth=1 origin "$diff_base"
           fi
 
           git diff --check "$diff_base" HEAD
@@ -66,10 +73,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # No npm cache: this job never runs npm ci, so it would save a
+      # near-empty ~/.npm under the key the other jobs share.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
-          cache: npm
       - name: Build and verify the disposable production container
         shell: bash
         run: bash scripts/check-production-container.sh

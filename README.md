@@ -2,9 +2,9 @@
 
 Tapboard v2 is a Node 24 modular monolith with server-rendered public and Admin pages, a clean SQLite domain model, canonical machine telemetry, deterministic pour detection, forecasting, health, Brew Story/Mystery, Tap Wars, optional outbound integrations, saved Simulation, and System administration. `/` is the authoritative public dashboard; `/admin/*` provides ordinary authenticated forms with progressive browser enhancements.
 
-The v2 implementation is prepared as application version **2.0.0**, schema **23**. [The acceptance ledger](docs/rebuild/STATUS.md) records exact checks and review/merge status for #80, #81, and master #65. Building and testing do not publish a release or deploy a service. The rebuild and follow-up issues #111–#114 are merged and closed. The [transition audit](docs/rebuild/TRANSITION-AUDIT.md) distinguishes the accepted v2 baseline from unresolved v1 parity decisions.
+The v2 implementation is prepared as application version **2.0.0**, schema **23**. The archived [acceptance ledger](docs/history/rebuild/STATUS.md) records exact checks and review/merge status for #80, #81, and master #65. Building and testing do not publish a release or deploy a service. The rebuild and follow-up issues #111–#114 are merged and closed. The archived [transition audit](docs/history/rebuild/TRANSITION-AUDIT.md) distinguishes the accepted v2 baseline from unresolved v1 parity decisions.
 
-The frozen v1 application remains available at commit `429cf07e451b64ca1713655a34ffa5ebd376efae` and through Git history. Reusable v1 evidence is indexed in [`docs/rebuild/v1-reuse-manifest.json`](docs/rebuild/v1-reuse-manifest.json); it is reference material, not an active dependency or import source for v2.
+The frozen v1 application remains available at commit `429cf07e451b64ca1713655a34ffa5ebd376efae` and through Git history. Reusable v1 evidence is indexed in the archived [`docs/history/rebuild/v1-reuse-manifest.json`](docs/history/rebuild/v1-reuse-manifest.json); it is reference material, not an active dependency or import source for v2.
 
 ## Requirements and setup
 
@@ -298,7 +298,7 @@ Run the complete local gate with Node 24:
 npm run check
 ```
 
-The gate runs Prettier checking, ESLint, `tsc --noEmit`, architecture and reuse-manifest checks, and the `node:test` suite. CI installs with `npm ci`, runs this same gate under Node 24, and checks changed-line whitespace.
+The gate runs Prettier checking, ESLint, `tsc --noEmit`, the architecture checks, and the `node:test` suite. CI installs with `npm ci`, runs this same gate under Node 24, and checks changed-line whitespace.
 
 The browser suite is separate so ordinary Node tests do not require a browser binary:
 
@@ -383,17 +383,11 @@ Rebuild and recreate normally without deleting `tapboard-dev_tapboard-data`, the
 
 After both implementation PRs are merged, update main and rebuild/recreate the development container with its existing volume. Verify `/healthz` reports schema 22 and System reports application 2.0.0. Confirm PIN login, no-JavaScript forms, a saved Simulation pour, Story/Mystery redaction, Tap Wars, and live display updates still work. Stop/start and recreate without deleting volumes; verify normal inventory, Simulation history, and installation policies persist. Use disposable fake integrations to confirm an outage degrades connectivity while local administration/readiness remain available, and stop during a delayed request without late database errors. For production, run the disposable container script before applying the documented LAN/proxy pattern to the operator's own stack. Keep actual deployment, key/backup management, and destructive fixtures separate from the persistent development volume.
 
-## Authoritative rebuild context
+## Source of truth and design history
 
-- [`docs/rebuild/TARGET.md`](docs/rebuild/TARGET.md)
-- [`docs/rebuild/ARCHITECTURE-DECISIONS.md`](docs/rebuild/ARCHITECTURE-DECISIONS.md)
-- [`docs/rebuild/V1-REUSE-CRITERIA.md`](docs/rebuild/V1-REUSE-CRITERIA.md)
-- [`docs/rebuild/ARCHITECTURE-FREEZE.md`](docs/rebuild/ARCHITECTURE-FREEZE.md)
-- [`docs/adr/`](docs/adr/)
-- [`architecture.md`](architecture.md)
-- [`docs/rebuild/STATUS.md`](docs/rebuild/STATUS.md)
+The code and its executable configuration are the source of truth, and [`architecture.md`](architecture.md) describes the current design. When a document disagrees with the code, trust the code and fix the document.
 
-If these sources appear to conflict, follow the precedence in `ARCHITECTURE-FREEZE.md` and stop on any unresolved conflict.
+[`docs/adr/`](docs/adr/) explains the decisions behind the v2 rebuild. [`docs/history/rebuild/`](docs/history/rebuild/) archives the rebuild's product target, architecture decisions and freeze, v1 reuse criteria and manifest, and acceptance records. Both are background, not requirements.
 
 ## Admin errors and container diagnostics
 

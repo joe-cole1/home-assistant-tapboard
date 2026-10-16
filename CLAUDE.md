@@ -6,8 +6,9 @@ recipes from Brewfather, computes deterministic flavor guidance, and raises heal
 can be delivered to any configured destination.
 
 **Source code and executable configuration are the source of truth.** If documentation disagrees
-with the code, trust the code and fix or flag the document. `docs/rebuild/` and `docs/adr/`
-record how the v2 rebuild was designed; read them for background, not as requirements.
+with the code, trust the code and fix or flag the document. `docs/history/rebuild/` and
+`docs/adr/` record how the v2 rebuild was designed; read them for background, not as
+requirements.
 
 ## Product principles
 

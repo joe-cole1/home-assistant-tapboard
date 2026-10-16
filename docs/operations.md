@@ -1,6 +1,6 @@
 # Tapboard v2 operator and security guide
 
-Application version 2.0.0 uses canonical schema 22. The telemetry wire API remains v1. [README](../README.md) covers setup and manual workflows; [STATUS](rebuild/STATUS.md) records exact acceptance evidence. Build/review, merge, image publication, and deployment are separate operator actions.
+Application version 2.0.0 uses canonical schema 23. The telemetry wire API remains v1. [README](../README.md) covers setup and manual workflows; the archived [rebuild STATUS](history/rebuild/STATUS.md) records the rebuild's acceptance evidence. Build/review, merge, image publication, and deployment are separate operator actions.
 
 ## Select the deployment boundary
 

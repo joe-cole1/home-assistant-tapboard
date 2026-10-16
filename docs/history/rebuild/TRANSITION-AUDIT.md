@@ -1,5 +1,7 @@
 # V1 transition audit — 2026-10-03
 
+> **Historical record.** Archived in October 2026, after the v2 rebuild was complete. This document is no longer maintained and does not constrain current work: the code, its executable configuration, and [`architecture.md`](../../../architecture.md) are the source of truth.
+
 The merged frozen v2 implementation is the accepted baseline. Literal parity with every v1 feature is **not achieved**. The operator authorized an explicit decision queue first, then obsolete-v1 cleanup; opening these issues makes no implementation commitment. No active v1 application runtime was found, so this cleanup updates documentation only.
 
 ## Scope and method

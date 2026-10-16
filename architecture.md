@@ -162,17 +162,25 @@ Development dependencies are TypeScript, `@types/node`, and `@types/better-sqlit
 
 ## Architecture enforcement
 
-The canonical `npm run check` gate combines format, lint, type, architecture, reuse-manifest, and `node:test` validation. The architecture checker permits the legitimate Foundation package/source paths, coherent #85 development container set, exact content-checked production Dockerfile/ignore pair and hardened runnable Compose contract, and v2-safe `.env.example`. Negative fixtures reject legacy Node/HA-telemetry/backup/secret configuration, development-image substitution, missing hardening, and unapproved container variants. Legacy imports, shadow runtimes, integration/domain layering, browser/server layering, raw SQL ownership, and the controlled SQLite connection boundary remain enforced.
+The canonical `npm run check` gate combines format, lint, type, architecture, and `node:test` validation. `scripts/check-architecture.sh` enforces five ownership rules and reports the violated rule and path:
+
+- `[sql-ownership]`: raw SQL appears only in `src/infrastructure/database/connection.ts`, `src/infrastructure/database/migrations.ts`, and feature `repository.ts` or `repositories/*.ts` files.
+- `[sqlite-boundary]`: only `src/infrastructure/database/connection.ts` imports `better-sqlite3` or constructs a database.
+- `[browser-server]`: browser code under `public/` does not import `src/application`, `src/main`, `src/config`, or anything under `src/infrastructure/`.
+- `[secret-crypto]`: only `src/features/secrets/crypto.ts` calls `createCipheriv` or `createDecipheriv`.
+- `[activity-outbox]`: `src/features/activity/` does not import events or the outbox, so overflow Activity never feeds the outbox ([ADR-0005](docs/adr/0005-integrations-events-and-bounded-outbox.md)).
+
+`test/architecture.test.ts` covers each rule with isolated fixtures. The production Dockerfile and Compose example are verified by behavior rather than content rules: CI builds and runs them with `scripts/check-production-container.sh`, which checks the non-root user, read-only root, dropped capabilities, restricted tmpfs, persistence, degraded integrations, and SIGTERM shutdown.
 
 ## Acceptance and follow-up
 
-The complete frozen implementation covers #66–#81 plus #85 and the approved ADR-0008 Simulation extension. Canonical Node checks, complete Chromium E2E, migration/OpenAPI contracts, a disposable hardened-container gate, and a fresh security/privacy/transaction/lifecycle/migration/compatibility review establish acceptance on a specific revision. Exact evidence and unverified platform/operator boundaries are recorded in `docs/rebuild/STATUS.md` and PRs. Merge, release publication, and production deployment remain operator actions.
+The rebuild implemented #66–#81 plus #85 and the approved ADR-0008 Simulation extension. Canonical Node checks, complete Chromium E2E, migration/OpenAPI contracts, a disposable hardened-container gate, and a fresh security/privacy/transaction/lifecycle/migration/compatibility review established acceptance on a specific revision. That evidence and its unverified platform/operator boundaries are archived in [`docs/history/rebuild/STATUS.md`](docs/history/rebuild/STATUS.md); later changes record theirs in PR descriptions. Merge, release publication, and production deployment remain operator actions.
 
-Post-rebuild issues #111 HTTP boundaries, #112 shared validation/stored Health evidence, #113 Admin helpers/pagination/presentation, and #114 domain route extraction were delivered by merged PRs #124–#127. Public health remains an aggregate presentation rather than an evidence/detail API. The [transition audit](docs/rebuild/TRANSITION-AUDIT.md) records retained behavior, excluded capabilities, and the open decision queue; literal parity with every v1 feature is not achieved.
+Post-rebuild issues #111 HTTP boundaries, #112 shared validation/stored Health evidence, #113 Admin helpers/pagination/presentation, and #114 domain route extraction were delivered by merged PRs #124–#127. Public health remains an aggregate presentation rather than an evidence/detail API. The archived [transition audit](docs/history/rebuild/TRANSITION-AUDIT.md) records retained behavior, excluded capabilities, and the open decision queue; literal parity with every v1 feature is not achieved.
 
 ## Historical v1
 
-The complete v1 implementation remains recoverable at commit `429cf07e451b64ca1713655a34ffa5ebd376efae` and through Git history. The rebuild does not import it, maintain a shadow runtime tree, reproduce its schema, or introduce compatibility shims by default. The frozen reuse manifest governs any later reference to v1 evidence.
+The complete v1 implementation remains recoverable at commit `429cf07e451b64ca1713655a34ffa5ebd376efae` and through Git history. The rebuild does not import it, maintain a shadow runtime tree, reproduce its schema, or introduce compatibility shims by default. The archived [v1 reuse manifest](docs/history/rebuild/v1-reuse-manifest.json) indexes v1 evidence for reference.
 
 ## Built-in simulation workspace
 
