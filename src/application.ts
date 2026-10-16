@@ -744,8 +744,6 @@ class FoundationApplication implements Application {
           liveUpdates.publish({ name: "integration_status.updated", target: "header" }),
         disableSource: () =>
           liveUpdates.publish({ name: "integration_status.updated", target: "header" }),
-        revokeSource: () =>
-          liveUpdates.publish({ name: "integration_status.updated", target: "header" }),
       });
       const detectorService = observeCommittedCalls(rawDetectorService, {
         manualRebaseline: (_result, args) => {
