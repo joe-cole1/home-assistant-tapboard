@@ -460,8 +460,8 @@ void test("webhook secrets follow same-origin edits but must be re-entered for a
     });
     assert.equal(moved.enabled, true);
     assert.equal(secrets.revealPrivileged("outbound", DESTINATION, slot), "Bearer moved");
-    // Dismissed by the move (and possibly pruned by a later admission): never left to resend.
-    assert.notEqual(deliveryState(database, "33333333-3333-4333-8333-333333333402"), "pending");
+    // Dismissed by the move, never left to resend, and kept as history for System retention.
+    assert.equal(deliveryState(database, "33333333-3333-4333-8333-333333333402"), "dismissed");
   } finally {
     database.close();
   }

@@ -16,8 +16,11 @@ import { createKegService } from "../src/features/kegs/service.ts";
 import { createMachineKeyService } from "../src/features/machine-keys/service.ts";
 import { createOutboundService } from "../src/features/outbound/service.ts";
 import {
+  applyDeliveryResult,
+  claimDue,
   createDestination,
   createDestinationVersion,
+  mutateAndAdmit,
   pruneTerminalOutbox,
 } from "../src/features/outbox/repository.ts";
 import { createSecretsService } from "../src/features/secrets/service.ts";
@@ -741,6 +744,70 @@ void test("Outbox retention preserves encrypted endpoint ownership until explici
         .get(currentVersion),
     );
     assert.deepEqual(h.database.pragma("foreign_key_check"), []);
+  } finally {
+    h.close();
+  }
+});
+
+void test("Succeeded outbox history survives later admissions until System retention reaches it", () => {
+  const h = harness();
+  try {
+    h.system.updateRetentionSettings({ outbox: { retentionDays: 7 } });
+    const destination = createDestination(h.database, { label: "History", createdAt: OLD });
+    const version = createDestinationVersion(h.database, {
+      destinationId: destination.id,
+      versionNumber: 1,
+      createdAt: OLD,
+    });
+    const admit = (number: number) =>
+      mutateAndAdmit(
+        h.database,
+        () => undefined,
+        {
+          event: {
+            event_type: "integration.status_changed",
+            event_id: id(600_000 + number),
+            coalescing_key: `integration-${number}`,
+            data: { integration_type: "ha", state: "degraded", reason_code: "timeout" },
+          },
+          targets: [{ destinationId: destination.id, destinationVersionId: version.id }],
+        },
+        { now: h.now },
+      );
+    const deliveryState = (number: number) =>
+      h.database
+        .prepare<[string], { state: string }>(
+          "SELECT state FROM outbound_deliveries WHERE event_id = ?",
+        )
+        .get(id(600_000 + number))?.state;
+
+    assert.equal(admit(1).status, "queued");
+    const [claim] = claimDue(h.database, "worker", OLD, 5_000, 1);
+    assert.ok(claim);
+    assert.equal(
+      applyDeliveryResult(h.database, {
+        deliveryId: claim.deliveryId,
+        owner: "worker",
+        revision: claim.revision,
+        outcome: "success",
+        now: OLD,
+      }),
+      true,
+    );
+    h.setNow("2026-01-01T00:01:00.000Z");
+    for (const number of [2, 3]) assert.equal(admit(number).pruned, 0);
+    assert.equal(deliveryState(1), "succeeded");
+
+    h.setNow("2026-01-07T23:59:59.000Z");
+    assert.equal(h.system.runRetention().outboxDeliveries, 0);
+    assert.equal(deliveryState(1), "succeeded");
+
+    h.setNow("2026-01-08T00:00:01.000Z");
+    const swept = h.system.runRetention();
+    assert.equal(swept.outboxDeliveries, 1);
+    assert.equal(swept.outboxEvents, 1);
+    assert.equal(deliveryState(1), undefined);
+    assert.deepEqual([deliveryState(2), deliveryState(3)], ["pending", "pending"]);
   } finally {
     h.close();
   }

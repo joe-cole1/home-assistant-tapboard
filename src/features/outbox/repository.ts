@@ -355,8 +355,7 @@ function pruneTerminal(database: DatabaseExecutor, batchSize: number): number {
        )`,
     )
     .run(batchSize);
-  const remaining = batchSize - result.changes;
-  if (remaining <= 0) return result.changes;
+  // Events left without deliveries get their own batch so they cannot accumulate under pressure.
   const events = database
     .prepare<[number]>(
       `DELETE FROM outbound_events
@@ -366,7 +365,7 @@ function pruneTerminal(database: DatabaseExecutor, batchSize: number): number {
          ORDER BY e.created_at ASC, e.id ASC LIMIT ?
        )`,
     )
-    .run(remaining);
+    .run(batchSize);
   return result.changes + events.changes;
 }
 
@@ -488,12 +487,19 @@ function findCoalescibleEvent(
   coalescingKey: string,
   targets: readonly OutboxTarget[],
 ): string | undefined {
+  // Only unattempted events qualify; filtering in SQL keeps retained history out of this loop.
+  // Pending deliveries never hold a lease (schema CHECK).
   const rows = database
-    .prepare<[string, string], { readonly event_id: string; readonly envelope_json: string }>(
-      `SELECT e.id AS event_id, e.envelope_json
+    .prepare<[string, string], { readonly event_id: string }>(
+      `SELECT e.id AS event_id
        FROM outbound_events e
        WHERE e.event_type = ?
          AND e.coalescing_key = ?
+         AND EXISTS (SELECT 1 FROM outbound_deliveries d WHERE d.event_id = e.id)
+         AND NOT EXISTS (
+           SELECT 1 FROM outbound_deliveries d
+           WHERE d.event_id = e.id AND (d.state <> 'pending' OR d.attempt_count <> 0)
+         )
        ORDER BY e.created_at ASC, e.id ASC`,
     )
     .all(eventType, coalescingKey);
@@ -502,30 +508,10 @@ function findCoalescibleEvent(
     const deliveries = database
       .prepare<
         [string],
-        {
-          readonly destination_id: string;
-          readonly destination_version_id: string;
-          readonly state: string;
-          readonly attempt_count: number;
-          readonly lease_owner: string | null;
-          readonly lease_expires_at: string | null;
-        }
-      >(
-        `SELECT destination_id, destination_version_id, state, attempt_count, lease_owner, lease_expires_at
-         FROM outbound_deliveries WHERE event_id = ?`,
-      )
+        { readonly destination_id: string; readonly destination_version_id: string }
+      >("SELECT destination_id, destination_version_id FROM outbound_deliveries WHERE event_id = ?")
       .all(row.event_id);
     if (deliveries.length !== wanted.size) continue;
-    if (
-      deliveries.some(
-        (item) =>
-          item.state !== "pending" ||
-          item.attempt_count !== 0 ||
-          item.lease_owner !== null ||
-          item.lease_expires_at !== null,
-      )
-    )
-      continue;
     const actual = new Set(
       deliveries.map((item) => `${item.destination_id}\u0000${item.destination_version_id}`),
     );
@@ -880,7 +866,11 @@ export function mutateAndAdmit(
       throw new TypeError("Outbox mutation must complete synchronously");
     }
     for (const target of targets) assertDestinationExists(database, target);
-    const pruned = pruneTerminal(database, quota.pruneBatch);
+    // Terminal history ages out in the System retention sweep; admission prunes it only for room.
+    const before = usage(database);
+    const pruned = validateCapacity(before, quota, built.bytes, targets)
+      ? 0
+      : pruneTerminal(database, quota.pruneBatch);
     let coalesced = false;
     const definition = getEventDefinition(built.envelope.event_type);
     const coalescingKey = getCoalescingKey(intent);
@@ -906,7 +896,8 @@ export function mutateAndAdmit(
         }
       }
     }
-    if (!validateCapacity(usage(database), quota, built.bytes, targets)) {
+    const current = pruned === 0 && !coalesced ? before : usage(database);
+    if (!validateCapacity(current, quota, built.bytes, targets)) {
       recordCapacityIncident(database, built.envelope, targets, admissionNow);
       return { status: "not_queued_capacity", pruned, coalesced } as const;
     }
