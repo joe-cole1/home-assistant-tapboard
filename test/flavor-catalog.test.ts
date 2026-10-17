@@ -160,7 +160,7 @@ void test("process aids, botanicals and acid context stay distinct", () => {
     "unresolved",
   );
 });
-void test("category fallback is restricted to explicit base grain families, never darkness", () => {
+void test("category and colour classify unknown grains generically; conflicting colour stays unresolved", () => {
   assert.equal(
     resolveIngredient(
       "fermentables",
@@ -168,10 +168,42 @@ void test("category fallback is restricted to explicit base grain families, neve
     ).family,
     "pilsner",
   );
+  const dark = resolveIngredient(
+    "fermentables",
+    ingredient({ name: "Dark mystery", type: "Grain", color: 600, grainCategory: "Roasted" }),
+  );
+  assert.equal(dark.id, "property-roasted");
+  assert.equal(dark.level, "family");
+  assert.equal(dark.roastClass, "black");
+  assert.deepEqual(dark.descriptors, []);
+  assert.ok(dark.diagnostics.some((value) => value.includes("Brewfather category and colour")));
+  // Custom Brewfather grains can store °L in `color`; the product name's number wins.
+  const crystal = resolveIngredient(
+    "fermentables",
+    ingredient({ name: "Crystal 40L", type: "Grain", color: 40, grainCategory: "Crystal/Caramel" }),
+  );
+  assert.equal(crystal.family, "crystal_light");
+  assert.ok(crystal.diagnostics.some((value) => value.includes("(40 °L)")));
+  for (const conflict of [
+    ingredient({ name: "Dark mystery", type: "Grain", color: 3, grainCategory: "Roasted" }),
+    ingredient({ name: "Unlisted", type: "Grain", color: 145.5, grainCategory: "Base" }),
+  ]) {
+    const resolution = resolveIngredient("fermentables", conflict);
+    assert.equal(resolution.level, "unresolved");
+    assert.ok(resolution.diagnostics.some((value) => value.includes("conflicts")));
+  }
+  for (const name of ["Smoked Malt", "Acidulated Malt", "Peated Malt"])
+    assert.equal(
+      resolveIngredient(
+        "fermentables",
+        ingredient({ name, type: "Grain", color: 3, grainCategory: "Base" }),
+      ).level,
+      "unresolved",
+    );
   assert.equal(
     resolveIngredient(
       "fermentables",
-      ingredient({ name: "Dark mystery", type: "Grain", color: 600, grainCategory: "Roasted" }),
+      ingredient({ name: "Mystery DME", type: "Dry Extract", color: 4 }),
     ).level,
     "unresolved",
   );
@@ -261,13 +293,13 @@ void test("verified priority products retain manufacturer guards and family-only
     ).family,
     "crystal_light",
   );
-  assert.equal(
-    resolveIngredient(
-      "fermentables",
-      ingredient({ name: "Crystal 40L (Murphy & Rude)", supplier: "Other" }),
-    ).level,
-    "unresolved",
+  // Another supplier gets only the generic class, never the manufacturer's facts.
+  const otherCrystal = resolveIngredient(
+    "fermentables",
+    ingredient({ name: "Crystal 40L (Murphy & Rude)", supplier: "Other" }),
   );
+  assert.equal(otherCrystal.id, "property-crystal_light");
+  assert.deepEqual(otherCrystal.descriptors, []);
   assert.equal(
     resolveIngredient(
       "fermentables",
@@ -275,11 +307,12 @@ void test("verified priority products retain manufacturer guards and family-only
     ).family,
     "aromatic",
   );
-  assert.equal(
-    resolveIngredient("fermentables", ingredient({ name: "Honey Malt", supplier: "Cargill" }))
-      .level,
-    "unresolved",
+  const otherHoney = resolveIngredient(
+    "fermentables",
+    ingredient({ name: "Honey Malt", supplier: "Cargill" }),
   );
+  assert.equal(otherHoney.id, "property-aromatic");
+  assert.deepEqual(otherHoney.descriptors, []);
   assert.equal(
     resolveIngredient("fermentables", ingredient({ name: "Corn Sugar (Dextrose)" })).family,
     "sugar",

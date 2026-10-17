@@ -361,6 +361,69 @@ void test("tartness absence requires identified nonsouring yeast and complete re
     null,
   );
 });
+void test("grain identity gaps cannot block none-expected tartness; acid malt, other material and cultures can", () => {
+  const grain = (name: string, grams: number, type = "Grain") =>
+    ingredient({ name, type, grams, stage: "unknown", form: null });
+  const yeast = (name: string, type = "Ale") =>
+    ingredient({ name, type, grams: null, stage: "unknown", form: null });
+  const tartness = (fermentables: BrewingIngredient[], yeasts: BrewingIngredient[]) =>
+    resolveFlavorProfile({
+      brewingInputs: withRows(withRows(fixture(), "fermentables", fermentables), "yeasts", yeasts),
+    }).axes.tartness;
+  const usO5 = ingredient({
+    name: "SafAle US-05",
+    laboratory: "Fermentis",
+    productId: "US-05",
+    grams: null,
+    stage: "unknown",
+  });
+  const base = [grain("Pale Malt", 4800), grain("Mystery grain", 200)];
+  assert.equal(tartness(base, [usO5]).value, 0);
+  assert.equal(tartness(base, [yeast("London Ale")]).value, 0);
+  const cultured = tartness(base, [yeast("Philly Sour")]);
+  assert.equal(cultured.value, null);
+  assert.deepEqual(cultured.reasons, ["souring_or_finished_acid_requires_separate_model"]);
+  const acid = tartness([grain("Pale Malt", 4800), grain("Acidulated", 200)], [usO5]);
+  assert.equal(acid.value, null);
+  assert.deepEqual(acid.reasons, ["acidulated_malt_requires_review"]);
+  assert.equal(tartness([grain("Pale Malt", 4900), grain("Acidulated", 100)], [usO5]).value, 0);
+  assert.equal(
+    tartness([grain("Pale Malt", 4000), grain("Raspberry (Fruit)", 1000, "Other")], [usO5]).value,
+    null,
+  );
+});
+void test("descriptor salience is associative across split additions and lager notes stay off chips", () => {
+  const hops = (count: number) =>
+    withRows(
+      fixture(),
+      "hops",
+      Array.from({ length: count }, (_, index) =>
+        ingredient({ sourcePath: `recipe.hops[${index}]`, grams: 100 / count }),
+      ),
+    );
+  const labels = (input: BrewingInputs) =>
+    resolveFlavorProfile({ brewingInputs: input }).descriptors.map(({ label, role }) => ({
+      label,
+      role,
+    }));
+  assert.ok(labels(hops(1)).length > 0);
+  assert.deepEqual(labels(hops(4)), labels(hops(1)));
+  const lager = ingredient({
+    name: "SafLager W-34/70",
+    laboratory: "Fermentis",
+    productId: "W-34/70",
+    type: "Lager",
+    grams: null,
+    stage: "unknown",
+  });
+  const descriptors = resolveFlavorProfile({
+    brewingInputs: withRows(fixture(), "yeasts", [lager]),
+  }).descriptors;
+  assert.equal(
+    descriptors.some((item) => item.role === "yeasts"),
+    false,
+  );
+});
 void test("optional provider aroma contributes generic descriptors without changing intensity", () => {
   const input = withRows(fixture(), "hops", [
     ingredient({ name: null, aroma: { fruity: 80, floral: 0, citrus: 101, unknown: 90 } }),

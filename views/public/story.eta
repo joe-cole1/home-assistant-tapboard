@@ -46,7 +46,7 @@
           </dl>
         </div>
         <% if (!radar.eligible) { %><p class="muted flavor-incomplete">Some inputs are incomplete or limited. Available estimates are shown without filling unknown values.</p><% } %>
-        <details class="flavor-disclosure"><summary>How this is estimated</summary><p>Recipe and batch inputs support a deterministic estimate of intensity and expected character. These are recipe-informed expectations, not tasting measurements or quality ratings. Unknown means there is not enough usable information; none expected requires supporting recipe information.</p></details>
+        <details class="flavor-disclosure"><summary>How this is estimated</summary><p>Recipe and batch inputs support a deterministic estimate of intensity and expected character. These are recipe-informed expectations, not tasting measurements or quality ratings. Where a maltster's tasting notes aren't available, typical malt-class character is used. Unknown means there is not enough usable information; none expected requires supporting recipe information.</p></details>
       <% } else { %><p>Flavor profile unavailable.</p><% } %>
     </section>
     <section aria-labelledby="story-recipes">

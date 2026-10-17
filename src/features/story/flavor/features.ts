@@ -7,13 +7,14 @@ import type { FlavorCoverage } from "../types.ts";
 import { resolveIngredient } from "./catalog.ts";
 import type { IngredientResolution } from "./catalog-types.ts";
 import { finite, defineCurve, interpolateCurve } from "./math.ts";
+// A 0-minute addition steeps like a short whirlpool; rolling boil strips volatiles quickly.
 const FIXED_CURVE_0 = defineCurve([
   [0, 0.5],
-  [5, 0.4],
-  [10, 0.3],
-  [20, 0.15],
-  [30, 0.08],
-  [60, 0.025],
+  [5, 0.25],
+  [10, 0.15],
+  [20, 0.06],
+  [30, 0.03],
+  [60, 0.02],
 ]);
 export interface ResolvedRow {
   readonly ingredient: BrewingIngredient;

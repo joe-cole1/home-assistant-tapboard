@@ -1,4 +1,4 @@
-import type { IngredientFact } from "./catalog-types.ts";
+import type { FermentableFamily, IngredientFact } from "./catalog-types.ts";
 import type { BrewingIngredientRole } from "../../beverages/brewing-types.ts";
 
 /** Immutable short factual tags; never manufacturer intensity scores or model coefficients. */
@@ -1138,4 +1138,31 @@ export const INGREDIENT_FACTS: readonly IngredientFact[] = Object.freeze([
       ],
     },
   ),
+]);
+
+/** Typical malt-class character, used only when a product has no producer descriptors.
+ * Textbook class words, not producer claims; crystal malts use the colour bands below. */
+export const FAMILY_CHARACTER: Readonly<Partial<Record<FermentableFamily, readonly string[]>>> =
+  Object.freeze({
+    pilsner: ["grainy", "cracker"],
+    pale: ["bready"],
+    wheat: ["bready", "doughy"],
+    vienna: ["toasty", "bready"],
+    munich: ["toasty", "bread crust"],
+    biscuit: ["biscuit", "toasty"],
+    aromatic: ["malty", "bread crust"],
+    rye: ["spicy rye"],
+    chocolate: ["chocolate", "coffee"],
+    roasted: ["roast", "coffee"],
+    dehusked_roast: ["smooth roast", "cocoa"],
+  });
+export const HONEY_MALT_CHARACTER: readonly string[] = Object.freeze(["honey", "bread crust"]);
+/** Crystal/caramel character by colour band; `below` is an exclusive upper bound in °L. */
+export const CRYSTAL_CHARACTER: readonly {
+  readonly below: number;
+  readonly words: readonly string[];
+}[] = Object.freeze([
+  { below: 25, words: ["light caramel", "honey"] },
+  { below: 75, words: ["caramel", "toffee"] },
+  { below: Infinity, words: ["dark caramel", "raisin"] },
 ]);

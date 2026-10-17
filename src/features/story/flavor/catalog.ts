@@ -2,7 +2,7 @@ import type { BrewingIngredient, BrewingIngredientRole } from "../../beverages/b
 import type { FermentableFamily, IngredientFact, IngredientResolution } from "./catalog-types.ts";
 import { INGREDIENT_FACTS } from "./catalog-data.ts";
 
-export const CATALOG_VERSION = "tapboard-flavor-catalog-1";
+export const CATALOG_VERSION = "tapboard-flavor-catalog-2";
 
 /** Bounded exact identity normalization, never substring matching. */
 function identity(value: string | null): string {
@@ -73,6 +73,100 @@ const CATEGORY_FAMILIES: Readonly<Record<string, FermentableFamily>> = {
   "base (vienna)": "vienna",
   "base (munich)": "munich",
 };
+
+/** Colour in °L: explicit Lovibond, then an "NN L" product name, then Brewfather SRM `color`.
+ * Custom Brewfather grains sometimes store °L in `color`, so the name wins over conversion. */
+export function lovibondOf(item: BrewingIngredient): number | null {
+  if (item.lovibond !== null && Number.isFinite(item.lovibond)) return item.lovibond;
+  const named = /(\d+(?:\.\d+)?)\s*°?\s*L\b/.exec(item.name ?? "");
+  if (named) return Number(named[1]);
+  return item.color !== null && Number.isFinite(item.color) ? (item.color + 0.76) / 1.3546 : null;
+}
+function classified(
+  family: FermentableFamily,
+  lovibond: number | null,
+  bodyClass: IngredientResolution["bodyClass"] = null,
+): IngredientResolution {
+  return {
+    id: `property-${family}`,
+    level: "family",
+    family,
+    descriptors: [],
+    sourceUrls: ["https://docs.brewfather.app/api/types"],
+    souring: null,
+    functions: family === "sugar" ? ["fermentable_sugar"] : [],
+    bodyClass,
+    roastClass:
+      family === "roasted"
+        ? "black"
+        : family === "chocolate"
+          ? "chocolate"
+          : family === "dehusked_roast"
+            ? "dehusked"
+            : "none",
+    diagnostics: [
+      `Classified from Brewfather category and colour${lovibond === null ? "" : ` (${Math.round(lovibond)} °L)`}; product character unresolved.`,
+    ],
+  };
+}
+/** Last-resort class from name tokens, Brewfather type/category and colour. Conflicting colour
+ * stays unresolved so a data-entry error never becomes roast or base character. */
+function propertyResolution(item: BrewingIngredient, name: string): IngredientResolution | null {
+  const type = identity(item.type);
+  const category = identity(item.grainCategory);
+  const lovibond = lovibondOf(item);
+  if (type.includes("extract")) return null;
+  if (/smoked|rauch|peat|acidulated|sauer/.test(name))
+    return unresolved("Smoked, peated and acidulated malts need an explicit rule; not classified.");
+  if (/victory|biscuit|carabrown/.test(name)) return classified("biscuit", lovibond);
+  if (/honey malt|brumalt/.test(name)) return classified("aromatic", lovibond);
+  if (type === "sugar") return classified("sugar", lovibond);
+  if (/flaked|torrefied/.test(name) && ["", "grain", "adjunct"].includes(type))
+    return classified(
+      "flaked",
+      lovibond,
+      /oat/.test(name) ? "oats" : /wheat/.test(name) ? "flaked_wheat" : null,
+    );
+  if ((type !== "" && type !== "grain") || lovibond === null) return null;
+  if (category === "roasted" || /chocolate|black|roast|carafa/.test(name)) {
+    if (lovibond < 100)
+      return unresolved(
+        `Roasted category or name at ${Math.round(lovibond)} °L conflicts with roasted malt; not classified.`,
+      );
+    return classified(
+      /chocolate/.test(name)
+        ? "chocolate"
+        : /special|dehusk/.test(name)
+          ? "dehusked_roast"
+          : "roasted",
+      lovibond,
+    );
+  }
+  if (category.startsWith("crystal") || /cara|crystal|caramel/.test(name))
+    return classified(
+      lovibond < 3.5 ? "carapils" : lovibond < 75 ? "crystal_light" : "crystal_dark",
+      lovibond,
+    );
+  if (category !== "" && !category.startsWith("base")) return null;
+  if (lovibond > 35)
+    return unresolved(
+      `Base malt at ${Math.round(lovibond)} °L conflicts with its category; not classified.`,
+    );
+  if (lovibond < 13 && /wheat/.test(name)) return classified("wheat", lovibond, "wheat");
+  if (lovibond < 13 && /rye/.test(name)) return classified("rye", lovibond, "rye");
+  return classified(
+    lovibond < 2.5
+      ? "pilsner"
+      : lovibond < 5
+        ? /vienna/.test(name)
+          ? "vienna"
+          : "pale"
+        : lovibond < 13
+          ? "munich"
+          : "aromatic",
+    lovibond,
+  );
+}
 
 export function resolveIngredient(
   role: BrewingIngredientRole,
@@ -170,6 +264,8 @@ export function resolveIngredient(
         ],
       };
     }
+    const property = propertyResolution(item, name);
+    if (property) return property;
   }
   return unresolved(
     name
