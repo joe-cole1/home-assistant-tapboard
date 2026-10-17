@@ -5,7 +5,7 @@ const BATCH_SUMMARY_INCLUDE = [
   "recipe.name",
   "recipe.type",
   "recipe.style",
-  "recipe.description",
+  "recipe.teaser",
   "recipe.ibu",
   "recipe.color",
   "recipe.abv",
