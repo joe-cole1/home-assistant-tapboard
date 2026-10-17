@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { extractDescriptors } from "../scripts/flavor-sources/extract.ts";
 import { buildEntry } from "../scripts/flavor-sources/build.ts";
-import { robotsAllows } from "../scripts/flavor-sources/fetch.ts";
+import { isBotChallenge, robotsAllows } from "../scripts/flavor-sources/fetch.ts";
 import { LEXICON } from "../scripts/flavor-sources/lexicon.ts";
 import { REVIEWED_FACTS } from "../src/features/story/flavor/catalog-data.ts";
 import { sourcedFacts } from "../src/features/story/flavor/sourced.ts";
@@ -195,4 +195,11 @@ void test("a built entry carries only extracted words and says when the maker na
     ["pairing"],
   );
   assert.doesNotThrow(() => sourcedFacts("yeasts", [built]));
+});
+
+void test("bot challenges are recognised so they become gaps instead of being bypassed", () => {
+  assert.equal(isBotChallenge(429, new Headers({ "x-vercel-mitigated": "challenge" }), ""), true);
+  assert.equal(isBotChallenge(403, new Headers(), "<title>Just a moment...</title> cf-chl"), true);
+  assert.equal(isBotChallenge(200, new Headers(), "<h1>Citra</h1> grapefruit"), false);
+  assert.equal(isBotChallenge(404, new Headers(), "Not found"), false);
 });
