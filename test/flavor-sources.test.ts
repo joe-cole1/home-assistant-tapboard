@@ -48,6 +48,11 @@ void test("negated, conditional and pairing mentions are reported, never kept", 
     "fruity",
     "banana",
   ]);
+  // A line break ends a statement: a fact line never inherits the next sentence's condition.
+  assert.deepEqual(
+    words("Fruity, slight banana and clove\nA strain that can be used widely.", "yeasts"),
+    ["fruity", "banana", "clove"],
+  );
   assert.deepEqual(reasons("Free of phenols; fruity at warmer temperatures.", "yeasts"), [
     "phenolic:negated",
     "fruity:conditional",

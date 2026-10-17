@@ -46,7 +46,7 @@ function normalise(text: string): string {
     .toLowerCase()
     .replace(/[‐‑–—-]/g, " ")
     .replace(/[\/&+]/g, " , ")
-    .replace(/\s+/g, " ");
+    .replace(/[^\S\n]+/g, " ");
 }
 const escape = (phrase: string) => phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const entries: readonly { readonly phrase: string; readonly term: LexiconTerm | null }[] = [
