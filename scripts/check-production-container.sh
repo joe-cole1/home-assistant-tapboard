@@ -159,9 +159,17 @@ exercise preflight
 node "$qc_fixture" pin "$qc_private" |
   docker exec --interactive "$qc_container" node src/operator/reset-pin.ts >"$qc_private/operator.log" 2>&1
 exercise create
+# The documented online backup writes one private, checked copy onto the persistent volume.
+docker exec "$qc_container" npm run --silent operator:backup \
+  >"$qc_private/backup.log" 2>"$qc_private/backup-error.log"
+qc_backup="$(sed -En 's#^(/app/data/backups/tapboard-v2-[0-9]{8}T[0-9]{6}Z\.sqlite3) \([0-9]+ bytes\)$#\1#p' "$qc_private/backup.log")"
+[[ -n "$qc_backup" && "$(wc -l <"$qc_private/backup.log")" -eq 1 ]] ||
+  fail "backup output was not exactly one path and size"
+[[ "$(docker exec "$qc_container" stat -c '%a %u' /app/data/backups "$qc_backup")" == $'700 1000\n600 1000' ]] ||
+  fail "backup directory or file is not private to UID 1000"
 save_tokens_and_logs fresh
 stop_gracefully fresh-stopped
-printf 'Verified source hashes, schema 23, SSR, hardening, stdin PIN, and created domain state.\n'
+printf 'Verified source hashes, schema 23, SSR, hardening, stdin PIN, created domain state, and an online backup.\n'
 
 qc_phase="restart-persistence"
 compose start tapboard >"$qc_private/start.log" 2>&1

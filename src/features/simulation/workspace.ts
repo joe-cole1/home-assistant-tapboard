@@ -1,10 +1,9 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { lstat, rm } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { resolve } from "node:path";
 
 import type { Application, CreateApplicationOptions } from "../../application.ts";
-import { loadConfig, type ApplicationConfig } from "../../config.ts";
+import { loadConfig, simulationDatabasePath, type ApplicationConfig } from "../../config.ts";
 import { createRenderer, type Renderer } from "../../infrastructure/rendering/renderer.ts";
 import { Router } from "../../infrastructure/http/router.ts";
 import { HttpServer, type HttpServerAddress } from "../../infrastructure/http/server.ts";
@@ -351,7 +350,7 @@ export class WorkspaceApplication implements Application, SimulationController {
   }
 
   #simulationPath(): string {
-    return resolve(this.#config.databasePath) + ".simulation.sqlite3";
+    return simulationDatabasePath(this.#config.databasePath);
   }
 
   async #assertFileSafety(): Promise<void> {

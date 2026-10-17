@@ -63,7 +63,7 @@ docker compose --env-file "${TAPBOARD_ENV_FILE:-.env}" -p tapboard-prod -f compo
 curl -fsS http://127.0.0.1:3005/healthz
 ```
 
-Use the LAN/proxy URL instead when selected. GET and HEAD readiness report local application/database status with schema 22. Integration outages can degrade public connectivity while local readiness and domain administration remain available. After an update, follow the issue-specific MANUAL DEV TEST in README with disposable entities for destructive actions. Never use `down --volumes` as an update step.
+Use the LAN/proxy URL instead when selected. GET and HEAD readiness report local application/database status with schema 23. Integration outages can degrade public connectivity while local readiness and domain administration remain available. After an update, follow the issue-specific MANUAL DEV TEST in README with disposable entities for destructive actions. Never use `down --volumes` as an update step.
 
 The normal database is `/app/data/tapboard-v2.sqlite3`; Simulation uses a separate saved sibling. V1 `tapboard.db` is neither imported nor migrated. Do not point v2 at a v1 database or rewrite a rejected ledger. Canonical earlier v2 schemas upgrade transactionally; an unpublished divergent schema needs an explicit preservation/migration plan.
 
@@ -73,11 +73,55 @@ The four-ASCII-digit PIN provides local/online authentication with scrypt and du
 
 Use the supported verify-before-commit stdin key rotation. After it succeeds, atomically update only `TAPBOARD_SECRET_KEY` in the ignored environment file, preserving all other configuration, then recreate the service. README provides that sequence. Keep the new key secure through this operation; do not copy decrypted credentials into logs, screenshots, issues, or fixtures.
 
-Backups, snapshot consistency, key escrow, and restore rehearsal belong to the deployment operator. Tapboard has no backup volume, backup scheduler, browser restore, or v1 user-data migration. Protect both the normal and saved Simulation databases and the separate encryption key through the chosen external process.
+## Back up and restore
+
+`npm run operator:backup [target-directory]` takes an online snapshot while Tapboard keeps running. The database uses SQLite's rollback journal, so copying the file directly can capture a half-written transaction. The command instead runs SQLite's `VACUUM INTO` on a read-only connection: it copies one committed state and never migrates or modifies the source. Application writes wait while the snapshot reads, roughly a second per 100 MB, and fail only if that exceeds SQLite's 5-second busy timeout. Each copy must pass SQLite's `quick_check` and foreign-key check before it gets its final name; otherwise the command exits nonzero. The saved Simulation database is copied too when it exists. The default target is `<database directory>/backups`, which in the production container is `/app/data/backups` on the persistent volume, because the root filesystem is read-only. An existing `/app/backups` mount can be the target when it's writable by UID 1000 and its filesystem supports hard links, which publish each finished copy without replacing anything.
+
+```sh
+docker compose --env-file "${TAPBOARD_ENV_FILE:-.env}" -p tapboard-prod -f compose.production.example.yaml exec -T tapboard npm run operator:backup
+```
+
+The command prints only each copy's path and size, such as `/app/data/backups/tapboard-v2-20261017T031500Z.sqlite3 (1048576 bytes)`; a Simulation copy has the same name plus `.simulation.sqlite3`. Names carry a UTC timestamp, and an existing file is never overwritten. If any copy fails, the command exits nonzero and removes that copy, so every file under a backup name passed the check; a killed run can leave `*.partial` and `*.partial-journal` files to delete. The copies contain the Admin PIN verifier and encrypted integration credentials, so each is created with mode 0600. A missing target directory is created with mode 0700; its parent must already exist.
+
+Copy a backup out of the container, then move it off the host with your own tooling. `docker compose cp` keeps the 0600 mode:
+
+```sh
+docker compose --env-file "${TAPBOARD_ENV_FILE:-.env}" -p tapboard-prod -f compose.production.example.yaml cp tapboard:/app/data/backups/tapboard-v2-20261017T031500Z.sqlite3 /secure/tapboard-backups/
+```
+
+Tapboard has no backup scheduler or retention engine; schedule backups with the operator's own cron. This script, run from a crontab entry such as `15 3 * * * /usr/local/bin/tapboard-backup`, takes a backup and then keeps the newest seven copies and their Simulation siblings. `set -e` skips pruning when the backup fails. Copy new backups off the host in the same script if you rely on them for disaster recovery.
+
+```sh
+#!/bin/sh
+set -eu
+cd /path/to/home-assistant-tapboard
+export TAPBOARD_ENV_FILE=.env # or the absolute path of an external file; cron has no shell variables
+tapboard() {
+  docker compose --env-file "$TAPBOARD_ENV_FILE" -p tapboard-prod -f compose.production.example.yaml "$@"
+}
+tapboard exec -T tapboard npm run --silent operator:backup
+tapboard exec -T tapboard sh -c 'cd /app/data/backups && ls -1r tapboard-v2-*Z.sqlite3 | tail -n +8 |
+  while IFS= read -r f; do rm -f -- "$f" "$f.simulation.sqlite3"; done'
+```
+
+Backups never contain `TAPBOARD_SECRET_KEY`. Store the key separately from them, for example in a password manager: anyone holding both a backup and its key can decrypt the stored credentials, and a restored database without the matching key keeps its encrypted credentials but cannot use them until that key is configured. Root-key rotation re-encrypts only the live database, so keep each key for as long as you keep backups made under it.
+
+To restore, stop Tapboard, replace the database file, and start it again; run the backup command first if the current database might still be needed. This one-off container uses the same volume and UID 1000, so the restored file keeps the expected owner. It renames the copy into place only after the whole transfer arrives, and removes any rollback journal left by the replaced database, which must never be applied to the restored copy:
+
+```sh
+docker compose --env-file "${TAPBOARD_ENV_FILE:-.env}" -p tapboard-prod -f compose.production.example.yaml stop tapboard
+docker compose --env-file "${TAPBOARD_ENV_FILE:-.env}" -p tapboard-prod -f compose.production.example.yaml run --rm -T tapboard \
+  sh -c 'cat > /app/data/restore.partial && rm -f /app/data/tapboard-v2.sqlite3-journal && mv /app/data/restore.partial /app/data/tapboard-v2.sqlite3' \
+  < /secure/tapboard-backups/tapboard-v2-20261017T031500Z.sqlite3
+docker compose --env-file "${TAPBOARD_ENV_FILE:-.env}" -p tapboard-prod -f compose.production.example.yaml start tapboard
+curl -fsS http://127.0.0.1:3005/healthz
+```
+
+Restore a Simulation copy the same way, to `/app/data/tapboard-v2.sqlite3.simulation.sqlite3`. A backup from an earlier schema upgrades when Tapboard starts; an older image refuses a backup with a newer schema. A restore also brings back the PIN and Admin sessions from backup time: if the PIN changed or sessions were revoked since, run `operator:reset-pin` afterwards, which sets the PIN and revokes every session. Never use `down --volumes` as part of a restore. Browser restore, key escrow, and v1 user-data migration remain outside Tapboard.
 
 ## Reproduce acceptance
 
-Run `npm run check`, then install Chromium and run `npm run test:e2e`. `bash scripts/check-production-container.sh` builds a fresh image and checks hardened execution, clean-volume initialization, health/SSR, stdin PIN setup, persistent domain state after restart/recreate, degraded integration behavior, and graceful SIGTERM. It uses only a uniquely named disposable project/volume and removes only what it created. CI runs these as three independent gates.
+Run `npm run check`, then install Chromium and run `npm run test:e2e`. `bash scripts/check-production-container.sh` builds a fresh image and checks hardened execution, clean-volume initialization, health/SSR, stdin PIN setup, the online backup command, persistent domain state after restart/recreate, degraded integration behavior, and graceful SIGTERM. It uses only a uniquely named disposable project/volume and removes only what it created. CI runs these as three independent gates.
 
 Actual VPS deployment, other CPU architectures, and live Brewfather/Home Assistant mutations are operator checks beyond the disposable acceptance run. They are not substitutes for the canonical, browser, migration, and container gates.
 
