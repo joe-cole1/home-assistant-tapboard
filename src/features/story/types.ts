@@ -389,6 +389,8 @@ export interface FlavorCalculation {
   readonly coverage: Readonly<Record<BrewingIngredientRole, FlavorCoverage>>;
   readonly scalars: BrewingInputs["scalars"] | null;
   readonly diagnostics: readonly string[];
+  /** Admin only: named ingredients without a reviewed catalog entry, and how each was treated. */
+  readonly catalogGaps: readonly string[];
   readonly modelVersion: string;
   readonly catalogVersion: string;
   readonly fingerprint: string;
@@ -406,6 +408,7 @@ export interface AdminFlavorGuidance {
   readonly coverage: FlavorCalculation["coverage"];
   readonly axes: FlavorCalculation["axes"];
   readonly diagnostics: readonly string[];
+  readonly catalogGaps: readonly string[];
   readonly manualOverrides: SensoryPredictionMap;
   readonly modelVersion: string;
   readonly catalogVersion: string;

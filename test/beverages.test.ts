@@ -763,7 +763,7 @@ void test("Brewfather candidate linking, snapshot versioning, and atomic unlink"
       _id: "recipe-xyz-789",
       name: "Hazy IPA Recipe",
       style: { name: "New England IPA" },
-      description: "Juicy tropical hazy IPA",
+      teaser: "Juicy tropical hazy IPA",
       fermentables: [
         { name: "Pilsner Malt", amount: 5, unit: "kg" },
         { name: "Flaked Oats", amount: 1.5, unit: "kg" },

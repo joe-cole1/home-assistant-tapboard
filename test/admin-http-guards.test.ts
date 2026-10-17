@@ -426,12 +426,17 @@ void test("sensory Admin form preserves zero and clears only submitted axes", as
   const safe = safeAdminFlavorDetails({
     modelVersion: "model",
     diagnostics: Array(100).fill("bounded"),
+    catalogGaps: [
+      { secret: "PRIVATE" },
+      ...Array.from({ length: 40 }, () => "Yeast · Hefeweizen IV: generic"),
+    ],
     scalars: { fg: { value: Number.NaN, sourcePath: "recipe.fg", secret: "PRIVATE" } },
     axes: { malt: { value: 1, rawNotes: "PRIVATE" } },
     secret: "PRIVATE",
   });
   assert.ok(safe);
   assert.equal(safe.diagnostics.length, 30);
+  assert.ok(safe.catalogGaps.length > 0 && safe.catalogGaps.length <= 30);
   assert.equal(safe.scalars.find((row) => row.key === "fg")?.value, null);
   assert.ok(!JSON.stringify(safe).includes("PRIVATE"));
 });

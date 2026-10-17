@@ -42,7 +42,8 @@ requirements.
   `telemetry/detector.ts` (pure pour detector) → pours, forecasts, and `health/` incidents.
 - Events out: `events/` (envelope) → `outbox/` → `outbound/` (Home Assistant and webhook
   transports).
-- Brewfather: `beverages/brewfather/`. Flavor: `story/flavor/` (pure functions).
+- Brewfather: `beverages/brewfather/`. Flavor: `story/flavor/` (pure functions). To add or update a
+  catalog ingredient from a name and data sheet, follow `.claude/skills/flavor-catalog/SKILL.md`.
 - `src/features/web/` and `views/`: server-rendered Admin and public pages (Eta). `public/js/` is
   progressive enhancement only; pages must work without JavaScript.
 - `src/infrastructure/database/`: the SQLite connection and append-only migrations.

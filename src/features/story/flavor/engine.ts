@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { BrewingInputs } from "../../beverages/brewing-types.ts";
+import type { BrewingInputs, BrewingIngredientRole } from "../../beverages/brewing-types.ts";
 import { BEVERAGE_SENSORY_AXES } from "../../beverages/types.ts";
 import type {
   SensoryAxis,
@@ -9,8 +9,22 @@ import type {
   FlavorDescriptor,
   SensoryAxisResult,
 } from "../types.ts";
-import { CATALOG_VERSION } from "./catalog.ts";
-import { composition, resolveFeatures, ROLES, type ResolvedRow } from "./features.ts";
+import { ACID_MALT, CATALOG_VERSION, lovibondOf, SOURING_CULTURE } from "./catalog.ts";
+import {
+  CRYSTAL_CHARACTER,
+  FAMILY_CHARACTER,
+  HONEY_MALT_CHARACTER,
+  SUGAR_CHARACTER,
+} from "./catalog-data.ts";
+import type { FermentableFamily } from "./catalog-types.ts";
+import {
+  composition,
+  gristPercentScale,
+  inGrist,
+  resolveFeatures,
+  ROLES,
+  type ResolvedRow,
+} from "./features.ts";
 import { clamp, finite, defineCurve, interpolateCurve, stableSerialize } from "./math.ts";
 const FIXED_CURVE_0 = defineCurve([
   [0, 0],
@@ -114,7 +128,49 @@ export function sensoryBand(key: SensoryAxis, value: number | null, manual = fal
           : "Very high";
 }
 
-export const MODEL_VERSION = "recipe-flavor-1";
+export const MODEL_VERSION = "recipe-flavor-2";
+/** Shared saturating dose→intensity map on the 0–5 scale. */
+function saturate(units: number): number {
+  return -5 * Math.expm1(-units / 5);
+}
+// Descriptor salience heuristics: relative flavour strength per unit of grist.
+const MALT_POTENCY: Readonly<Record<FermentableFamily, number>> = {
+  pilsner: 0.55,
+  pale: 0.65,
+  wheat: 0.55,
+  vienna: 1.4,
+  munich: 1.8,
+  biscuit: 3.5,
+  aromatic: 3.5,
+  crystal_light: 2.5,
+  crystal_dark: 6.5,
+  roasted: 15,
+  chocolate: 13,
+  dehusked_roast: 4.5,
+  flaked: 0,
+  rye: 1.2,
+  carapils: 0,
+  sugar: 0,
+  lactose: 0,
+  processing: 0,
+  extract_pale: 0,
+  extract_dark: 0,
+  smoked: 4,
+  peated: 40,
+};
+const CRYSTAL_POTENCY = [2.5, 4.5, 6.5] as const;
+const EXPRESSIVE_YEAST = new Set(["banana", "clove", "phenolic", "pepper", "spicy"]);
+const POSITION_WEIGHTS = [1, 0.85, 0.7, 0.55] as const;
+const PROVIDER_AROMA = [
+  "floral",
+  "grassy",
+  "herbal",
+  "earthy",
+  "woody",
+  "onion",
+  "citrus",
+  "fruity",
+];
 const MALT = {
   pilsner: 1.6,
   pale: 1.8,
@@ -136,6 +192,8 @@ const MALT = {
   processing: 0,
   extract_pale: 0,
   extract_dark: 0,
+  smoked: 1.8,
+  peated: 1.8,
 } as const;
 const BODY = { oats: 1, flaked_wheat: 1, chit: 1, rye: 0.8, wheat: 0.5, carapils: 0.4 } as const;
 const ROAST = { black: 1, chocolate: 0.8, dehusked: 0.35, none: 0, unknown: 0 } as const;
@@ -265,12 +323,7 @@ function predictions(
       validOg === null ? ["missing_strength_context"] : limitations("og"),
       validOg === null || !grist.absentSupported,
     );
-    const roastPercent =
-      100 *
-      grist.fractions.reduce(
-        (sum, { row, fraction }) => sum + fraction * ROAST[row.resolution.roastClass],
-        0,
-      );
+    const roastPercent = roastShare(grist);
     const roastComplete =
       grist.absentSupported &&
       grist.fractions.every(({ row }) => row.resolution.roastClass !== "unknown");
@@ -296,7 +349,7 @@ function predictions(
   if (hopsComplete && volume !== null && volume > 0 && volume <= 10000) {
     const exposure = hopRows.reduce((sum, row) => sum + (row.exposure ?? 0), 0) / volume;
     axes.hops = result(
-      -5 * Math.expm1(-exposure / 5),
+      saturate(exposure),
       [
         exposure === 0
           ? "complete_schedule_no_conventional_hop_exposure"
@@ -399,11 +452,37 @@ function predictions(
       attenuationLimited,
     );
   }
+  // Tartness needs positive evidence: grain and hop identity gaps cannot make a beer sour, but
+  // yeast, misc, acidulated-malt and process gaps can hide souring.
   const yeasts = features.rows.yeasts;
+  const yeastIdentity = (row: ResolvedRow) =>
+    `${row.ingredient.name ?? ""} ${row.ingredient.productId ?? ""}`;
   const yeastKnown =
     features.coverage.yeasts.complete &&
     yeasts.length > 0 &&
-    yeasts.every((row) => row.resolution.souring === false);
+    yeasts.every(
+      (row) =>
+        row.resolution.souring === false ||
+        (row.resolution.level === "unresolved" &&
+          yeastIdentity(row).trim() !== "" &&
+          ["ale", "lager", "wheat"].includes(row.ingredient.type?.trim().toLowerCase() ?? "") &&
+          !SOURING_CULTURE.test(yeastIdentity(row))),
+    );
+  const gristShared = grist.fractions.some(({ fraction }) => fraction > 0);
+  const acidulated = grist.fractions.some(
+    ({ row, fraction }) =>
+      ACID_MALT.test(row.ingredient.name ?? "") && (!gristShared || fraction > 0.03),
+  );
+  // Unknown grains, adjuncts, sugars and extracts cannot sour a beer; unknown other material
+  // (fruit entered as a fermentable, for example) can.
+  const unknownMaterial = features.rows.fermentables.some((row) => {
+    const type = row.ingredient.type?.trim().toLowerCase() ?? "";
+    return (
+      row.resolution.level === "unresolved" &&
+      !["", "grain", "adjunct", "sugar"].includes(type) &&
+      !type.includes("extract")
+    );
+  });
   const unresolvedAcidStage = features.rows.miscs.some(
     (row) =>
       row.resolution.functions.includes("mash_acid") &&
@@ -418,14 +497,24 @@ function predictions(
         !row.resolution.functions.some((fn) => ["finished_acid", "fruit"].includes(fn)),
     );
   const souring =
-    yeasts.some((row) => row.resolution.souring === true) ||
-    features.rows.miscs.some((row) =>
+    yeasts.some(
+      (row) => row.resolution.souring === true || SOURING_CULTURE.test(yeastIdentity(row)),
+    ) ||
+    [...features.rows.miscs, ...features.rows.fermentables].some((row) =>
       row.resolution.functions.some((fn) => ["finished_acid", "fruit"].includes(fn)),
     );
-  if (yeastKnown && miscsKnown && grist.absentSupported && inputs.processComplete && !souring)
+  if (
+    yeastKnown &&
+    miscsKnown &&
+    !acidulated &&
+    !unknownMaterial &&
+    features.coverage.fermentables.complete &&
+    inputs.processComplete &&
+    !souring
+  )
     axes.tartness = result(
       0,
-      ["complete_conventional_recipe_no_souring_evidence"],
+      ["identified_nonsouring_yeast_and_no_souring_evidence"],
       [...refs(yeasts), ...refs(features.rows.miscs)],
       ["none_expected_is_not_measured_zero_acidity"],
     );
@@ -435,7 +524,9 @@ function predictions(
         ? "souring_or_finished_acid_requires_separate_model"
         : !yeastKnown
           ? "missing_or_ambiguous_yeast"
-          : "incomplete_absence_support",
+          : acidulated
+            ? "acidulated_malt_requires_review"
+            : "incomplete_absence_support",
     ]);
   return axes;
 }
@@ -444,68 +535,180 @@ function descriptorSelection(
   features: ReturnType<typeof resolveFeatures>,
 ): FlavorDescriptor[] {
   if (inputs.beverageType.toLowerCase() !== "beer") return [];
-  const groups: FlavorDescriptor[][] = [];
-  const volume = scalar(inputs, "volume");
-  const totalHop = features.rows.hops.reduce((sum, row) => sum + (row.exposure ?? 0), 0);
-  for (const role of ROLES) {
-    const support = new Map<string, { weight: number; refs: string[] }>();
-    for (const row of features.rows[role]) {
-      if (
-        role === "hops" &&
-        (volume === null ||
-          volume <= 0 ||
-          row.exposure === null ||
-          row.exposure / volume < 0.1 ||
-          totalHop === 0 ||
-          row.exposure / totalHop < 0.05)
-      )
-        continue;
-      const weight = role === "hops" ? (row.exposure ?? 0) : role === "fermentables" ? row.mass : 1;
-      const providerDescriptors =
-        role === "hops" && row.ingredient.aroma
-          ? Object.entries(row.ingredient.aroma)
-              .filter(
-                ([key, value]) =>
-                  [
-                    "floral",
-                    "grassy",
-                    "herbal",
-                    "earthy",
-                    "woody",
-                    "onion",
-                    "citrus",
-                    "fruity",
-                  ].includes(key) &&
-                  finite(value) &&
-                  value > 0 &&
-                  value <= 100,
-              )
-              .map(([key]) => key)
-          : [];
-      for (const label of new Set([...row.resolution.descriptors, ...providerDescriptors])) {
-        const old = support.get(label) ?? { weight: 0, refs: [] };
-        old.weight += weight;
-        old.refs.push(row.ingredient.sourcePath);
-        support.set(label, old);
-      }
+  // Linear "units" per (label, role) are summed before one saturation, so splitting an addition
+  // never changes the result and each label belongs to its strongest contributor.
+  const contributions = new Map<
+    string,
+    { units: Map<BrewingIngredientRole, number>; refs: Set<string> }
+  >();
+  const add = (
+    words: readonly string[],
+    role: BrewingIngredientRole,
+    units: number,
+    row: ResolvedRow,
+  ) => {
+    if (!(units > 0)) return;
+    words.forEach((label, index) => {
+      const entry = contributions.get(label) ?? { units: new Map(), refs: new Set<string>() };
+      const weight = POSITION_WEIGHTS[Math.min(index, POSITION_WEIGHTS.length - 1)]!;
+      entry.units.set(role, (entry.units.get(role) ?? 0) + units * weight);
+      entry.refs.add(row.ingredient.sourcePath);
+      contributions.set(label, entry);
+    });
+  };
+  const og = scalar(inputs, "og");
+  const gravity = clamp(og === null ? 1 : (og - 1) / 0.05, 0.65, 1.75);
+  const grist = composition(features.rows.fermentables, features.coverage.fermentables);
+  const roastPercent = roastShare(grist);
+  for (const { row, fraction } of grist.fractions) {
+    if (row.resolution.family === "sugar" && !row.resolution.descriptors.length) {
+      const name = row.ingredient.name?.toLowerCase() ?? "";
+      const sugar = SUGAR_CHARACTER.find(
+        (item) => item.pattern.test(name) && (row.ingredient.color ?? 0) >= item.minSrm,
+      );
+      if (sugar && fraction >= sugar.minFraction)
+        add(sugar.words, "fermentables", sugar.potency * fraction, row);
+      continue;
     }
-    groups.push(
-      [...support]
-        .sort((a, b) => b[1].weight - a[1].weight || a[0].localeCompare(b[0], "en"))
-        .map(([label, item]) => ({ label, role, evidenceReferences: [...new Set(item.refs)] })),
-    );
+    const character = maltCharacter(row);
+    const words = row.resolution.descriptors.length ? row.resolution.descriptors : character.words;
+    add(words, "fermentables", fraction * character.potency * gravity * 2.2, row);
   }
+  const volume = scalar(inputs, "volume");
+  const litres = volume !== null && volume > 0 && volume <= 10000 ? volume : null;
+  // Flavour adjuncts are dosed per litre wherever Brewfather lists them; an addition without a
+  // usable mass or volume counts as clearly noticeable.
+  const adjunctUnits = (row: ResolvedRow) => {
+    const noticeable = row.resolution.noticeableGPerL;
+    return litres !== null && noticeable !== null && row.mass > 0
+      ? (2.5 * row.mass) / litres / noticeable
+      : 1.5;
+  };
+  for (const row of features.rows.fermentables)
+    if (!inGrist(row)) add(row.resolution.descriptors, "fermentables", adjunctUnits(row), row);
+  if (litres !== null) {
+    const exposure =
+      features.rows.hops.reduce((sum, row) => sum + Math.max(0, row.exposure ?? 0), 0) / litres;
+    // Mixture suppression: each hop's character is its share of one saturating hop aroma.
+    const scale =
+      exposure > 0 ? (saturate(exposure) / exposure) * (1 - Math.min(0.5, roastPercent / 20)) : 0;
+    for (const row of features.rows.hops)
+      add(
+        [...new Set([...row.resolution.descriptors, ...providerAroma(row)])],
+        "hops",
+        (Math.max(0, row.exposure ?? 0) / litres) * scale,
+        row,
+      );
+  }
+  for (const row of features.rows.miscs)
+    add(row.resolution.descriptors, "miscs", adjunctUnits(row), row);
+  // Clean ale and lager strains add no chips; a lager's producer notes describe subtle balance.
+  for (const row of features.rows.yeasts) {
+    const words = row.resolution.descriptors;
+    if (row.ingredient.type?.trim().toLowerCase() === "lager") continue;
+    add(words, "yeasts", words.some((word) => EXPRESSIVE_YEAST.has(word)) ? 3 : 1.1, row);
+  }
+  const ranked = [...contributions]
+    .map(([label, entry]) => {
+      const role = ROLES.reduce((best, candidate) =>
+        (entry.units.get(candidate) ?? 0) > (entry.units.get(best) ?? 0) ? candidate : best,
+      );
+      const units = [...entry.units.values()].reduce((sum, value) => sum + value, 0);
+      return { label, role, salience: saturate(units), evidenceReferences: [...entry.refs] };
+    })
+    .sort((a, b) => b.salience - a.salience || a.label.localeCompare(b.label, "en"));
+  const floor = ranked.filter((item) => item.salience >= 0.75).length >= 3 ? 0.75 : 0.6;
+  const perRole = new Map<BrewingIngredientRole, number>();
   const selected: FlavorDescriptor[] = [];
-  const labels = new Set<string>();
-  for (let i = 0; i < 6 && selected.length < 6; i++)
-    for (const group of groups) {
-      const item = group[i];
-      if (item && !labels.has(item.label) && selected.length < 6) {
-        selected.push(item);
-        labels.add(item.label);
-      }
-    }
+  for (const { label, role, salience, evidenceReferences } of ranked) {
+    if (salience < floor || selected.length === 6) break;
+    const count = perRole.get(role) ?? 0;
+    if (count === 3) continue;
+    perRole.set(role, count + 1);
+    selected.push({ label, role, evidenceReferences });
+  }
   return selected;
+}
+/** Roast-weighted grist percent shared by the roast axis and hop-aroma masking. */
+function roastShare(grist: ReturnType<typeof composition>): number {
+  return (
+    100 *
+    grist.fractions.reduce(
+      (sum, { row, fraction }) => sum + fraction * ROAST[row.resolution.roastClass],
+      0,
+    )
+  );
+}
+function maltCharacter(row: ResolvedRow): { words: readonly string[]; potency: number } {
+  const family = row.resolution.family;
+  if (family === null) return { words: [], potency: 0 };
+  if (family === "crystal_light" || family === "crystal_dark") {
+    const lovibond = lovibondOf(row.ingredient);
+    const band =
+      lovibond === null
+        ? family === "crystal_dark"
+          ? CRYSTAL_CHARACTER.length - 1
+          : 0
+        : CRYSTAL_CHARACTER.findIndex((item) => lovibond < item.below);
+    return { words: CRYSTAL_CHARACTER[band]!.words, potency: CRYSTAL_POTENCY[band]! };
+  }
+  if (family === "aromatic" && /honey|brumalt/i.test(row.ingredient.name ?? ""))
+    return { words: HONEY_MALT_CHARACTER, potency: MALT_POTENCY.aromatic };
+  return { words: FAMILY_CHARACTER[family] ?? [], potency: MALT_POTENCY[family] };
+}
+function providerAroma(row: ResolvedRow): string[] {
+  return row.ingredient.aroma
+    ? Object.entries(row.ingredient.aroma)
+        .filter(
+          ([key, value]) =>
+            PROVIDER_AROMA.includes(key) && finite(value) && value > 0 && value <= 100,
+        )
+        .map(([key]) => key)
+    : [];
+}
+const GAP_ROLE: Readonly<Record<BrewingIngredientRole, string>> = {
+  fermentables: "Fermentable",
+  hops: "Hop",
+  yeasts: "Yeast",
+  miscs: "Misc",
+};
+/** Named ingredients a reviewed catalog entry would improve: unresolved rows of any role, and
+ * yeasts that fell back to a generic class. Property-classified malts and spice classes are
+ * complete, and an unnamed row needs a name in Brewfather rather than a catalog entry. */
+function catalogGaps(features: ReturnType<typeof resolveFeatures>): string[] {
+  const gaps = new Set<string>();
+  for (const role of ROLES)
+    for (const { ingredient, resolution } of features.rows[role]) {
+      const name = ingredient.name?.trim();
+      const generic = role === "yeasts" && resolution.id?.startsWith("class-") === true;
+      if (!name || (resolution.level !== "unresolved" && !generic)) continue;
+      const maker = role === "yeasts" ? ingredient.laboratory : ingredient.supplier;
+      const identity = [maker, ingredient.productId].filter((part) => part?.trim()).join(" ");
+      gaps.add(
+        `${GAP_ROLE[role]} · ${name}${identity ? ` (${identity})` : ""}: ${resolution.diagnostics[0] ?? "not used for flavor words."}`,
+      );
+    }
+  return [...gaps].slice(0, 30);
+}
+/** Grist rows whose mass share and Brewfather percentage disagree by more than two points.
+ * Percentages are rescaled to the grist when fruit or processing rows carry their own share. */
+function massPercentageDisagreements(features: ReturnType<typeof resolveFeatures>): string[] {
+  const massG = features.coverage.fermentables.eligibleMassG;
+  const grist = features.rows.fermentables.filter(inGrist);
+  // Incomplete percentages are compared as recorded, row by row.
+  const scale = gristPercentScale(grist, features.rows.fermentables) ?? 100;
+  if (!(massG > 0)) return [];
+  return grist
+    .filter(
+      (row) =>
+        row.mass > 0 &&
+        finite(row.ingredient.percentage) &&
+        Math.abs((row.mass / massG) * 100 - (row.ingredient.percentage / scale) * 100) > 2,
+    )
+    .map(
+      (row) =>
+        `${row.ingredient.sourcePath}: mass/percentage disagreement; eligible positive mass selected.`,
+    );
 }
 /** Version changes invalidate derived guidance even when provider inputs are unchanged. */
 export function flavorInputFingerprint(
@@ -621,26 +824,12 @@ export function resolveFlavorProfile(input: SensoryProfileInput): FlavorCalculat
     scalars: inputs?.scalars ?? null,
     diagnostics: [
       ...(inputs?.diagnostics ?? []),
-      ...(features && features.coverage.fermentables.eligibleMassG > 0
-        ? features.rows.fermentables
-            .filter(
-              (row) =>
-                row.mass > 0 &&
-                finite(row.ingredient.percentage) &&
-                Math.abs(
-                  (row.mass / features.coverage.fermentables.eligibleMassG) * 100 -
-                    row.ingredient.percentage,
-                ) > 2,
-            )
-            .map(
-              (row) =>
-                `${row.ingredient.sourcePath}: mass/percentage disagreement; eligible positive mass selected.`,
-            )
-        : []),
+      ...(features ? massPercentageDisagreements(features) : []),
       ...(features
         ? ROLES.flatMap((role) => features.rows[role].flatMap((row) => row.resolution.diagnostics))
         : []),
     ].slice(0, 100),
+    catalogGaps: features ? catalogGaps(features) : [],
     modelVersion: MODEL_VERSION,
     catalogVersion: CATALOG_VERSION,
     fingerprint: flavorInputFingerprint(

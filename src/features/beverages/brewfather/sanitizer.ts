@@ -153,7 +153,8 @@ export function sanitizeBatchSummary(
   const recipeName = cleanText(recipe.name ?? s.name, 160);
   const styleId = cleanText(style._id ?? style.id, 256);
   const styleName = cleanText(style.name ?? recipe.style ?? s.style, 120);
-  const description = cleanText(recipe.description ?? style.description, 2000);
+  // Brewfather's drinker-facing recipe text is `teaser`; batch tasting notes stay private.
+  const description = cleanText(recipe.teaser, 2000);
 
   const brewDate = isoDate(s.brewDate ?? s.brew_date);
   const estimatedOg = finiteNumber(s.estimatedOg, 0.5, 2.0);
@@ -211,7 +212,7 @@ export function sanitizeBatchToSourceProfile(batchData: unknown): SanitizedSourc
 
   const name = cleanText(recipe.name ?? s.name, 160) ?? "Brewfather Batch";
   const styleName = cleanText(style.name ?? recipe.style ?? s.style, 120);
-  const description = cleanText(recipe.description ?? style.description, 4000);
+  const description = cleanText(recipe.teaser, 4000);
 
   // Preference for measured values over estimated values for actual presentation
   const abv =

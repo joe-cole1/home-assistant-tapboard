@@ -212,3 +212,65 @@ void test("B016 specific laboratory/product code resolves independently of broad
   const changed = evaluateFixture(raw).inputs.ingredients.yeasts.items[0]!;
   assert.equal(resolveIngredient("yeasts", changed).id, resolveIngredient("yeasts", yeast).id);
 });
+void test("descriptors follow the strongest contributors across ingredient roles", () => {
+  const descriptors = (id: string) => result(id).calculation.descriptors;
+  const has = (id: string, labels: readonly string[], role: string) =>
+    descriptors(id).some((item) => labels.includes(item.label) && item.role === role);
+  // Dark beers lead with their roasted grain, not 10–20 minute boil hops.
+  for (const id of ["B004", "B011", "B021", "B040"]) {
+    assert.ok(
+      descriptors(id)
+        .slice(0, 2)
+        .every((item) => item.role === "fermentables"),
+      id,
+    );
+    assert.ok(has(id, ["chocolate", "coffee", "roast"], "fermentables"), id);
+  }
+  for (const id of ["B044", "B050"]) assert.equal(descriptors(id)[0]?.role, "fermentables", id);
+  // A label shared by yeast and hops belongs to its strongest contributor.
+  for (const id of ["B033", "B043", "B063"]) {
+    assert.ok(has(id, ["citrus", "tropical fruit"], "hops"), id);
+    assert.equal(has(id, ["citrus", "tropical fruit"], "yeasts"), false, id);
+  }
+  // A 1% colour addition of dehusked roast stays below perception.
+  assert.equal(
+    descriptors("B015").some((item) => ["cocoa", "coffee", "smooth roast"].includes(item.label)),
+    false,
+  );
+  for (const id of ["B045", "B055", "B064"])
+    assert.equal(
+      descriptors(id).some((item) => item.role === "yeasts"),
+      false,
+      id,
+    );
+  for (const id of ["B027", "B035", "B036", "B038", "B051"])
+    assert.ok(descriptors(id).length > 0, id);
+});
+void test("every corpus fermentable resolves to a catalog entry or a generic class", () => {
+  const unresolved = new Set<string>();
+  for (const item of [...corpus.batches, ...corpus.recipes]) {
+    const { inputs } = evaluateFixture(
+      item.input,
+      corpus.batches.includes(item) ? "batch" : "recipe",
+    );
+    for (const row of inputs.ingredients.fermentables.items)
+      if (resolveIngredient("fermentables", row).level === "unresolved")
+        unresolved.add(row.name ?? "");
+  }
+  assert.deepEqual([...unresolved], []);
+});
+void test("splitting every hop addition into four equal parts changes no descriptor", () => {
+  const raw = batchFixture("B033");
+  const split = structuredClone(raw);
+  const recipe = split.recipe as Record<string, unknown>;
+  recipe.hops = (recipe.hops as Record<string, unknown>[]).flatMap((hop) =>
+    Array.from({ length: 4 }, () => ({ ...hop, amount: (hop.amount as number) / 4 })),
+  );
+  const labels = (input: Record<string, unknown>) =>
+    evaluateFixture(input).calculation.descriptors.map(({ label, role }) => ({ label, role }));
+  assert.deepEqual(labels(split), labels(raw));
+  assert.equal(
+    evaluateFixture(split).calculation.axes.hops.value,
+    evaluateFixture(raw).calculation.axes.hops.value,
+  );
+});
