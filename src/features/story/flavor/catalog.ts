@@ -222,15 +222,8 @@ export function resolveIngredient(
       ["Laboratory established by exact branded product name."],
     );
   }
-  if (
-    role === "hops" &&
-    ["hallertau", "arctic blend", "columbus/tomahawk/zeus (ctz)"].includes(name)
-  )
-    return unresolved(
-      name === "hallertau"
-        ? "Hallertau is ambiguous; no specific variety inferred."
-        : "Blend composition is not resolved.",
-    );
+  if (role === "hops" && name === "arctic blend")
+    return unresolved("Proprietary blend composition is not published.");
   if (role === "fermentables") {
     // Product exceptions must not fall through into misleading source categories.
     if (

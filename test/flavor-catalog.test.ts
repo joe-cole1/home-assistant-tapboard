@@ -128,8 +128,53 @@ void test("exact hop identity never fabricates missing varieties or blend consti
     resolveIngredient("hops", ingredient({ name: "Mosaic", type: "Whole" })).id,
     "hop-mosaic-brand",
   );
-  for (const name of [null, "Hallertau", "Arctic Blend", "Citra clone", "Citra extract"])
+  for (const name of [null, "Arctic Blend", "Citra clone", "Citra extract", "Zeus"])
     assert.equal(resolveIngredient("hops", ingredient({ name })).level, "unresolved");
+  // Bare Hallertau is a labelled regional class, never a guessed variety.
+  const hallertau = resolveIngredient("hops", ingredient({ name: "Hallertau" }));
+  assert.equal(hallertau.id, "family-hop-hallertau");
+  assert.equal(hallertau.level, "family");
+  assert.ok(hallertau.diagnostics.some((value) => value.includes("variety is unknown")));
+});
+void test("reviewed hop varieties and flavourful yeasts resolve by exact name and laboratory", () => {
+  const hops: readonly [string, string][] = [
+    ["Tettnang", "hop-tettnanger"],
+    ["Hersbrucker", "hop-hersbrucker-spat"],
+    ["Perle", "hop-perle"],
+    ["Nugget", "hop-nugget"],
+    ["Crystal", "hop-crystal"],
+    ["Mount Hood", "hop-mt-hood"],
+    ["Fuggle", "hop-fuggle"],
+    ["Centennial", "hop-centennial"],
+    ["El Dorado", "hop-el-dorado"],
+    ["Bravo", "hop-bravo"],
+    ["Mandarina Bavaria", "hop-mandarina-bavaria"],
+    ["German Tradition", "hop-hallertauer-tradition"],
+    ["Columbus/Tomahawk/Zeus (CTZ)", "hop-ctz"],
+  ];
+  for (const [name, id] of hops)
+    assert.equal(resolveIngredient("hops", ingredient({ name })).id, id);
+  const yeasts: readonly [string, string, string, string][] = [
+    ["London Ale", "White Labs", "WLP013", "white-labs-wlp013"],
+    ["London Ale Yeast", "Wyeast Labs", "1028", "wyeast-1028"],
+    ["Voss Kveik", "Omega", "OYL-061", "omega-voss"],
+    ["New England", "Lallemand (LalBrew)", "", "lallemand-new-england"],
+    ["Belgian Wit", "Mangrove Jack's", "M21", "mangrove-jacks-m21"],
+  ];
+  for (const [name, laboratory, productId, id] of yeasts)
+    assert.equal(resolveIngredient("yeasts", ingredient({ name, laboratory, productId })).id, id);
+  // A name shared by two laboratories never crosses manufacturers.
+  assert.equal(
+    resolveIngredient("yeasts", ingredient({ name: "London Ale", laboratory: "Other Lab" })).level,
+    "unresolved",
+  );
+  assert.equal(
+    resolveIngredient(
+      "yeasts",
+      ingredient({ name: "Voss Kveik", laboratory: "Lallemand (LalBrew)", productId: "" }),
+    ).id,
+    "lallemand-voss",
+  );
 });
 void test("process aids, botanicals and acid context stay distinct", () => {
   assert.deepEqual(resolveIngredient("miscs", ingredient({ name: "Brewzyme-D" })).functions, [

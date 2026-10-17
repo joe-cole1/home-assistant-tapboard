@@ -1138,7 +1138,194 @@ export const INGREDIENT_FACTS: readonly IngredientFact[] = Object.freeze([
       ],
     },
   ),
+  ...hopVarieties(),
+  fact(
+    "family-hop-hallertau",
+    "hops",
+    ["Hallertau", "Hallertauer"],
+    "https://www.yakimachief.com/variety/hallertauer-mittelfruher",
+    {
+      descriptors: ["herbal", "spicy", "woody", "citrus"],
+      sourceUrls: [
+        "https://www.yakimachief.com/variety/hallertauer-mittelfruher",
+        "https://www.barthhaas.com/hops-and-products/hops/hallertau-tradition",
+        "https://www.yakimachief.com/variety/hersbrucker-spat",
+      ],
+      limitations: [
+        "Regional class only: character named by at least two of the reviewed Hallertau aroma varieties (Mittelfrüh, Tradition, Hersbrucker); the variety is unknown.",
+      ],
+    },
+  ),
+  fact(
+    "white-labs-wlp013",
+    "yeasts",
+    ["London Ale", "London Ale Yeast"],
+    "https://www.whitelabs.com/yeast-bank/wlp013-london-ale-yeast",
+    {
+      manufacturer: "White Labs",
+      manufacturerAliases: ["WhiteLabs"],
+      codes: ["WLP013"],
+      descriptors: ["fruity"],
+      souring: false,
+    },
+  ),
+  fact(
+    "wyeast-1028",
+    "yeasts",
+    ["London Ale", "London Ale Yeast"],
+    "https://wyeastlab.com/product/london-ale",
+    {
+      manufacturer: "Wyeast",
+      manufacturerAliases: ["Wyeast Labs"],
+      codes: ["1028"],
+      descriptors: ["fruity"],
+      souring: false,
+    },
+  ),
+  fact(
+    "omega-voss",
+    "yeasts",
+    ["Voss Kveik"],
+    "https://omegayeast.com/yeast/norwegian-ales/voss-kveik",
+    {
+      manufacturer: "Omega",
+      manufacturerAliases: ["Omega Yeast", "Omega Yeast Labs"],
+      codes: ["OYL-061"],
+      descriptors: ["orange", "citrus"],
+      souring: false,
+    },
+  ),
+  fact(
+    "lallemand-new-england",
+    "yeasts",
+    ["New England", "LalBrew New England", "New England American East Coast Ale"],
+    "https://files.scottlab.com/uploads/NEW%20ENGLAND%20TDS.pdf",
+    {
+      manufacturer: "Lallemand",
+      manufacturerAliases: ["Lallemand (LalBrew)", "LalBrew"],
+      descriptors: ["stone fruit", "peach", "tropical fruit"],
+      souring: false,
+    },
+  ),
+  fact(
+    "mangrove-jacks-m21",
+    "yeasts",
+    ["Belgian Wit", "M21 Belgian Wit"],
+    "https://brouwland.com/en/yeast-and-bacteria/1942-dried-brewing-yeast-belgian-wit-m21-mangrove-jack-s-craft-series-10-g.html",
+    {
+      manufacturer: "Mangrove Jack's",
+      manufacturerAliases: ["Mangrove Jacks"],
+      codes: ["M21"],
+      descriptors: ["fruity", "spicy", "phenolic"],
+      souring: false,
+      limitations: [
+        "Manufacturer description as reproduced by a retailer; the official product page was not reviewed.",
+        "Descriptors are expectations, not guaranteed batch flavor.",
+      ],
+    },
+  ),
 ]);
+
+/** Variety pages reviewed 2026-10-17 through search summaries of the cited producer pages. */
+function hopVarieties(): IngredientFact[] {
+  const variety = (
+    id: string,
+    aliases: readonly string[],
+    source: string,
+    descriptors: readonly string[],
+    note?: string,
+  ) =>
+    fact(id, "hops", aliases, source, {
+      descriptors,
+      limitations: [
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        ...(note ? [note] : []),
+      ],
+    });
+  return [
+    variety(
+      "hop-tettnanger",
+      ["Tettnanger", "Tettnang", "Tettnang Tettnanger"],
+      "https://www.yakimachief.com/variety/tettnanger",
+      ["spicy", "floral", "tea", "woody"],
+    ),
+    variety(
+      "hop-hersbrucker-spat",
+      ["Hersbrucker", "Hersbrucker Spät", "Hersbrucker Spat", "Hersbrucker Spaet"],
+      "https://www.yakimachief.com/variety/hersbrucker-spat",
+      ["hay", "orange", "spicy", "woody"],
+    ),
+    variety("hop-perle", ["Perle"], "https://hopsteiner.com/variety-data-sheets/Perle", [
+      "tea",
+      "spicy",
+      "pepper",
+      "green fruit",
+    ]),
+    variety("hop-nugget", ["Nugget"], "https://www.yakimachief.com/variety/nugget", [
+      "citrus",
+      "stone fruit",
+      "tropical fruit",
+      "woody",
+    ]),
+    variety(
+      "hop-crystal",
+      ["Crystal"],
+      "https://www.johnihaas.com/wp-content/uploads/2015/01/Crystal.pdf",
+      ["spicy", "floral"],
+      "Published Crystal descriptors conflict between suppliers; only the mild spicy/floral character is used.",
+    ),
+    variety(
+      "hop-mt-hood",
+      ["Mt. Hood", "Mt Hood", "Mount Hood"],
+      "https://www.yakimachief.com/variety/mt-hood",
+      ["hay", "herbal", "spicy", "woody"],
+    ),
+    variety(
+      "hop-fuggle",
+      ["Fuggle", "Fuggles", "UK Fuggle"],
+      "https://www.yakimachief.com/variety/fuggle",
+      ["herbal", "grassy", "earthy", "woody"],
+    ),
+    variety("hop-centennial", ["Centennial"], "https://www.yakimachief.com/variety/centennial", [
+      "lemon",
+      "floral",
+      "orange",
+      "tropical fruit",
+      "woody",
+    ]),
+    variety(
+      "hop-el-dorado",
+      ["El Dorado"],
+      "https://www.johnihaas.com/wp-content/uploads/2017/09/El-Dorado-1.pdf",
+      ["tropical fruit", "pear", "watermelon", "stone fruit"],
+    ),
+    variety("hop-bravo", ["Bravo"], "https://hopsteiner.com/variety-data-sheets/bravo", [
+      "orange",
+      "lime",
+      "fruity",
+      "floral",
+    ]),
+    variety(
+      "hop-mandarina-bavaria",
+      ["Mandarina Bavaria"],
+      "https://www.barthhaas.com/hops-and-products/hops/mandarina-bavaria",
+      ["tangerine", "orange", "currant"],
+    ),
+    variety(
+      "hop-hallertauer-tradition",
+      ["Hallertauer Tradition", "Hallertau Tradition", "Tradition", "German Tradition"],
+      "https://www.barthhaas.com/hops-and-products/hops/hallertau-tradition",
+      ["citrus", "lime", "woody", "herbal", "grassy"],
+    ),
+    variety(
+      "hop-ctz",
+      ["Columbus/Tomahawk/Zeus (CTZ)", "CTZ", "Columbus", "Columbus (Tomahawk)", "Tomahawk"],
+      "https://www.yakimachief.com/variety/ctz",
+      ["citrus", "dank", "earthy", "woody"],
+      "Sold as the CTZ designation; Columbus and Tomahawk names share one aroma class. Bare Zeus is not aliased.",
+    ),
+  ];
+}
 
 /** Typical malt-class character, used only when a product has no producer descriptors.
  * Textbook class words, not producer claims; crystal malts use the colour bands below. */

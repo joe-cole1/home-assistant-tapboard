@@ -21,7 +21,7 @@
       "explicitZero": 1,
       "saturatedFive": 0,
       "source": { "recipe_prediction": 107 },
-      "support": { "limited": 59, "supported": 48 },
+      "support": { "limited": 19, "supported": 88 },
       "bands": {
         "High": 5,
         "Low": 13,
@@ -163,7 +163,7 @@
           "productId": null,
           "grams": 85.048569,
           "stage": "whirlpool",
-          "reasons": ["Blend composition is not resolved."]
+          "reasons": ["Proprietary blend composition is not published."]
         },
         {
           "role": "hops",
@@ -174,7 +174,7 @@
           "productId": null,
           "grams": 56.699046,
           "stage": "dry_hop",
-          "reasons": ["Blend composition is not resolved."]
+          "reasons": ["Proprietary blend composition is not published."]
         },
         {
           "role": "hops",
@@ -185,7 +185,7 @@
           "productId": null,
           "grams": 56.699046,
           "stage": "dry_hop",
-          "reasons": ["Blend composition is not resolved."]
+          "reasons": ["Proprietary blend composition is not published."]
         }
       ],
       "axes": {
@@ -221,10 +221,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 2,
-          "resolvedCount": 0,
+          "resolvedCount": 2,
           "eligibleMassG": 56.699046,
-          "resolvedMassG": 0,
-          "classifiedFraction": 0
+          "resolvedMassG": 56.699046,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
@@ -245,30 +245,7 @@
           "classifiedFraction": 1
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[0]",
-          "name": "Columbus/Tomahawk/Zeus (CTZ)",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.349523,
-          "stage": "boil",
-          "reasons": ["Blend composition is not resolved."]
-        },
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[1]",
-          "name": "Columbus/Tomahawk/Zeus (CTZ)",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.349523,
-          "stage": "boil",
-          "reasons": ["Blend composition is not resolved."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "tartness": {
           "value": 0,
@@ -1050,19 +1027,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "yeasts",
-          "sourcePath": "recipe.yeasts[0]",
-          "name": "Voss Kveik",
-          "supplier": null,
-          "laboratory": "Omega",
-          "productId": "OYL-061",
-          "grams": null,
-          "stage": "unknown",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 1.7438415815027561,
@@ -1144,7 +1109,7 @@
           "present": true,
           "complete": true,
           "acceptedCount": 1,
-          "resolvedCount": 0,
+          "resolvedCount": 1,
           "eligibleMassG": 0,
           "resolvedMassG": 0,
           "classifiedFraction": null
@@ -1170,7 +1135,7 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -1654,19 +1619,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[0]",
-          "name": "Columbus/Tomahawk/Zeus (CTZ)",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.349523,
-          "stage": "boil",
-          "reasons": ["Blend composition is not resolved."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 2.111086700718822,
@@ -1679,7 +1632,7 @@
           "value": 0.5898642726204945,
           "band": "Very low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -1739,10 +1692,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 3,
-          "resolvedCount": 2,
+          "resolvedCount": 3,
           "eligibleMassG": 141.747615,
-          "resolvedMassG": 113.398092,
-          "classifiedFraction": 0.8
+          "resolvedMassG": 141.747615,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
@@ -1773,7 +1726,8 @@
         "Roasted ingredient identity/color conflict retained.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Blend composition is not resolved.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Sold as the CTZ designation; Columbus and Tomahawk names share one aroma class. Bare Zeus is not aliased.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Descriptors are expectations, not guaranteed batch flavor.",
@@ -1862,30 +1816,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[1]",
-          "name": "Hallertau",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.349523,
-          "stage": "boil",
-          "reasons": ["Hallertau is ambiguous; no specific variety inferred."]
-        },
-        {
-          "role": "yeasts",
-          "sourcePath": "recipe.yeasts[0]",
-          "name": "London Ale",
-          "supplier": null,
-          "laboratory": "White Labs",
-          "productId": "WLP013",
-          "grams": null,
-          "stage": "unknown",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 2.337000254756434,
@@ -1898,7 +1829,7 @@
           "value": 0.19048680429092046,
           "band": "Very low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -1958,16 +1889,16 @@
           "present": true,
           "complete": true,
           "acceptedCount": 2,
-          "resolvedCount": 1,
+          "resolvedCount": 2,
           "eligibleMassG": 70.873808,
-          "resolvedMassG": 42.524285,
-          "classifiedFraction": 0.600000002821917
+          "resolvedMassG": 70.873808,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
           "complete": true,
           "acceptedCount": 1,
-          "resolvedCount": 0,
+          "resolvedCount": 1,
           "eligibleMassG": 0,
           "resolvedMassG": 0,
           "classifiedFraction": null
@@ -1992,8 +1923,8 @@
         "Biscuit-style malt; not black roasted grain despite provider Roasted category.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Hallertau is ambiguous; no specific variety inferred.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Regional class only: character named by at least two of the reviewed Hallertau aroma varieties (Mittelfrüh, Tradition, Hersbrucker); the variety is unknown.",
+        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -2094,7 +2025,7 @@
           "productId": null,
           "grams": 85.048569,
           "stage": "whirlpool",
-          "reasons": ["Blend composition is not resolved."]
+          "reasons": ["Proprietary blend composition is not published."]
         },
         {
           "role": "hops",
@@ -2105,7 +2036,7 @@
           "productId": null,
           "grams": 56.699046,
           "stage": "dry_hop",
-          "reasons": ["Blend composition is not resolved."]
+          "reasons": ["Proprietary blend composition is not published."]
         },
         {
           "role": "hops",
@@ -2116,7 +2047,7 @@
           "productId": null,
           "grams": 56.699046,
           "stage": "dry_hop",
-          "reasons": ["Blend composition is not resolved."]
+          "reasons": ["Proprietary blend composition is not published."]
         }
       ],
       "axes": {
@@ -2218,9 +2149,9 @@
       "diagnostics": [
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Blend composition is not resolved.",
-        "Blend composition is not resolved.",
-        "Blend composition is not resolved.",
+        "Proprietary blend composition is not published.",
+        "Proprietary blend composition is not published.",
+        "Proprietary blend composition is not published.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -2309,30 +2240,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[0]",
-          "name": "Centennial",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 7.087381,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[1]",
-          "name": "Centennial",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 7.087381,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 1.713485698045291,
@@ -2345,7 +2253,7 @@
           "value": 0.13043012742789178,
           "band": "Very low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -2405,10 +2313,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 4,
-          "resolvedCount": 2,
+          "resolvedCount": 4,
           "eligibleMassG": 28.349524,
-          "resolvedMassG": 14.174762,
-          "classifiedFraction": 0.5
+          "resolvedMassG": 28.349524,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
@@ -2434,8 +2342,8 @@
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Classified from Brewfather category and colour (10 °L); product character unresolved.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Ingredient identity is outside the reviewed catalog.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Descriptors are expectations, not guaranteed batch flavor.",
@@ -2719,30 +2627,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[1]",
-          "name": "Hallertau",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.349523,
-          "stage": "boil",
-          "reasons": ["Hallertau is ambiguous; no specific variety inferred."]
-        },
-        {
-          "role": "yeasts",
-          "sourcePath": "recipe.yeasts[0]",
-          "name": "London Ale",
-          "supplier": null,
-          "laboratory": "White Labs",
-          "productId": "WLP013",
-          "grams": null,
-          "stage": "unknown",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 2.337000254756434,
@@ -2755,7 +2640,7 @@
           "value": 0.19359377397545463,
           "band": "Very low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -2815,16 +2700,16 @@
           "present": true,
           "complete": true,
           "acceptedCount": 2,
-          "resolvedCount": 1,
+          "resolvedCount": 2,
           "eligibleMassG": 85.048569,
-          "resolvedMassG": 56.699046,
-          "classifiedFraction": 0.6666666666666667
+          "resolvedMassG": 85.048569,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
           "complete": true,
           "acceptedCount": 1,
-          "resolvedCount": 0,
+          "resolvedCount": 1,
           "eligibleMassG": 0,
           "resolvedMassG": 0,
           "classifiedFraction": null
@@ -2849,8 +2734,8 @@
         "Biscuit-style malt; not black roasted grain despite provider Roasted category.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Hallertau is ambiguous; no specific variety inferred.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Regional class only: character named by at least two of the reviewed Hallertau aroma varieties (Mittelfrüh, Tradition, Hersbrucker); the variety is unknown.",
+        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -3135,30 +3020,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[1]",
-          "name": "Hallertau",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.349523,
-          "stage": "boil",
-          "reasons": ["Hallertau is ambiguous; no specific variety inferred."]
-        },
-        {
-          "role": "yeasts",
-          "sourcePath": "recipe.yeasts[0]",
-          "name": "London Ale Yeast",
-          "supplier": null,
-          "laboratory": "Wyeast Labs",
-          "productId": "1028",
-          "grams": null,
-          "stage": "unknown",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 2.337000254756434,
@@ -3171,7 +3033,7 @@
           "value": 0.24144339090177663,
           "band": "Very low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -3231,16 +3093,16 @@
           "present": true,
           "complete": true,
           "acceptedCount": 2,
-          "resolvedCount": 1,
+          "resolvedCount": 2,
           "eligibleMassG": 85.048569,
-          "resolvedMassG": 56.699046,
-          "classifiedFraction": 0.6666666666666667
+          "resolvedMassG": 85.048569,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
           "complete": true,
           "acceptedCount": 1,
-          "resolvedCount": 0,
+          "resolvedCount": 1,
           "eligibleMassG": 0,
           "resolvedMassG": 0,
           "classifiedFraction": null
@@ -3265,8 +3127,8 @@
         "Biscuit-style malt; not black roasted grain despite provider Roasted category.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Hallertau is ambiguous; no specific variety inferred.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Regional class only: character named by at least two of the reviewed Hallertau aroma varieties (Mittelfrüh, Tradition, Hersbrucker); the variety is unknown.",
+        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -3358,28 +3220,6 @@
       "unresolvedIngredients": [
         {
           "role": "hops",
-          "sourcePath": "recipe.hops[0]",
-          "name": "Bravo",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 4.252428,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[1]",
-          "name": "Bravo",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 5.669905,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "hops",
           "sourcePath": "recipe.hops[2]",
           "name": "Sterling",
           "supplier": null,
@@ -3387,28 +3227,6 @@
           "productId": null,
           "grams": 7.087381,
           "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[3]",
-          "name": "Hersbrucker",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 5.102914,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "yeasts",
-          "sourcePath": "recipe.yeasts[0]",
-          "name": "Belgian Wit",
-          "supplier": null,
-          "laboratory": "Mangrove Jack's",
-          "productId": "M21",
-          "grams": null,
-          "stage": "unknown",
           "reasons": ["Ingredient identity is outside the reviewed catalog."]
         }
       ],
@@ -3484,16 +3302,16 @@
           "present": true,
           "complete": true,
           "acceptedCount": 4,
-          "resolvedCount": 0,
+          "resolvedCount": 3,
           "eligibleMassG": 22.112628,
-          "resolvedMassG": 0,
-          "classifiedFraction": 0
+          "resolvedMassG": 15.025247,
+          "classifiedFraction": 0.6794871690510961
         },
         "yeasts": {
           "present": true,
           "complete": true,
           "acceptedCount": 1,
-          "resolvedCount": 0,
+          "resolvedCount": 1,
           "eligibleMassG": 0,
           "resolvedMassG": 0,
           "classifiedFraction": null
@@ -3511,11 +3329,12 @@
       "diagnostics": [
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Ingredient identity is outside the reviewed catalog.",
-        "Ingredient identity is outside the reviewed catalog.",
-        "Ingredient identity is outside the reviewed catalog.",
-        "Ingredient identity is outside the reviewed catalog.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Manufacturer description as reproduced by a retailer; the official product page was not reviewed.",
+        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -3607,30 +3426,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[0]",
-          "name": "Tettnang",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.349523,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[1]",
-          "name": "Mandarina Bavaria",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.4,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 1.7413310411929506,
@@ -3643,7 +3439,7 @@
           "value": 0.1259033095635138,
           "band": "Very low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -3703,10 +3499,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 2,
-          "resolvedCount": 0,
+          "resolvedCount": 2,
           "eligibleMassG": 56.749522999999996,
-          "resolvedMassG": 0,
-          "classifiedFraction": 0
+          "resolvedMassG": 56.749522999999996,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
@@ -3733,8 +3529,8 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Ingredient identity is outside the reviewed catalog.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -3821,17 +3617,6 @@
         }
       },
       "unresolvedIngredients": [
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[0]",
-          "name": "Hallertau",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 42.524285,
-          "stage": "boil",
-          "reasons": ["Hallertau is ambiguous; no specific variety inferred."]
-        },
         {
           "role": "hops",
           "sourcePath": "recipe.hops[1]",
@@ -3927,10 +3712,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 2,
-          "resolvedCount": 0,
+          "resolvedCount": 1,
           "eligibleMassG": 56.699047,
-          "resolvedMassG": 0,
-          "classifiedFraction": 0
+          "resolvedMassG": 42.524285,
+          "classifiedFraction": 0.7499999955907548
         },
         "yeasts": {
           "present": true,
@@ -3956,7 +3741,7 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Descriptors are expectations, not guaranteed batch flavor.",
-        "Hallertau is ambiguous; no specific variety inferred.",
+        "Regional class only: character named by at least two of the reviewed Hallertau aroma varieties (Mittelfrüh, Tradition, Hersbrucker); the variety is unknown.",
         "Ingredient name is missing; no identity inferred.",
         "Ingredient identity is outside the reviewed catalog.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -4807,30 +4592,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[0]",
-          "name": "Hallertau",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 85.048569,
-          "stage": "boil",
-          "reasons": ["Hallertau is ambiguous; no specific variety inferred."]
-        },
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[1]",
-          "name": "Hallertau",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.349523,
-          "stage": "boil",
-          "reasons": ["Hallertau is ambiguous; no specific variety inferred."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 2.712849160469915,
@@ -4843,7 +4605,7 @@
           "value": 0.10630665577185949,
           "band": "Very low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -4903,10 +4665,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 2,
-          "resolvedCount": 0,
+          "resolvedCount": 2,
           "eligibleMassG": 113.398092,
-          "resolvedMassG": 0,
-          "classifiedFraction": 0
+          "resolvedMassG": 113.398092,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
@@ -4933,8 +4695,8 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Hallertau is ambiguous; no specific variety inferred.",
-        "Hallertau is ambiguous; no specific variety inferred.",
+        "Regional class only: character named by at least two of the reviewed Hallertau aroma varieties (Mittelfrüh, Tradition, Hersbrucker); the variety is unknown.",
+        "Regional class only: character named by at least two of the reviewed Hallertau aroma varieties (Mittelfrüh, Tradition, Hersbrucker); the variety is unknown.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment."
       ]
@@ -5016,41 +4778,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[0]",
-          "name": "Nugget",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 21.262142,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[1]",
-          "name": "Crystal",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 21.262142,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[3]",
-          "name": "Crystal",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 7.087381,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 2.3099998982481753,
@@ -5063,7 +4791,7 @@
           "value": 0.4240410489491269,
           "band": "Very low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -5123,10 +4851,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 5,
-          "resolvedCount": 2,
+          "resolvedCount": 5,
           "eligibleMassG": 77.96118799999999,
-          "resolvedMassG": 28.349523,
-          "classifiedFraction": 0.3636363648024451
+          "resolvedMassG": 77.96118799999999,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
@@ -5154,10 +4882,12 @@
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Classified from Brewfather category and colour (120 °L); product character unresolved.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Ingredient identity is outside the reviewed catalog.",
-        "Ingredient identity is outside the reviewed catalog.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Published Crystal descriptors conflict between suppliers; only the mild spicy/floral character is used.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Published Crystal descriptors conflict between suppliers; only the mild spicy/floral character is used.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -5247,19 +4977,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[0]",
-          "name": "Tettnang",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.349523,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 1.2467368318455234,
@@ -5272,7 +4990,7 @@
           "value": 0.02715924789102451,
           "band": "Very low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -5332,10 +5050,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 1,
-          "resolvedCount": 0,
+          "resolvedCount": 1,
           "eligibleMassG": 28.349523,
-          "resolvedMassG": 0,
-          "classifiedFraction": 0
+          "resolvedMassG": 28.349523,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
@@ -5359,7 +5077,7 @@
       "diagnostics": [
         "Provider base-grain category supports family only; specific product character unresolved.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -5635,30 +5353,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[1]",
-          "name": "Fuggle",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.349523,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[2]",
-          "name": "Fuggle",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.349523,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 2.8854898187920988,
@@ -5671,7 +5366,7 @@
           "value": 0.8969758102465,
           "band": "Very low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -5731,10 +5426,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 4,
-          "resolvedCount": 2,
+          "resolvedCount": 4,
           "eligibleMassG": 113.398092,
-          "resolvedMassG": 56.699046,
-          "classifiedFraction": 0.5
+          "resolvedMassG": 113.398092,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
@@ -5762,8 +5457,8 @@
         "Classified from Brewfather category and colour (120 °L); product character unresolved.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Ingredient identity is outside the reviewed catalog.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -5851,30 +5546,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[0]",
-          "name": "Columbus/Tomahawk/Zeus (CTZ)",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.349523,
-          "stage": "boil",
-          "reasons": ["Blend composition is not resolved."]
-        },
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[1]",
-          "name": "Columbus/Tomahawk/Zeus (CTZ)",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.349523,
-          "stage": "boil",
-          "reasons": ["Blend composition is not resolved."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 2.997315173475076,
@@ -5887,7 +5559,7 @@
           "value": 0.047913497993982104,
           "band": "Very low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -5947,10 +5619,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 2,
-          "resolvedCount": 0,
+          "resolvedCount": 2,
           "eligibleMassG": 56.699046,
-          "resolvedMassG": 0,
-          "classifiedFraction": 0
+          "resolvedMassG": 56.699046,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
@@ -5978,8 +5650,10 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Blend composition is not resolved.",
-        "Blend composition is not resolved.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Sold as the CTZ designation; Columbus and Tomahawk names share one aroma class. Bare Zeus is not aliased.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Sold as the CTZ designation; Columbus and Tomahawk names share one aroma class. Bare Zeus is not aliased.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -6068,30 +5742,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[0]",
-          "name": "Tradition",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.349523,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[1]",
-          "name": "Hersbrucker",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.349523,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 1.5360000000000014,
@@ -6104,7 +5755,7 @@
           "value": 0.062021716206469256,
           "band": "Very low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -6164,10 +5815,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 2,
-          "resolvedCount": 0,
+          "resolvedCount": 2,
           "eligibleMassG": 56.699046,
-          "resolvedMassG": 0,
-          "classifiedFraction": 0
+          "resolvedMassG": 56.699046,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
@@ -6190,8 +5841,8 @@
       },
       "diagnostics": [
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Ingredient identity is outside the reviewed catalog.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -6280,19 +5931,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[1]",
-          "name": "Hallertau",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.349523,
-          "stage": "boil",
-          "reasons": ["Hallertau is ambiguous; no specific variety inferred."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 2.3938498002224473,
@@ -6305,7 +5944,7 @@
           "value": 0.14196768053864886,
           "band": "Very low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -6365,10 +6004,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 2,
-          "resolvedCount": 1,
+          "resolvedCount": 2,
           "eligibleMassG": 56.699046,
-          "resolvedMassG": 28.349523,
-          "classifiedFraction": 0.5
+          "resolvedMassG": 56.699046,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
@@ -6399,7 +6038,7 @@
         "Classified from Brewfather category and colour (26 °L); product character unresolved.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Hallertau is ambiguous; no specific variety inferred.",
+        "Regional class only: character named by at least two of the reviewed Hallertau aroma varieties (Mittelfrüh, Tradition, Hersbrucker); the variety is unknown.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -6491,17 +6130,6 @@
       },
       "unresolvedIngredients": [
         {
-          "role": "hops",
-          "sourcePath": "recipe.hops[0]",
-          "name": "Nugget",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 14.174762,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
           "role": "yeasts",
           "sourcePath": "recipe.yeasts[0]",
           "name": "American Ale",
@@ -6525,7 +6153,7 @@
           "value": 0.012466352859057866,
           "band": "Very low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -6585,10 +6213,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 1,
-          "resolvedCount": 0,
+          "resolvedCount": 1,
           "eligibleMassG": 14.174762,
-          "resolvedMassG": 0,
-          "classifiedFraction": 0
+          "resolvedMassG": 14.174762,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
@@ -6613,7 +6241,7 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Descriptors are expectations, not guaranteed batch flavor.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Ingredient identity is outside the reviewed catalog.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -6703,19 +6331,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "yeasts",
-          "sourcePath": "recipe.yeasts[0]",
-          "name": "New England",
-          "supplier": null,
-          "laboratory": "Lallemand (LalBrew)",
-          "productId": null,
-          "grams": null,
-          "stage": "unknown",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 1.5836088063750804,
@@ -6797,7 +6413,7 @@
           "present": true,
           "complete": true,
           "acceptedCount": 1,
-          "resolvedCount": 0,
+          "resolvedCount": 1,
           "eligibleMassG": 0,
           "resolvedMassG": 0,
           "classifiedFraction": null
@@ -6820,7 +6436,7 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -7528,28 +7144,6 @@
       },
       "unresolvedIngredients": [
         {
-          "role": "hops",
-          "sourcePath": "recipe.hops[0]",
-          "name": "German Tradition",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 56.699046,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[1]",
-          "name": "German Tradition",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 56.699046,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
           "role": "yeasts",
           "sourcePath": "recipe.yeasts[0]",
           "name": "Oktoberfest",
@@ -7584,7 +7178,7 @@
           "value": 0.32590506708832484,
           "band": "Very low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -7644,10 +7238,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 2,
-          "resolvedCount": 0,
+          "resolvedCount": 2,
           "eligibleMassG": 113.398092,
-          "resolvedMassG": 0,
-          "classifiedFraction": 0
+          "resolvedMassG": 113.398092,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
@@ -7674,8 +7268,8 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Classified from Brewfather category and colour (40 °L); product character unresolved.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Ingredient identity is outside the reviewed catalog.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Ingredient identity is outside the reviewed catalog.",
         "Ingredient identity is outside the reviewed catalog.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -7767,28 +7361,6 @@
       },
       "unresolvedIngredients": [
         {
-          "role": "hops",
-          "sourcePath": "recipe.hops[0]",
-          "name": "Perle",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 56.699046,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[1]",
-          "name": "Mount Hood",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.349523,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
           "role": "yeasts",
           "sourcePath": "recipe.yeasts[0]",
           "name": "Kolsch II",
@@ -7812,7 +7384,7 @@
           "value": 0.3491835700253781,
           "band": "Very low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -7872,10 +7444,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 2,
-          "resolvedCount": 0,
+          "resolvedCount": 2,
           "eligibleMassG": 85.048569,
-          "resolvedMassG": 0,
-          "classifiedFraction": 0
+          "resolvedMassG": 85.048569,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
@@ -7900,8 +7472,8 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Classified from Brewfather category and colour (49 °L); product character unresolved.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Ingredient identity is outside the reviewed catalog.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Ingredient identity is outside the reviewed catalog.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -7991,19 +7563,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[0]",
-          "name": "Tettnang",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.349523,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 1.5435789346658861,
@@ -8016,7 +7576,7 @@
           "value": 0.02715924789102451,
           "band": "Very low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -8076,10 +7636,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 1,
-          "resolvedCount": 0,
+          "resolvedCount": 1,
           "eligibleMassG": 28.349523,
-          "resolvedMassG": 0,
-          "classifiedFraction": 0
+          "resolvedMassG": 28.349523,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
@@ -8103,7 +7663,7 @@
       "diagnostics": [
         "Provider base-grain category supports family only; specific product character unresolved.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -8194,30 +7754,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[0]",
-          "name": "Nugget",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 21.262142,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[1]",
-          "name": "Hersbrucker",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 56.7,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 1.622400009171232,
@@ -8230,7 +7767,7 @@
           "value": 0.19277864769196504,
           "band": "Very low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -8290,10 +7827,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 2,
-          "resolvedCount": 0,
+          "resolvedCount": 2,
           "eligibleMassG": 77.962142,
-          "resolvedMassG": 0,
-          "classifiedFraction": 0
+          "resolvedMassG": 77.962142,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
@@ -8317,8 +7854,8 @@
       "diagnostics": [
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Ingredient identity is outside the reviewed catalog.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -8408,41 +7945,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[1]",
-          "name": "El Dorado",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 56.699046,
-          "stage": "whirlpool",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[4]",
-          "name": "El Dorado",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.349523,
-          "stage": "dry_hop",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[7]",
-          "name": "El Dorado",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.349523,
-          "stage": "dry_hop",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 1.7676922388141725,
@@ -8455,7 +7958,7 @@
           "value": 4.132267137175033,
           "band": "Very high",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -8515,10 +8018,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 8,
-          "resolvedCount": 5,
+          "resolvedCount": 8,
           "eligibleMassG": 283.49523,
-          "resolvedMassG": 170.097138,
-          "classifiedFraction": 0.6
+          "resolvedMassG": 283.49523,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
@@ -8544,13 +8047,13 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Ingredient identity is outside the reviewed catalog.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Ingredient identity is outside the reviewed catalog.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -8636,41 +8139,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[0]",
-          "name": "Nugget",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.349523,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[1]",
-          "name": "Crystal",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 21.262142,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[3]",
-          "name": "Crystal",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 7.087381,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 2.3099998982481753,
@@ -8683,7 +8152,7 @@
           "value": 0.4411440325530007,
           "band": "Very low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -8743,10 +8212,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 5,
-          "resolvedCount": 2,
+          "resolvedCount": 5,
           "eligibleMassG": 85.04856899999999,
-          "resolvedMassG": 28.349523,
-          "classifiedFraction": 0.3333333333333334
+          "resolvedMassG": 85.04856899999999,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
@@ -8774,10 +8243,12 @@
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Classified from Brewfather category and colour (120 °L); product character unresolved.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Ingredient identity is outside the reviewed catalog.",
-        "Ingredient identity is outside the reviewed catalog.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Published Crystal descriptors conflict between suppliers; only the mild spicy/floral character is used.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Published Crystal descriptors conflict between suppliers; only the mild spicy/floral character is used.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -8867,19 +8338,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "yeasts",
-          "sourcePath": "recipe.yeasts[0]",
-          "name": "Belgian Wit",
-          "supplier": null,
-          "laboratory": "Mangrove Jack's",
-          "productId": "M21",
-          "grams": null,
-          "stage": "unknown",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 1.235258505636116,
@@ -8961,7 +8420,7 @@
           "present": true,
           "complete": true,
           "acceptedCount": 1,
-          "resolvedCount": 0,
+          "resolvedCount": 1,
           "eligibleMassG": 0,
           "resolvedMassG": 0,
           "classifiedFraction": null
@@ -8985,7 +8444,8 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Manufacturer description as reproduced by a retailer; the official product page was not reviewed.",
+        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -10680,30 +10140,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[0]",
-          "name": "Perle",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.349523,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[1]",
-          "name": "Mount Hood",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.349523,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 2.1340797812449708,
@@ -10716,7 +10153,7 @@
           "value": 0.5366807783595063,
           "band": "Very low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -10776,10 +10213,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 2,
-          "resolvedCount": 0,
+          "resolvedCount": 2,
           "eligibleMassG": 56.699046,
-          "resolvedMassG": 0,
-          "classifiedFraction": 0
+          "resolvedMassG": 56.699046,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
@@ -10805,8 +10242,8 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Classified from Brewfather category and colour (46 °L); product character unresolved.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Ingredient identity is outside the reviewed catalog.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -11282,30 +10719,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[1]",
-          "name": "El Dorado",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.349523,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[5]",
-          "name": "El Dorado",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 56.699046,
-          "stage": "dry_hop",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 2.069999962690995,
@@ -11318,7 +10732,7 @@
           "value": 4.351182681973535,
           "band": "Very high",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -11378,10 +10792,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 7,
-          "resolvedCount": 5,
+          "resolvedCount": 7,
           "eligibleMassG": 311.844753,
-          "resolvedMassG": 226.796184,
-          "classifiedFraction": 0.7272727272727273
+          "resolvedMassG": 311.844753,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
@@ -11409,11 +10823,11 @@
         "Classified from Brewfather category and colour (37 °L); product character unresolved.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Ingredient identity is outside the reviewed catalog.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -11696,19 +11110,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[1]",
-          "name": "Tettnang",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 56.699046,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 3.0299999078066855,
@@ -11721,7 +11123,7 @@
           "value": 0.18376667737954344,
           "band": "Very low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -11781,10 +11183,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 2,
-          "resolvedCount": 1,
+          "resolvedCount": 2,
           "eligibleMassG": 113.398092,
-          "resolvedMassG": 56.699046,
-          "classifiedFraction": 0.5
+          "resolvedMassG": 113.398092,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
@@ -11813,7 +11215,7 @@
         "Distinct from original Briess Carapils; no inherited no-flavor rule or numerical mouthfeel bonus.",
         "Classified from Brewfather category and colour (19 °L); product character unresolved.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -11903,41 +11305,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[0]",
-          "name": "Perle",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.349523,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[1]",
-          "name": "Perle",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.349523,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[2]",
-          "name": "Hersbrucker",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.349523,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 2.610000019841602,
@@ -11950,7 +11318,7 @@
           "value": 0.17543574716182508,
           "band": "Very low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -12010,10 +11378,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 3,
-          "resolvedCount": 0,
+          "resolvedCount": 3,
           "eligibleMassG": 85.048569,
-          "resolvedMassG": 0,
-          "classifiedFraction": 0
+          "resolvedMassG": 85.048569,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
@@ -12039,9 +11407,9 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Provider base-grain category supports family only; specific product character unresolved.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Ingredient identity is outside the reviewed catalog.",
-        "Ingredient identity is outside the reviewed catalog.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -12722,30 +12090,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[0]",
-          "name": "Bravo",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 56.699046,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[2]",
-          "name": "Tettnang",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 56.699046,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 2.0983111030285846,
@@ -12758,7 +12103,7 @@
           "value": 1.299847568884426,
           "band": "Low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -12818,10 +12163,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 3,
-          "resolvedCount": 1,
+          "resolvedCount": 3,
           "eligibleMassG": 170.097138,
-          "resolvedMassG": 56.699046,
-          "classifiedFraction": 0.33333333333333337
+          "resolvedMassG": 170.097138,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
@@ -12848,9 +12193,9 @@
         "Classified from Brewfather category and colour (111 °L); product character unresolved.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Ingredient identity is outside the reviewed catalog.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -13521,30 +12866,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[0]",
-          "name": "Hallertau",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 85.048569,
-          "stage": "boil",
-          "reasons": ["Hallertau is ambiguous; no specific variety inferred."]
-        },
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[1]",
-          "name": "Hallertau",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.349523,
-          "stage": "boil",
-          "reasons": ["Hallertau is ambiguous; no specific variety inferred."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 3.0926480429356973,
@@ -13557,7 +12879,7 @@
           "value": 0.21629067380880573,
           "band": "Very low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -13617,10 +12939,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 2,
-          "resolvedCount": 0,
+          "resolvedCount": 2,
           "eligibleMassG": 113.398092,
-          "resolvedMassG": 0,
-          "classifiedFraction": 0
+          "resolvedMassG": 113.398092,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
@@ -13647,8 +12969,8 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Hallertau is ambiguous; no specific variety inferred.",
-        "Hallertau is ambiguous; no specific variety inferred.",
+        "Regional class only: character named by at least two of the reviewed Hallertau aroma varieties (Mittelfrüh, Tradition, Hersbrucker); the variety is unknown.",
+        "Regional class only: character named by at least two of the reviewed Hallertau aroma varieties (Mittelfrüh, Tradition, Hersbrucker); the variety is unknown.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -13736,30 +13058,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[0]",
-          "name": "Perle",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.349523,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[1]",
-          "name": "Mount Hood",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.349523,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 2.2723255817940142,
@@ -13772,7 +13071,7 @@
           "value": 0.600717307701505,
           "band": "Very low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -13832,10 +13131,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 2,
-          "resolvedCount": 0,
+          "resolvedCount": 2,
           "eligibleMassG": 56.699046,
-          "resolvedMassG": 0,
-          "classifiedFraction": 0
+          "resolvedMassG": 56.699046,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
@@ -13861,8 +13160,8 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Classified from Brewfather category and colour (46 °L); product character unresolved.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Ingredient identity is outside the reviewed catalog.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -14148,30 +13447,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[1]",
-          "name": "Fuggle",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.349523,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[2]",
-          "name": "Fuggle",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.349523,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 2.7020176355659444,
@@ -14184,7 +13460,7 @@
           "value": 0.8225614406019544,
           "band": "Very low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -14244,10 +13520,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 4,
-          "resolvedCount": 2,
+          "resolvedCount": 4,
           "eligibleMassG": 113.398092,
-          "resolvedMassG": 56.699046,
-          "classifiedFraction": 0.5
+          "resolvedMassG": 113.398092,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
@@ -14275,8 +13551,8 @@
         "Classified from Brewfather category and colour (120 °L); product character unresolved.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Ingredient identity is outside the reviewed catalog.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -14556,41 +13832,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[0]",
-          "name": "Nugget",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.349523,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[1]",
-          "name": "Crystal",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 21.262142,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[3]",
-          "name": "Crystal",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 7.087381,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 2.276171258738274,
@@ -14603,7 +13845,7 @@
           "value": 0.4792641484334915,
           "band": "Very low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -14663,10 +13905,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 5,
-          "resolvedCount": 2,
+          "resolvedCount": 5,
           "eligibleMassG": 85.04856899999999,
-          "resolvedMassG": 28.349523,
-          "classifiedFraction": 0.3333333333333334
+          "resolvedMassG": 85.04856899999999,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
@@ -14694,10 +13936,12 @@
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Classified from Brewfather category and colour (120 °L); product character unresolved.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Ingredient identity is outside the reviewed catalog.",
-        "Ingredient identity is outside the reviewed catalog.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Published Crystal descriptors conflict between suppliers; only the mild spicy/floral character is used.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Published Crystal descriptors conflict between suppliers; only the mild spicy/floral character is used.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -14800,39 +14044,6 @@
           "reasons": ["Ingredient identity is outside the reviewed catalog."]
         },
         {
-          "role": "hops",
-          "sourcePath": "recipe.hops[2]",
-          "name": "Columbus (Tomahawk)",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 24.3,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[9]",
-          "name": "Centennial",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 24.3,
-          "stage": "dry_hop",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[11]",
-          "name": "Columbus (Tomahawk)",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 24.3,
-          "stage": "dry_hop",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
           "role": "yeasts",
           "sourcePath": "recipe.yeasts[0]",
           "name": "American Ale",
@@ -14916,10 +14127,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 13,
-          "resolvedCount": 9,
+          "resolvedCount": 12,
           "eligibleMassG": 339.6,
-          "resolvedMassG": 254.60000000000005,
-          "classifiedFraction": 0.7497055359246173
+          "resolvedMassG": 327.50000000000006,
+          "classifiedFraction": 0.9643698468786809
         },
         "yeasts": {
           "present": true,
@@ -14946,16 +14157,18 @@
         "Classified from Brewfather category and colour (45 °L); product character unresolved.",
         "Ingredient identity is outside the reviewed catalog.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Sold as the CTZ designation; Columbus and Tomahawk names share one aroma class. Bare Zeus is not aliased.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Ingredient identity is outside the reviewed catalog.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Sold as the CTZ designation; Columbus and Tomahawk names share one aroma class. Bare Zeus is not aliased.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Ingredient identity is outside the reviewed catalog.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -15451,45 +14664,12 @@
       "unresolvedIngredients": [
         {
           "role": "hops",
-          "sourcePath": "recipe.hops[0]",
-          "name": "Bravo",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 4.252428,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[1]",
-          "name": "Bravo",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 5.669905,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "hops",
           "sourcePath": "recipe.hops[2]",
           "name": "Sterling",
           "supplier": null,
           "laboratory": null,
           "productId": null,
           "grams": 7.087381,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[3]",
-          "name": "Hersbrucker",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 5.102914,
           "stage": "boil",
           "reasons": ["Ingredient identity is outside the reviewed catalog."]
         },
@@ -15577,10 +14757,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 4,
-          "resolvedCount": 0,
+          "resolvedCount": 3,
           "eligibleMassG": 22.112628,
-          "resolvedMassG": 0,
-          "classifiedFraction": 0
+          "resolvedMassG": 15.025247,
+          "classifiedFraction": 0.6794871690510961
         },
         "yeasts": {
           "present": true,
@@ -15605,10 +14785,10 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Ingredient identity is outside the reviewed catalog.",
-        "Ingredient identity is outside the reviewed catalog.",
-        "Ingredient identity is outside the reviewed catalog.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Ingredient identity is outside the reviewed catalog.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -17065,30 +16245,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[0]",
-          "name": "Tradition",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.349523,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[1]",
-          "name": "Hersbrucker",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.349523,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 1.435311935999998,
@@ -17101,7 +16258,7 @@
           "value": 0.06762176103478149,
           "band": "Very low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -17161,10 +16318,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 2,
-          "resolvedCount": 0,
+          "resolvedCount": 2,
           "eligibleMassG": 56.699046,
-          "resolvedMassG": 0,
-          "classifiedFraction": 0
+          "resolvedMassG": 56.699046,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
@@ -17187,8 +16344,8 @@
       },
       "diagnostics": [
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Ingredient identity is outside the reviewed catalog.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -17685,30 +16842,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[0]",
-          "name": "Tettnang",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 26.2,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[1]",
-          "name": "Mandarina Bavaria",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.4,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 1.560824168042919,
@@ -17721,7 +16855,7 @@
           "value": 0.11358088840941932,
           "band": "Very low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -17781,10 +16915,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 2,
-          "resolvedCount": 0,
+          "resolvedCount": 2,
           "eligibleMassG": 54.599999999999994,
-          "resolvedMassG": 0,
-          "classifiedFraction": 0
+          "resolvedMassG": 54.599999999999994,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
@@ -17811,8 +16945,8 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Ingredient identity is outside the reviewed catalog.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -17901,17 +17035,6 @@
       },
       "unresolvedIngredients": [
         {
-          "role": "hops",
-          "sourcePath": "recipe.hops[1]",
-          "name": "Tettnang",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 14.174762,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
           "role": "yeasts",
           "sourcePath": "recipe.yeasts[0]",
           "name": "Bavarian Lager",
@@ -17935,7 +17058,7 @@
           "value": 0.036630091679120465,
           "band": "Very low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -17995,10 +17118,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 2,
-          "resolvedCount": 1,
+          "resolvedCount": 2,
           "eligibleMassG": 31.184475999999997,
-          "resolvedMassG": 17.009714,
-          "classifiedFraction": 0.5454545396241387
+          "resolvedMassG": 31.184475999999997,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
@@ -18024,7 +17147,7 @@
         "Provider base-grain category supports family only; specific product character unresolved.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Ingredient identity is outside the reviewed catalog.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment."
@@ -18311,19 +17434,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[1]",
-          "name": "Tettnang",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 56.699046,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 2.9734597789815695,
@@ -18336,7 +17447,7 @@
           "value": 0.17517103905339965,
           "band": "Very low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -18396,10 +17507,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 2,
-          "resolvedCount": 1,
+          "resolvedCount": 2,
           "eligibleMassG": 113.398092,
-          "resolvedMassG": 56.699046,
-          "classifiedFraction": 0.5
+          "resolvedMassG": 113.398092,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
@@ -18428,7 +17539,7 @@
         "Distinct from original Briess Carapils; no inherited no-flavor rule or numerical mouthfeel bonus.",
         "Classified from Brewfather category and colour (19 °L); product character unresolved.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -19155,30 +18266,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[0]",
-          "name": "Bravo",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 56.699046,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[2]",
-          "name": "Tettnang",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 56.699046,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 2.082759325577373,
@@ -19191,7 +18279,7 @@
           "value": 1.246418716730375,
           "band": "Low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -19251,10 +18339,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 3,
-          "resolvedCount": 1,
+          "resolvedCount": 3,
           "eligibleMassG": 170.097138,
-          "resolvedMassG": 56.699046,
-          "classifiedFraction": 0.33333333333333337
+          "resolvedMassG": 170.097138,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
@@ -19281,9 +18369,9 @@
         "Classified from Brewfather category and colour (111 °L); product character unresolved.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Ingredient identity is outside the reviewed catalog.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -19371,30 +18459,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[0]",
-          "name": "Hallertau",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 85.048569,
-          "stage": "boil",
-          "reasons": ["Hallertau is ambiguous; no specific variety inferred."]
-        },
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[1]",
-          "name": "Hallertau",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.349523,
-          "stage": "boil",
-          "reasons": ["Hallertau is ambiguous; no specific variety inferred."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 3.069745356468268,
@@ -19407,7 +18472,7 @@
           "value": 0.21629067380880573,
           "band": "Very low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -19467,10 +18532,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 2,
-          "resolvedCount": 0,
+          "resolvedCount": 2,
           "eligibleMassG": 113.398092,
-          "resolvedMassG": 0,
-          "classifiedFraction": 0
+          "resolvedMassG": 113.398092,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
@@ -19497,8 +18562,8 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Hallertau is ambiguous; no specific variety inferred.",
-        "Hallertau is ambiguous; no specific variety inferred.",
+        "Regional class only: character named by at least two of the reviewed Hallertau aroma varieties (Mittelfrüh, Tradition, Hersbrucker); the variety is unknown.",
+        "Regional class only: character named by at least two of the reviewed Hallertau aroma varieties (Mittelfrüh, Tradition, Hersbrucker); the variety is unknown.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -19586,30 +18651,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[0]",
-          "name": "Nugget",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 21.262142,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[1]",
-          "name": "Hersbrucker",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 56.7,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 1.3709656037499052,
@@ -19622,7 +18664,7 @@
           "value": 0.19277864769196504,
           "band": "Very low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -19682,10 +18724,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 2,
-          "resolvedCount": 0,
+          "resolvedCount": 2,
           "eligibleMassG": 77.962142,
-          "resolvedMassG": 0,
-          "classifiedFraction": 0
+          "resolvedMassG": 77.962142,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
@@ -19709,8 +18751,8 @@
       "diagnostics": [
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Ingredient identity is outside the reviewed catalog.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -20787,30 +19829,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[0]",
-          "name": "Hallertau",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 42.524285,
-          "stage": "boil",
-          "reasons": ["Hallertau is ambiguous; no specific variety inferred."]
-        },
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[1]",
-          "name": "Hallertau",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 14.174762,
-          "stage": "boil",
-          "reasons": ["Hallertau is ambiguous; no specific variety inferred."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 2.8860708684265335,
@@ -20823,7 +19842,7 @@
           "value": 0.10192267702504737,
           "band": "Very low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -20883,10 +19902,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 2,
-          "resolvedCount": 0,
+          "resolvedCount": 2,
           "eligibleMassG": 56.699047,
-          "resolvedMassG": 0,
-          "classifiedFraction": 0
+          "resolvedMassG": 56.699047,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
@@ -20913,8 +19932,8 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Hallertau is ambiguous; no specific variety inferred.",
-        "Hallertau is ambiguous; no specific variety inferred.",
+        "Regional class only: character named by at least two of the reviewed Hallertau aroma varieties (Mittelfrüh, Tradition, Hersbrucker); the variety is unknown.",
+        "Regional class only: character named by at least two of the reviewed Hallertau aroma varieties (Mittelfrüh, Tradition, Hersbrucker); the variety is unknown.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -21207,17 +20226,6 @@
       "unresolvedIngredients": [
         {
           "role": "hops",
-          "sourcePath": "recipe.hops[0]",
-          "name": "Hallertau",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 42.524285,
-          "stage": "boil",
-          "reasons": ["Hallertau is ambiguous; no specific variety inferred."]
-        },
-        {
-          "role": "hops",
           "sourcePath": "recipe.hops[1]",
           "name": null,
           "supplier": null,
@@ -21311,10 +20319,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 2,
-          "resolvedCount": 0,
+          "resolvedCount": 1,
           "eligibleMassG": 56.699047,
-          "resolvedMassG": 0,
-          "classifiedFraction": 0
+          "resolvedMassG": 42.524285,
+          "classifiedFraction": 0.7499999955907548
         },
         "yeasts": {
           "present": true,
@@ -21340,7 +20348,7 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Descriptors are expectations, not guaranteed batch flavor.",
-        "Hallertau is ambiguous; no specific variety inferred.",
+        "Regional class only: character named by at least two of the reviewed Hallertau aroma varieties (Mittelfrüh, Tradition, Hersbrucker); the variety is unknown.",
         "Ingredient name is missing; no identity inferred.",
         "Ingredient identity is outside the reviewed catalog.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -21857,19 +20865,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "yeasts",
-          "sourcePath": "recipe.yeasts[0]",
-          "name": "New England",
-          "supplier": null,
-          "laboratory": "Lallemand (LalBrew)",
-          "productId": null,
-          "grams": null,
-          "stage": "unknown",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 2.0281584000000024,
@@ -21951,7 +20947,7 @@
           "present": true,
           "complete": true,
           "acceptedCount": 1,
-          "resolvedCount": 0,
+          "resolvedCount": 1,
           "eligibleMassG": 0,
           "resolvedMassG": 0,
           "classifiedFraction": null
@@ -21971,7 +20967,7 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -22059,19 +21055,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[1]",
-          "name": "Hallertau",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.349523,
-          "stage": "boil",
-          "reasons": ["Hallertau is ambiguous; no specific variety inferred."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 2.4552440972747,
@@ -22084,7 +21068,7 @@
           "value": 0.1673435108633284,
           "band": "Very low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -22144,10 +21128,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 2,
-          "resolvedCount": 1,
+          "resolvedCount": 2,
           "eligibleMassG": 56.699046,
-          "resolvedMassG": 28.349523,
-          "classifiedFraction": 0.5
+          "resolvedMassG": 56.699046,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
@@ -22176,7 +21160,7 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Hallertau is ambiguous; no specific variety inferred.",
+        "Regional class only: character named by at least two of the reviewed Hallertau aroma varieties (Mittelfrüh, Tradition, Hersbrucker); the variety is unknown.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -22697,28 +21681,6 @@
       },
       "unresolvedIngredients": [
         {
-          "role": "hops",
-          "sourcePath": "recipe.hops[0]",
-          "name": "Perle",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 56.699046,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[1]",
-          "name": "Mount Hood",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.349523,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
           "role": "yeasts",
           "sourcePath": "recipe.yeasts[0]",
           "name": "Kolsch II",
@@ -22742,7 +21704,7 @@
           "value": 0.3491835700253781,
           "band": "Very low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -22802,10 +21764,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 2,
-          "resolvedCount": 0,
+          "resolvedCount": 2,
           "eligibleMassG": 85.048569,
-          "resolvedMassG": 0,
-          "classifiedFraction": 0
+          "resolvedMassG": 85.048569,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
@@ -22830,8 +21792,8 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Classified from Brewfather category and colour (49 °L); product character unresolved.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Ingredient identity is outside the reviewed catalog.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Ingredient identity is outside the reviewed catalog.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -22923,17 +21885,6 @@
       },
       "unresolvedIngredients": [
         {
-          "role": "hops",
-          "sourcePath": "recipe.hops[0]",
-          "name": "Mount Hood",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.349523,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
           "role": "yeasts",
           "sourcePath": "recipe.yeasts[0]",
           "name": "American Hefeweizen Ale",
@@ -22957,7 +21908,7 @@
           "value": 0.02715924789102451,
           "band": "Very low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -23017,10 +21968,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 1,
-          "resolvedCount": 0,
+          "resolvedCount": 1,
           "eligibleMassG": 28.349523,
-          "resolvedMassG": 0,
-          "classifiedFraction": 0
+          "resolvedMassG": 28.349523,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
@@ -23045,7 +21996,7 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Descriptors are expectations, not guaranteed batch flavor.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Ingredient identity is outside the reviewed catalog.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
