@@ -45,6 +45,9 @@ export function rejectCommandArguments(argv: readonly string[]): void {
   if (argv.length > 2) throw new Error("Operator commands do not accept positional arguments");
 }
 
-export function safeFailure(stderr: OperatorOutput): void {
-  stderr.write("Operator command failed.\n");
+/** A reason must be fixed text from the command, never error, input, or path content. */
+export function safeFailure(stderr: OperatorOutput, reason?: string): void {
+  stderr.write(
+    reason === undefined ? "Operator command failed.\n" : `Operator command failed: ${reason}.\n`,
+  );
 }
