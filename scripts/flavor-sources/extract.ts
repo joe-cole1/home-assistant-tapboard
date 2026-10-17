@@ -24,9 +24,11 @@ const NEGATOR =
 // product gives, so every word in that clause is left out.
 const CONDITIONAL =
   /\b(?:if|when|whenever|unless|depending|depends|can|could|may|might|potentially|optionally|at (?:higher|lower|warmer|cooler|high|low|the upper|the lower)|with (?:warmer|cooler|higher|lower)|warmer temperatures|cooler temperatures|higher temperatures|lower temperatures)\b/;
-// Words after a pairing or use marker describe other ingredients or beer styles.
+// A pairing or use marker covers the next few words, which name other ingredients or beer
+// styles ("ideal for fruity Belgian ales"); flavour named later in the clause is the product's own.
 const PAIRING =
-  /\b(?:for|ideal for|suited (?:to|for)|recommended for|great for|perfect for|used in|use in|pairs?(?: well)? with|complement\w*|accentuat\w*|enhanc\w*|matches up|showcas\w*|alongside|blends?(?: well)? with|works well with|similar to|substitute\w*|replacement for)\b/;
+  /\b(?:for|ideal for|suited (?:to|for)|recommended for|great for|perfect for|used in|use in|pairs?(?: well)? with|complement\w*|accentuat\w*|enhanc\w*|matches up|showcas\w*|alongside|blends?(?: well)? with|works well with|similar to|substitute\w*|replacement for)\b/g;
+const PAIRING_REACH_WORDS = 4;
 const STOPWORDS = new Set(
   "a an and are as at be been but by character characteristics contributes delivers distinct excellent flavor flavors flavour flavours from gives good great has have high hints imparts in into is it its known light medium mild moderate more most notes of on or over pleasant produces profile provides rich slightly strong subtle that the these this to touch very well which with aroma aromas aromatic taste tastes beer beers brewing brew style styles use used variety hop hops malt malts yeast strain also intense intensely nice clean crisp neutral balanced smooth dry sweet sweetness bitter bitterness body full finish mouthfeel".split(
     " ",
@@ -63,7 +65,7 @@ export function extractDescriptors(text: string, role: BrewingIngredientRole): E
   const seen = new Set<string>();
   for (const clause of normalise(text).split(/[.;!?:\n]+|\b(?:but|while|whereas|however)\b/)) {
     const conditional = CONDITIONAL.test(clause);
-    const pairingAt = clause.search(PAIRING);
+    const pairings = [...clause.matchAll(PAIRING)].map((match) => match.index + match[0].length);
     const negators = [...clause.matchAll(NEGATOR)].map((match) => match.index);
     let consumedTo = 0;
     for (const match of clause.matchAll(PHRASES)) {
@@ -81,7 +83,12 @@ export function extractDescriptors(text: string, role: BrewingIngredientRole): E
             ? "negated"
             : conditional
               ? "conditional"
-              : pairingAt !== -1 && pairingAt < match.index
+              : pairings.some(
+                    (end) =>
+                      end <= match.index &&
+                      clause.slice(end, match.index).split(/\s+/).filter(Boolean).length <
+                        PAIRING_REACH_WORDS,
+                  )
                 ? "pairing"
                 : null;
       if (reason) excluded.push({ word: term.word, evidence, reason });

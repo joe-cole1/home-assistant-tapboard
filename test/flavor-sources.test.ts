@@ -52,6 +52,11 @@ void test("negated, conditional and pairing mentions are reported, never kept", 
     "fruity:conditional",
   ]);
   assert.deepEqual(words("A strain ideal for fruity Belgian ales.", "yeasts"), []);
+  // A pairing marker covers only the words right after it; the product's own flavour stays.
+  assert.deepEqual(
+    words("Residual sweetness accentuates malt character along with mild fruity esters.", "yeasts"),
+    ["fruity"],
+  );
   assert.deepEqual(reasons("Matches up perfectly with roasted and caramel malts.", "yeasts"), [
     "roast:other ingredient",
     "caramel:other ingredient",
