@@ -96,6 +96,11 @@ function secretKeyConfiguration(value: string | undefined): {
   return { key: value, state: "available" };
 }
 
+/** The saved Simulation database is the normal database's absolute filename plus a fixed suffix. */
+export function simulationDatabasePath(databasePath: string): string {
+  return resolve(databasePath) + ".simulation.sqlite3";
+}
+
 export function loadConfig(options: LoadConfigOptions = {}): ApplicationConfig {
   const env = options.env ?? process.env;
   const baseDirectory = resolve(options.baseDirectory ?? process.cwd());

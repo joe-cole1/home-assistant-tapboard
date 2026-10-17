@@ -9,6 +9,7 @@
   },
   "scripts": {
     "start": "node src/main.ts",
+    "operator:backup": "node src/operator/backup.ts",
     "operator:reset-pin": "node src/operator/reset-pin.ts",
     "operator:rotate-secret-key": "node src/operator/rotate-secret-key.ts",
     "format": "prettier --write --ignore-unknown .",

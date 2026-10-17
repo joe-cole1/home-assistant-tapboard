@@ -139,6 +139,35 @@ function verifyDatabaseIntegrity(database: DatabaseExecutor): void {
   }
 }
 
+/**
+ * Write one transactionally consistent, compacted copy of a live database. The read-only source
+ * is never migrated or modified, and SQLite refuses a target that exists and is not empty.
+ */
+export function snapshotDatabase(sourcePath: string, targetPath: string): void {
+  const source = new BetterSqlite3(sourcePath, {
+    readonly: true,
+    fileMustExist: true,
+    timeout: 5_000,
+  });
+  try {
+    source.prepare("VACUUM INTO ?").run(targetPath);
+  } finally {
+    source.close();
+  }
+}
+
+/** Run the startup integrity checks on a database file without migrating or modifying it. */
+export function verifyDatabaseFile(path: string): void {
+  const connection = new ControlledDatabaseConnection(
+    new BetterSqlite3(path, { readonly: true, fileMustExist: true }),
+  );
+  try {
+    verifyDatabaseIntegrity(connection);
+  } finally {
+    connection.close();
+  }
+}
+
 export function openDatabase(path: string, options: OpenDatabaseOptions = {}): DatabaseConnection {
   let connection: ControlledDatabaseConnection | undefined;
 
