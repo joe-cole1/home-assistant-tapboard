@@ -81,6 +81,14 @@ function copiesIn(stdout: string): string[] {
     });
 }
 
+function failed(reason: string): {
+  readonly code: 1;
+  readonly stdout: "";
+  readonly stderr: string;
+} {
+  return { code: 1, stdout: "", stderr: `Operator command failed: ${reason}.\n` };
+}
+
 function rawUserVersion(path: string): number {
   const database = new DatabaseSync(path, { readOnly: true });
   try {
@@ -184,7 +192,7 @@ void test("backup refuses, instead of copying, while uncommitted pages are in th
   const result = backup(ws.databasePath);
   application.execute("ROLLBACK");
 
-  assert.deepEqual(result, { code: 1, stdout: "", stderr: "Operator command failed.\n" });
+  assert.deepEqual(result, failed("the database stayed locked for 5 seconds"));
   assert.deepEqual(readdirSync(ws.backups), []);
   assert.deepEqual(kegNumbers(application), []);
 });
@@ -233,7 +241,7 @@ void test("backup never overwrites an existing file", (context) => {
     createKegService(database).createKeg({ kegNumber: 1, capacityMl: 19_500 }),
   );
   const second = backup(ws.databasePath, { now });
-  assert.deepEqual(second, { code: 1, stdout: "", stderr: "Operator command failed.\n" });
+  assert.deepEqual(second, failed("a backup with this name already exists"));
   assert.deepEqual(readFileSync(copy ?? ""), original);
   assert.deepEqual(readdirSync(ws.backups), ["tapboard-v2-20261017T031500Z.sqlite3"]);
 });
@@ -271,8 +279,76 @@ void test("a copy that fails quick_check exits nonzero and leaves no file behind
       corruptFreeblock(targetPath);
     },
   });
-  assert.deepEqual(result, { code: 1, stdout: "", stderr: "Operator command failed.\n" });
+  assert.deepEqual(result, failed("the copy of the database failed its integrity check"));
   assert.deepEqual(readdirSync(ws.backups), []);
+});
+
+void test("copy failures print a fixed reason naming the copy, never the error's text", (context) => {
+  const ws = workspace(context);
+  openDatabase(ws.databasePath).close();
+  const detail = `${ws.root} private-error-detail`;
+  const reasons: readonly (readonly [string | undefined, string])[] = [
+    ["SQLITE_BUSY", "the database stayed locked for 5 seconds"],
+    ["SQLITE_FULL", "the target filesystem is full"],
+    ["ENOSPC", "the target filesystem is full"],
+    ["SQLITE_CORRUPT_INDEX", "the database is corrupt"],
+    ["SQLITE_NOTADB", "the database is corrupt"],
+    ["SQLITE_CANTOPEN", "the database could not be copied"],
+    [undefined, "the database could not be copied"],
+  ];
+  for (const [code, reason] of reasons) {
+    const result = backup(ws.databasePath, {
+      snapshotDatabase: () => {
+        throw Object.assign(new Error(detail), code === undefined ? {} : { code });
+      },
+    });
+    assert.deepEqual(result, failed(reason));
+  }
+  assert.deepEqual(readdirSync(ws.backups), []);
+
+  // The main copy stays listed when the Simulation copy then fails.
+  const simulationPath = simulationDatabasePath(ws.databasePath);
+  openDatabase(simulationPath).close();
+  const partial = backup(ws.databasePath, {
+    snapshotDatabase: (sourcePath, targetPath) => {
+      if (sourcePath === simulationPath) {
+        throw Object.assign(new Error(detail), { code: "SQLITE_BUSY" });
+      }
+      snapshotDatabase(sourcePath, targetPath);
+    },
+  });
+  assert.equal(partial.code, 1);
+  assert.equal(
+    partial.stderr,
+    "Operator command failed: the Simulation database stayed locked for 5 seconds.\n",
+  );
+  const [main, ...others] = copiesIn(partial.stdout);
+  assert.deepEqual(others, []);
+  assert.deepEqual(readdirSync(ws.backups), [basename(main ?? "")]);
+
+  // An unexpected error keeps the generic line.
+  assert.deepEqual(backup(ws.databasePath, { now: () => new Date(Number.NaN) }), {
+    code: 1,
+    stdout: "",
+    stderr: "Operator command failed.\n",
+  });
+});
+
+void test("an invalid configuration is reported without its values", (context) => {
+  const saved = process.env.TAPBOARD_PORT;
+  context.after(() => {
+    if (saved === undefined) delete process.env.TAPBOARD_PORT;
+    else process.env.TAPBOARD_PORT = saved;
+  });
+  process.env.TAPBOARD_PORT = "private-port-value";
+  let stderr = "";
+  const code = runBackup({
+    argv: ["node", "backup.ts"],
+    stdout: { write: () => undefined },
+    stderr: { write: (value) => void (stderr += value) },
+  });
+  assert.equal(code, 1);
+  assert.equal(stderr, "Operator command failed: the configuration is invalid.\n");
 });
 
 void test("backup prints only paths and sizes and keeps credentials encrypted", async (context) => {
@@ -323,16 +399,26 @@ void test("backup prints only paths and sizes and keeps credentials encrypted", 
   });
 });
 
-void test("backup rejects invalid arguments and a missing database without creating files", (context) => {
+void test("backup rejects invalid arguments, a missing database, and an unusable target without creating files", (context) => {
   const ws = workspace(context);
-  const failure = { code: 1, stdout: "", stderr: "Operator command failed.\n" };
-  assert.deepEqual(backup(ws.databasePath), failure);
+  assert.deepEqual(backup(ws.databasePath), failed("the database file does not exist"));
   assert.deepEqual(readdirSync(ws.root), []);
 
   openDatabase(ws.databasePath).close();
-  for (const extra of [["one", "two"], ["--help"], [""], [join(ws.root, "missing", "parent")]]) {
-    assert.deepEqual(backup(ws.databasePath, { argv: ["node", "backup.ts", ...extra] }), failure);
+  for (const extra of [["one", "two"], ["--help"], [""]]) {
+    assert.deepEqual(
+      backup(ws.databasePath, { argv: ["node", "backup.ts", ...extra] }),
+      failed("usage is npm run operator:backup [target-directory]"),
+    );
   }
+  assert.deepEqual(
+    backup(ws.databasePath, { argv: ["node", "backup.ts", join(ws.root, "missing", "parent")] }),
+    failed("the target directory's parent does not exist"),
+  );
+  assert.deepEqual(
+    backup(ws.databasePath, { argv: ["node", "backup.ts", ws.databasePath] }),
+    failed("the target is not a writable directory"),
+  );
   assert.deepEqual(readdirSync(ws.root), ["tapboard-v2.sqlite3"]);
 
   mkdirSync(ws.backups, { mode: 0o755 });
