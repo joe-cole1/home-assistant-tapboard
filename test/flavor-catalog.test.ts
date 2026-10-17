@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import { resolveIngredient, CATALOG_VERSION } from "../src/features/story/flavor/catalog.ts";
-import { INGREDIENT_CLASSES, INGREDIENT_FACTS } from "../src/features/story/flavor/catalog-data.ts";
+import {
+  INGREDIENT_CLASSES,
+  INGREDIENT_FACTS,
+  REVIEWED_FACTS,
+} from "../src/features/story/flavor/catalog-data.ts";
 import type { BrewingIngredient } from "../src/features/beverages/brewing-types.ts";
 const ingredient = (fields: Partial<BrewingIngredient>): BrewingIngredient => ({
   sourcePath: "recipe.ingredients[0]",
@@ -531,7 +535,7 @@ void test("catalog data stays well formed and every fact is in the sources ledge
   );
   const ids = [...INGREDIENT_FACTS, ...INGREDIENT_CLASSES].map((entry) => entry.id);
   assert.equal(new Set(ids).size, ids.length);
-  for (const fact of INGREDIENT_FACTS) {
+  for (const fact of REVIEWED_FACTS) {
     assert.ok(fact.sourceUrls.length > 0, fact.id);
     assert.ok(
       fact.sourceUrls.every((url) => url.startsWith("https://")),

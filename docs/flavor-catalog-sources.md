@@ -32,6 +32,12 @@ Hop variety names have no reliable style classes. Instead an unmatched hop name 
 
 Admin lists every unresolved ingredient, plus each yeast that fell back to a class, under "Ingredients not in the flavor catalog" in the beverage's "Why these estimates?" disclosure.
 
+## Maker-sourced datasets
+
+`src/features/story/flavor/sourced/<role>.json` holds entries generated from makers' own pages by `scripts/flavor-sources/`; words are never typed by hand. Each entry records its source URL, retrieval date and a SHA-256 of the page, and whether the text is the maker's own (`maker`) or the maker's text reproduced elsewhere (`maker-copy`, with `via` naming where), which is used only when the maker's own copy is unavailable. Fetched pages are cached under the git-ignored `data/flavor-sources/` and never committed.
+
+Words come from a fixed lexicon (`scripts/flavor-sources/lexicon.ts`): only spelling, plural and part-of-speech variants of one flavour share a word, and every stored word keeps the maker phrase it came from. Negated ("low fruitiness"), conditional ("fruity at warmer temperatures"), pairing or style ("for fruity Belgian ales") mentions and, for yeasts and hops, grain or sugar words are reported for review and never kept. A page whose flavour text names none of the lexicon's words yields an entry with no words. The loader rejects an entry without a source, an `https` URL, a hash or an exact name; a test rejects any word that is not a lexicon word with one of its phrases as evidence, and any sourced entry that shares a name with a hand-reviewed fact it has not replaced.
+
 ## Adding or updating an ingredient
 
 Bring the ingredient's exact Brewfather name, its maker and product code, and the maker's data sheet or product page. A Claude Code session follows `.claude/skills/flavor-catalog/SKILL.md`: a named product from one maker becomes a fact in `INGREDIENT_FACTS` with short paraphrased tags, its source URL in the list below and a resolution test; a generic ingredient family (a spice, a fruit, a yeast style) becomes or extends a class in `INGREDIENT_CLASSES`. `node scripts/flavor-resolve.ts <role> "<name>" [--maker M] [--code C] [--type T]` shows how an ingredient resolves before and after. The catalog test fails when a fact is missing from this list.

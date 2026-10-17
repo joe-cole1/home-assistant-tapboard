@@ -1,5 +1,6 @@
 import type { FermentableFamily, IngredientClass, IngredientFact } from "./catalog-types.ts";
 import type { BrewingIngredientRole } from "../../beverages/brewing-types.ts";
+import { SOURCED_FACTS } from "./sourced.ts";
 
 /** Immutable short factual tags; never manufacturer intensity scores or model coefficients. */
 function fact(
@@ -33,7 +34,9 @@ function fact(
   return Object.freeze(entry);
 }
 
-export const INGREDIENT_FACTS: readonly IngredientFact[] = Object.freeze([
+/** Hand-reviewed facts, each listed in docs/flavor-catalog-sources.md. Maker-sourced entries from
+ * `sourced/*.json` follow them and replace them product by product. */
+export const REVIEWED_FACTS: readonly IngredientFact[] = Object.freeze([
   fact(
     "fermentis-us05",
     "yeasts",
@@ -1104,6 +1107,10 @@ export const INGREDIENT_FACTS: readonly IngredientFact[] = Object.freeze([
       ],
     },
   ),
+]);
+export const INGREDIENT_FACTS: readonly IngredientFact[] = Object.freeze([
+  ...REVIEWED_FACTS,
+  ...SOURCED_FACTS,
 ]);
 
 /** Variety pages reviewed 2026-10-17 through search summaries of the cited producer pages. */

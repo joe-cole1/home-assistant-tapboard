@@ -57,7 +57,8 @@ node --input-type=module -e 'const d = await import("./src/features/story/flavor
 
 ## 4. Record, test and version
 
-1. Add `- [Primary source](URL): \`fact-id\`.`to "Primary references" in`docs/flavor-catalog-sources.md`. The catalog test fails if a fact is missing there.
+1. Add a line of the form ``- [Primary source](URL): `fact-id`.`` to "Primary references" in
+   `docs/flavor-catalog-sources.md`. The catalog test fails if a fact is missing there.
 2. Add a resolution assertion to `test/flavor-catalog.test.ts` (exact name with maker and code,
    expected id and descriptors). When a corpus beer changes, add an expectation in
    `test/flavor-corpus.test.ts` and run `node scripts/report-flavor-corpus.ts`.
