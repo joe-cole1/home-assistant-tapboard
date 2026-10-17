@@ -246,7 +246,7 @@ void test("descriptors follow the strongest contributors across ingredient roles
   for (const id of ["B027", "B035", "B036", "B038", "B051"])
     assert.ok(descriptors(id).length > 0, id);
 });
-void test("every corpus grain resolves to a catalog or generic class except explicit rules", () => {
+void test("every corpus fermentable resolves to a catalog entry or a generic class", () => {
   const unresolved = new Set<string>();
   for (const item of [...corpus.batches, ...corpus.recipes]) {
     const { inputs } = evaluateFixture(
@@ -257,7 +257,7 @@ void test("every corpus grain resolves to a catalog or generic class except expl
       if (resolveIngredient("fermentables", row).level === "unresolved")
         unresolved.add(row.name ?? "");
   }
-  assert.deepEqual([...unresolved].sort(), ["Acidulated", "Raspberry (Fruit)"]);
+  assert.deepEqual([...unresolved], []);
 });
 void test("splitting every hop addition into four equal parts changes no descriptor", () => {
   const raw = batchFixture("B033");

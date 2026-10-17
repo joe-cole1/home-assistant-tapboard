@@ -19,7 +19,9 @@ export type FermentableFamily =
   | "lactose"
   | "processing"
   | "extract_pale"
-  | "extract_dark";
+  | "extract_dark"
+  | "smoked"
+  | "peated";
 export type IngredientFunction =
   | "nonextract"
   | "lactose"
@@ -43,6 +45,8 @@ export interface IngredientResolution {
   readonly functions: readonly IngredientFunction[];
   readonly bodyClass: "oats" | "flaked_wheat" | "chit" | "rye" | "wheat" | "carapils" | null;
   readonly roastClass: "black" | "chocolate" | "dehusked" | "none" | "unknown";
+  /** Dose in g/L at which a flavour adjunct becomes clearly noticeable; null when not dosed. */
+  readonly noticeableGPerL: number | null;
   readonly diagnostics: readonly string[];
 }
 export interface IngredientFact {
@@ -62,4 +66,21 @@ export interface IngredientFact {
   readonly functions: readonly IngredientFunction[];
   readonly bodyClass: IngredientResolution["bodyClass"];
   readonly roastClass: IngredientResolution["roastClass"];
+  readonly noticeableGPerL: number | null;
+}
+/** Generic class matched by name tokens when no reviewed product or property rule applies. */
+export interface IngredientClass {
+  readonly id: string;
+  readonly label: string;
+  readonly roles: readonly BrewingIngredientRole[];
+  /** Tested against the accent-folded lowercase name (yeasts: name and product code). */
+  readonly pattern: RegExp;
+  readonly exclude: RegExp | null;
+  /** Lowercase Brewfather types the class applies to; empty means any type. */
+  readonly types: readonly string[];
+  readonly family: FermentableFamily | null;
+  readonly descriptors: readonly string[];
+  readonly functions: readonly IngredientFunction[];
+  readonly souring: boolean | null;
+  readonly noticeableGPerL: number | null;
 }

@@ -246,6 +246,7 @@ export function safeAdminFlavorDetails(value: unknown) {
       };
     }),
     diagnostics: boundedStrings(raw.diagnostics, 30),
+    catalogGaps: boundedStrings(raw.catalogGaps, 30),
   };
 }
 

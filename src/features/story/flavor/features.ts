@@ -4,7 +4,7 @@ import type {
   BrewingIngredientRole,
 } from "../../beverages/brewing-types.ts";
 import type { FlavorCoverage } from "../types.ts";
-import { resolveIngredient } from "./catalog.ts";
+import { CONCENTRATED_HOP, resolveIngredient } from "./catalog.ts";
 import type { IngredientResolution } from "./catalog-types.ts";
 import { finite, defineCurve, interpolateCurve } from "./math.ts";
 // A 0-minute addition steeps like a short whirlpool; rolling boil strips volatiles quickly.
@@ -23,6 +23,13 @@ export interface ResolvedRow {
   readonly exposure: number | null;
 }
 export const ROLES = ["fermentables", "hops", "yeasts", "miscs"] as const;
+/** Malt and sugar rows; processing aids and flavour adjuncts entered as fermentables are not grist. */
+export function inGrist(row: ResolvedRow): boolean {
+  return (
+    row.resolution.family !== "processing" &&
+    !row.resolution.functions.some((fn) => ["nonextract", "fruit", "botanical"].includes(fn))
+  );
+}
 export function hopWeight(item: BrewingIngredient): number | null {
   switch (item.stage) {
     case "boil":
@@ -43,16 +50,7 @@ export function hopWeight(item: BrewingIngredient): number | null {
 }
 export function conventionalHop(item: BrewingIngredient): boolean {
   const form = item.form?.trim().toLowerCase();
-  if (
-    /\b(?:cryo|lupomax|incognito|spectrum|extract)\b|hop[ -]?oil/i.test(
-      `${item.name ?? ""} ${item.form ?? ""} ${item.type ?? ""}`,
-    )
-  )
-    return false;
-  if (
-    item.type &&
-    ["extract", "oil", "concentrate", "cryogenic", "cryo"].includes(item.type.trim().toLowerCase())
-  )
+  if (CONCENTRATED_HOP.test(`${item.name ?? ""} ${item.form ?? ""} ${item.type ?? ""}`))
     return false;
   return (
     form == null ||
@@ -74,9 +72,11 @@ export function resolveFeatures(inputs: BrewingInputs): {
       const weight = role === "hops" && conventionalHop(ingredient) ? hopWeight(ingredient) : null;
       return { ingredient, resolution, mass, exposure: weight === null ? null : mass * weight };
     });
-    const eligible = rows[role].filter(
-      (row) =>
-        !row.resolution.functions.includes("nonextract") && row.resolution.family !== "processing",
+    const eligible = rows[role].filter((row) =>
+      role === "fermentables"
+        ? inGrist(row)
+        : !row.resolution.functions.includes("nonextract") &&
+          row.resolution.family !== "processing",
     );
     const eligibleMassG = eligible.reduce((total, row) => total + row.mass, 0);
     const resolvedMassG = eligible
@@ -100,6 +100,22 @@ export function resolveFeatures(inputs: BrewingInputs): {
   }
   return { rows, coverage };
 }
+/** Divisor turning grist rows' Brewfather percentages into grist fractions: 100 when they sum to
+ * 100, their own sum when the whole recipe (fruit and processing rows included) sums to 100, and
+ * null when the percentages cannot form a grist. */
+export function gristPercentScale(
+  grist: readonly ResolvedRow[],
+  recipe: readonly ResolvedRow[] = grist,
+): number | null {
+  const total = (rows: readonly ResolvedRow[]) =>
+    rows.reduce((sum, row) => sum + (row.ingredient.percentage ?? 0), 0);
+  if (!grist.every((row) => finite(row.ingredient.percentage) && row.ingredient.percentage >= 0))
+    return null;
+  const gristTotal = total(grist);
+  if (Math.abs(gristTotal - 100) <= 0.5) return 100;
+  const recipeRows = recipe.filter((row) => finite(row.ingredient.percentage));
+  return gristTotal > 0 && Math.abs(total(recipeRows) - 100) <= 0.5 ? gristTotal : null;
+}
 export function composition(
   rows: readonly ResolvedRow[],
   coverage: FlavorCoverage,
@@ -108,22 +124,15 @@ export function composition(
   supported: boolean;
   absentSupported: boolean;
 } {
-  const eligible = rows.filter(
-    (row) =>
-      !row.resolution.functions.includes("nonextract") && row.resolution.family !== "processing",
-  );
+  const eligible = rows.filter(inGrist);
   const massComplete = eligible.length > 0 && eligible.every((row) => row.mass > 0);
-  const percentages = eligible.map((row) => row.ingredient.percentage);
-  const percentageComplete =
-    eligible.length > 0 &&
-    percentages.every((value) => finite(value) && value >= 0) &&
-    Math.abs(percentages.reduce<number>((sum, value) => sum + (value ?? 0), 0) - 100) <= 0.5;
+  const scale = eligible.length === 0 ? null : gristPercentScale(eligible, rows);
   const fractions = eligible.map((row) => ({
     row,
     fraction: massComplete
       ? row.mass / coverage.eligibleMassG
-      : percentageComplete
-        ? (row.ingredient.percentage ?? 0) / 100
+      : scale !== null
+        ? (row.ingredient.percentage ?? 0) / scale
         : 0,
   }));
   const resolvedFraction = fractions
@@ -132,7 +141,7 @@ export function composition(
   const highImpact = fractions.some(
     ({ row, fraction }) => row.resolution.family === null && fraction > 0.05,
   );
-  const denominator = massComplete || percentageComplete;
+  const denominator = massComplete || scale !== null;
   return {
     fractions,
     supported: coverage.complete && denominator && resolvedFraction >= 0.85 && !highImpact,

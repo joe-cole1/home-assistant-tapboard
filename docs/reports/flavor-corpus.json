@@ -7,13 +7,13 @@
   "maximumSnapshotBytes": 21840,
   "perAxis": {
     "malt": {
-      "available": 106,
-      "unavailable": 1,
+      "available": 107,
+      "unavailable": 0,
       "explicitZero": 0,
       "saturatedFive": 0,
-      "source": { "recipe_prediction": 106, "unavailable": 1 },
-      "support": { "limited": 2, "supported": 104, "unavailable": 1 },
-      "bands": { "High": 4, "Low": 52, "Moderate": 50, "Unknown": 1 }
+      "source": { "recipe_prediction": 107 },
+      "support": { "supported": 107 },
+      "bands": { "High": 4, "Low": 53, "Moderate": 50 }
     },
     "hops": {
       "available": 107,
@@ -21,7 +21,7 @@
       "explicitZero": 1,
       "saturatedFive": 0,
       "source": { "recipe_prediction": 107 },
-      "support": { "limited": 19, "supported": 88 },
+      "support": { "limited": 18, "supported": 89 },
       "bands": {
         "High": 5,
         "Low": 13,
@@ -72,17 +72,16 @@
       "bands": { "Full": 13, "Light": 55, "Medium": 37, "Very light": 2 }
     },
     "roast": {
-      "available": 104,
-      "unavailable": 3,
-      "explicitZero": 76,
+      "available": 107,
+      "unavailable": 0,
+      "explicitZero": 79,
       "saturatedFive": 0,
-      "source": { "recipe_prediction": 104, "unavailable": 3 },
-      "support": { "supported": 104, "unavailable": 3 },
+      "source": { "recipe_prediction": 107 },
+      "support": { "supported": 107 },
       "bands": {
         "Low": 3,
         "Moderate": 2,
-        "None expected": 76,
-        "Unknown": 3,
+        "None expected": 79,
         "Very high": 8,
         "Very low": 15
       }
@@ -437,10 +436,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 8,
-          "resolvedCount": 7,
+          "resolvedCount": 8,
           "eligibleMassG": 7484.272999999999,
-          "resolvedMassG": 7257.476999999999,
-          "classifiedFraction": 0.9696969899414412
+          "resolvedMassG": 7484.272999999999,
+          "classifiedFraction": 1
         },
         "hops": {
           "present": true,
@@ -464,45 +463,20 @@
           "present": true,
           "complete": true,
           "acceptedCount": 9,
-          "resolvedCount": 8,
+          "resolvedCount": 9,
           "eligibleMassG": 80.88642703125001,
-          "resolvedMassG": 73.79904625,
-          "classifiedFraction": 0.9123786147889579
+          "resolvedMassG": 80.88642703125001,
+          "classifiedFraction": 1
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "fermentables",
-          "sourcePath": "recipe.fermentables[7]",
-          "name": "Acidulated",
-          "supplier": "Weyermann",
-          "laboratory": null,
-          "productId": null,
-          "grams": 226.796,
-          "stage": "unknown",
-          "reasons": [
-            "Smoked, peated, acidulated and maltodextrin products need an explicit rule; not classified."
-          ]
-        },
-        {
-          "role": "miscs",
-          "sourcePath": "recipe.miscs[0]",
-          "name": "Amylase Enzyme",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 7.08738078125,
-          "stage": "mash",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "roast": {
-          "value": null,
-          "band": "Unknown",
-          "source": "unavailable",
-          "support": "unavailable",
-          "reasons": ["missing_relevant_inputs"]
+          "value": 0,
+          "band": "None expected",
+          "source": "recipe_prediction",
+          "support": "supported",
+          "reasons": ["complete_grist_no_roasted_contributors"]
         },
         "tartness": {
           "value": null,
@@ -1345,8 +1319,10 @@
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established."
+        "Generic ginger class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog.",
+        "Generic orange class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog."
       ]
     },
     {
@@ -1934,8 +1910,10 @@
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established.",
+        "Generic cinnamon class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog.",
+        "Generic ginger class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment."
       ]
@@ -2742,8 +2720,10 @@
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established.",
+        "Generic cinnamon class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog.",
+        "Generic ginger class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment."
       ]
     },
@@ -3138,8 +3118,10 @@
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established."
+        "Generic cinnamon class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog.",
+        "Generic ginger class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog."
       ]
     },
     {
@@ -3346,9 +3328,12 @@
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established."
+        "Generic coriander class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog.",
+        "Generic orange class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog.",
+        "Generic orange class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog."
       ]
     },
     {
@@ -3526,7 +3511,6 @@
         }
       },
       "diagnostics": [
-        "recipe.fermentables[0]: mass/percentage disagreement; eligible positive mass selected.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Descriptors are expectations, not guaranteed batch flavor.",
@@ -6049,8 +6033,10 @@
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established."
+        "Generic cinnamon class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog.",
+        "Generic ginger class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog."
       ]
     },
     {
@@ -6253,7 +6239,8 @@
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established."
+        "Generic orange class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog."
       ]
     },
     {
@@ -6867,8 +6854,10 @@
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established."
+        "Generic coriander class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog.",
+        "Generic orange class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog."
       ]
     },
     {
@@ -8453,10 +8442,14 @@
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established."
+        "Generic coriander class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog.",
+        "Generic floral class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog.",
+        "Generic orange class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog.",
+        "Generic grains of paradise class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog."
       ]
     },
     {
@@ -8648,10 +8641,14 @@
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established."
+        "Generic coriander class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog.",
+        "Generic floral class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog.",
+        "Generic orange class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog.",
+        "Generic grains of paradise class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog."
       ]
     },
     {
@@ -9445,8 +9442,10 @@
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established."
+        "Generic ginger class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog.",
+        "Generic orange class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog."
       ]
     },
     {
@@ -9721,38 +9720,13 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "fermentables",
-          "sourcePath": "recipe.fermentables[7]",
-          "name": "Acidulated",
-          "supplier": "Weyermann",
-          "laboratory": null,
-          "productId": null,
-          "grams": 226.796,
-          "stage": "unknown",
-          "reasons": [
-            "Smoked, peated, acidulated and maltodextrin products need an explicit rule; not classified."
-          ]
-        },
-        {
-          "role": "miscs",
-          "sourcePath": "recipe.miscs[0]",
-          "name": "Amylase Enzyme",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 7.08738078125,
-          "stage": "mash",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
-          "value": 1.8357577215582581,
+          "value": 1.8987879824800604,
           "band": "Low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["classified_grist_flavor_proxy"]
         },
         "hops": {
@@ -9784,11 +9758,11 @@
           "reasons": ["fg_fullness_proxy"]
         },
         "roast": {
-          "value": null,
-          "band": "Unknown",
-          "source": "unavailable",
-          "support": "unavailable",
-          "reasons": ["missing_relevant_inputs"]
+          "value": 0,
+          "band": "None expected",
+          "source": "recipe_prediction",
+          "support": "supported",
+          "reasons": ["complete_grist_no_roasted_contributors"]
         },
         "tartness": {
           "value": null,
@@ -9810,10 +9784,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 8,
-          "resolvedCount": 7,
+          "resolvedCount": 8,
           "eligibleMassG": 7484.272999999999,
-          "resolvedMassG": 7257.476999999999,
-          "classifiedFraction": 0.9696969899414412
+          "resolvedMassG": 7484.272999999999,
+          "classifiedFraction": 1
         },
         "hops": {
           "present": true,
@@ -9837,14 +9811,13 @@
           "present": true,
           "complete": true,
           "acceptedCount": 9,
-          "resolvedCount": 8,
+          "resolvedCount": 9,
           "eligibleMassG": 80.88642703125001,
-          "resolvedMassG": 73.79904625,
-          "classifiedFraction": 0.9123786147889579
+          "resolvedMassG": 80.88642703125001,
+          "classifiedFraction": 1
         }
       },
       "diagnostics": [
-        "recipe.fermentables[0]: mass/percentage disagreement; eligible positive mass selected.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
@@ -9852,7 +9825,7 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Provider base-grain category supports family only; specific product character unresolved.",
-        "Smoked, peated, acidulated and maltodextrin products need an explicit rule; not classified.",
+        "Classified from Brewfather category and colour (2 °L); product character unresolved.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
@@ -9863,6 +9836,7 @@
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Thiol-oriented family context only; current NEXT generation cannot establish historical process specifications or thiol concentration.",
+        "Generic processing aid class from the ingredient name; no reviewed product entry.",
         "Ingredient identity is outside the reviewed catalog.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -11624,8 +11598,10 @@
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established."
+        "Generic ginger class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog.",
+        "Generic orange class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog."
       ]
     },
     {
@@ -11824,9 +11800,12 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Ingredient identity is outside the reviewed catalog.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established."
+        "Generic allspice class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog.",
+        "Generic cinnamon class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog.",
+        "Generic ginger class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog."
       ]
     },
     {
@@ -12014,7 +11993,8 @@
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established."
+        "Generic clove class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog."
       ]
     },
     {
@@ -12398,8 +12378,10 @@
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established."
+        "Generic coriander class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog.",
+        "Generic orange class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog."
       ]
     },
     {
@@ -14676,17 +14658,6 @@
           "grams": 7.087381,
           "stage": "boil",
           "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "yeasts",
-          "sourcePath": "recipe.yeasts[0]",
-          "name": "Belgian Witbier",
-          "supplier": null,
-          "laboratory": "Wyeast Labs",
-          "productId": "3944",
-          "grams": null,
-          "stage": "unknown",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
         }
       ],
       "axes": {
@@ -14770,7 +14741,7 @@
           "present": true,
           "complete": true,
           "acceptedCount": 1,
-          "resolvedCount": 0,
+          "resolvedCount": 1,
           "eligibleMassG": 0,
           "resolvedMassG": 0,
           "classifiedFraction": null
@@ -14793,6 +14764,7 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Ingredient identity is outside the reviewed catalog.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Generic witbier class from the ingredient name; no reviewed product entry.",
         "Ingredient identity is outside the reviewed catalog.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -14802,9 +14774,12 @@
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established."
+        "Generic coriander class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog.",
+        "Generic orange class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog.",
+        "Generic orange class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog."
       ]
     },
     {
@@ -14884,19 +14859,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "yeasts",
-          "sourcePath": "recipe.yeasts[0]",
-          "name": "Belgian Ardennes",
-          "supplier": null,
-          "laboratory": "Wyeast Labs",
-          "productId": "3522",
-          "grams": null,
-          "stage": "unknown",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 1.9174000000000002,
@@ -14978,7 +14941,7 @@
           "present": true,
           "complete": true,
           "acceptedCount": 1,
-          "resolvedCount": 0,
+          "resolvedCount": 1,
           "eligibleMassG": 0,
           "resolvedMassG": 0,
           "classifiedFraction": null
@@ -15003,6 +14966,7 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Generic Belgian ale class from the ingredient name; no reviewed product entry.",
         "Ingredient identity is outside the reviewed catalog.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment."
@@ -15770,7 +15734,8 @@
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established."
+        "Generic clove class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog."
       ]
     },
     {
@@ -15850,19 +15815,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "yeasts",
-          "sourcePath": "recipe.yeasts[0]",
-          "name": "French Saison Ale",
-          "supplier": null,
-          "laboratory": "White Labs",
-          "productId": "WLP590",
-          "grams": null,
-          "stage": "unknown",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 1.4307660037228773,
@@ -15944,7 +15897,7 @@
           "present": true,
           "complete": true,
           "acceptedCount": 1,
-          "resolvedCount": 0,
+          "resolvedCount": 1,
           "eligibleMassG": 0,
           "resolvedMassG": 0,
           "classifiedFraction": null
@@ -15967,6 +15920,7 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Generic saison class from the ingredient name; no reviewed product entry.",
         "Ingredient identity is outside the reviewed catalog.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -15978,7 +15932,8 @@
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established."
+        "Generic grains of paradise class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog."
       ]
     },
     {
@@ -16944,7 +16899,6 @@
         }
       },
       "diagnostics": [
-        "recipe.fermentables[0]: mass/percentage disagreement; eligible positive mass selected.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Descriptors are expectations, not guaranteed batch flavor.",
@@ -17636,17 +17590,6 @@
       },
       "unresolvedIngredients": [
         {
-          "role": "fermentables",
-          "sourcePath": "recipe.fermentables[1]",
-          "name": "Raspberry (Fruit)",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 1360.7769999999998,
-          "stage": "unknown",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
           "role": "hops",
           "sourcePath": "recipe.hops[2]",
           "name": "Galaxy",
@@ -17660,11 +17603,11 @@
       ],
       "axes": {
         "malt": {
-          "value": null,
-          "band": "Unknown",
-          "source": "unavailable",
-          "support": "unavailable",
-          "reasons": ["unclassified_or_invalid_grist_denominator"]
+          "value": 1.8871819021274656,
+          "band": "Low",
+          "source": "recipe_prediction",
+          "support": "supported",
+          "reasons": ["classified_grist_flavor_proxy"]
         },
         "hops": {
           "value": 1.3642749553630817,
@@ -17688,18 +17631,18 @@
           "reasons": ["fg_residual_extract_proxy"]
         },
         "body": {
-          "value": 1.2272,
+          "value": 1.3296999246753876,
           "band": "Light",
           "source": "recipe_prediction",
           "support": "supported",
           "reasons": ["fg_fullness_proxy"]
         },
         "roast": {
-          "value": null,
-          "band": "Unknown",
-          "source": "unavailable",
-          "support": "unavailable",
-          "reasons": ["unclassified_or_invalid_grist_denominator"]
+          "value": 0,
+          "band": "None expected",
+          "source": "recipe_prediction",
+          "support": "supported",
+          "reasons": ["complete_grist_no_roasted_contributors"]
         },
         "tartness": {
           "value": null,
@@ -17721,10 +17664,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 5,
-          "resolvedCount": 4,
-          "eligibleMassG": 6803.884999999999,
+          "resolvedCount": 5,
+          "eligibleMassG": 5443.107999999999,
           "resolvedMassG": 5443.107999999999,
-          "classifiedFraction": 0.7999999999999999
+          "classifiedFraction": 1
         },
         "hops": {
           "present": true,
@@ -17756,7 +17699,7 @@
       },
       "diagnostics": [
         "Provider base-grain category supports family only; specific product character unresolved.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Generic raspberry class from the ingredient name; no reviewed product entry.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Classified from Brewfather category and colour (1 °L); product character unresolved.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
@@ -17768,7 +17711,8 @@
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
-        "Explicit material identity; prevents unsupported nonsour absence conclusion. No acid/sugar equivalence."
+        "Generic hibiscus class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog."
       ]
     },
     {
@@ -19345,8 +19289,10 @@
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established."
+        "Generic coriander class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog.",
+        "Generic orange class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog."
       ]
     },
     {
@@ -19551,8 +19497,10 @@
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established."
+        "Generic ginger class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog.",
+        "Generic orange class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog."
       ]
     },
     {
@@ -19751,9 +19699,12 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Ingredient identity is outside the reviewed catalog.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established."
+        "Generic allspice class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog.",
+        "Generic cinnamon class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog.",
+        "Generic ginger class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog."
       ]
     },
     {
@@ -20021,19 +19972,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[1]",
-          "name": "Hallertau Mittelfruh",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 28.3,
-          "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 1.8495691453317193,
@@ -20046,7 +19985,7 @@
           "value": 0.7583173843874585,
           "band": "Very low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["process_weighted_hop_dose_proxy"]
         },
         "bitterness": {
@@ -20106,10 +20045,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 3,
-          "resolvedCount": 2,
+          "resolvedCount": 3,
           "eligibleMassG": 70.774762,
-          "resolvedMassG": 42.474762,
-          "classifiedFraction": 0.6001399481922667
+          "resolvedMassG": 70.774762,
+          "classifiedFraction": 1
         },
         "yeasts": {
           "present": true,
@@ -20137,7 +20076,7 @@
         "Provider base-grain category supports family only; specific product character unresolved.",
         "Provider base-grain category supports family only; specific product character unresolved.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -20146,8 +20085,10 @@
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
-        "Explicit material identity; prevents unsupported nonsour absence conclusion. No acid/sugar equivalence.",
-        "Explicit material identity; prevents unsupported nonsour absence conclusion. No acid/sugar equivalence."
+        "Generic blueberry class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog.",
+        "Generic raspberry class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog."
       ]
     },
     {
@@ -20443,38 +20384,13 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "fermentables",
-          "sourcePath": "recipe.fermentables[7]",
-          "name": "Acidulated",
-          "supplier": "Weyermann",
-          "laboratory": null,
-          "productId": null,
-          "grams": 226.796,
-          "stage": "unknown",
-          "reasons": [
-            "Smoked, peated, acidulated and maltodextrin products need an explicit rule; not classified."
-          ]
-        },
-        {
-          "role": "miscs",
-          "sourcePath": "recipe.miscs[0]",
-          "name": "Amylase Enzyme",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 7.08738078125,
-          "stage": "mash",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
-          "value": 1.906363787772039,
+          "value": 1.9718182894985261,
           "band": "Low",
           "source": "recipe_prediction",
-          "support": "limited",
+          "support": "supported",
           "reasons": ["classified_grist_flavor_proxy"]
         },
         "hops": {
@@ -20506,11 +20422,11 @@
           "reasons": ["fg_fullness_proxy"]
         },
         "roast": {
-          "value": null,
-          "band": "Unknown",
-          "source": "unavailable",
-          "support": "unavailable",
-          "reasons": ["missing_relevant_inputs"]
+          "value": 0,
+          "band": "None expected",
+          "source": "recipe_prediction",
+          "support": "supported",
+          "reasons": ["complete_grist_no_roasted_contributors"]
         },
         "tartness": {
           "value": null,
@@ -20532,10 +20448,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 8,
-          "resolvedCount": 7,
+          "resolvedCount": 8,
           "eligibleMassG": 7484.272999999999,
-          "resolvedMassG": 7257.476999999999,
-          "classifiedFraction": 0.9696969899414412
+          "resolvedMassG": 7484.272999999999,
+          "classifiedFraction": 1
         },
         "hops": {
           "present": true,
@@ -20559,14 +20475,13 @@
           "present": true,
           "complete": true,
           "acceptedCount": 9,
-          "resolvedCount": 8,
+          "resolvedCount": 9,
           "eligibleMassG": 80.88642703125001,
-          "resolvedMassG": 73.79904625,
-          "classifiedFraction": 0.9123786147889579
+          "resolvedMassG": 80.88642703125001,
+          "classifiedFraction": 1
         }
       },
       "diagnostics": [
-        "recipe.fermentables[0]: mass/percentage disagreement; eligible positive mass selected.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
@@ -20574,7 +20489,7 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Provider base-grain category supports family only; specific product character unresolved.",
-        "Smoked, peated, acidulated and maltodextrin products need an explicit rule; not classified.",
+        "Classified from Brewfather category and colour (2 °L); product character unresolved.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
@@ -20585,6 +20500,7 @@
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Thiol-oriented family context only; current NEXT generation cannot establish historical process specifications or thiol concentration.",
+        "Generic processing aid class from the ingredient name; no reviewed product entry.",
         "Ingredient identity is outside the reviewed catalog.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -21175,9 +21091,12 @@
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established."
+        "Generic allspice class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog.",
+        "Generic cinnamon class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog.",
+        "Generic ginger class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog."
       ]
     },
     {
@@ -21257,19 +21176,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "yeasts",
-          "sourcePath": "recipe.yeasts[0]",
-          "name": "French Saison",
-          "supplier": null,
-          "laboratory": "Wyeast Labs",
-          "productId": "3711",
-          "grams": null,
-          "stage": "unknown",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 1.0116380577770192,
@@ -21351,7 +21258,7 @@
           "present": true,
           "complete": true,
           "acceptedCount": 1,
-          "resolvedCount": 0,
+          "resolvedCount": 1,
           "eligibleMassG": 0,
           "resolvedMassG": 0,
           "classifiedFraction": null
@@ -21374,6 +21281,7 @@
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
+        "Generic saison class from the ingredient name; no reviewed product entry.",
         "Ingredient identity is outside the reviewed catalog.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -21479,17 +21387,6 @@
           "grams": 28.349523,
           "stage": "boil",
           "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "yeasts",
-          "sourcePath": "recipe.yeasts[0]",
-          "name": "Abbey Ale",
-          "supplier": null,
-          "laboratory": "White Labs",
-          "productId": "WLP530",
-          "grams": null,
-          "stage": "unknown",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
         }
       ],
       "axes": {
@@ -21573,7 +21470,7 @@
           "present": true,
           "complete": true,
           "acceptedCount": 1,
-          "resolvedCount": 0,
+          "resolvedCount": 1,
           "eligibleMassG": 0,
           "resolvedMassG": 0,
           "classifiedFraction": null
@@ -21596,6 +21493,7 @@
         "Ingredient identity is outside the reviewed catalog.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Ingredient identity is outside the reviewed catalog.",
+        "Generic Belgian ale class from the ingredient name; no reviewed product entry.",
         "Ingredient identity is outside the reviewed catalog.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -22012,7 +21910,8 @@
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
-        "Explicit named botanical identity only; provider type/amount/unit retained separately, intensity not established."
+        "Generic orange class from the ingredient name; no reviewed product entry.",
+        "Ingredient identity is outside the reviewed catalog."
       ]
     },
     {
@@ -22093,17 +21992,6 @@
         }
       },
       "unresolvedIngredients": [
-        {
-          "role": "hops",
-          "sourcePath": "recipe.hops[0]",
-          "name": "Hallertau Magnum",
-          "supplier": null,
-          "laboratory": null,
-          "productId": null,
-          "grams": 10,
-          "stage": "first_wort",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
         {
           "role": "hops",
           "sourcePath": "recipe.hops[2]",
@@ -22199,10 +22087,10 @@
           "present": true,
           "complete": true,
           "acceptedCount": 5,
-          "resolvedCount": 2,
+          "resolvedCount": 3,
           "eligibleMassG": 406.893325,
-          "resolvedMassG": 255.145709,
-          "classifiedFraction": 0.6270579862670395
+          "resolvedMassG": 265.145709,
+          "classifiedFraction": 0.6516344523469388
         },
         "yeasts": {
           "present": true,
@@ -22230,7 +22118,7 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Ingredient identity is outside the reviewed catalog.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
