@@ -6,7 +6,9 @@ import {
   canonicalSensoryToPublic,
   styleBaselineFor,
   deriveAttenuation,
+  flavorSummary,
 } from "../src/features/story/profile.ts";
+import { batchFixture, evaluateFixture } from "./fixtures/flavor/corpus.ts";
 import { BEVERAGE_SENSORY_AXES } from "../src/features/beverages/types.ts";
 void test("manual canonical scale remains independent per axis and invalid values fail closed", () => {
   const profile = resolveSensoryProfile({
@@ -44,4 +46,32 @@ void test("simple apparent attenuation retains values above100", () => {
   assert.ok((deriveAttenuation(1.05, 0.995) ?? 0) > 100);
   assert.equal(deriveAttenuation(1, 0.995), null);
   assert.equal(deriveAttenuation(true, 0.995), null);
+});
+void test("flavor summary is one sentence of character, band-worded axes and warmth only", () => {
+  const stout = flavorSummary(evaluateFixture(batchFixture("B011")).calculation)!;
+  assert.equal(
+    stout,
+    "Coffee, chocolate and roast character with a full body, very high bitterness and a moderately sweet finish. Noticeable alcohol warmth.",
+  );
+  const kolsch = flavorSummary(evaluateFixture(batchFixture("B027")).calculation)!;
+  assert.match(kolsch, /^Grainy and cracker character with a very light body/u);
+  assert.equal(kolsch.includes("warmth"), false);
+  // Numbers, metric names and style words never appear, so Mystery's sensory reveal suffices.
+  for (const sentence of [stout, kolsch]) {
+    assert.doesNotMatch(sentence, /\d|%|ABV|IBU|SRM|stout|kölsch|kolsch/iu);
+  }
+});
+void test("flavor summary omits unknown axes and needs a descriptor or two known clauses", () => {
+  const manualOnly = resolveFlavorProfile({ manualOverrides: { body: 6, bitterness: 2 } });
+  assert.deepEqual(manualOnly.descriptors, []);
+  assert.equal(flavorSummary(manualOnly), "A full body and low bitterness.");
+  assert.equal(flavorSummary(resolveFlavorProfile({ manualOverrides: { body: 6 } })), null);
+  assert.equal(flavorSummary(resolveFlavorProfile({})), null);
+  const zeroBitterness = resolveFlavorProfile({
+    manualOverrides: { body: 6, bitterness: 0, sweetness: 0 },
+  });
+  assert.equal(
+    flavorSummary(zeroBitterness),
+    "A full body, no expected bitterness and a very dry finish.",
+  );
 });

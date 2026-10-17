@@ -27,6 +27,13 @@ test("flavor guidance renders eight accessible rows with compact phone bars", as
   await page.locator(".flavor-disclosure summary").focus();
   await page.keyboard.press("Enter");
   await expect(page.locator(".flavor-disclosure")).toHaveAttribute("open", "");
+  // The brewer's description wins on the page; the generated sentence stays in the JSON.
+  const json = (await (await page.request.get(`/api/public${story}`)).json()) as {
+    flavor: { summary: string | null } | null;
+  };
+  const summary = json.flavor?.summary;
+  expect(typeof summary).toBe("string");
+  await expect(page.getByText(summary!, { exact: true })).toHaveCount(0);
 });
 test("isolated corpus preview displays privacy-safe fixture guidance and captures representative layouts", async ({
   browser,

@@ -479,6 +479,7 @@ export class PublicStoryService {
         coverage: calculation.coverage,
         axes: calculation.axes,
         diagnostics: calculation.diagnostics,
+        catalogGaps: calculation.catalogGaps,
         manualOverrides,
         modelVersion: calculation.modelVersion,
         catalogVersion: calculation.catalogVersion,

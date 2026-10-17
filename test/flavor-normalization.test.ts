@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   sanitizeRecipeSnapshot,
+  sanitizeBatchSummary,
   sanitizeBatchToSourceProfile,
 } from "../src/features/beverages/brewfather/sanitizer.ts";
 import {
@@ -40,6 +41,38 @@ void test("all supplied cases pass production snapshot normalization with bounde
     assert.equal(snapshot.recipeJson.includes("tasteNotes"), false);
   }
   assert.ok(maximum < 262144);
+});
+void test("Brewfather teaser is the brewer description; tasting, batch and recipe notes stay private", () => {
+  const raw = {
+    _id: "batch-teaser",
+    status: "Completed",
+    tasteNotes: "Dumped. Infected.",
+    batchNotes: "Old yeast again.",
+    recipe: {
+      name: "Summer Vibes",
+      teaser: "A peppery, clovey, funky Saison.",
+      notes: "Water built from RO.",
+      description: "Not a Brewfather recipe field",
+      style: { name: "Saison", description: "Style guideline prose" },
+    },
+  };
+  const profile = sanitizeBatchToSourceProfile(raw)!;
+  const summary = sanitizeBatchSummary(raw)!;
+  assert.equal(profile.description, "A peppery, clovey, funky Saison.");
+  assert.equal(summary.description, "A peppery, clovey, funky Saison.");
+  for (const json of [profile.rawSourceJson, summary.rawSummaryJson])
+    for (const text of [
+      "Dumped",
+      "Old yeast",
+      "Water built",
+      "Not a Brewfather",
+      "Style guideline",
+    ])
+      assert.equal(json.includes(text), false, text);
+  const { teaser: _teaser, ...recipeWithoutTeaser } = raw.recipe;
+  const withoutTeaser = { ...raw, recipe: recipeWithoutTeaser };
+  assert.equal(sanitizeBatchToSourceProfile(withoutTeaser)!.description, null);
+  assert.equal(sanitizeBatchSummary(withoutTeaser)!.description, null);
 });
 void test("historical producer contracts retain scalar precedence, attenuation, stage, identity and barrel facts", () => {
   const amber = batch("B064");

@@ -12,6 +12,11 @@ import type {
   EffectiveBeveragePresentation,
 } from "../src/features/beverages/types.ts";
 import { batchFixture } from "./fixtures/flavor/corpus.ts";
+import { createRenderer } from "../src/infrastructure/rendering/renderer.ts";
+import { buildSensoryRadar } from "../src/features/story/index.ts";
+import type { PublicStoryView } from "../src/features/story/types.ts";
+import { temperature, volume } from "../src/features/web/admin/presentation.ts";
+import { recipeAmount, recipeMass, recipeNumber } from "../src/features/web/recipe-presentation.ts";
 
 const TAP_ID = "00000000-0000-4000-8000-000000000077";
 const BEVERAGE_ID = "00000000-0000-4000-8000-000000000078";
@@ -732,6 +737,15 @@ void test("normalized batch guidance preserves selected source and excludes dens
   assert.ok(!publicJson.includes("evidenceReferences"));
 });
 
+void test("Admin guidance names catalog gaps that public story JSON never carries", () => {
+  const { service } = fixture({ flavorBatch: batchFixture("B015") });
+  const gaps = service.getAdminBeverageGuidance(BEVERAGE_ID).flavorDetails?.catalogGaps ?? [];
+  assert.ok(gaps.some((gap) => gap.startsWith("Yeast · Lutra Kveik (Omega OYL-071):")));
+  const publicJson = JSON.stringify(service.getStory(TAP_ID));
+  assert.ok(!publicJson.includes("catalogGaps"));
+  assert.ok(!publicJson.includes("outside the reviewed catalog"));
+});
+
 void test("explicit scalar overrides including null replace source inputs independently", () => {
   const raw = batchFixture("B058");
   const changed = fixture({
@@ -786,4 +800,47 @@ void test("Mystery flavor redaction gates process history separately from abstra
     setMystery(mystery({ enabled: true, [extra]: true }));
     assert.equal(service.getStory(TAP_ID)?.flavor, null);
   }
+});
+
+void test("flavor summary follows the sensory reveal and renders only without a brewer description", () => {
+  const renderer = createRenderer();
+  const html = (story: PublicStoryView) =>
+    renderer.render("/public/story", {
+      sharedDisplay: { theme: "modern_dark", unitSystem: "us" },
+      header: { tapboardName: "Tapboard", connectivity: "connected", connectivityLabel: "Online" },
+      ssePath: "/api/public/events",
+      tapId: TAP_ID,
+      isAdmin: false,
+      sensoryRadar: buildSensoryRadar(story.sensory),
+      temperature,
+      volume,
+      recipeAmount,
+      recipeMass,
+      recipeNumber,
+      story,
+    });
+  const described = fixture({ flavorBatch: batchFixture("B011") });
+  const withDescription = described.service.getStory(TAP_ID)!;
+  const summary = withDescription.flavor?.summary;
+  assert.ok(summary?.startsWith("Coffee, chocolate and roast character"));
+  assert.equal(html(withDescription).includes(summary!), false);
+  const bare = fixture({
+    flavorBatch: batchFixture("B011"),
+    presentationPatch: { description: null },
+  });
+  assert.ok(html(bare.service.getStory(TAP_ID)!).includes(summary!));
+  // Sensory reveal alone shows the sentence; it carries no hidden style or metric text.
+  described.setMystery(mystery({ enabled: true, revealSensory: true }));
+  const mysteryStory = described.service.getStory(TAP_ID)!;
+  assert.equal(mysteryStory.presentation.description, null);
+  assert.equal(mysteryStory.flavor?.summary, summary);
+  const mysteryHtml = html(mysteryStory);
+  assert.ok(mysteryHtml.includes(summary!));
+  for (const secret of ["Secret Style", "Secret Description", "Secret Beverage Name"])
+    assert.equal(mysteryHtml.includes(secret), false, secret);
+  described.setMystery(mystery({ enabled: true, revealDescription: true }));
+  const hidden = described.service.getStory(TAP_ID)!;
+  assert.equal(hidden.flavor, null);
+  assert.equal(html(hidden).includes(summary!), false);
+  assert.equal(JSON.stringify(hidden).includes(summary!), false);
 });

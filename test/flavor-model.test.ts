@@ -9,6 +9,7 @@ import type {
 import {
   resolveFlavorProfile,
   canonicalSensoryToPublic,
+  publicFlavorGuidance,
   resolveSensoryAxis,
 } from "../src/features/story/profile.ts";
 import { interpolateCurve } from "../src/features/story/flavor/math.ts";
@@ -361,6 +362,84 @@ void test("tartness absence requires identified nonsouring yeast and complete re
     null,
   );
 });
+void test("grain identity gaps cannot block none-expected tartness; acid malt, other material and cultures can", () => {
+  const grain = (name: string, grams: number, type = "Grain") =>
+    ingredient({ name, type, grams, stage: "unknown", form: null });
+  const yeast = (name: string, type = "Ale") =>
+    ingredient({ name, type, grams: null, stage: "unknown", form: null });
+  const tartness = (fermentables: BrewingIngredient[], yeasts: BrewingIngredient[]) =>
+    resolveFlavorProfile({
+      brewingInputs: withRows(withRows(fixture(), "fermentables", fermentables), "yeasts", yeasts),
+    }).axes.tartness;
+  const usO5 = ingredient({
+    name: "SafAle US-05",
+    laboratory: "Fermentis",
+    productId: "US-05",
+    grams: null,
+    stage: "unknown",
+  });
+  const base = [grain("Pale Malt", 4800), grain("Mystery grain", 200)];
+  assert.equal(tartness(base, [usO5]).value, 0);
+  assert.equal(tartness(base, [yeast("London Ale")]).value, 0);
+  const cultured = tartness(base, [yeast("Philly Sour")]);
+  assert.equal(cultured.value, null);
+  assert.deepEqual(cultured.reasons, ["souring_or_finished_acid_requires_separate_model"]);
+  // Mixed cultures are named for their style or blend rather than their bugs.
+  for (const name of [
+    "Belgian Lambic Blend",
+    "Berliner Weisse Blend",
+    "Oud Bruin Blend",
+    "American Farmhouse Blend",
+    "Amalgamation",
+  ])
+    assert.equal(tartness(base, [yeast(name)]).value, null, name);
+  const unnamed = tartness(base, [
+    ingredient({ name: null, productId: "", type: "Ale", grams: null, stage: "unknown" }),
+  ]);
+  assert.deepEqual(unnamed.reasons, ["missing_or_ambiguous_yeast"]);
+  for (const name of ["Acidulated", "Acid Malt", "Sour Malt", "Sauermalz"]) {
+    const acid = tartness([grain("Pale Malt", 4800), grain(name, 200)], [usO5]);
+    assert.equal(acid.value, null, name);
+    assert.deepEqual(acid.reasons, ["acidulated_malt_requires_review"], name);
+  }
+  assert.equal(tartness([grain("Pale Malt", 4900), grain("Acidulated", 100)], [usO5]).value, 0);
+  assert.equal(
+    tartness([grain("Pale Malt", 4000), grain("Raspberry (Fruit)", 1000, "Other")], [usO5]).value,
+    null,
+  );
+});
+void test("descriptor salience is associative across split additions and lager notes stay off chips", () => {
+  const hops = (count: number) =>
+    withRows(
+      fixture(),
+      "hops",
+      Array.from({ length: count }, (_, index) =>
+        ingredient({ sourcePath: `recipe.hops[${index}]`, grams: 100 / count }),
+      ),
+    );
+  const labels = (input: BrewingInputs) =>
+    resolveFlavorProfile({ brewingInputs: input }).descriptors.map(({ label, role }) => ({
+      label,
+      role,
+    }));
+  assert.ok(labels(hops(1)).length > 0);
+  assert.deepEqual(labels(hops(4)), labels(hops(1)));
+  const lager = ingredient({
+    name: "SafLager W-34/70",
+    laboratory: "Fermentis",
+    productId: "W-34/70",
+    type: "Lager",
+    grams: null,
+    stage: "unknown",
+  });
+  const descriptors = resolveFlavorProfile({
+    brewingInputs: withRows(fixture(), "yeasts", [lager]),
+  }).descriptors;
+  assert.equal(
+    descriptors.some((item) => item.role === "yeasts"),
+    false,
+  );
+});
 void test("optional provider aroma contributes generic descriptors without changing intensity", () => {
   const input = withRows(fixture(), "hops", [
     ingredient({ name: null, aroma: { fruity: 80, floral: 0, citrus: 101, unknown: 90 } }),
@@ -433,4 +512,138 @@ void test("explicit zero hop mass remains a supported zero while missing mass st
   assert.equal(resolveFlavorProfile({ brewingInputs: zero }).axes.hops.value, 0);
   const missing = withRows(fixture(), "hops", [ingredient({ amount: null, grams: null })]);
   assert.equal(resolveFlavorProfile({ brewingInputs: missing }).axes.hops.value, null);
+});
+const grainRow = (name: string, grams: number, patch: Partial<BrewingIngredient> = {}) =>
+  ingredient({ name, type: "Grain", grams, stage: "unknown", form: null, ...patch });
+const yeastRow = (patch: Partial<BrewingIngredient>) =>
+  ingredient({ grams: null, stage: "unknown", form: null, type: "Ale", ...patch });
+const us05 = yeastRow({ name: "SafAle US-05", laboratory: "Fermentis", productId: "US-05" });
+const profileOf = (
+  fermentables: BrewingIngredient[],
+  yeasts: BrewingIngredient[] = [us05],
+  miscs: BrewingIngredient[] = [],
+) =>
+  resolveFlavorProfile({
+    brewingInputs: withRows(
+      withRows(withRows(fixture(), "fermentables", fermentables), "yeasts", yeasts),
+      "miscs",
+      miscs,
+    ),
+  });
+const labelled = (calculation: ReturnType<typeof resolveFlavorProfile>, role: string) =>
+  calculation.descriptors.filter((item) => item.role === role).map((item) => item.label);
+void test("fruit entered as a fermentable is dosed per litre, leaves the grist and keeps tartness open", () => {
+  const fruit = (grams: number) =>
+    grainRow("Raspberry (Fruit)", grams, {
+      type: "Other",
+      sourcePath: "recipe.fermentables[1]",
+      percentage: 20,
+    });
+  const malt = grainRow("Pale Malt", 4000, { percentage: 80 });
+  const strong = profileOf([malt, fruit(1000)]);
+  assert.ok(labelled(strong, "fermentables").includes("raspberry"));
+  assert.notEqual(strong.axes.malt.value, null);
+  assert.equal(strong.axes.tartness.value, null);
+  assert.deepEqual(strong.axes.tartness.reasons, [
+    "souring_or_finished_acid_requires_separate_model",
+  ]);
+  // The fruit's own Brewfather share never reads as a grist disagreement.
+  assert.equal(
+    strong.diagnostics.some((value) => value.includes("mass/percentage disagreement")),
+    false,
+  );
+  assert.equal(labelled(profileOf([malt, fruit(40)]), "fermentables").includes("raspberry"), false);
+  // Without masses the grist is the malt's share of the recorded percentages.
+  const byPercent = profileOf([
+    grainRow("Pale Malt", 0, { grams: null, percentage: 80 }),
+    { ...fruit(0), grams: null },
+  ]);
+  assert.notEqual(byPercent.axes.malt.value, null);
+});
+void test("flavoured sugars name themselves from a meaningful grist share", () => {
+  const sugar = (name: string, grams: number, color: number | null = null) =>
+    labelled(
+      profileOf([
+        grainRow("Pilsner Malt", 5000),
+        grainRow(name, grams, { type: "Sugar", color, sourcePath: "recipe.fermentables[1]" }),
+      ]),
+      "fermentables",
+    );
+  assert.ok(sugar("Candi Syrup, D-180", 500, 180).includes("dark fruit"));
+  assert.ok(sugar("Candi Syrup, D-90", 500, 90).includes("caramel"));
+  assert.equal(sugar("Candi Sugar, Clear", 500, 1).includes("caramel"), false);
+  assert.ok(sugar("Honey", 600).includes("honey"));
+  assert.equal(sugar("Honey", 100).includes("honey"), false);
+  assert.ok(sugar("Maple Syrup", 600).includes("maple"));
+});
+void test("a generic yeast class gives style words and the same tartness as the unresolved path", () => {
+  const malt = [grainRow("Pale Malt", 5000)];
+  const hefe = profileOf(malt, [
+    yeastRow({
+      name: "Hefeweizen IV",
+      laboratory: "White Labs",
+      productId: "WLP380",
+      type: "Wheat",
+    }),
+  ]);
+  assert.deepEqual(labelled(hefe, "yeasts").sort(), ["banana", "clove"]);
+  assert.equal(hefe.axes.tartness.value, 0);
+  const untyped = profileOf(malt, [yeastRow({ name: "Belgian Saison", type: "" })]);
+  assert.deepEqual(labelled(untyped, "yeasts"), []);
+  assert.deepEqual(untyped.axes.tartness.reasons, ["missing_or_ambiguous_yeast"]);
+});
+void test("catalog gaps name unrecognised ingredients and generic yeasts for Admin only", () => {
+  const calculation = profileOf(
+    [grainRow("Pale Malt", 5000), grainRow("House Special Malt", 200)],
+    [
+      yeastRow({
+        name: "Hefeweizen IV",
+        laboratory: "White Labs",
+        productId: "WLP380",
+        type: "Wheat",
+      }),
+      yeastRow({
+        name: "Hefeweizen IV",
+        laboratory: "White Labs",
+        productId: "WLP380",
+        type: "Wheat",
+      }),
+    ],
+    [
+      ingredient({ name: "Cloves", type: "Spice", grams: 2, stage: "unknown" }),
+      ingredient({ name: "Mystery Spice", type: "Spice", grams: 2, stage: "unknown" }),
+      ingredient({ name: null, type: "Spice", grams: 2, stage: "unknown" }),
+    ],
+  );
+  assert.deepEqual(
+    calculation.catalogGaps.map((gap) => gap.split(":")[0]),
+    [
+      "Fermentable · House Special Malt",
+      "Yeast · Hefeweizen IV (White Labs WLP380)",
+      "Misc · Mystery Spice",
+    ],
+  );
+  assert.ok(calculation.catalogGaps[1]!.includes("Generic hefeweizen class"));
+  const publicGuidance = JSON.stringify(publicFlavorGuidance(calculation));
+  assert.equal(publicGuidance.includes("Mystery Spice"), false);
+  assert.equal(publicGuidance.includes("catalogGaps"), false);
+});
+void test("processing rows with their own Brewfather share do not distort the grist", () => {
+  const hulls = (grams: number | null) =>
+    grainRow("Rice Hulls", grams ?? 0, {
+      type: "Adjunct",
+      grams,
+      percentage: 6,
+      sourcePath: "recipe.fermentables[1]",
+    });
+  const withMass = profileOf([grainRow("Pale Malt", 4700, { percentage: 94 }), hulls(300)]);
+  assert.equal(
+    withMass.diagnostics.some((value) => value.includes("mass/percentage disagreement")),
+    false,
+  );
+  const byPercent = profileOf([
+    grainRow("Pale Malt", 0, { grams: null, percentage: 94 }),
+    hulls(null),
+  ]);
+  assert.notEqual(byPercent.axes.malt.value, null);
 });
