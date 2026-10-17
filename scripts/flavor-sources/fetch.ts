@@ -44,12 +44,16 @@ export function isBotChallenge(status: number, headers: Headers, body: string): 
   );
 }
 
-/** Allow/disallow prefix rules for `*` from a robots.txt body; the longest matching rule wins,
- * and Allow wins a tie. */
-export function robotsAllows(robots: string, path: string): boolean {
+/** The `*` group of a robots.txt: its Allow/Disallow patterns and any Crawl-delay. */
+export interface RobotsPolicy {
+  readonly rules: readonly { readonly allow: boolean; readonly pattern: string }[];
+  readonly crawlDelaySeconds: number | null;
+}
+export function parseRobots(robots: string): RobotsPolicy {
   let applies = false;
   let inGroupHeader = false;
-  const rules: { allow: boolean; prefix: string }[] = [];
+  let crawlDelaySeconds: number | null = null;
+  const rules: { allow: boolean; pattern: string }[] = [];
   for (const raw of robots.split(/\r?\n/)) {
     const line = raw.replace(/#.*/, "").trim();
     const match = /^([a-z-]+)\s*:\s*(.*)$/i.exec(line);
@@ -63,29 +67,54 @@ export function robotsAllows(robots: string, path: string): boolean {
       continue;
     }
     inGroupHeader = false;
-    if (applies && (key === "allow" || key === "disallow") && value !== "")
-      rules.push({ allow: key === "allow", prefix: value.trim() });
+    if (!applies) continue;
+    if ((key === "allow" || key === "disallow") && value.trim() !== "")
+      rules.push({ allow: key === "allow", pattern: value.trim() });
+    if (key === "crawl-delay" && Number.isFinite(Number(value))) crawlDelaySeconds = Number(value);
   }
-  const matching = rules
-    .filter((rule) => path.startsWith(rule.prefix.replace(/\*.*$/, "")))
-    .sort((a, b) => b.prefix.length - a.prefix.length || Number(b.allow) - Number(a.allow));
+  return { rules, crawlDelaySeconds };
+}
+/** RFC 9309 matching: `*` matches any run of characters, a trailing `$` anchors the end, the
+ * longest matching pattern wins and Allow wins a tie. */
+export function robotsAllows(robots: string, path: string): boolean {
+  const matching = parseRobots(robots)
+    .rules.filter(({ pattern }) => {
+      const anchored = pattern.endsWith("$");
+      const body = (anchored ? pattern.slice(0, -1) : pattern)
+        .split("*")
+        .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+        .join(".*");
+      return new RegExp(`^${body}${anchored ? "$" : ""}`).test(path);
+    })
+    .sort((a, b) => b.pattern.length - a.pattern.length || Number(b.allow) - Number(a.allow));
   return matching[0]?.allow ?? true;
 }
 
 const cachePath = (url: string) =>
   join(CACHE_DIR, new URL(url).host, createHash("sha1").update(url).digest("hex") + ".json");
 const lastRequest = new Map<string, number>();
+const intervalByHost = new Map<string, number>();
 const robotsByOrigin = new Map<string, string>();
 
-async function politeGet(url: string): Promise<Response> {
+async function politeGet(url: string, retried = false): Promise<Response> {
   // Node's fetch ignores HTTPS_PROXY unless asked; without it, proxied networks fail to resolve.
   if (process.env["HTTPS_PROXY"] && process.env["NODE_USE_ENV_PROXY"] !== "1")
     throw new Error("Run maker fetches with NODE_USE_ENV_PROXY=1 so fetch uses HTTPS_PROXY.");
   const { host } = new URL(url);
-  const wait = (lastRequest.get(host) ?? 0) + HOST_INTERVAL_MS - Date.now();
+  const interval = intervalByHost.get(host) ?? HOST_INTERVAL_MS;
+  const wait = (lastRequest.get(host) ?? 0) + interval - Date.now();
   if (wait > 0) await delay(wait);
   lastRequest.set(host, Date.now());
-  return fetch(url, { headers: { "user-agent": USER_AGENT }, redirect: "follow" });
+  const response = await fetch(url, { headers: { "user-agent": USER_AGENT }, redirect: "follow" });
+  // A plain rate limit (not a challenge) is honoured once, then reported.
+  if (response.status === 429 && !retried && !response.headers.has("x-vercel-mitigated")) {
+    const retryAfter = Number(response.headers.get("retry-after"));
+    await delay(
+      Math.min(Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 60, 300) * 1000,
+    );
+    return politeGet(url, true);
+  }
+  return response;
 }
 
 /** Fetches a maker page once, honouring robots.txt and a per-host interval, and returns the
@@ -105,6 +134,9 @@ export async function fetchSource(url: string, refresh = false): Promise<CachedS
     const text = await robots.text();
     if (isBotChallenge(robots.status, robots.headers, text)) throw new BotChallengeError(url);
     robotsByOrigin.set(origin, robots.ok ? text : "");
+    const delaySeconds = parseRobots(robotsByOrigin.get(origin)!).crawlDelaySeconds;
+    if (delaySeconds !== null)
+      intervalByHost.set(new URL(url).host, Math.max(HOST_INTERVAL_MS, delaySeconds * 1000));
   }
   if (!robotsAllows(robotsByOrigin.get(origin)!, pathname + search))
     throw new Error(`robots.txt disallows ${url}`);

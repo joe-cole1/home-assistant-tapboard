@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { extractDescriptors } from "../scripts/flavor-sources/extract.ts";
 import { buildEntry } from "../scripts/flavor-sources/build.ts";
-import { isBotChallenge, robotsAllows } from "../scripts/flavor-sources/fetch.ts";
+import { isBotChallenge, parseRobots, robotsAllows } from "../scripts/flavor-sources/fetch.ts";
 import { LEXICON } from "../scripts/flavor-sources/lexicon.ts";
 import { REVIEWED_FACTS } from "../src/features/story/flavor/catalog-data.ts";
 import { sourcedFacts } from "../src/features/story/flavor/sourced.ts";
@@ -174,6 +174,13 @@ void test("robots.txt rules for every agent decide what the fetcher may read", (
   assert.equal(robotsAllows(robots, "/products/private/notes"), false);
   assert.equal(robotsAllows(robots, "/products/private/data-sheets/a.pdf"), true);
   assert.equal(robotsAllows("", "/anything"), true);
+  // Wildcards: Fermentis forbids every query string but not its plain product pages.
+  const fermentis = "User-agent: *\nDisallow: /*?*\nDisallow: /*.pdf$\nCrawl-delay: 10";
+  assert.equal(robotsAllows(fermentis, "/en/product/safale-us-05/"), true);
+  assert.equal(robotsAllows(fermentis, "/en/products/?page=2"), false);
+  assert.equal(robotsAllows(fermentis, "/sheet.pdf"), false);
+  assert.equal(robotsAllows(fermentis, "/sheet.pdf.html"), true);
+  assert.equal(parseRobots(fermentis).crawlDelaySeconds, 10);
 });
 
 void test("a built entry carries only extracted words and says when the maker names none", () => {
