@@ -814,27 +814,24 @@ void test("flavor summary follows the sensory reveal and renders only without a 
   const withDescription = described.service.getStory(TAP_ID)!;
   const summary = withDescription.flavor?.summary;
   assert.ok(summary?.startsWith("Coffee, chocolate and roast character"));
-  assert.doesNotMatch(html(withDescription), /class="flavor-summary"/u);
+  assert.equal(html(withDescription).includes(summary!), false);
   const bare = fixture({
     flavorBatch: batchFixture("B011"),
     presentationPatch: { description: null },
   });
-  assert.match(
-    html(bare.service.getStory(TAP_ID)!),
-    /<p class="flavor-summary">Coffee, chocolate/u,
-  );
+  assert.ok(html(bare.service.getStory(TAP_ID)!).includes(summary!));
   // Sensory reveal alone shows the sentence; it carries no hidden style or metric text.
   described.setMystery(mystery({ enabled: true, revealSensory: true }));
   const mysteryStory = described.service.getStory(TAP_ID)!;
   assert.equal(mysteryStory.presentation.description, null);
   assert.equal(mysteryStory.flavor?.summary, summary);
   const mysteryHtml = html(mysteryStory);
-  assert.match(mysteryHtml, /class="flavor-summary"/u);
+  assert.ok(mysteryHtml.includes(summary!));
   for (const secret of ["Secret Style", "Secret Description", "Secret Beverage Name"])
     assert.equal(mysteryHtml.includes(secret), false, secret);
   described.setMystery(mystery({ enabled: true, revealDescription: true }));
   const hidden = described.service.getStory(TAP_ID)!;
   assert.equal(hidden.flavor, null);
-  assert.doesNotMatch(html(hidden), /class="flavor-summary"/u);
+  assert.equal(html(hidden).includes(summary!), false);
   assert.equal(JSON.stringify(hidden).includes(summary!), false);
 });

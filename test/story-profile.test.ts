@@ -70,5 +70,8 @@ void test("flavor summary omits unknown axes and needs a descriptor or two known
   const zeroBitterness = resolveFlavorProfile({
     manualOverrides: { body: 6, bitterness: 0, sweetness: 0 },
   });
-  assert.equal(flavorSummary(zeroBitterness), "A full body and a very dry finish.");
+  assert.equal(
+    flavorSummary(zeroBitterness),
+    "A full body, no expected bitterness and a very dry finish.",
+  );
 });

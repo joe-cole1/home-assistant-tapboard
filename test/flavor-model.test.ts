@@ -383,9 +383,24 @@ void test("grain identity gaps cannot block none-expected tartness; acid malt, o
   const cultured = tartness(base, [yeast("Philly Sour")]);
   assert.equal(cultured.value, null);
   assert.deepEqual(cultured.reasons, ["souring_or_finished_acid_requires_separate_model"]);
-  const acid = tartness([grain("Pale Malt", 4800), grain("Acidulated", 200)], [usO5]);
-  assert.equal(acid.value, null);
-  assert.deepEqual(acid.reasons, ["acidulated_malt_requires_review"]);
+  // Mixed cultures are named for their style or blend rather than their bugs.
+  for (const name of [
+    "Belgian Lambic Blend",
+    "Berliner Weisse Blend",
+    "Oud Bruin Blend",
+    "American Farmhouse Blend",
+    "Amalgamation",
+  ])
+    assert.equal(tartness(base, [yeast(name)]).value, null, name);
+  const unnamed = tartness(base, [
+    ingredient({ name: null, productId: "", type: "Ale", grams: null, stage: "unknown" }),
+  ]);
+  assert.deepEqual(unnamed.reasons, ["missing_or_ambiguous_yeast"]);
+  for (const name of ["Acidulated", "Acid Malt", "Sour Malt", "Sauermalz"]) {
+    const acid = tartness([grain("Pale Malt", 4800), grain(name, 200)], [usO5]);
+    assert.equal(acid.value, null, name);
+    assert.deepEqual(acid.reasons, ["acidulated_malt_requires_review"], name);
+  }
   assert.equal(tartness([grain("Pale Malt", 4900), grain("Acidulated", 100)], [usO5]).value, 0);
   assert.equal(
     tartness([grain("Pale Malt", 4000), grain("Raspberry (Fruit)", 1000, "Other")], [usO5]).value,

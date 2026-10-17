@@ -9,7 +9,7 @@ import type {
   FlavorDescriptor,
   SensoryAxisResult,
 } from "../types.ts";
-import { CATALOG_VERSION, lovibondOf } from "./catalog.ts";
+import { ACID_MALT, CATALOG_VERSION, lovibondOf } from "./catalog.ts";
 import { CRYSTAL_CHARACTER, FAMILY_CHARACTER, HONEY_MALT_CHARACTER } from "./catalog-data.ts";
 import type { FermentableFamily } from "./catalog-types.ts";
 import { composition, resolveFeatures, ROLES, type ResolvedRow } from "./features.ts";
@@ -157,7 +157,9 @@ const NOTICEABLE_G_PER_L: Readonly<Record<string, number>> = {
   "botanical-chamomile": 0.4,
 };
 const POSITION_WEIGHTS = [1, 0.85, 0.7, 0.55] as const;
-const SOURING_CULTURE = /lacto|brett|sour|philly|wild|pedio|lachancea|mixed|culture|roeselare/i;
+// Souring and mixed cultures are usually named for their bugs, style or blend.
+const SOURING_CULTURE =
+  /lacto|brett|sour|philly|wild|pedio|lachancea|mixed|culture|roeselare|blend|lambic|gueuze|berliner|bruin|flanders|farmhouse|amalgamation|funk|bugs|dregs/i;
 const PROVIDER_AROMA = [
   "floral",
   "grassy",
@@ -318,12 +320,7 @@ function predictions(
       validOg === null ? ["missing_strength_context"] : limitations("og"),
       validOg === null || !grist.absentSupported,
     );
-    const roastPercent =
-      100 *
-      grist.fractions.reduce(
-        (sum, { row, fraction }) => sum + fraction * ROAST[row.resolution.roastClass],
-        0,
-      );
+    const roastPercent = roastShare(grist);
     const roastComplete =
       grist.absentSupported &&
       grist.fractions.every(({ row }) => row.resolution.roastClass !== "unknown");
@@ -464,13 +461,14 @@ function predictions(
       (row) =>
         row.resolution.souring === false ||
         (row.resolution.level === "unresolved" &&
+          yeastIdentity(row).trim() !== "" &&
           ["ale", "lager", "wheat"].includes(row.ingredient.type?.trim().toLowerCase() ?? "") &&
           !SOURING_CULTURE.test(yeastIdentity(row))),
     );
   const gristShared = grist.fractions.some(({ fraction }) => fraction > 0);
   const acidulated = grist.fractions.some(
     ({ row, fraction }) =>
-      /acidulated|sauer/i.test(row.ingredient.name ?? "") && (!gristShared || fraction > 0.03),
+      ACID_MALT.test(row.ingredient.name ?? "") && (!gristShared || fraction > 0.03),
   );
   // Unknown grains, adjuncts, sugars and extracts cannot sour a beer; unknown other material
   // (fruit entered as a fermentable, for example) can.
@@ -558,9 +556,8 @@ function descriptorSelection(
   const og = scalar(inputs, "og");
   const gravity = clamp(og === null ? 1 : (og - 1) / 0.05, 0.65, 1.75);
   const grist = composition(features.rows.fermentables, features.coverage.fermentables);
-  let roastPercent = 0;
+  const roastPercent = roastShare(grist);
   for (const { row, fraction } of grist.fractions) {
-    roastPercent += 100 * fraction * ROAST[row.resolution.roastClass];
     if (row.resolution.family === "sugar" && /honey/i.test(row.ingredient.name ?? "")) {
       if (fraction >= 0.04) add(["honey"], "fermentables", 25 * fraction, row);
       continue;
@@ -620,6 +617,16 @@ function descriptorSelection(
     selected.push({ label, role, evidenceReferences });
   }
   return selected;
+}
+/** Roast-weighted grist percent shared by the roast axis and hop-aroma masking. */
+function roastShare(grist: ReturnType<typeof composition>): number {
+  return (
+    100 *
+    grist.fractions.reduce(
+      (sum, { row, fraction }) => sum + fraction * ROAST[row.resolution.roastClass],
+      0,
+    )
+  );
 }
 function maltCharacter(row: ResolvedRow): { words: readonly string[]; potency: number } {
   const family = row.resolution.family;

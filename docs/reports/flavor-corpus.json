@@ -480,7 +480,9 @@
           "productId": null,
           "grams": 226.796,
           "stage": "unknown",
-          "reasons": ["Smoked, peated and acidulated malts need an explicit rule; not classified."]
+          "reasons": [
+            "Smoked, peated, acidulated and maltodextrin products need an explicit rule; not classified."
+          ]
         },
         {
           "role": "miscs",
@@ -9729,7 +9731,9 @@
           "productId": null,
           "grams": 226.796,
           "stage": "unknown",
-          "reasons": ["Smoked, peated and acidulated malts need an explicit rule; not classified."]
+          "reasons": [
+            "Smoked, peated, acidulated and maltodextrin products need an explicit rule; not classified."
+          ]
         },
         {
           "role": "miscs",
@@ -9848,7 +9852,7 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Provider base-grain category supports family only; specific product character unresolved.",
-        "Smoked, peated and acidulated malts need an explicit rule; not classified.",
+        "Smoked, peated, acidulated and maltodextrin products need an explicit rule; not classified.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
@@ -20449,7 +20453,9 @@
           "productId": null,
           "grams": 226.796,
           "stage": "unknown",
-          "reasons": ["Smoked, peated and acidulated malts need an explicit rule; not classified."]
+          "reasons": [
+            "Smoked, peated, acidulated and maltodextrin products need an explicit rule; not classified."
+          ]
         },
         {
           "role": "miscs",
@@ -20568,7 +20574,7 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Provider base-grain category supports family only; specific product character unresolved.",
-        "Smoked, peated and acidulated malts need an explicit rule; not classified.",
+        "Smoked, peated, acidulated and maltodextrin products need an explicit rule; not classified.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",

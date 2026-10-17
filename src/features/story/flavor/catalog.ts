@@ -74,11 +74,13 @@ const CATEGORY_FAMILIES: Readonly<Record<string, FermentableFamily>> = {
   "base (munich)": "munich",
 };
 
+/** Acidulated (sour) malt: its producer allows both pH adjustment and sour-beer use. */
+export const ACID_MALT = /acidulated|acid malt|sauer|sour malt/i;
 /** Colour in °L: explicit Lovibond, then an "NN L" product name, then Brewfather SRM `color`.
  * Custom Brewfather grains sometimes store °L in `color`, so the name wins over conversion. */
 export function lovibondOf(item: BrewingIngredient): number | null {
   if (item.lovibond !== null && Number.isFinite(item.lovibond)) return item.lovibond;
-  const named = /(\d+(?:\.\d+)?)\s*°?\s*L\b/.exec(item.name ?? "");
+  const named = /(\d+(?:\.\d+)?)\s*°?\s*L\b/i.exec(item.name ?? "");
   if (named) return Number(named[1]);
   return item.color !== null && Number.isFinite(item.color) ? (item.color + 0.76) / 1.3546 : null;
 }
@@ -94,7 +96,7 @@ function classified(
     descriptors: [],
     sourceUrls: ["https://docs.brewfather.app/api/types"],
     souring: null,
-    functions: family === "sugar" ? ["fermentable_sugar"] : [],
+    functions: family === "sugar" ? ["fermentable_sugar"] : family === "lactose" ? ["lactose"] : [],
     bodyClass,
     roastClass:
       family === "roasted"
@@ -116,8 +118,11 @@ function propertyResolution(item: BrewingIngredient, name: string): IngredientRe
   const category = identity(item.grainCategory);
   const lovibond = lovibondOf(item);
   if (type.includes("extract")) return null;
-  if (/smoked|rauch|peat|acidulated|sauer/.test(name))
-    return unresolved("Smoked, peated and acidulated malts need an explicit rule; not classified.");
+  if (/smoked|rauch|peat|maltodextrin/.test(name) || ACID_MALT.test(name))
+    return unresolved(
+      "Smoked, peated, acidulated and maltodextrin products need an explicit rule; not classified.",
+    );
+  if (/lactose|milk sugar/.test(name)) return classified("lactose", lovibond);
   if (/victory|biscuit|carabrown/.test(name)) return classified("biscuit", lovibond);
   if (/honey malt|brumalt/.test(name)) return classified("aromatic", lovibond);
   if (type === "sugar") return classified("sugar", lovibond);

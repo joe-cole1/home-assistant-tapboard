@@ -76,8 +76,12 @@ export function flavorSummary(calculation: FlavorCalculation): string | null {
     tartness = value("tartness"),
     sweetness = value("sweetness");
   const clauses = [
-    body ? `a ${band("body")} body` : null,
-    bitterness ? `${band("bitterness")} bitterness` : null,
+    body === null ? null : `a ${body === 0 ? "very light" : band("body")} body`,
+    bitterness === null
+      ? null
+      : bitterness === 0
+        ? "no expected bitterness"
+        : `${band("bitterness")} bitterness`,
     tartness !== null && tartness >= 1 ? `${band("tartness")} tartness` : null,
     sweetness === null ? null : FINISH[sensoryBand("sweetness", sweetness)]!,
   ].filter((clause): clause is string => clause !== null);

@@ -237,14 +237,39 @@ void test("category and colour classify unknown grains generically; conflicting 
     assert.equal(resolution.level, "unresolved");
     assert.ok(resolution.diagnostics.some((value) => value.includes("conflicts")));
   }
-  for (const name of ["Smoked Malt", "Acidulated Malt", "Peated Malt"])
+  for (const name of ["Smoked Malt", "Acidulated Malt", "Acid Malt", "Sour Malt", "Peated Malt"])
     assert.equal(
       resolveIngredient(
         "fermentables",
         ingredient({ name, type: "Grain", color: 3, grainCategory: "Base" }),
       ).level,
       "unresolved",
+      name,
     );
+  // Unlisted lactose keeps its sweetness floor; maltodextrin needs its own rule.
+  const lactose = resolveIngredient(
+    "fermentables",
+    ingredient({ name: "Lactose Powder", type: "Sugar", color: 0 }),
+  );
+  assert.equal(lactose.family, "lactose");
+  assert.deepEqual(lactose.functions, ["lactose"]);
+  assert.equal(
+    resolveIngredient("fermentables", ingredient({ name: "Maltodextrin", type: "Sugar", color: 0 }))
+      .level,
+    "unresolved",
+  );
+  // A lowercase "l" colour suffix still names the colour.
+  assert.ok(
+    resolveIngredient(
+      "fermentables",
+      ingredient({
+        name: "Crystal 60l",
+        type: "Grain",
+        color: 60,
+        grainCategory: "Crystal/Caramel",
+      }),
+    ).diagnostics.some((value) => value.includes("(60 °L)")),
+  );
   assert.equal(
     resolveIngredient(
       "fermentables",
