@@ -65,7 +65,10 @@ export const maker: MakerSource = {
           aliases: titleAliases(name, [], ["Yeast"]),
           flavorText: [facts["flavour description"] ?? "", description].join("\n"),
           source: makerSource(source),
-          souring: souringFromStated(`${product.tags.join(" ")} ${name} yeast`),
+          souring: souringFromStated(
+            `${product.product_type} ${product.tags.join(" ")} ${name}`,
+            description,
+          ),
         });
       } catch (error) {
         gaps.push({ url, reason: error instanceof Error ? error.message : String(error) });

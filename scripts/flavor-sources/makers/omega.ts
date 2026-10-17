@@ -34,11 +34,13 @@ export const maker: MakerSource = {
   role: "yeasts",
   async read(limit) {
     const listed = (await shopifyProducts(ORIGIN))
-      // Pinnacle dry yeasts (PIN- codes) are AB Mauri products that Omega resells.
+      // Pinnacle dry yeasts (PIN- codes, "From Pinnacle Yeast") are AB Mauri products that
+      // Omega resells; their maker is not Omega.
       .filter(
         ({ product }) =>
           /brewing yeast/i.test(product.product_type) &&
-          !product.variants.some((variant) => /^PIN-/i.test(variant.sku ?? "")),
+          !product.variants.some((variant) => /^PIN-/i.test(variant.sku ?? "")) &&
+          !/pinnacle/i.test(`${product.title} ${product.body_html ?? ""}`),
       )
       .slice(0, limit);
     const products: ParsedProduct[] = [];
@@ -62,7 +64,7 @@ export const maker: MakerSource = {
           aliases: titleAliases(product.title, [], ["Yeast"]),
           flavorText: [facts["tasting notes"] ?? "", description].join("\n"),
           source: makerSource(source),
-          souring: souringFromStated(`${facts["strain type"] ?? ""} ${product.product_type}`),
+          souring: souringFromStated(`${facts["strain type"] ?? ""} ${product.title}`, description),
         });
       } catch (error) {
         gaps.push({ url, reason: error instanceof Error ? error.message : String(error) });

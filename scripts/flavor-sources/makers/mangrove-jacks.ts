@@ -1,4 +1,5 @@
 import type { ParsedProduct } from "../build.ts";
+import { fetchSource } from "../fetch.ts";
 import {
   fragmentText,
   makerSource,
@@ -20,7 +21,17 @@ export const maker: MakerSource = {
       )
       .slice(0, limit);
     const products: ParsedProduct[] = [];
-    for (const { product, source } of listed) {
+    const gaps: { url: string; reason: string }[] = [];
+    for (const { product } of listed) {
+      const url = `${ORIGIN}/products/${product.handle}`;
+      // The product page shows the listing's description; its hash records what was read.
+      let source;
+      try {
+        source = await fetchSource(url);
+      } catch (error) {
+        gaps.push({ url, reason: error instanceof Error ? error.message : String(error) });
+        continue;
+      }
       const [, code, rest] = /^(M\d+)\s+(.*)$/.exec(product.title) as unknown as [
         string,
         string,
@@ -39,11 +50,10 @@ export const maker: MakerSource = {
         codes: [code],
         aliases: [...titleAliases(name, [], ["Yeast"]), `${code} ${name}`],
         flavorText: text,
-        source: { ...makerSource(source), url: `${ORIGIN}/products/${product.handle}` },
-        souring: souringFromStated(`${name} yeast`),
-        limitations: ["Read from the maker's product listing (products.json)."],
+        source: makerSource(source),
+        souring: souringFromStated(name, text),
       });
     }
-    return { products, gaps: [] };
+    return { products, gaps };
   },
 };

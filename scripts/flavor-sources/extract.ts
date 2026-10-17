@@ -29,6 +29,9 @@ const CONDITIONAL =
 const PAIRING =
   /\b(?:for|ideal for|suited (?:to|for)|recommended for|great for|perfect for|used in|use in|pairs?(?: well)? with|complement\w*|accentuat\w*|enhanc\w*|matches up|showcas\w*|alongside|blends?(?: well)? with|works well with|similar to|substitute\w*|replacement for)\b/g;
 const PAIRING_REACH_WORDS = 4;
+// A flavour credited to another ingredient right after it ("a hint of spice from hops").
+const FROM_OTHER_INGREDIENT =
+  /^ (?:(?:that )?comes? )?from (?:the )?(?:hops?|malts?|grains?|grist|adjuncts?)\b/;
 const STOPWORDS = new Set(
   "a an and are as at be been but by character characteristics contributes delivers distinct excellent flavor flavors flavour flavours from gives good great has have high hints imparts in into is it its known light medium mild moderate more most notes of on or over pleasant produces profile provides rich slightly strong subtle that the these this to touch very well which with aroma aromas aromatic taste tastes beer beers brewing brew style styles use used variety hop hops malt malts yeast strain also intense intensely nice clean crisp neutral balanced smooth dry sweet sweetness bitter bitterness body full finish mouthfeel".split(
     " ",
@@ -77,7 +80,8 @@ export function extractDescriptors(text: string, role: BrewingIngredientRole): E
       const evidence = match[0];
       const negatedBy = negators.findLast((at) => at < match.index);
       const reason: ExcludedWord["reason"] | null =
-        term.maltOnly && (role === "yeasts" || role === "hops")
+        (term.maltOnly && (role === "yeasts" || role === "hops")) ||
+        FROM_OTHER_INGREDIENT.test(clause.slice(match.index + match[0].length))
           ? "other ingredient"
           : negatedBy !== undefined && !clause.slice(negatedBy, match.index).includes(",")
             ? "negated"

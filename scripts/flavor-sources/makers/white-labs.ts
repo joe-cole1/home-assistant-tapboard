@@ -70,7 +70,7 @@ export const maker: MakerSource = {
           aliases: titleAliases(name, [], ["Yeast", "Yeast Blend"]),
           flavorText: page.description,
           source: makerSource(source),
-          souring: souringFromStated(name),
+          souring: souringFromStated(name, page.description),
         });
       } catch (error) {
         gaps.push({ url, reason: error instanceof Error ? error.message : String(error) });

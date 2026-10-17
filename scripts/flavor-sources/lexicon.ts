@@ -117,6 +117,12 @@ export const LEXICON: readonly LexiconTerm[] = Object.freeze([
   term("bubblegum", "bubble gum"),
   term("phenolic", "phenols", "phenolics", "phenol"),
   term("honey", "honeyed", "honey like"),
+  // Dried and dark fruit: crystal and dark malts, and the esters of Belgian and English yeasts.
+  term("raisin", "raisins"),
+  term("prune", "prunes"),
+  term("fig", "figs"),
+  term("dried fruit", "dried fruits"),
+  term("dark fruit", "dark fruits"),
   // Grain and sugar
   malt("bready", "bread", "breadiness", "fresh bread", "baked bread", "baking bread", "bread like"),
   malt("bread crust", "crusty bread", "bread crusts"),
@@ -138,11 +144,6 @@ export const LEXICON: readonly LexiconTerm[] = Object.freeze([
   malt("brown sugar"),
   malt("burnt sugar"),
   malt("marshmallow", "toasted marshmallow", "marshmallows"),
-  malt("raisin", "raisins"),
-  malt("prune", "prunes"),
-  malt("fig", "figs"),
-  malt("dried fruit", "dried fruits"),
-  malt("dark fruit", "dark fruits"),
   malt(
     "chocolate",
     "chocolatey",

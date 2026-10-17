@@ -47,7 +47,7 @@ export const maker: MakerSource = {
           aliases: titleAliases(page.name, [], ["Yeast"]),
           flavorText: page.profile,
           source: makerSource(source),
-          souring: souringFromStated(`${page.species} ${page.name}`),
+          souring: souringFromStated(`${page.species} ${page.name}`, page.profile),
         });
       } catch (error) {
         gaps.push({ url, reason: error instanceof Error ? error.message : String(error) });

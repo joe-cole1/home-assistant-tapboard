@@ -56,9 +56,9 @@ export const slug = (text: string): string =>
     .replace(/[øØ]/g, "o")
     .replace(/[æÆ]/g, "ae")
     .replace(/ß/g, "ss")
+    .replace(/[®™℠]/g, "")
     .normalize("NFKD")
     .replace(/\p{M}/gu, "")
-    .replace(/[®™℠]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
@@ -83,19 +83,24 @@ export function titleAliases(
   return [...variants].filter((name) => name !== "");
 }
 
-/** Souring from what a lab states about a culture (species, strain type, category or name):
- * bacteria, Brettanomyces, Lachancea, blends and mixed or sour cultures are souring; a stated
- * Saccharomyces or ordinary ale, lager, wheat or kveik yeast is not; anything else is unknown. */
-export function souringFromStated(stated: string): boolean | null {
-  if (
-    /lacto|pedio|bacteri|brett|lachancea|\bsour\b|mixed|\bblend\b|culture|kombucha|acetobacter/i.test(
-      stated,
-    )
-  )
-    return true;
-  if (/saccharomyces|\bale\b|lager|wheat|kveik|\byeast\b|weizen|saison|kolsch|kölsch/i.test(stated))
-    return false;
-  return null;
+const SOURING_ORGANISM =
+  /lacto|pedio|bacteri|\blab\b|brett|lachancea|acetobacter|kombucha|\bsour|lambic|gueuze|geuze|berliner|flemish|flanders|roeselare|bruin|mixed (?:culture|ferment)/i;
+const BREWING_SPECIES = /saccharomyces|cerevisiae|pastorianus|bayanus|uvarum/i;
+const ORDINARY_YEAST =
+  /brewer.?s yeast|\bale\b|lager|wheat|weizen|kveik|\byeast\b|saison|k[oö]lsch/i;
+/** Souring from what a lab states about a culture. `stated` is what names the culture itself
+ * (species, strain type, category, product name) and `text` is its description:
+ * - a souring organism or sour style in `stated` makes it souring;
+ * - otherwise a stated Saccharomyces species makes it not souring;
+ * - otherwise a souring organism mentioned in `text` (a blend partner or a pairing) leaves it
+ *   unknown;
+ * - otherwise an ordinary ale, lager, wheat or kveik yeast is not souring, and anything else is
+ *   unknown. A blend or culture is not souring by that word alone. */
+export function souringFromStated(stated: string, text = ""): boolean | null {
+  if (SOURING_ORGANISM.test(stated)) return true;
+  if (BREWING_SPECIES.test(stated)) return false;
+  if (SOURING_ORGANISM.test(text)) return null;
+  return ORDINARY_YEAST.test(stated) ? false : null;
 }
 
 export interface ShopifyProduct {

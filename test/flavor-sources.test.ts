@@ -5,6 +5,7 @@ import { extractDescriptors } from "../scripts/flavor-sources/extract.ts";
 import { buildEntry } from "../scripts/flavor-sources/build.ts";
 import { isBotChallenge, parseRobots, robotsAllows } from "../scripts/flavor-sources/fetch.ts";
 import { LEXICON } from "../scripts/flavor-sources/lexicon.ts";
+import { slug, souringFromStated } from "../scripts/flavor-sources/maker.ts";
 import { REVIEWED_FACTS } from "../src/features/story/flavor/catalog-data.ts";
 import { sourcedFacts } from "../src/features/story/flavor/sourced.ts";
 
@@ -61,6 +62,12 @@ void test("negated, conditional and pairing mentions are reported, never kept", 
     "roast:other ingredient",
     "caramel:other ingredient",
   ]);
+  assert.deepEqual(
+    reasons("Clean and crisp, with the slightest hint of spice from hops.", "yeasts"),
+    ["spicy:other ingredient"],
+  );
+  // Dried and dark fruit are yeast esters too, unlike caramel or bread.
+  assert.deepEqual(words("Caramel, plum and dark fruit esters.", "yeasts"), ["plum", "dark fruit"]);
 });
 
 void test("ignored phrases consume look-alike words and unknown words are reported", () => {
@@ -214,4 +221,25 @@ void test("bot challenges are recognised so they become gaps instead of being by
   assert.equal(isBotChallenge(403, new Headers(), "<title>Just a moment...</title> cf-chl"), true);
   assert.equal(isBotChallenge(200, new Headers(), "<h1>Citra</h1> grapefruit"), false);
   assert.equal(isBotChallenge(404, new Headers(), "Not found"), false);
+});
+
+void test("souring follows what names the culture, and a description mention leaves it unknown", () => {
+  assert.equal(souringFromStated("Yeast & Lactic Acid Bacteria blend. Saccharomyces"), true);
+  assert.equal(souringFromStated("Belgian Lambic Blend"), true);
+  assert.equal(souringFromStated("Brettanomyces bruxellensis variant"), true);
+  // A blend or culture of brewing yeasts is not souring by that word alone.
+  assert.equal(souringFromStated("Blend of Saccharomyces yeast cultures (non-STA1)"), false);
+  assert.equal(souringFromStated("American Ale Yeast Blend", "Clean and versatile."), false);
+  assert.equal(
+    souringFromStated("American Farmhouse Blend", "A farmhouse strain mixed with Brettanomyces."),
+    null,
+  );
+  assert.equal(souringFromStated("Wild Sacch"), null);
+  // A stated species outranks a pairing mention in the description.
+  assert.equal(souringFromStated("Saccharomyces cerevisiae", "A good choice for sours."), false);
+});
+
+void test("ids drop trademark signs before folding accents", () => {
+  assert.equal(slug("SafBrew™ HA-18"), "safbrew-ha-18");
+  assert.equal(slug("RØKKAR Kölsch®"), "rokkar-kolsch");
 });
