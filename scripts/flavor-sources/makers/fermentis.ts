@@ -14,7 +14,7 @@ const ORIGIN = "https://fermentis.com";
 /** Fermentis product pages: `h1` "SafAle US‑05™", the breadcrumb ("Beer & brewing solutions /
  * …"), and a Description tab whose top-level blocks run: tagline heading, description,
  * "Ingredients: Yeast (Saccharomyces cerevisiae)…", an overview grid, then "… sensory profile"
- * with its paragraph, then technical features, which are never read. */
+ * (or "sensory features") with its paragraph, then technical features, which are never read. */
 function readPage() {
   const description: string[] = [];
   const sensory: string[] = [];
@@ -24,11 +24,13 @@ function readPage() {
     const heading = block.querySelector("h2, h3");
     if (block.classList.contains("section-title-container") && heading) {
       const title = (heading.textContent ?? "").toLowerCase();
-      section = /sensory profile/.test(title)
+      section = /sensory (?:profile|features)/.test(title)
         ? "sensory"
         : block.querySelector("h2")
           ? "description"
           : "other";
+      // The tagline heading ("A great yeast for elegant lagers with floral notes") is maker text.
+      if (section === "description") description.push((heading.textContent ?? "").trim());
       continue;
     }
     if (block.tagName !== "P") continue;

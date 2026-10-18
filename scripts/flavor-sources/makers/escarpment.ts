@@ -15,7 +15,7 @@ import {
 
 const ORIGIN = "https://escarpmentlabs.com";
 
-/** Escarpment strain pages hold labelled `.KeyItem` facts; "Flavour Description" is the text. */
+/** Escarpment strain pages hold labelled `.KeyItem` facts; the flavour tags are the text. */
 function readFacts(): Record<string, string> {
   const facts: Record<string, string> = {};
   for (const item of document.querySelectorAll(".KeyItem")) {
@@ -64,7 +64,11 @@ export const maker: MakerSource = {
           manufacturerAliases: ["Escarpment", "Escarpment Laboratories"],
           codes: lsb ? [lsb.toUpperCase()] : [],
           aliases: titleAliases(name, [], ["Yeast"]),
-          flavorText: [facts["flavour description"] ?? "", description].join("\n"),
+          // Homebrew pages label the tags "Flavour Description", professional pages "Flavour Profile".
+          flavorText: [
+            facts["flavour description"] ?? facts["flavour profile"] ?? "",
+            description,
+          ].join("\n"),
           source: makerSource(source),
           // Tags are use facets ("Sour" marks strains suited to sour beers), not organisms.
           souring: souringFromStated(

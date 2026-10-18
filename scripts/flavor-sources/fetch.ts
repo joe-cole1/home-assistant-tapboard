@@ -122,11 +122,14 @@ async function politeGet(url: string, retried = false): Promise<Response> {
 export async function fetchSource(url: string, refresh = false): Promise<CachedSource> {
   const path = cachePath(url);
   if (!refresh) {
+    let cached: CachedSource | { missing: true } | null = null;
     try {
-      return JSON.parse(await readFile(path, "utf8")) as CachedSource;
+      cached = JSON.parse(await readFile(path, "utf8")) as CachedSource | { missing: true };
     } catch {
       // Not cached yet.
     }
+    if (cached && "missing" in cached) throw new Error(`${url} answered 404`);
+    if (cached) return cached;
   }
   const { origin, pathname, search } = new URL(url);
   if (!robotsByOrigin.has(origin)) {
@@ -147,6 +150,12 @@ export async function fetchSource(url: string, refresh = false): Promise<CachedS
     /pdf|octet-stream/i.test(contentType) || bytes.subarray(0, 5).toString() === "%PDF-";
   if (isBotChallenge(response.status, response.headers, binary ? "" : bytes.toString("utf8")))
     throw new BotChallengeError(url);
+  // A missing page is remembered like any other answer, so a withdrawn product is not
+  // re-requested on every run; `refresh` checks again.
+  if (response.status === 404) {
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, JSON.stringify({ missing: true }));
+  }
   if (!response.ok) throw new Error(`${url} answered ${response.status}`);
   const source: CachedSource = {
     url,

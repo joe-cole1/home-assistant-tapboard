@@ -55,7 +55,8 @@ export const maker: MakerSource = {
         const codes = product.variants
           .map((variant) => variant.sku ?? "")
           .filter((sku) => /^OYL-\d+/i.test(sku))
-          .map((sku) => /^OYL-\d+/i.exec(sku)![0].toUpperCase());
+          // Keep format suffixes: dried Lutra is OYL-071DRY, liquid Lutra OYL-071.
+          .map((sku) => /^OYL-\d+[A-Z]*/i.exec(sku)![0].toUpperCase());
         const description = await fragmentText(product.body_html ?? "");
         products.push({
           id: `omega-${product.handle}`,

@@ -53,6 +53,31 @@ void test("negated, conditional and pairing mentions are reported, never kept", 
     words("Fruity, slight banana and clove\nA strain that can be used widely.", "yeasts"),
     ["fruity", "banana", "clove"],
   );
+  // A condition covers its own part of the sentence and what follows, never what precedes it.
+  assert.deepEqual(
+    words("Provides fruity flavors, specially at higher densities and temperatures.", "yeasts"),
+    ["fruity"],
+  );
+  assert.deepEqual(reasons("May produce banana, clove and bubblegum.", "yeasts"), [
+    "banana:conditional",
+    "clove:conditional",
+    "bubblegum:conditional",
+  ]);
+  // A comparison's own phrase describes the other product.
+  assert.deepEqual(
+    words(
+      "Unlike WLP840, which tends toward a light apple fruitiness, it ferments neutrally. Compared to similar products, it displays enhanced citrus.",
+      "yeasts",
+    ),
+    ["citrus"],
+  );
+  assert.deepEqual(reasons("Saison like phenols at the high end of the range.", "yeasts"), [
+    "phenolic:conditional",
+  ]);
+  assert.deepEqual(words("Offers less guava and more melon and mango.", "yeasts"), [
+    "melon",
+    "mango",
+  ]);
   assert.deepEqual(reasons("Free of phenols; fruity at warmer temperatures.", "yeasts"), [
     "phenolic:negated",
     "fruity:conditional",

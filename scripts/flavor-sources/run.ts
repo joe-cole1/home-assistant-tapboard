@@ -60,6 +60,17 @@ async function writeRole(role: string): Promise<void> {
     if (output.role === role) entries.push(...output.entries);
   }
   entries.sort((a, b) => a.id.localeCompare(b.id));
+  // Within one maker, an alias or code naming two entries would make both unmatchable.
+  const owners = new Map<string, string>();
+  const clashes: string[] = [];
+  for (const entry of entries)
+    for (const key of [...entry.aliases, ...entry.codes.map((code) => `code ${code}`)]) {
+      const owner = `${entry.manufacturer ?? ""}|${key.trim().toLowerCase()}`;
+      const other = owners.get(owner);
+      if (other && other !== entry.id) clashes.push(`${other} and ${entry.id} share ${key}`);
+      owners.set(owner, entry.id);
+    }
+  if (clashes.length) throw new Error(`Ambiguous identities:\n${clashes.join("\n")}`);
   const target = `src/features/story/flavor/sourced/${role}.json`;
   await writeFile(target, await format(JSON.stringify(entries), { parser: "json" }));
   process.stdout.write(`${target}: ${entries.length} entries\n`);

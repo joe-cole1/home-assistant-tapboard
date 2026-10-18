@@ -18,9 +18,10 @@ interface Page {
   readonly facts: Record<string, string>;
 }
 
-/** White Labs strain pages: `h1` "WLP001 California Ale Yeast®", the "Description" block up to
- * its "Part No:" (the strain code; the "Suggested Beverages & Styles" list follows and is never read),
- * and `h2.table-title` facts such as STA1. */
+/** White Labs strain pages: `h1` "WLP001 California Ale Yeast®", and a `.dynamic-content` block
+ * whose text runs: the description (often a bare text node before any paragraph), then "Part
+ * No:" (the strain code), part details, the "Suggested Beverages & Styles" list and food
+ * pairings, which are never read. `h2.table-title` facts such as STA1 sit elsewhere. */
 function readPage(): Page {
   const facts: Record<string, string> = {};
   for (const heading of document.querySelectorAll("h2.table-title")) {
@@ -32,22 +33,25 @@ function readPage(): Page {
         .toLowerCase()
     ] = (value?.textContent ?? "").trim();
   }
-  const block = document.querySelector(".dynamic-content");
+  const block = document.querySelector<HTMLElement>(".dynamic-content");
+  // Lines that are only a link ("Pitch Rate Calculator") are navigation, not description.
+  const links = new Set(
+    [...(block?.querySelectorAll("a") ?? [])].map((link) => (link.textContent ?? "").trim()),
+  );
   const parts: string[] = [];
-  for (const element of block?.querySelectorAll("p, li") ?? []) {
-    const text = ((element as HTMLElement).innerText ?? "").trim();
+  for (const raw of (block?.innerText ?? "").split("\n")) {
+    const text = raw.trim();
     if (
       /^(part no|part name|sta1 qc|type:|suggested|pairing recommendations|food pairing)/i.test(
         text,
       )
     )
       break;
-    if (element.closest("a") || element.querySelector("a")) continue;
-    if (text) parts.push(text);
+    if (text && text !== "Description" && !links.has(text)) parts.push(text);
   }
   return {
     title: (document.querySelector("h1")?.textContent ?? "").trim(),
-    partNo: /part no:\s*(\S+)/i.exec((block as HTMLElement | null)?.innerText ?? "")?.[1] ?? "",
+    partNo: /part no:\s*(\S+)/i.exec(block?.innerText ?? "")?.[1] ?? "",
     description: parts.join("\n"),
     facts,
   };
@@ -80,7 +84,9 @@ export const maker: MakerSource = {
           manufacturer: "White Labs",
           manufacturerAliases: ["WhiteLabs", "White Labs Inc."],
           codes: [wlp],
-          aliases: titleAliases(name, [], ["Yeast", "Yeast Blend"]),
+          // Only "Yeast" is dropped: "English Ale Yeast Blend" (WLP085) must not become WLP002's
+          // "English Ale".
+          aliases: titleAliases(name, [], ["Yeast"]),
           flavorText: page.description,
           source: makerSource(source),
           souring: souringFromStated(name, page.description),
