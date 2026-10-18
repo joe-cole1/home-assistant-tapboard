@@ -3,18 +3,20 @@ import { join } from "node:path";
 import { format } from "prettier";
 import type { SourcedEntry } from "../../src/features/story/flavor/sourced.ts";
 import { buildEntry } from "./build.ts";
-import { CACHE_DIR } from "./fetch.ts";
+import { CACHE_DIR, refreshPages } from "./fetch.ts";
 import { closeDom, type MakerSource } from "./maker.ts";
 
 // Usage:
-//   NODE_USE_ENV_PROXY=1 node scripts/flavor-sources/run.ts white-labs [--limit 5]
+//   NODE_USE_ENV_PROXY=1 node scripts/flavor-sources/run.ts white-labs [--limit 5] [--refresh]
 //   node scripts/flavor-sources/run.ts --write yeasts
 // Reading writes data/flavor-sources/out/<maker>.json (entries, review, gaps); --write merges
-// every reviewed maker of a role into src/features/story/flavor/sourced/<role>.json.
+// every reviewed maker of a role into src/features/story/flavor/sourced/<role>.json. Pages are
+// read from the cache under data/flavor-sources/; --refresh re-reads them to pick up new products.
 const OUT_DIR = join(CACHE_DIR, "out");
 const args = process.argv.slice(2);
 const limitAt = args.indexOf("--limit");
 const limit = limitAt === -1 ? undefined : Number(args[limitAt + 1]);
+if (args.includes("--refresh")) refreshPages();
 
 interface MakerOutput {
   readonly maker: string;

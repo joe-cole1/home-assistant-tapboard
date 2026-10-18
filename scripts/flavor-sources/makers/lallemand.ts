@@ -91,7 +91,7 @@ export const maker: MakerSource = {
           id: `lallemand-${slug(title.replace(/^(?:lalbrew|wildbrew)\s*[®™]?\s*/i, ""))}`,
           role: "yeasts",
           manufacturer: "Lallemand",
-          manufacturerAliases: ["Lallemand Brewing", "LalBrew", "Danstar"],
+          manufacturerAliases: ["Lallemand Brewing", "Lallemand (LalBrew)", "LalBrew", "Danstar"],
           codes: [],
           aliases: titleAliases(title, ["LalBrew", "WildBrew"], ["Yeast"]),
           flavorText: [page.facts["aroma"] ?? "", page.description].join("\n"),

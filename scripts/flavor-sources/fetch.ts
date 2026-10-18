@@ -117,11 +117,18 @@ async function politeGet(url: string, retried = false): Promise<Response> {
   return response;
 }
 
+let refreshing = false;
+const readThisRun = new Set<string>();
+/** Makes every page re-read once in this run, so new products and changed text are picked up. */
+export function refreshPages(): void {
+  refreshing = true;
+}
+
 /** Fetches a maker page once, honouring robots.txt and a per-host interval, and returns the
  * cached copy on later calls. `refresh` re-reads the page to detect maker changes. */
 export async function fetchSource(url: string, refresh = false): Promise<CachedSource> {
   const path = cachePath(url);
-  if (!refresh) {
+  if (!refresh && (!refreshing || readThisRun.has(url))) {
     let cached: CachedSource | { missing: true } | null = null;
     try {
       cached = JSON.parse(await readFile(path, "utf8")) as CachedSource | { missing: true };
@@ -143,6 +150,7 @@ export async function fetchSource(url: string, refresh = false): Promise<CachedS
   }
   if (!robotsAllows(robotsByOrigin.get(origin)!, pathname + search))
     throw new Error(`robots.txt disallows ${url}`);
+  readThisRun.add(url);
   const response = await politeGet(url);
   const bytes = Buffer.from(await response.arrayBuffer());
   const contentType = response.headers.get("content-type") ?? "";
