@@ -187,4 +187,12 @@ export const IGNORED_PHRASES: readonly string[] = Object.freeze([
   "orange pekoe",
   "orange grove",
   "orange groves",
+  "kettle sour",
+  "kettle sours",
+  "sour program",
+  "sour brown",
+  "sour red",
+  "milk the funk",
+  "fruit leather",
+  "dried fruit leather",
 ]);

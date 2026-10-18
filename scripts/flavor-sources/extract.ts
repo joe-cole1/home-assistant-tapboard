@@ -29,11 +29,11 @@ const CONDITIONAL =
 const PAIRING =
   /\b(?:for|ideal for|suited (?:to|for)|recommended for|great for|perfect for|used in|use in|pairs?(?: well)? with|complement\w*|accentuat\w*|enhanc\w*|matches up|showcas\w*|alongside|blends?(?: well)? with|works well with|similar to|substitute\w*|replacement for)\b/g;
 const PAIRING_REACH_WORDS = 4;
-// A flavour credited to another ingredient right after it ("a hint of spice from hops", "grape
-// derived products"), or naming another ingredient ("tropical hops" in yeast text; a hop maker's
-// "fruity hop" is the hop itself).
+// A flavour credited to another ingredient or material right after it ("a hint of spice from
+// hops", "grape derived products", "tolerates acidic wort"), or naming another ingredient
+// ("tropical hops" in yeast text; a hop maker's "fruity hop" is the hop itself).
 const FROM_OTHER_INGREDIENT =
-  /^ (?:(?:(?:that )?comes? )?from (?:the )?(?:hops?|malts?|grains?|grist|adjuncts?)|based|derived)\b/;
+  /^ (?:(?:(?:that )?comes? )?from (?:the )?(?:hops?|malts?|grains?|grist|adjuncts?)|based|derived|worts?|water)\b/;
 const OTHER_NOUN: Readonly<Record<BrewingIngredientRole, RegExp>> = {
   fermentables: /^ hops?\b/,
   hops: /^ malts?\b/,

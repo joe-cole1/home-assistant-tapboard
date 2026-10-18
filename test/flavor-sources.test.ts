@@ -89,6 +89,14 @@ void test("negated, conditional and pairing mentions are reported, never kept", 
     "phenolic:negated",
   ]);
   assert.deepEqual(words("Citrus aromas this side of an orange grove.", "yeasts"), ["citrus"]);
+  // Names of processes, styles, communities and confections are not flavours.
+  assert.deepEqual(
+    words(
+      "Tolerates acidic wort; no need to kettle sour. Isolated by Milk the Funk members; dried fruit leather.",
+      "yeasts",
+    ),
+    [],
+  );
   // Dried and dark fruit are yeast esters too, unlike caramel or bread.
   assert.deepEqual(words("Caramel, plum and dark fruit esters.", "yeasts"), ["plum", "dark fruit"]);
 });

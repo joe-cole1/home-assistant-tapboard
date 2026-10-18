@@ -11,6 +11,20 @@ import {
 
 const ORIGIN = "https://www.lallemandbrewing.com";
 const PRODUCTS = `${ORIGIN}/en/global/products/`;
+// A strain withdrawn from the global site can still be listed regionally.
+const REGIONS = ["global", "united-states", "canada", "united-kingdom", "continental-europe"];
+
+/** The first regional page of a product that exists. */
+async function productPage(name: string) {
+  for (const region of REGIONS) {
+    try {
+      return await fetchSource(`${ORIGIN}/en/${region}/products/${name}/`);
+    } catch (error) {
+      if (!(error instanceof Error && / answered 404$/.test(error.message))) throw error;
+    }
+  }
+  throw new Error(`${name} answered 404 in every region`);
+}
 
 /** Lallemand product pages: `h1` "LalBrew Nottingham™", the description block right after the
  * heading, and the "Quick facts" table ("Strain", "Aroma", "Beer styles", …). Beer styles are
@@ -68,7 +82,7 @@ export const maker: MakerSource = {
     for (const name of candidates) {
       const url = `${PRODUCTS}${name}/`;
       try {
-        const source = await fetchSource(url);
+        const source = await productPage(name);
         const page = await inDom(source.body, readPage);
         const strain = page.facts["strain"] ?? "";
         if (!strain) continue;
