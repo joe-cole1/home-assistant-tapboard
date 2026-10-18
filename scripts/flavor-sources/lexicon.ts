@@ -1,8 +1,9 @@
 /** A maker phrase and the Tapboard word it records. Only spelling, plural and part-of-speech
  * variants of one flavour share a word; a different flavour is never substituted, so a maker's
  * "mandarin" stays "mandarin" rather than becoming "tangerine". Phrases are lowercase with
- * hyphens written as spaces. `maltOnly` words describe grain or sugar; yeast and hop text that
- * mentions them is describing the malts they pair with, not themselves. */
+ * hyphens written as spaces. `maltOnly` words describe grain or sugar; yeast text that mentions
+ * them is describing the malts the yeast pairs with, not itself. Hop sources do use some of
+ * them for a hop's own aroma (BarthHaas's "cream caramel"). */
 export interface LexiconTerm {
   readonly word: string;
   readonly phrases: readonly string[];
@@ -56,7 +57,10 @@ export const LEXICON: readonly LexiconTerm[] = Object.freeze([
   term("cherry", "cherries"),
   term("plum", "plums"),
   // Melon, berry, orchard and vine fruit
-  term("melon", "melons", "honeydew", "cantaloupe"),
+  term("melon", "melons", "honeydew", "cantaloupe", "rockmelon", "rockmelons"),
+  term("quince", "quinces"),
+  term("kiwi", "kiwis", "kiwifruit", "kiwi fruit"),
+  term("red fruit", "red fruits"),
   term("watermelon", "watermelons"),
   term("berry", "berries", "red berries", "red berry", "mixed berries", "berry fruit"),
   term("boysenberry", "boysenberries"),
@@ -74,6 +78,10 @@ export const LEXICON: readonly LexiconTerm[] = Object.freeze([
     "black currant",
     "blackcurrant",
     "black currants",
+    "red currant",
+    "red currants",
+    "redcurrant",
+    "redcurrants",
     "blackcurrants",
     "cassis",
   ),
@@ -90,6 +98,7 @@ export const LEXICON: readonly LexiconTerm[] = Object.freeze([
     "flowers",
     "flower",
     "floral notes",
+    "florals",
     "blossom",
     "blossoms",
     "orange blossom",
@@ -99,6 +108,7 @@ export const LEXICON: readonly LexiconTerm[] = Object.freeze([
     "elderflowers",
   ),
   term("rose", "roses", "rose petal", "rose petals"),
+  term("chamomile", "camomile"),
   term("lavender"),
   term("geranium", "geraniums"),
   term("herbal", "herbs", "herb", "herbaceous", "herby"),
@@ -106,6 +116,29 @@ export const LEXICON: readonly LexiconTerm[] = Object.freeze([
   term("jasmine"),
   term("lilac", "lilacs"),
   term("sage"),
+  term("thyme"),
+  term("tarragon"),
+  term("marjoram"),
+  term("fennel"),
+  term("lovage"),
+  term("lemon balm"),
+  term("woodruff"),
+  term("nettle", "nettles"),
+  term("menthol"),
+  term("vegetal", "vegetables", "vegetable"),
+  term("cucumber", "cucumbers"),
+  term("tomato", "tomato leaf", "tomato leaves"),
+  term("celery", "celeriac"),
+  term("leek", "leeks"),
+  term("artichoke", "artichokes"),
+  term("curry"),
+  term("ginger"),
+  term("gingerbread"),
+  term("tonka", "tonka bean", "tonka beans"),
+  term("myrrh"),
+  term("incense"),
+  term("cognac"),
+  term("candy", "candies"),
   term("tea", "black tea", "green tea", "earl grey"),
   term("hay"),
   term("grassy", "grass", "fresh cut grass", "cut grass", "freshly cut grass"),
@@ -203,6 +236,16 @@ export const IGNORED_PHRASES: readonly string[] = Object.freeze([
   "spent grain",
   "orange pekoe",
   "gin berries",
+  // Hop names that contain a flavour word, and hop chemistry.
+  "huell melon",
+  "hull melon",
+  "tsingtao flower",
+  "tsingdao flower",
+  "lemon drop",
+  "soft resins",
+  "soft resin",
+  "hard resins",
+  "hard resin",
   "cream ale",
   "cream ales",
   "orange grove",

@@ -15,8 +15,9 @@ interface Card {
 /** The hops listing (/products/hops/) has one `div.hop` card per variety: `h3.product-card__title`
  * with the name and, for bred varieties, the cultivar code ("Citra®" and "HBC 394 c.v."), the
  * dominant Haas Aroma Standards categories as icon `alt` texts, "Region: USA", and buttons
- * "Download Specs" (the variety's data sheet PDF) and, for some, "Learn More". The featured cards
- * above the listing repeat listed varieties. */
+ * "Download Specs" (the variety's data sheet PDF) and, for some, "Learn More": a variety page under
+ * /products/hops/, or a marketing page (/sabro/, /el-dorado/, /australian-hops/, …) in its own
+ * layout, which is not read. The featured cards above the listing repeat listed varieties. */
 function readListing(): Card[] {
   return [...document.querySelectorAll<HTMLElement>("div.hop")].map((card) => ({
     title: card.querySelector<HTMLElement>(".product-card__title")?.innerText.trim() ?? "",
@@ -67,7 +68,7 @@ function miniSheet(text: string): string[] | null {
       .slice(0, end)
       .split("\n")
       // Capitalised origin and name lines, and a cultivar code on its own ("H B C 394 c .v.").
-      .filter((line) => /[a-z]/.test(line) && !CODE.test(line))
+      .filter((line) => !line.trim() || (/[a-z]/.test(line) && !CODE.test(line)))
       .join("\n"),
   );
   return read.length ? [read.at(-1)!, ...read.slice(0, -1)] : null;
@@ -89,12 +90,18 @@ function hopFranceSheet(text: string): string[] | null {
     .map((line) => line.slice(valueFrom).trim())
     .filter(Boolean)
     .join(" ");
-  const column = lines[start]!.indexOf("TECHNICAL DATA");
+  // The right-hand column starts at its leftmost heading; "TECHNICAL DATA" can sit one further.
+  const column = Math.min(
+    ...lines
+      .map((line) => line.search(/TECHNICAL DATA|R&D ALSACE|AROMA QUALITIES|ALPHA ACIDS/))
+      .filter((at) => at > 0),
+  );
   const left: string[] = [];
   for (const line of lines.slice(start + 1)) {
     const part = line.slice(0, column).trim();
     if (/^BREWING QUALITIES/.test(part)) break;
-    left.push(part);
+    // A line with only right-hand text continues the left paragraph; a blank line ends it.
+    if (part || !line.trim()) left.push(part);
   }
   return [aroma, ...blocks(left.join("\n"))];
 }
@@ -118,6 +125,9 @@ function columnTags(lines: readonly string[], before: number): string[] {
  * Capitalised headings, cultivar codes and the bare variety name are left out. */
 function columnText(lines: readonly string[], name: string): string {
   const columns = new Map<number, { row: number; text: string }[]>();
+  // A paragraph ends at a blank line, not at a line holding only another column's text.
+  const blank = (from: number, to: number) =>
+    lines.slice(from + 1, to).some((line) => line.trim() === "");
   lines.forEach((line, row) => {
     // Words in one column are at most two spaces apart; columns are further apart.
     for (const match of line.matchAll(/\S+(?: {1,2}\S+)*/g)) {
@@ -129,14 +139,19 @@ function columnText(lines: readonly string[], name: string): string {
       columns.set(start, [...(columns.get(start) ?? []), { row, text }]);
     }
   });
-  return [...columns]
-    .sort(([a], [b]) => a - b)
-    .map(([, parts]) =>
-      parts
-        .map(({ row, text }, at) => (at > 0 && row - parts[at - 1]!.row > 1 ? `\n${text}` : text))
-        .join("\n"),
-    )
-    .join("\n\n");
+  return (
+    [...columns]
+      .sort(([a], [b]) => a - b)
+      .map(([, parts]) =>
+        parts
+          .map(({ row, text }, at) =>
+            at > 0 && blank(parts[at - 1]!.row, row) ? `\n${text}` : text,
+          )
+          .join("\n"),
+      )
+      // Text flows from the foot of one column to the head of the next.
+      .join("\n")
+  );
 }
 
 // Section headings at the left margin of the Haas spec sheets; the description precedes them.

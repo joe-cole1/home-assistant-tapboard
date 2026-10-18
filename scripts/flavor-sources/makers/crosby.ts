@@ -68,7 +68,7 @@ interface Described {
   readonly printed: string;
   readonly name: string;
   readonly origin: string | null;
-  /** Breeder codes the title gives ("HBC 394"). */
+  /** Other names: a breeder code in the title ("HBC 394") and earlier names the text gives. */
   readonly codes: readonly string[];
   readonly limitations: readonly string[];
   readonly text: string;
@@ -106,6 +106,22 @@ function parseTitle(title: string) {
   }
   return { printed, name, origin, codes, limitations };
 }
+
+// Other names a description gives for the variety: "Formerly known as Denali", "originally
+// named YQH-1320", "Once designated HRC-003 or W1108-333", "once known as “Experimental Pine
+// Fruit”", "Synonymous with English Goldings". A name is a run of capitalised words or codes
+// ending at punctuation or a lowercase word, so a run-on ("Styrian Golding ‘B’Light floral …")
+// yields nothing.
+const NAME = String.raw`((?:[“‘"']?[A-Z0-9][\w/-]*[”’"']?)(?: [“‘"']?[A-Z0-9][\w/-]*[”’"']?)*)(?=[,.;:)]|\s+[a-z]|$)`;
+const EARLIER_NAME = new RegExp(
+  String.raw`\b(?:(?:[Ff]ormerly|[Pp]reviously|[Oo]riginally|[Oo]nce|[Aa]lso) (?:known? as|named|called|designated)|[Ss]ynonymous with) ${NAME}(?: or ${NAME})?`,
+  "g",
+);
+const earlierNames = (text: string) =>
+  [...text.matchAll(EARLIER_NAME)]
+    .flatMap((match) => [match[1], match[2]])
+    .filter((name): name is string => !!name)
+    .map((name) => name.replace(/[“”‘’"']/g, ""));
 
 // A blend of named varieties ("Crosby Blend", "this unique blend of choice Riwaka™, Moutere™
 // and Motueka™") has no single variety; "a unique blend of citrus, melon …" is a flavour.
@@ -150,10 +166,12 @@ export const maker: MakerSource = {
           gaps.push({ url, reason: "the page has no description or aroma profile" });
           continue;
         }
+        const title = parseTitle(page.title);
         described.push({
           url,
           source,
-          ...parseTitle(page.title),
+          ...title,
+          codes: [...title.codes, ...earlierNames(page.description)],
           text,
           blend: isBlend(page.title, page.description),
         });
@@ -161,25 +179,34 @@ export const maker: MakerSource = {
         gaps.push({ url, reason: error instanceof Error ? error.message : String(error) });
       }
     }
-    // One entry per variety: a current variety page wins over an older product page, an
-    // unprefixed name over an origin-prefixed one, then the listing order. Other origins of the
-    // same variety are noted on the kept entry, and every page's breeder code names it.
-    const byVariety = new Map<string, Described[]>();
+    // One entry per variety, where pages share a name or another name ("Vista (also known as
+    // USDA Elite Line 074)" and "USDA 074 (also known as USDA Elite Line 074)"): a current
+    // variety page wins over an older product page, an unprefixed name over an origin-prefixed
+    // one, then the listing order. Other origins are noted on the kept entry, and every page's
+    // names name it.
+    const groups: { names: Set<string>; entries: Described[] }[] = [];
     for (const entry of described.filter((entry) => !entry.blend)) {
-      const key = slug(hopName(entry.name));
-      byVariety.set(key, [...(byVariety.get(key) ?? []), entry]);
+      const names = new Set([entry.name, ...entry.codes].map((name) => slug(hopName(name))));
+      const matching = groups.filter((group) => [...names].some((name) => group.names.has(name)));
+      const merged = { names, entries: [entry] };
+      for (const group of matching) {
+        group.names.forEach((name) => merged.names.add(name));
+        merged.entries.unshift(...group.entries);
+        groups.splice(groups.indexOf(group), 1);
+      }
+      groups.push(merged);
     }
     const kind = (entry: Described) =>
       (entry.url.includes("/products/") ? 2 : 0) + (entry.origin ? 1 : 0);
     const result: ParsedProduct[] = [];
-    for (const group of byVariety.values()) {
+    for (const { entries: group } of groups) {
       const [kept, ...others] = [...group].sort((a, b) => kind(a) - kind(b));
       const otherOrigins = others
         .filter((other) => other.origin && other.origin !== kept!.origin)
         .map((other) => `Also described with origin ${other.origin} (${hopName(other.printed)}).`);
       result.push(
         hopVariety(kept!.source, kept!.name, kept!.text, {
-          aliases: [kept!.printed, ...group.flatMap((entry) => entry.codes)],
+          aliases: [kept!.printed, ...group.flatMap((entry) => [entry.name, ...entry.codes])],
           limitations: [...new Set([...kept!.limitations, ...otherOrigins])],
         }),
       );

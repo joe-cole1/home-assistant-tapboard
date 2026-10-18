@@ -38,15 +38,21 @@ const iconLabel = (alt: string): string => {
   return (file ? file[1]!.replace(/-/g, " ") : alt.replace(/ for .*$/, "")).trim();
 };
 
-// Earlier names the description gives: "Formerly known as Denali", "Previously known as
-// USDA-074", "originally named YQH-1320", "Also known as OT48", "Synonymous with English
-// Goldings". A name is a run of capitalised words or codes ending at punctuation or a lowercase
-// word, so a run-on ("Styrian Golding ‘B’Light floral …") yields nothing.
-const NAME = String.raw`((?:[‘'"]?[A-Z0-9][\w/-]*[’'"]?)(?: [‘'"]?[A-Z0-9][\w/-]*[’'"]?)*)(?=[,.;:)]|\s+[a-z]|$)`;
+// Other names a description gives for the variety: "Formerly known as Denali", "originally
+// named YQH-1320", "Once designated HRC-003 or W1108-333", "once known as “Experimental Pine
+// Fruit”", "Synonymous with English Goldings". A name is a run of capitalised words or codes
+// ending at punctuation or a lowercase word, so a run-on ("Styrian Golding ‘B’Light floral …")
+// yields nothing.
+const NAME = String.raw`((?:[“‘"']?[A-Z0-9][\w/-]*[”’"']?)(?: [“‘"']?[A-Z0-9][\w/-]*[”’"']?)*)(?=[,.;:)]|\s+[a-z]|$)`;
 const EARLIER_NAME = new RegExp(
-  String.raw`\b(?:(?:[Ff]ormerly|[Pp]reviously|[Oo]riginally|[Aa]lso) (?:known?|named|called)(?: as)?|[Ss]ynonymous with) ${NAME}`,
+  String.raw`\b(?:(?:[Ff]ormerly|[Pp]reviously|[Oo]riginally|[Oo]nce|[Aa]lso) (?:known? as|named|called|designated)|[Ss]ynonymous with) ${NAME}(?: or ${NAME})?`,
   "g",
 );
+const earlierNames = (text: string) =>
+  [...text.matchAll(EARLIER_NAME)]
+    .flatMap((match) => [match[1], match[2]])
+    .filter((name): name is string => !!name)
+    .map((name) => name.replace(/[“”‘’"']/g, ""));
 
 // An origin code the title prints before or after the name ("NZ Pacific Jade", "Cascade UK").
 const ORIGINS: Readonly<Record<string, string>> = {
@@ -98,7 +104,7 @@ export const maker: MakerSource = {
           printed,
           ...titleOrigin(printed),
           text,
-          aliases: [...page.description.matchAll(EARLIER_NAME)].map((match) => match[1]!),
+          aliases: earlierNames(page.description),
         });
       } catch (error) {
         gaps.push({ url, reason: error instanceof Error ? error.message : String(error) });

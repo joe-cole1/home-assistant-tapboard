@@ -29,7 +29,7 @@ export function buildEntry(product: ParsedProduct): {
   entry: SourcedEntry;
   extraction: Extraction;
 } {
-  const extraction = extractDescriptors(product.flavorText, product.role);
+  const extraction = extractDescriptors(product.flavorText, product.role, product.aliases);
   return {
     extraction,
     entry: {

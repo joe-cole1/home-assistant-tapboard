@@ -1,6 +1,6 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { format } from "prettier";
+import { format, resolveConfig } from "prettier";
 import type { SourcedEntry } from "../../src/features/story/flavor/sourced.ts";
 import { buildEntry } from "./build.ts";
 import { CACHE_DIR, refreshPages } from "./fetch.ts";
@@ -81,7 +81,9 @@ async function writeRole(role: string): Promise<void> {
     }
   if (clashes.length) throw new Error(`Ambiguous identities:\n${clashes.join("\n")}`);
   const target = `src/features/story/flavor/sourced/${role}.json`;
-  await writeFile(target, await format(JSON.stringify(entries), { parser: "json" }));
+  // Formatted with the repository's own Prettier settings, so a rewrite only shows data changes.
+  const options = (await resolveConfig(target)) ?? {};
+  await writeFile(target, await format(JSON.stringify(entries), { ...options, parser: "json" }));
   process.stdout.write(`${target}: ${entries.length} entries\n`);
 }
 

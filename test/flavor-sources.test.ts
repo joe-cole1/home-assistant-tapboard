@@ -146,20 +146,39 @@ void test("negated, conditional and pairing mentions are reported, never kept", 
     words("Melon, citrus-lime, apple blossom and green pepper; juniper and gin berries.", "hops"),
     ["melon", "citrus", "lime", "floral", "green pepper", "juniper"],
   );
+  // A product's own name and other hop names never yield words; hop chemistry is not aroma.
+  assert.deepEqual(
+    extractDescriptors("Tsingtao Flower: melon, tobacco.", "hops", ["Tsingtao Flower"]).words.map(
+      (item) => item.word,
+    ),
+    ["melon", "tobacco"],
+  );
+  assert.deepEqual(words("Daughter of Cascade and Huell Melon; rich in soft resins.", "hops"), []);
+  // A low dose is not a negation, and hop sources may name caramel as the hop's own aroma.
+  assert.deepEqual(words("A low dose on the hot side leads to soft florals and spice.", "hops"), [
+    "floral",
+    "spicy",
+  ]);
+  assert.deepEqual(words("Cream caramel, quince and redcurrant.", "hops"), [
+    "cream",
+    "caramel",
+    "quince",
+    "currant",
+  ]);
   // Dried and dark fruit are yeast esters too, unlike caramel or bread.
   assert.deepEqual(words("Caramel, plum and dark fruit esters.", "yeasts"), ["plum", "dark fruit"]);
 });
 
 void test("ignored phrases consume look-alike words and unknown words are reported", () => {
   const history = extractDescriptors(
-    "Its popularity rose to new heights; gooseberry and kiwi.",
+    "Its popularity rose to new heights; gooseberry and sarsaparilla.",
     "hops",
   );
   assert.deepEqual(
     history.words.map((item) => item.word),
     ["gooseberry"],
   );
-  assert.ok(history.unmatched.includes("kiwi"));
+  assert.ok(history.unmatched.includes("sarsaparilla"));
   assert.deepEqual(words("Use with grains of paradise.", "miscs"), []);
 });
 

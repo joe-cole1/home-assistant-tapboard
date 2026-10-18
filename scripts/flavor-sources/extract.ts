@@ -19,7 +19,7 @@ export interface Extraction {
 // A negator reaches forward to the next comma in its clause: "low fruitiness and esters" negates
 // both, while "no diacetyl, fruity" keeps "fruity".
 const NEGATOR =
-  /\b(?:no|not|non|low|lower|minimal|minimum|without|free of|clear of|void of|devoid of|none of|little of|absence of|absent|lacks?|lacking|less|reduced|reduces?|suppress\w*|avoid\w*|never|nor|zero)\b/g;
+  /\b(?:no|not|non|low(?:er)?(?! (?:doses?|dosage|dosing|rates?|temperatures?|gravit(?:y|ies)|hopping))|minimal|minimum|without|free of|clear of|void of|devoid of|none of|little of|absence of|absent|lacks?|lacking|less|reduced|reduces?|suppress\w*|avoid\w*|never|nor|zero)\b/g;
 // Conditional and temperature-dependent statements describe what can happen, not what the
 // product gives. A condition covers its own comma-separated part of the clause and everything
 // after it, so "fruity, especially at higher temperatures" keeps "fruity" while "at warmer
@@ -78,13 +78,24 @@ const PHRASES = new RegExp(
 );
 
 /** Deterministic flavour words from a maker's own text. Only lexicon phrases are recorded, in
- * the maker's order; negated, conditional and pairing mentions are reported, never kept. */
-export function extractDescriptors(text: string, role: BrewingIngredientRole): Extraction {
+ * the maker's order; negated, conditional and pairing mentions are reported, never kept. The
+ * product's own names never yield a word ("Tsingtao Flower" is not floral). */
+export function extractDescriptors(
+  text: string,
+  role: BrewingIngredientRole,
+  ownNames: readonly string[] = [],
+): Extraction {
   const words: ExtractedWord[] = [];
   const excluded: ExcludedWord[] = [];
   const unmatched = new Set<string>();
   const seen = new Set<string>();
-  for (const clause of normalise(text).split(/[.;!?:\n]+|\b(?:but|while|whereas|however)\b/)) {
+  let normalised = normalise(text);
+  for (const name of ownNames
+    .map((own) => normalise(own).trim())
+    .filter((own) => /[a-z]{3}/.test(own))
+    .sort((a, b) => b.length - a.length))
+    normalised = normalised.replace(new RegExp(`\\b${escape(name)}\\b`, "g"), " ");
+  for (const clause of normalised.split(/[.;!?:\n]+|\b(?:but|while|whereas|however)\b/)) {
     const condition = CONDITIONAL.exec(clause);
     const conditionalFrom = condition ? clause.lastIndexOf(",", condition.index) + 1 : Infinity;
     const pairings = [...clause.matchAll(PAIRING)].map((match) => match.index + match[0].length);
@@ -108,7 +119,7 @@ export function extractDescriptors(text: string, role: BrewingIngredientRole): E
       const evidence = match[0];
       const negatedBy = negators.findLast((at) => at < match.index);
       const reason: ExcludedWord["reason"] | null =
-        (term.maltOnly && (role === "yeasts" || role === "hops")) ||
+        (term.maltOnly && role === "yeasts") ||
         FROM_OTHER_INGREDIENT.test(clause.slice(match.index + match[0].length)) ||
         OTHER_NOUN[role].test(clause.slice(match.index + match[0].length)) ||
         comparisons.some(({ from, to }) => match.index > from && match.index < to)
