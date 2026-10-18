@@ -1,6 +1,6 @@
 {
   "format": "tapboard-flavor-corpus-report-1",
-  "modelVersion": "recipe-flavor-2",
+  "modelVersion": "recipe-flavor-3",
   "catalogVersion": "tapboard-flavor-catalog-3",
   "qualification": "Offline normalization and behavior acceptance; no sensory ground-truth labels or scientific validation.",
   "counts": { "batches": 61, "savedRecipes": 46, "total": 107 },
@@ -87,13 +87,13 @@
       }
     },
     "tartness": {
-      "available": 99,
-      "unavailable": 8,
-      "explicitZero": 99,
+      "available": 96,
+      "unavailable": 11,
+      "explicitZero": 96,
       "saturatedFive": 0,
-      "source": { "recipe_prediction": 99, "unavailable": 8 },
-      "support": { "supported": 99, "unavailable": 8 },
-      "bands": { "None expected": 99, "Unknown": 8 }
+      "source": { "recipe_prediction": 96, "unavailable": 11 },
+      "support": { "supported": 96, "unavailable": 11 },
+      "bands": { "None expected": 96, "Unknown": 11 }
     },
     "alcohol": {
       "available": 107,
@@ -363,11 +363,11 @@
           "reasons": ["complete_grist_no_roasted_contributors"]
         },
         "tartness": {
-          "value": 0,
-          "band": "None expected",
-          "source": "recipe_prediction",
-          "support": "supported",
-          "reasons": ["identified_nonsouring_yeast_and_no_souring_evidence"]
+          "value": null,
+          "band": "Unknown",
+          "source": "unavailable",
+          "support": "unavailable",
+          "reasons": ["yeast_maker_describes_acidity"]
         }
       }
     },
@@ -930,7 +930,7 @@
       "caseId": "B001",
       "kind": "batch",
       "snapshotBytes": 13825,
-      "fingerprint": "f23eb71cb94c7f38e01ea32506ebd172fde646bc49806769befedccc0efc61c7",
+      "fingerprint": "6789e90d972f0b10a7a03d15e4352daff3906fc336c8f0f9a2f55a593e476454",
       "selectedScalars": {
         "og": {
           "value": 1.064,
@@ -1122,7 +1122,7 @@
       "caseId": "B002",
       "kind": "batch",
       "snapshotBytes": 13075,
-      "fingerprint": "784afd8c2da62655bfd12be1924e524233e22182581f7d15c1a1534fd920e477",
+      "fingerprint": "3b78f5310e24b50ce3ffa9ca0fa67af903ed0775508c45dbd1a91fcdb3831deb",
       "selectedScalars": {
         "og": {
           "value": 1.067,
@@ -1327,7 +1327,7 @@
       "caseId": "B003",
       "kind": "batch",
       "snapshotBytes": 15247,
-      "fingerprint": "d1b2281a663e7df8a5984941b87ae5904e1a48be20a5513ff2b613c53eb1ed5b",
+      "fingerprint": "61b9afe65e8c93bf59b8c6cc4bc6ce4e7062fc2812809c48bf7d6cf4e956ee21",
       "selectedScalars": {
         "og": {
           "value": 1.056,
@@ -1521,7 +1521,7 @@
       "caseId": "B004",
       "kind": "batch",
       "snapshotBytes": 15423,
-      "fingerprint": "e93bc340f861ce89fb272b32c7a43263d6505d73f032fe98cc6756d10a58e32c",
+      "fingerprint": "54a57bac9760f6471e5b4e71ee7a26226c50109dc896659809151fd81b7aac37",
       "selectedScalars": {
         "og": {
           "value": 1.088,
@@ -1718,7 +1718,7 @@
       "caseId": "B005",
       "kind": "batch",
       "snapshotBytes": 17332,
-      "fingerprint": "aca2da6b5c61a210346053447958dbe376c138833030d76afe0169fac7f0ca21",
+      "fingerprint": "2703a8a47e33a43c4fefaaed9b57412b4027b86b32b3996a71fbdf2727f115de",
       "selectedScalars": {
         "og": {
           "value": 1.08,
@@ -1918,7 +1918,7 @@
       "caseId": "B007",
       "kind": "batch",
       "snapshotBytes": 12486,
-      "fingerprint": "d917770c1c5c1dee6ffbb663eb4b2d3ecc59ed37a6a47a34c7dad4a70e97f288",
+      "fingerprint": "fe5c3280b99d957a915fe9ceca964309caa337ff171616dc03a95d606605a06b",
       "selectedScalars": {
         "og": {
           "value": 1.067,
@@ -2128,7 +2128,6 @@
         "Proprietary blend composition is not published.",
         "Proprietary blend composition is not published.",
         "Proprietary blend composition is not published.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -2143,7 +2142,7 @@
       "caseId": "B008",
       "kind": "batch",
       "snapshotBytes": 13857,
-      "fingerprint": "817007e698872dbe05bc202d57c1a63f4ba21af1ff3b27d48120c2727c3f884f",
+      "fingerprint": "fe1c8ebf1569c088285bd5f2eaad7a5fb9eb2636f00bd6cce5497243a8414f88",
       "selectedScalars": {
         "og": {
           "value": 1.047,
@@ -2335,7 +2334,7 @@
       "caseId": "B009",
       "kind": "batch",
       "snapshotBytes": 14493,
-      "fingerprint": "9a764d1cce4d9fc1eb4e9486fc47776b2832cb0c3333bbbc476524be7935019f",
+      "fingerprint": "bb305977da40a90c21421fe3696ad920f03ecbfc1eaf904e3b7d78caed975a4a",
       "selectedScalars": {
         "og": {
           "value": 1.055,
@@ -2529,7 +2528,7 @@
       "caseId": "B010",
       "kind": "batch",
       "snapshotBytes": 14580,
-      "fingerprint": "5d5e16740653bb075f080e1da8256fd77dda732fd0ad4d10306282fb513e74f9",
+      "fingerprint": "6b998f96a694ee73f9efe43e3318d6141cee70bdcdb90d0f62a5bda106f48ba8",
       "selectedScalars": {
         "og": {
           "value": 1.075,
@@ -2725,7 +2724,7 @@
       "caseId": "B011",
       "kind": "batch",
       "snapshotBytes": 16686,
-      "fingerprint": "302c7716c1a1b69811c20e577b0d2c01ddf69dbd3876a1bbf330a3103bee7a44",
+      "fingerprint": "20ac82720f767fd69bad2c6dc8e35f98ac7b70210217db8eb717cf9efed934f8",
       "selectedScalars": {
         "og": {
           "value": 1.095,
@@ -2923,7 +2922,7 @@
       "caseId": "B012",
       "kind": "batch",
       "snapshotBytes": 15983,
-      "fingerprint": "ce3a14100a200bf45f2a78b8e6142a022b52cd80337d05b351ea5c0853d4ff2d",
+      "fingerprint": "1f4d4eb6b3eb1863a6357bc87c8d58ed38e3cdb344c10eccb5905efe281f285d",
       "selectedScalars": {
         "og": {
           "value": 1.088,
@@ -3121,7 +3120,7 @@
       "caseId": "B013",
       "kind": "batch",
       "snapshotBytes": 15870,
-      "fingerprint": "72d47ca66d5f5e5e042abe45e64639d0f04e267529a93d47953830eecc185d30",
+      "fingerprint": "c01ccb59b1b68322124b3470506e5370e0317fdd3d3d905c7570de2109c729e4",
       "selectedScalars": {
         "og": {
           "value": 1.061,
@@ -3331,7 +3330,7 @@
       "caseId": "B014",
       "kind": "batch",
       "snapshotBytes": 11204,
-      "fingerprint": "9eb50c868609200c2eae2a3208b1225c2f7ea0ee89247a265af4b0cd633bf576",
+      "fingerprint": "3cfd747b4ca23ad0104745ebe3be8b87dce8f47870c011e2043b83e8bb82dd44",
       "selectedScalars": {
         "og": {
           "value": 1.062,
@@ -3449,11 +3448,11 @@
           "reasons": ["complete_grist_no_roasted_contributors"]
         },
         "tartness": {
-          "value": 0,
-          "band": "None expected",
-          "source": "recipe_prediction",
-          "support": "supported",
-          "reasons": ["identified_nonsouring_yeast_and_no_souring_evidence"]
+          "value": null,
+          "band": "Unknown",
+          "source": "unavailable",
+          "support": "unavailable",
+          "reasons": ["yeast_maker_describes_acidity"]
         },
         "alcohol": {
           "value": 2.2,
@@ -3508,7 +3507,6 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -3520,7 +3518,7 @@
       "caseId": "B015",
       "kind": "batch",
       "snapshotBytes": 13956,
-      "fingerprint": "4e6547a0ba8e72ec740853f8860c221089dcef2989ca78809dfa5f5edadccab8",
+      "fingerprint": "816876f8d09eeb3032516828998fe6b73b06220173205c3244360b0e16f26dab",
       "selectedScalars": {
         "og": {
           "value": 1.053995,
@@ -3725,7 +3723,7 @@
       "caseId": "B016",
       "kind": "batch",
       "snapshotBytes": 13996,
-      "fingerprint": "9182efa6674220eaa2b4798406b9dfbb3217ee41a017143ecf9fc33ef9fbab6e",
+      "fingerprint": "1977dbbbdcf71061db590f39848011b1500a6f73f1a6341064219fe300850e3a",
       "selectedScalars": {
         "og": {
           "value": 1.042,
@@ -3917,7 +3915,7 @@
       "caseId": "B017",
       "kind": "batch",
       "snapshotBytes": 6975,
-      "fingerprint": "e8354da2f3eb2cc4531bd4ec5d035737fbb06a51d25b4cadae296c1ee9ddde0c",
+      "fingerprint": "30957321af5cc0afeceb24150c7afd4f46ee0b10c462d4dc4533ce333dd95869",
       "selectedScalars": {
         "og": {
           "value": 1.049,
@@ -4100,7 +4098,7 @@
       "caseId": "B018",
       "kind": "batch",
       "snapshotBytes": 13123,
-      "fingerprint": "058a35291f80c2fe846f9450ca6776a3e7b18f338511e872b079e763da3ca31b",
+      "fingerprint": "3597922e1b86df927521aa080a1a9ce91cb7616a4121addfbc40145c31af5a08",
       "selectedScalars": {
         "og": {
           "value": 1.065,
@@ -4292,7 +4290,7 @@
       "caseId": "B019",
       "kind": "batch",
       "snapshotBytes": 13240,
-      "fingerprint": "0285f2a1cc52baa7df06710126c8ecaaaaa0320038b86ef04350ccb6899431e8",
+      "fingerprint": "9f71074e416a6db3ca47ac77e640818b73f5d70dd79af7c774527707efde72bb",
       "selectedScalars": {
         "og": {
           "value": 1.05,
@@ -4484,7 +4482,7 @@
       "caseId": "B020",
       "kind": "batch",
       "snapshotBytes": 9227,
-      "fingerprint": "f94511919cef400350ea044b9b1c5c3ee7054505d500b5f7b1140d0a06bc632f",
+      "fingerprint": "e96a30792b28fb6e0a6766c5e94030401ea33da0cdb0442c345e51ef02a84cd0",
       "selectedScalars": {
         "og": {
           "value": 1.05,
@@ -4669,7 +4667,7 @@
       "caseId": "B021",
       "kind": "batch",
       "snapshotBytes": 16624,
-      "fingerprint": "a1cc791bdc0532293c7e4cf893cb0baec77aff461c75cad61f74354639ae2585",
+      "fingerprint": "a2ec4296825c78349ab61c862bc7643c239d9349f8224745ad8eee23c094411b",
       "selectedScalars": {
         "og": {
           "value": 1.06,
@@ -4853,7 +4851,7 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Published Crystal descriptors conflict between suppliers; only the mild spicy/floral character is used.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -4868,7 +4866,7 @@
       "caseId": "B022",
       "kind": "batch",
       "snapshotBytes": 10297,
-      "fingerprint": "377d3dcef967a5d5c51c40ea3d72f4e7620bfbbb3c6fac65a9bfbd39daf03652",
+      "fingerprint": "5005a741391667c7351b7a9915b7bdfe11b14cfb885798542ba4faa6f43907fb",
       "selectedScalars": {
         "og": {
           "value": 1.042,
@@ -5054,7 +5052,7 @@
       "caseId": "B023",
       "kind": "batch",
       "snapshotBytes": 11310,
-      "fingerprint": "b89a183cc962381597d5444670a86dd50c23bdf3a806aa33ceca99636f7bf586",
+      "fingerprint": "3967835e3c4888655d5281fa896286ae9e5683a12a2a4cf7474646db6a7319c8",
       "selectedScalars": {
         "og": {
           "value": 1.075,
@@ -5242,7 +5240,7 @@
       "caseId": "B025",
       "kind": "batch",
       "snapshotBytes": 13956,
-      "fingerprint": "791350d4dad6f3804fa5c6fb0bea8b6a18cf33b274404e1f4f772f7f47aee68b",
+      "fingerprint": "2adca5fe59433769120d93b61c6a8c44e83a00021c0a91e80c905c5ca4f6411a",
       "selectedScalars": {
         "og": {
           "value": 1.065,
@@ -5435,7 +5433,7 @@
       "caseId": "B026",
       "kind": "batch",
       "snapshotBytes": 14900,
-      "fingerprint": "49d95eeb6873a894fe3065158f343f55006baa8bf82b8e903dfa3777ed31e38f",
+      "fingerprint": "a1f272552483b0450fe08a0fcafd599e04f80af650db1a6771979c8c6ce730df",
       "selectedScalars": {
         "og": {
           "value": 1.101,
@@ -5631,7 +5629,7 @@
       "caseId": "B027",
       "kind": "batch",
       "snapshotBytes": 11135,
-      "fingerprint": "d392c7af7d48fa29cde8d5fde53d140eb7451596d0a6296b1c9f04b4121694b7",
+      "fingerprint": "9c8589bc8f9193a7e2743298defc9a52897d0965321e5ce3feb2b9eab25913bf",
       "selectedScalars": {
         "og": {
           "value": 1.048,
@@ -5820,7 +5818,7 @@
       "caseId": "B028",
       "kind": "batch",
       "snapshotBytes": 16715,
-      "fingerprint": "aff07cadb26806dd9874e4e819e8a45eb221d9cbd3a3010f7db43445ed567939",
+      "fingerprint": "3aa0aad0281373e95525affad76840d6335a86fd9ab816e1e150ce6c626e4373",
       "selectedScalars": {
         "og": {
           "value": 1.07,
@@ -6018,7 +6016,7 @@
       "caseId": "B029",
       "kind": "batch",
       "snapshotBytes": 12625,
-      "fingerprint": "1d27877a7a859be0a692785ccb2b25106050c3982eda606aa456d03929b6a69f",
+      "fingerprint": "5be855a7864f249b8b31916e17d38b6e81f2baf5fad2a638ca46d54d8dc3dd7f",
       "selectedScalars": {
         "og": {
           "value": 1.045,
@@ -6210,7 +6208,7 @@
       "caseId": "B030",
       "kind": "batch",
       "snapshotBytes": 13885,
-      "fingerprint": "8ba12110984346cd8d72fdb5cefaaf7341cd8e920f3951e1a69dd0c6b622f5ec",
+      "fingerprint": "478757ad2ca8a627630384d775644fa475d0a7f5a8f65bbb307b1bad81b50876",
       "selectedScalars": {
         "og": {
           "value": 1.054,
@@ -6402,7 +6400,7 @@
       "caseId": "B031",
       "kind": "batch",
       "snapshotBytes": 13467,
-      "fingerprint": "b56e777cff90091bc40c79325ae59cafc50e7f31d65da292f55ae831ba9c2f19",
+      "fingerprint": "4763ad8a48707070b76575264fabdd1f21cd24e1d2ed7216980338e5d6439ebe",
       "selectedScalars": {
         "og": {
           "value": 1.075,
@@ -6594,7 +6592,7 @@
       "caseId": "B032",
       "kind": "batch",
       "snapshotBytes": 15290,
-      "fingerprint": "ee40d56ae5f262d2d6ca2035a5e3b60cfde15be0a086043b09d9257e0b240cb6",
+      "fingerprint": "bcce6a8a1f4e87c2f40f272e238ccf838ae39eb3f24c4341c3ee4c2ae0a3c5e1",
       "selectedScalars": {
         "og": {
           "value": 1.05,
@@ -6813,7 +6811,7 @@
       "caseId": "B033",
       "kind": "batch",
       "snapshotBytes": 16241,
-      "fingerprint": "c8bfd6308ab850f24caf56b41669d4d2e25abbea7547e4759f657c13066b9c97",
+      "fingerprint": "dc9d163f13ff081796ead5c8f6475917fcab04a48949f4d8ed9a118837711f38",
       "selectedScalars": {
         "og": {
           "value": 1.063,
@@ -7008,7 +7006,7 @@
       "caseId": "B035",
       "kind": "batch",
       "snapshotBytes": 14737,
-      "fingerprint": "57494226b9973613fdfd124571f7cce574716f3ed9a3535cde831f0742ebdf07",
+      "fingerprint": "55a3e0b94555e5492de25a8d99fa385b38e8985117a0f0c303e67aa0ae8d678c",
       "selectedScalars": {
         "og": {
           "value": 1.05,
@@ -7202,7 +7200,7 @@
       "caseId": "B036",
       "kind": "batch",
       "snapshotBytes": 13391,
-      "fingerprint": "d67d6910a55a2c9508300197e444bb2fed2b6a6f073d45fa1301f6a426e13e46",
+      "fingerprint": "5371b6605f0b9bb14797c447ec0ae9afcdb6104ca5545e5f7038c385cdbbd107",
       "selectedScalars": {
         "og": {
           "value": 1.054,
@@ -7393,7 +7391,7 @@
       "caseId": "B037",
       "kind": "batch",
       "snapshotBytes": 12714,
-      "fingerprint": "c9d4784bcdc04dd433cf6a9349d3069e907d0d1cd178afdefd2f88071a41bcb1",
+      "fingerprint": "87cf9af15844918f028258f3ce48db09a193eaf9387aab0d28861af235f0fbec",
       "selectedScalars": {
         "og": {
           "value": 1.052,
@@ -7583,7 +7581,7 @@
       "caseId": "B038",
       "kind": "batch",
       "snapshotBytes": 12645,
-      "fingerprint": "dff93a9c6d0b3d799c970bf8249f189b42da9bf0619423b620a75eb5ae3739fa",
+      "fingerprint": "e0d2286ad7c5e0739448344f27aa72ad7eecab5780aca7e6b0c760f934c436d3",
       "selectedScalars": {
         "og": {
           "value": 1.052,
@@ -7774,7 +7772,7 @@
       "caseId": "B039",
       "kind": "batch",
       "snapshotBytes": 14863,
-      "fingerprint": "d653146b1193c34db40a8227175c74a0f1f7620c4b1369c2fc17ab13d64b0e75",
+      "fingerprint": "93f5739464eae660390738f73602798cc15e0164ab2ed6165650be81d1e710e2",
       "selectedScalars": {
         "og": {
           "value": 1.06,
@@ -7967,7 +7965,7 @@
       "caseId": "B040",
       "kind": "batch",
       "snapshotBytes": 16990,
-      "fingerprint": "935bfbbb4eb93b9b2b8615bd17e90d74450c78ad9d48ec5cb14e39ead6a184d9",
+      "fingerprint": "d62433a29c75d6381f3e4f4adf157aa6e9417a5d2b0d3edd730b260b98d5355b",
       "selectedScalars": {
         "og": {
           "value": 1.06,
@@ -8165,7 +8163,7 @@
       "caseId": "B041",
       "kind": "batch",
       "snapshotBytes": 15987,
-      "fingerprint": "342c839f7930bfc98afdcd2de4808cd2fb4f65d6ff01247548c034b2cac1142a",
+      "fingerprint": "39d90cb1c5116b598665c40d177e93df39d5fe878021b5227506c03b5b5192a4",
       "selectedScalars": {
         "og": {
           "value": 1.05,
@@ -8363,7 +8361,7 @@
       "caseId": "B042",
       "kind": "batch",
       "snapshotBytes": 15976,
-      "fingerprint": "dcd3fa08e7ca3729c1ca769106c1dec0c356c76496c020fb8724adc38e4fe069",
+      "fingerprint": "65f7aad0c8bbebf8c46c8ff421fa5a3b5b464cb8492f92057469bf2058bc207a",
       "selectedScalars": {
         "og": {
           "value": 1.05,
@@ -8481,11 +8479,11 @@
           "reasons": ["complete_grist_no_roasted_contributors"]
         },
         "tartness": {
-          "value": 0,
-          "band": "None expected",
-          "source": "recipe_prediction",
-          "support": "supported",
-          "reasons": ["identified_nonsouring_yeast_and_no_souring_evidence"]
+          "value": null,
+          "band": "Unknown",
+          "source": "unavailable",
+          "support": "unavailable",
+          "reasons": ["yeast_maker_describes_acidity"]
         },
         "alcohol": {
           "value": 1.2000000000000002,
@@ -8561,7 +8559,7 @@
       "caseId": "B043",
       "kind": "batch",
       "snapshotBytes": 18083,
-      "fingerprint": "d7e5aa88ead99738d709368992b8e51a5df156120f5e43de625f45a17f18c023",
+      "fingerprint": "0ccc1dadd02dab7aabe8e236751f27df7cb8ee91abdbdbf4b156860f0a435a55",
       "selectedScalars": {
         "og": {
           "value": 1.06,
@@ -8758,7 +8756,7 @@
       "caseId": "B044",
       "kind": "batch",
       "snapshotBytes": 14499,
-      "fingerprint": "eba9547084d213b9b415687537fe4b1ce11d5c1f22633043b3922dfa819db70f",
+      "fingerprint": "114c96123a0ca52727968fb6f85a4b511890e1427c203b5683fa0599a176db69",
       "selectedScalars": {
         "og": {
           "value": 1.058,
@@ -8963,7 +8961,7 @@
       "caseId": "B045",
       "kind": "batch",
       "snapshotBytes": 9925,
-      "fingerprint": "1fb4822d14c275c7373dac26e9ab8125c0a33a3a303eed96b0548c3be95658b1",
+      "fingerprint": "04c85ab92716c722b0756dedb84b60f24ba9a5b05534fe9e74863bc8365546a0",
       "selectedScalars": {
         "og": {
           "value": 1.06,
@@ -9149,7 +9147,7 @@
       "caseId": "B046",
       "kind": "batch",
       "snapshotBytes": 14979,
-      "fingerprint": "f85d3b88929eb7e3994c87f9104eeb11eb6b177ae6d6b857d833501753bd0ede",
+      "fingerprint": "393fc314f8c5eea4a4034f7402b7cb9c6558199de913745b7f9ad41d2c55dd91",
       "selectedScalars": {
         "og": {
           "value": 1.07,
@@ -9356,7 +9354,7 @@
       "caseId": "B048",
       "kind": "batch",
       "snapshotBytes": 15741,
-      "fingerprint": "11748c9616ae1526a45651beb04862da6e6769db8cb45d4976e14557a9096084",
+      "fingerprint": "eee3159f902073fb42b5f01093a093e4e38af1de33490a28d00f1baab64b1eb6",
       "selectedScalars": {
         "og": {
           "value": 1.069,
@@ -9551,7 +9549,7 @@
       "caseId": "B049",
       "kind": "batch",
       "snapshotBytes": 21840,
-      "fingerprint": "420d8f43a195a7ac4eca9522b0af3ed5f04fef75aed27d41045d7cc626de3014",
+      "fingerprint": "64302413dccfa0e6eb3d98fea342c462393259de98c22abd00595e6e28387755",
       "selectedScalars": {
         "og": {
           "value": 1.065,
@@ -9755,7 +9753,7 @@
       "caseId": "B050",
       "kind": "batch",
       "snapshotBytes": 14183,
-      "fingerprint": "9fbacac88ae52b0a7cd2ed08dd1191027ad0cccbec30f6a360f3890b963bd1ac",
+      "fingerprint": "f76612482e8b1769f8648fd15b02252a089bdae46177e00bf13a757bcb864128",
       "selectedScalars": {
         "og": {
           "value": 1.058,
@@ -9934,7 +9932,7 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -9948,7 +9946,7 @@
       "caseId": "B051",
       "kind": "batch",
       "snapshotBytes": 14316,
-      "fingerprint": "e9e4c451ee375fba3a6fbdf299aff0de2f8c25d1b9c43e60dfa300d2eba6df1a",
+      "fingerprint": "a4d50cdf4a0f38dd4831a145a5a10acb5ae0356d16c41b7545fa3cfe4ba62923",
       "selectedScalars": {
         "og": {
           "value": 1.057,
@@ -10141,7 +10139,7 @@
       "caseId": "B052",
       "kind": "batch",
       "snapshotBytes": 6663,
-      "fingerprint": "a2e5a8def0ef24d9c9e2885786c17b51a102997bdc10e1b8efa594da2a31d39b",
+      "fingerprint": "d5f94f13f74fb04dce903d10b019e890833c577cc4ea6f1ca10faee20833d4e1",
       "selectedScalars": {
         "og": {
           "value": 1.048,
@@ -10322,7 +10320,7 @@
       "caseId": "B053",
       "kind": "batch",
       "snapshotBytes": 13135,
-      "fingerprint": "23a5feb32b2ba98599b4b83ad816d1feb97deb86a50bc7b4ca24bc872812eaed",
+      "fingerprint": "422eb4a5716584d54632c84b4dbe94037553cee2d134baabd6f1d5e7f60a972c",
       "selectedScalars": {
         "og": {
           "value": 1.045,
@@ -10526,7 +10524,7 @@
       "caseId": "B054",
       "kind": "batch",
       "snapshotBytes": 15659,
-      "fingerprint": "a86d83516774170b625c59c5bc8bc61e0b7e915ee592c2c4ee9d2335a3f47f34",
+      "fingerprint": "d148b07d5f04839d56f059ca353b679442da7f4811e7205e6a450b6bb88b6642",
       "selectedScalars": {
         "og": {
           "value": 1.065,
@@ -10720,7 +10718,7 @@
       "caseId": "B055",
       "kind": "batch",
       "snapshotBytes": 14957,
-      "fingerprint": "778e4cc2e1f47e02634a96bb4caf281de87ccf25c7ee0223bae8e7a4c2138f87",
+      "fingerprint": "724c7f6b5a135fce2f68086b35d840a8aebf7bf3c78a39935857908ce997ff7a",
       "selectedScalars": {
         "og": {
           "value": 1.04,
@@ -10915,7 +10913,7 @@
       "caseId": "B056",
       "kind": "batch",
       "snapshotBytes": 16161,
-      "fingerprint": "e0f7ed335e33af7d65ae8859841e85a19262d663c6f32b010a4720e5036b0618",
+      "fingerprint": "878b13bd86b3e011c01b284946075f3da23421908fd564e6bd789cfa80e3b708",
       "selectedScalars": {
         "og": {
           "value": 1.055,
@@ -11109,7 +11107,7 @@
       "caseId": "B057",
       "kind": "batch",
       "snapshotBytes": 12726,
-      "fingerprint": "905b2ec36ec1b25f37e7b718e1ec32de3298988ecd4c3af19419642479e687a5",
+      "fingerprint": "bf18be4fb04e4e78b35015ed79ea9db8b60f801dc5cf339ac196e96a4080f935",
       "selectedScalars": {
         "og": {
           "value": 1.045,
@@ -11299,7 +11297,7 @@
       "caseId": "B058",
       "kind": "batch",
       "snapshotBytes": 14585,
-      "fingerprint": "e5da1a5fb15b1adf3febf79dfa93d202160ec8b9c1e03a8e703259ddd36ad4c4",
+      "fingerprint": "85877080bf7abd1d4d6b41099a033766ccaab18191af55e5abf050214034d945",
       "selectedScalars": {
         "og": {
           "value": 1.065,
@@ -11506,7 +11504,7 @@
       "caseId": "B059",
       "kind": "batch",
       "snapshotBytes": 12032,
-      "fingerprint": "c3f6fc2d6aa22ff66451b78aaea06676c23402067bb5395eb18c845d83ef3ce3",
+      "fingerprint": "0504794fdfe78129454d317eb5924d239a930850f83ef258f22a825ab4bd7ff1",
       "selectedScalars": {
         "og": {
           "value": 1.055,
@@ -11698,7 +11696,7 @@
       "caseId": "B060",
       "kind": "batch",
       "snapshotBytes": 11404,
-      "fingerprint": "4eeac10ed815d52bd9e195077ab75bbd85d3f54d72a06695b6b5ce24954bac28",
+      "fingerprint": "e41a11cd03b681d3e7da4893895c2882a458724d57a4c0604c06667c09f1fe09",
       "selectedScalars": {
         "og": {
           "value": 1.055,
@@ -11887,7 +11885,7 @@
       "caseId": "B061",
       "kind": "batch",
       "snapshotBytes": 14092,
-      "fingerprint": "3f6d506b375c505656a308ee42d4b79297aea56f6bca5837c0486f31a252b3a9",
+      "fingerprint": "fa87359163200c390982c4dc1f73aa8b6d8b0643c0b82b3fac90b2575347c73e",
       "selectedScalars": {
         "og": {
           "value": 1.058,
@@ -12079,7 +12077,7 @@
       "caseId": "B062",
       "kind": "batch",
       "snapshotBytes": 13384,
-      "fingerprint": "5c07512b42caffd66fc334bc59cb54d12e59fd8800cf1992622622f500702ae9",
+      "fingerprint": "e13cdb09bcc3856bbe724a13a210965ef9f95b86cf06c05c67689e811aea4d87",
       "selectedScalars": {
         "og": {
           "value": 1.055,
@@ -12201,7 +12199,7 @@
           "band": "Unknown",
           "source": "unavailable",
           "support": "unavailable",
-          "reasons": ["missing_or_ambiguous_yeast"]
+          "reasons": ["yeast_maker_describes_acidity"]
         },
         "alcohol": {
           "value": 1.5,
@@ -12256,7 +12254,6 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Producer describes acidity; this is not a calibrated finished-beer tartness value or a souring-process assertion.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -12273,7 +12270,7 @@
       "caseId": "B063",
       "kind": "batch",
       "snapshotBytes": 18562,
-      "fingerprint": "8ed15128d794f080105fcdaa82f66ad3583e6fae1ef7655cd3350fa5b1710ed5",
+      "fingerprint": "e5ffa7333efc37747b0f23a70b9526f243bccfafcc3cb259c2b52ccc95e62765",
       "selectedScalars": {
         "og": {
           "value": 1.06,
@@ -12471,7 +12468,7 @@
       "caseId": "B064",
       "kind": "batch",
       "snapshotBytes": 13859,
-      "fingerprint": "0c1acfdaa0e95f687f26c982b843d273a0de780529ab7baf78529ac1939369a7",
+      "fingerprint": "72e4fe4c945f5b599abe190c17cefa6c15aaef0c9bb1929a8f80c0d03a94d3d7",
       "selectedScalars": {
         "og": {
           "value": 1.05,
@@ -12663,7 +12660,7 @@
       "caseId": "B065",
       "kind": "batch",
       "snapshotBytes": 13398,
-      "fingerprint": "7baa4624241f943996dc13072035aeb77217419e5fdcb13a06847259a7e0c97b",
+      "fingerprint": "26fb4fded098bfcd6f947525793f4d961d1153352ecb236d94b2e08b2c1f1db8",
       "selectedScalars": {
         "og": {
           "value": 1.057,
@@ -12854,7 +12851,7 @@
       "caseId": "R001",
       "kind": "recipe",
       "snapshotBytes": 14079,
-      "fingerprint": "d15c9ff3e2398f1341ce044904468968136fb690fb91a67efde76a5e7bc81713",
+      "fingerprint": "00ffe7cd3bc73ef50554c7d5e1e37546fae4076c03d962e9c5fde61197583ac3",
       "selectedScalars": {
         "og": {
           "value": 1.060692463,
@@ -13047,7 +13044,7 @@
       "caseId": "R002",
       "kind": "recipe",
       "snapshotBytes": 14795,
-      "fingerprint": "8e3b029bedecfe4cce210f5b097a8033ebff9ee29d3073743b2086645c5c2517",
+      "fingerprint": "c2ad0f78175e4054982443dbb2bf62ce62fc380652c434bce877bc196dd581b6",
       "selectedScalars": {
         "og": {
           "value": 1.060090564,
@@ -13242,7 +13239,7 @@
       "caseId": "R003",
       "kind": "recipe",
       "snapshotBytes": 13797,
-      "fingerprint": "0c6e53f561ec6a010779bb1eeb6ddfe2cb7fb0c7fd5a11247082707a2f0ff828",
+      "fingerprint": "ac979ba82586e9d8f884d22bf3eb502e7ff31dd445a99a485b25c6985893b663",
       "selectedScalars": {
         "og": {
           "value": 1.060867013,
@@ -13435,7 +13432,7 @@
       "caseId": "R004",
       "kind": "recipe",
       "snapshotBytes": 13077,
-      "fingerprint": "922337fda2970b1e7b6148ffbe1da013101341f317f9a09f2db6b45d07d7058a",
+      "fingerprint": "66e1c593a29cff1841087786108b41b2daa04649736a42f601f16b16510d7e48",
       "selectedScalars": {
         "og": {
           "value": 1.055209169,
@@ -13627,7 +13624,7 @@
       "caseId": "R005",
       "kind": "recipe",
       "snapshotBytes": 16468,
-      "fingerprint": "e680b5540b3ffa4b15efa233366a822b0b2d82a89fafed6ae5f38d0fe00b31c2",
+      "fingerprint": "afa8900caadf00479d9cccabcbab483111b571a5b9d47f568c7172b3548ddb69",
       "selectedScalars": {
         "og": {
           "value": 1.059121334,
@@ -13811,7 +13808,7 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Published Crystal descriptors conflict between suppliers; only the mild spicy/floral character is used.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -13826,7 +13823,7 @@
       "caseId": "R006",
       "kind": "recipe",
       "snapshotBytes": 16863,
-      "fingerprint": "9006b8d70486767406a14dce5386526bf4968ce4c27a8a150bd7d583f3be72d0",
+      "fingerprint": "1c1ac8ea47b8d5ec0dbc48e55e9d8336731f2b11b99b0fb532480a3bc81c12a4",
       "selectedScalars": {
         "og": {
           "value": 1.065436959,
@@ -14038,7 +14035,7 @@
       "caseId": "R007",
       "kind": "recipe",
       "snapshotBytes": 14024,
-      "fingerprint": "895a6ce2273540852f7288588b9f2742f7f58dc452e3a34bf420f469e247aea1",
+      "fingerprint": "00ffaabb3b72f865b46b90c506c4541b2a7bffd7e548897b9661cf3ceafea7e7",
       "selectedScalars": {
         "og": {
           "value": 1.058093466,
@@ -14217,7 +14214,7 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -14231,7 +14228,7 @@
       "caseId": "R008",
       "kind": "recipe",
       "snapshotBytes": 12533,
-      "fingerprint": "fc940788bed35056f8ee81f300561d389c53d9108ecbf3d31e3f2080a9b70783",
+      "fingerprint": "e5f44bb2258f70900e2ae3145f86a976a5a5311587535bb3582c8713f326802c",
       "selectedScalars": {
         "og": {
           "value": 1.062291094,
@@ -14434,7 +14431,7 @@
       "caseId": "R009",
       "kind": "recipe",
       "snapshotBytes": 15721,
-      "fingerprint": "0d5786ff609b52d400f47ea6338fb3bb59ce6115b1bf322620d6a0300be1d1f2",
+      "fingerprint": "1e832ab5a74b178fc4fb23caf9322cd96a8b395ed4db5d2a39866425b0bf2038",
       "selectedScalars": {
         "og": {
           "value": 1.05330248,
@@ -14564,11 +14561,11 @@
           "reasons": ["complete_grist_no_roasted_contributors"]
         },
         "tartness": {
-          "value": 0,
-          "band": "None expected",
-          "source": "recipe_prediction",
-          "support": "supported",
-          "reasons": ["identified_nonsouring_yeast_and_no_souring_evidence"]
+          "value": null,
+          "band": "Unknown",
+          "source": "unavailable",
+          "support": "unavailable",
+          "reasons": ["yeast_maker_describes_acidity"]
         },
         "alcohol": {
           "value": 1.06,
@@ -14644,7 +14641,7 @@
       "caseId": "R010",
       "kind": "recipe",
       "snapshotBytes": 11561,
-      "fingerprint": "98de49ad76abc1912128e06fa52af097c4500070dfaf17c297f9c8040118cb86",
+      "fingerprint": "fc5c13df6c632fe3cd7416b476e0581026be04ada1615cfa9b1af8607110fd85",
       "selectedScalars": {
         "og": {
           "value": 1.071247352,
@@ -14832,7 +14829,7 @@
       "caseId": "R011",
       "kind": "recipe",
       "snapshotBytes": 9530,
-      "fingerprint": "92b138ec7f59e12246c213e3442c4d17da4d613a0e2a56ac5c51f3728d2875c3",
+      "fingerprint": "979d4e32b13a1aa0086549c2c1be8f0e6bebf8306df26073affd51fbe3d16b55",
       "selectedScalars": {
         "og": {
           "value": 1.060969337,
@@ -15018,7 +15015,7 @@
       "caseId": "R012",
       "kind": "recipe",
       "snapshotBytes": 13837,
-      "fingerprint": "2a8bb88ae3a9626289389945f0914cf134db607f4dd52102e68e2ee558bbffaa",
+      "fingerprint": "54b6b83a9e7a267ea097a809dc8f4378420db21442aecf4108c84514feff9bf7",
       "selectedScalars": {
         "og": {
           "value": 1.042591735,
@@ -15210,7 +15207,7 @@
       "caseId": "R013",
       "kind": "recipe",
       "snapshotBytes": 17196,
-      "fingerprint": "ca9d7f722673ef03f8ab84ba9d9f5cae2d9b3dfa9b9fd8ab0a2aff0c02b57a5b",
+      "fingerprint": "e62edba36d27c712ec501bf88f05e95e43c86f7beb5047ddcc9ace884af59897",
       "selectedScalars": {
         "og": {
           "value": 1.092962792,
@@ -15409,7 +15406,7 @@
       "caseId": "R014",
       "kind": "recipe",
       "snapshotBytes": 9779,
-      "fingerprint": "d9d8377c5f50303336acac6d6a9baf60118c26eb3dccf29c64a1af8a8aafc335",
+      "fingerprint": "cf35775b9c24cd47dd6f71041bf121fdbfeb112dc16e00d7972d654679bea4e4",
       "selectedScalars": {
         "og": {
           "value": 1.052396348,
@@ -15597,7 +15594,7 @@
       "caseId": "R015",
       "kind": "recipe",
       "snapshotBytes": 15785,
-      "fingerprint": "640c8c155520a4ae81f44079236181492ab1b1e45f2bb440fd410d0fdf182714",
+      "fingerprint": "2d05ff68773d84130242b29f776f304999ab9cac918bdcba37b8d96da42b68f3",
       "selectedScalars": {
         "og": {
           "value": 1.047094178,
@@ -15793,7 +15790,7 @@
       "caseId": "R016",
       "kind": "recipe",
       "snapshotBytes": 12497,
-      "fingerprint": "2ae80a9c529229223abc03be592d434f20c7f7997e711e0b3760cdc0173ed03d",
+      "fingerprint": "7b332adea2f4b6720fb866c255102b8db4b0844ad7b83fcaabc6a89b1aa4c70b",
       "selectedScalars": {
         "og": {
           "value": 1.09817792,
@@ -15984,7 +15981,7 @@
       "caseId": "R017",
       "kind": "recipe",
       "snapshotBytes": 11285,
-      "fingerprint": "7540bf27295724c8f70cf4496200fbf79d50bb394da3c661b85bb3b4c3b6e93a",
+      "fingerprint": "e74be811a3f37bccb8d778bd57cf62d538bb1fc74c444d14760f67322cc422d3",
       "selectedScalars": {
         "og": {
           "value": 1.044853498,
@@ -16173,7 +16170,7 @@
       "caseId": "R018",
       "kind": "recipe",
       "snapshotBytes": 15425,
-      "fingerprint": "fd9f1894b51b49f7995c8ce562d4c84ad0f7cffb93f14e2595435d0a517f3145",
+      "fingerprint": "de173d999f0d3ac340702238e77d5dc2e345498cc8475a34fc053b5905634396",
       "selectedScalars": {
         "og": {
           "value": 1.082077331,
@@ -16368,7 +16365,7 @@
       "caseId": "R019",
       "kind": "recipe",
       "snapshotBytes": 11650,
-      "fingerprint": "e7c37ff1d90e2945f7e0b63ad27e26c4a921b6bf0e36ff79a5a14e06fd7fecf9",
+      "fingerprint": "b7768b5c04f6f3847794c595f432efe4731d8988386ff2a157fcd4e1b63d070f",
       "selectedScalars": {
         "og": {
           "value": 1.072829765,
@@ -16569,7 +16566,7 @@
       "caseId": "R020",
       "kind": "recipe",
       "snapshotBytes": 12087,
-      "fingerprint": "fb9689eba8514a2223a30549f4861bddf7556a6d4853d7579f7ac13f08bb0ea1",
+      "fingerprint": "60c50f65b271c6ea71fcd58a872f03d55c890b5c8e78703fb2ff75c1ee2c46fd",
       "selectedScalars": {
         "og": {
           "value": 1.055573063,
@@ -16758,7 +16755,7 @@
       "caseId": "R021",
       "kind": "recipe",
       "snapshotBytes": 8257,
-      "fingerprint": "a5a0856e45d1d6190a2873145a27acdcd9161a206615772ff4b850e40759f94c",
+      "fingerprint": "d9e31fe744748371cc42339fb2ce29ec1904b702e65a27753105fddcc557cf30",
       "selectedScalars": {
         "og": {
           "value": 1.07229709,
@@ -16943,7 +16940,7 @@
       "caseId": "R022",
       "kind": "recipe",
       "snapshotBytes": 13308,
-      "fingerprint": "e78ccbad13f6f5938554d407ae29d3cd68bc2a5d51b570cbba3094ddf518930d",
+      "fingerprint": "4df69b405c823ebf9256dc4d38856079e404b11cabf4f3323be8178eb57aa9be",
       "selectedScalars": {
         "og": {
           "value": 1.080601175,
@@ -17135,7 +17132,7 @@
       "caseId": "R023",
       "kind": "recipe",
       "snapshotBytes": 16535,
-      "fingerprint": "3e7d060a78ba6e5d5eed1bef48fcd38aedf2b72a2b61edbd74c459f70ea1f49d",
+      "fingerprint": "2e39378819a2e4c2be759b1cdf623b83a5b16f5e520053cfaf8c3e595ca03e64",
       "selectedScalars": {
         "og": {
           "value": 1.053973694,
@@ -17330,7 +17327,7 @@
       "caseId": "R024",
       "kind": "recipe",
       "snapshotBytes": 12717,
-      "fingerprint": "1d250fdf87d85ad7b420f5638d9e5cfc20ba65d458097b1510fee0db7f653ff8",
+      "fingerprint": "37080ed10e0cd57e5dd920fe9c1e5da5626281aee178559a2f691942549dc26d",
       "selectedScalars": {
         "og": {
           "value": 1.057187324,
@@ -17521,7 +17518,6 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Ingredient identity is outside the reviewed catalog.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -17534,7 +17530,7 @@
       "caseId": "R025",
       "kind": "recipe",
       "snapshotBytes": 14075,
-      "fingerprint": "9682e09fd840e6c843c421d3989c83573bb474abd91f6a5c65f4555579e4edfe",
+      "fingerprint": "f2d04a5252b78ed0d9378adf4b829afc8d66c03e997bed04a23accd7b4da902a",
       "selectedScalars": {
         "og": {
           "value": 1.077406312,
@@ -17726,7 +17722,7 @@
       "caseId": "R026",
       "kind": "recipe",
       "snapshotBytes": 15404,
-      "fingerprint": "bdc5bc15683590ad22f9832f390a32fc4a1545a2fcc2ff037dd7a018125ea5ee",
+      "fingerprint": "4e1a6961a8439fcdcd2687f034d41ebb09c15a258d4a8f4ca3afe52c26037428",
       "selectedScalars": {
         "og": {
           "value": 1.069323708,
@@ -17954,7 +17950,7 @@
       "caseId": "R027",
       "kind": "recipe",
       "snapshotBytes": 13936,
-      "fingerprint": "e2b3ebd600edfb5501c2800f0892bf3256f90c694700a06bf0cea04fb9602118",
+      "fingerprint": "e481d408223c4472b89e2ac941de18072bc988fd01e28d50d4170063ac30deb7",
       "selectedScalars": {
         "og": {
           "value": 1.057570129,
@@ -18146,7 +18142,7 @@
       "caseId": "R028",
       "kind": "recipe",
       "snapshotBytes": 13224,
-      "fingerprint": "19e011fc8eba2307478a0f6f8ade5aa5680302a9ad24e9e05980e7dff5c97340",
+      "fingerprint": "c62664579a7fc94867c6d1d618d75295237a24b38239be4c1343c8c3bfbee7f7",
       "selectedScalars": {
         "og": {
           "value": 1.056577885,
@@ -18337,7 +18333,7 @@
       "caseId": "R029",
       "kind": "recipe",
       "snapshotBytes": 12715,
-      "fingerprint": "91016f99dc816874d6bf8050483609afb4ca953e6ee79b56cd3b42d56c4237d6",
+      "fingerprint": "3fb98a7baba08a1f89a05a7ab00da9dbf09d0c2671bdd3dd11f9fc5fd20a4599",
       "selectedScalars": {
         "og": {
           "value": 1.043941205,
@@ -18512,7 +18508,7 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -18528,7 +18524,7 @@
       "caseId": "R030",
       "kind": "recipe",
       "snapshotBytes": 13737,
-      "fingerprint": "617c9c5ed064c7f21273c9ed8667bc9c8523e31b55393d4400436bb0a750f049",
+      "fingerprint": "d58020e8182e572a1ae015aa6f5227a3aaa08e3b6bc0c33e28e15c7f6d42e214",
       "selectedScalars": {
         "og": {
           "value": 1.058544888,
@@ -18720,7 +18716,7 @@
       "caseId": "R031",
       "kind": "recipe",
       "snapshotBytes": 16085,
-      "fingerprint": "4bc73fbc13a398577f8d6de4840a57b24c4a2de9fa5423d5ae26e0fffc4b6431",
+      "fingerprint": "36e8fe20c24b870ca34f7eb594c09a5e1ee317fc88ef68aa480e7952e130f5c0",
       "selectedScalars": {
         "og": {
           "value": 1.064532861,
@@ -18915,7 +18911,7 @@
       "caseId": "R032",
       "kind": "recipe",
       "snapshotBytes": 13147,
-      "fingerprint": "9ebe0fec2161d845e92ddc7a71d2139294848c75eb6d815ed94bedb889c2a0f2",
+      "fingerprint": "ae7e9f90a21795a6e3edb7ba4034c46d78b711b74c018b1189071d18520026ff",
       "selectedScalars": {
         "og": {
           "value": 1.050370456,
@@ -19037,7 +19033,7 @@
           "band": "Unknown",
           "source": "unavailable",
           "support": "unavailable",
-          "reasons": ["missing_or_ambiguous_yeast"]
+          "reasons": ["yeast_maker_describes_acidity"]
         },
         "alcohol": {
           "value": 1.125,
@@ -19092,7 +19088,6 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Producer describes acidity; this is not a calibrated finished-beer tartness value or a souring-process assertion.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -19109,7 +19104,7 @@
       "caseId": "R033",
       "kind": "recipe",
       "snapshotBytes": 14402,
-      "fingerprint": "f019034a1865f3f98bf0204a603ec8d7a3a354a6d5cc50ce3a3f329953ab10f3",
+      "fingerprint": "2ff5a3dd27748206c32369acc865dc00c0903fa788147fde5be90f17455b0952",
       "selectedScalars": {
         "og": {
           "value": 1.065950874,
@@ -19316,7 +19311,7 @@
       "caseId": "R034",
       "kind": "recipe",
       "snapshotBytes": 11167,
-      "fingerprint": "a933ff06aa85b15554c60da9c9c4dd8bf4178ab6fc82539f20dc25581ea61d40",
+      "fingerprint": "eeb92e0a7c6c71da0e850806f9317441dfdd3e38f0e2fec216f022c3bb29b7ef",
       "selectedScalars": {
         "og": {
           "value": 1.054769783,
@@ -19508,7 +19503,7 @@
       "caseId": "R035",
       "kind": "recipe",
       "snapshotBytes": 10515,
-      "fingerprint": "df4ab0b2acb26c035f1933572dc7f53cd8d859d1105c01f56d68fde71ad66407",
+      "fingerprint": "f34f646295e798795a9271b49b3df9da7a2eb80882f6a07e732409253dd21772",
       "selectedScalars": {
         "og": {
           "value": 1.053530322,
@@ -19695,7 +19690,7 @@
       "caseId": "R036",
       "kind": "recipe",
       "snapshotBytes": 14103,
-      "fingerprint": "f7aec54e3756482ae36fd9e725054166ce12b9f8139c6b1aa95ca5fd2faaf60e",
+      "fingerprint": "c8f07cde7e50efd3fb91cb80df18b71a9ee602e941aa5207b4cd883388965194",
       "selectedScalars": {
         "og": {
           "value": 1.060110996,
@@ -19874,7 +19869,6 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -19891,7 +19885,7 @@
       "caseId": "R037",
       "kind": "recipe",
       "snapshotBytes": 13774,
-      "fingerprint": "e7008d5f4fafe41a9c98a4a1a76dc9cc78233ae14b7a18cfbac88d1a0baa0328",
+      "fingerprint": "02e831e973159d520683c19a93a6fdcd45eb1625d53cc87ffb5d3834fb81b890",
       "selectedScalars": {
         "og": {
           "value": 1.054410878,
@@ -20096,7 +20090,7 @@
       "caseId": "R038",
       "kind": "recipe",
       "snapshotBytes": 21423,
-      "fingerprint": "609a1e312f7c7ee9491ca0155d61f419ed2a0649a5e49e9113937beb786d5f16",
+      "fingerprint": "7172d44211b1efe8d858de0a943f6a7a5cd73d12d509796970a6723d3e75ef37",
       "selectedScalars": {
         "og": {
           "value": 1.08255624,
@@ -20300,7 +20294,7 @@
       "caseId": "R039",
       "kind": "recipe",
       "snapshotBytes": 17737,
-      "fingerprint": "f93bfe9a2e886a068bf8aad595bd1ef8a772024764ff6764d211c9555896cae7",
+      "fingerprint": "54a71277f4041f4bcbd9053fe127bcb624b0ed5932d0f1b585f3b31c793c3eba",
       "selectedScalars": {
         "og": {
           "value": 1.063539461,
@@ -20497,7 +20491,7 @@
       "caseId": "R040",
       "kind": "recipe",
       "snapshotBytes": 11649,
-      "fingerprint": "a11eab937ae5fb61474fb2db93718b1575e9d25bad2d105cacb939a1c5bb3320",
+      "fingerprint": "b27b7842b5b26d1dfb632070a23e9bd9ef154ab9b3700fe0e0f60d1ed70a5930",
       "selectedScalars": {
         "og": {
           "value": 1.06337995,
@@ -20686,7 +20680,7 @@
       "caseId": "R041",
       "kind": "recipe",
       "snapshotBytes": 15982,
-      "fingerprint": "ed2dffd903a42e68a469bbb5d98b17cfe13a39c2863882ec8c129efec14e5f89",
+      "fingerprint": "36252ea36d2cd5b728672e33e720162624007a93abbf38e2aff40f558a077670",
       "selectedScalars": {
         "og": {
           "value": 1.074537189,
@@ -20884,7 +20878,7 @@
       "caseId": "R042",
       "kind": "recipe",
       "snapshotBytes": 10309,
-      "fingerprint": "cc54eb9c1132b5539cc3ff6ecf7c402d7145d331b1134b6ab1604be57c0ad7d4",
+      "fingerprint": "2cdd6bc4d705495213101b3f475c2ac4240413128be703accaaae1e04d3e9c9d",
       "selectedScalars": {
         "og": {
           "value": 1.033463853,
@@ -21071,7 +21065,7 @@
       "caseId": "R043",
       "kind": "recipe",
       "snapshotBytes": 14850,
-      "fingerprint": "e9a413f0f47ae32eff0d47659eab9fe41a3595e80bab8a1485639378055a34e1",
+      "fingerprint": "dc4ebb41eece4079afcab07d8f5cca3790bb31ab890fb78aa861807c524cb436",
       "selectedScalars": {
         "og": {
           "value": 1.0971195,
@@ -21287,7 +21281,7 @@
       "caseId": "R044",
       "kind": "recipe",
       "snapshotBytes": 13228,
-      "fingerprint": "340cc7d42d39cda048864617b228ad85a67017d96a6589f6e8a8f5d02260c9ba",
+      "fingerprint": "f0eff4f0c13d51104a28462c1ea172273d3dceb8b644197e4901468085ffb760",
       "selectedScalars": {
         "og": {
           "value": 1.050099892,
@@ -21478,7 +21472,7 @@
       "caseId": "R045",
       "kind": "recipe",
       "snapshotBytes": 12485,
-      "fingerprint": "2f87543d8f47a9fa0927ae2375244362197f73f9ca86bf7665e5a7ce837cf144",
+      "fingerprint": "0f69eee4ca6712ad9aebad1a6e3d6ff7606a93f64ea6849c48eb31d1b45f32a8",
       "selectedScalars": {
         "og": {
           "value": 1.047423604,
@@ -21669,7 +21663,7 @@
       "caseId": "R046",
       "kind": "recipe",
       "snapshotBytes": 14136,
-      "fingerprint": "612263932f3254562d00dc505d0558c661bd4d83dd42c3f64aed05b9c1c1473a",
+      "fingerprint": "e184b373cb87a1248bd9150c374178cf88ec4e9a7515a4b0d2cb48e5d1a64ab7",
       "selectedScalars": {
         "og": {
           "value": 1.071195965,

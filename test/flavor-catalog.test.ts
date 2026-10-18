@@ -329,6 +329,13 @@ void test("reviewed yeast priorities and dehusked/product families retain guards
       "product",
     );
   }
+  // Brewfather's Imperial rows can carry code and name together as both name and product id.
+  const rustic = resolveIngredient(
+    "yeasts",
+    ingredient({ name: "B56 Rustic", laboratory: "Imperial Yeast", productId: "B56 Rustic" }),
+  );
+  assert.equal(rustic.id, "imperial-b56");
+  assert.deepEqual(rustic.diagnostics, []);
   assert.equal(
     resolveIngredient(
       "fermentables",

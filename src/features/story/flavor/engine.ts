@@ -128,7 +128,7 @@ export function sensoryBand(key: SensoryAxis, value: number | null, manual = fal
           : "Very high";
 }
 
-export const MODEL_VERSION = "recipe-flavor-2";
+export const MODEL_VERSION = "recipe-flavor-3";
 /** Shared saturating dose→intensity map on the 0–5 scale. */
 function saturate(units: number): number {
   return -5 * Math.expm1(-units / 5);
@@ -468,6 +468,11 @@ function predictions(
           ["ale", "lager", "wheat"].includes(row.ingredient.type?.trim().toLowerCase() ?? "") &&
           !SOURING_CULTURE.test(yeastIdentity(row))),
     );
+  // A non-souring yeast whose maker says it gives tartness or acidity (Whiteout's "significant
+  // amount of acidity") does not support "none expected" either.
+  const yeastAcidity = yeasts.some((row) =>
+    row.resolution.descriptors.some((word) => ["tart", "sour", "acidic"].includes(word)),
+  );
   const gristShared = grist.fractions.some(({ fraction }) => fraction > 0);
   const acidulated = grist.fractions.some(
     ({ row, fraction }) =>
@@ -505,6 +510,7 @@ function predictions(
     );
   if (
     yeastKnown &&
+    !yeastAcidity &&
     miscsKnown &&
     !acidulated &&
     !unknownMaterial &&
@@ -524,9 +530,11 @@ function predictions(
         ? "souring_or_finished_acid_requires_separate_model"
         : !yeastKnown
           ? "missing_or_ambiguous_yeast"
-          : acidulated
-            ? "acidulated_malt_requires_review"
-            : "incomplete_absence_support",
+          : yeastAcidity
+            ? "yeast_maker_describes_acidity"
+            : acidulated
+              ? "acidulated_malt_requires_review"
+              : "incomplete_absence_support",
     ]);
   return axes;
 }

@@ -23,13 +23,14 @@ const NEGATOR =
 // Conditional and temperature-dependent statements describe what can happen, not what the
 // product gives. A condition covers its own comma-separated part of the clause and everything
 // after it, so "fruity, especially at higher temperatures" keeps "fruity" while "at warmer
-// temperatures, banana" and "may produce banana, clove" leave every word out.
+// temperatures, banana" and "may produce banana, clove" leave every word out. "When paired with"
+// is pairing advice and "when all is said and done" an idiom, not conditions.
 const CONDITIONAL =
-  /\b(?:if|when|whenever|unless|depending|depends|can(?! (?:all |also |often )?be (?:found|detected|noticed|tasted|smelled|perceived))|could|may|might|potentially|optionally|at (?:the )?(?:higher|lower|warmer|cooler|high|low|warm|cool|upper)|with (?:warmer|cooler|higher|lower)|warmer temperatures|cooler temperatures|higher temperatures|lower temperatures)\b/;
+  /\b(?:if|when(?! paired\b| all is said and done)|whenever|unless|depending|depends|can(?! (?:all |also |often )?be (?:found|detected|noticed|tasted|smelled|perceived))|could|may|might|potentially|optionally|at (?:the )?(?:higher|lower|warmer|cooler|high|low|warm|cool|upper)|with (?:warmer|cooler|higher|lower)|warmer temperatures|cooler temperatures|higher temperatures|lower temperatures)\b/;
 // A pairing or use marker covers the next few words, which name other ingredients or beer
 // styles ("ideal for fruity Belgian ales"); flavour named later in the clause is the product's own.
 const PAIRING =
-  /\b(?:(?<!\b(?:notable|celebrated|known|looking|aiming|prized|renowned|famous|valued|loved|noted|bred|selected|appreciated|recognised|recognized|revered) )for|ideal for|suited (?:to|for)|recommended for|great for|perfect for|used in|use in|pairs?(?: well| \w+ly)? with|complement\w*|accentuat\w*|enhanc(?:e|es|ing)\b|matches up|showcas\w*|alongside|blends?(?: well)? with|works well with|similar to|substitute\w*|replacement for)\b/g;
+  /\b(?:(?<!\b(?:notable|celebrated|known|looking|aiming|prized|renowned|famous|valued|loved|noted|bred|selected|appreciated|recognised|recognized|revered) )for|ideal for|suited (?:to|for)|recommended for|great for|perfect for|used in|use(?: it)? in|pair(?:s|ed)?(?: well| \w+ly)? with|complement\w*|accentuat\w*|enhanc(?:e|es|ing)\b|matches up|showcas\w*|alongside|blends?(?: well)? with|works well with|similar to|substitute\w*|replacement for)\b/g;
 const PAIRING_REACH_WORDS = 4;
 // A comparison names another product: its own phrase, and a "which…" phrase describing that
 // product ("unlike WLP840, which tends toward apple, WLP940…"), belong to it.

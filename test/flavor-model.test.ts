@@ -355,6 +355,21 @@ void test("tartness absence requires identified nonsouring yeast and complete re
       .value,
     null,
   );
+  // Whiteout is a non-souring yeast whose maker says it gives "a significant amount of acidity".
+  const whiteout = resolveFlavorProfile({
+    brewingInputs: withRows(input, "yeasts", [
+      ingredient({
+        name: "Whiteout",
+        laboratory: "Imperial Yeast",
+        productId: "B44",
+        type: "Ale",
+        grams: null,
+        stage: "unknown",
+      }),
+    ]),
+  }).axes.tartness;
+  assert.equal(whiteout.value, null);
+  assert.deepEqual(whiteout.reasons, ["yeast_maker_describes_acidity"]);
   assert.equal(
     resolveFlavorProfile({
       brewingInputs: withRows(input, "miscs", [ingredient({ name: "Unknown powder", grams: 1 })]),

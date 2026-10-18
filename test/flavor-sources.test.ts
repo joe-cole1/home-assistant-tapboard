@@ -89,6 +89,17 @@ void test("negated, conditional and pairing mentions are reported, never kept", 
     "fruity:conditional",
   ]);
   assert.deepEqual(words("A strain ideal for fruity Belgian ales.", "yeasts"), []);
+  assert.deepEqual(words("Use it in a sour fruited beer to maximize aromatics.", "yeasts"), []);
+  // "When paired with" is pairing advice and "when all is said and done" an idiom: neither is a
+  // condition on the product's own flavour.
+  assert.deepEqual(
+    words("Produces stone fruit esters that work great when paired with citrus hops.", "yeasts"),
+    ["stone fruit"],
+  );
+  assert.deepEqual(
+    words("When all is said and done, it gives citrus aromas and black pepper phenols.", "yeasts"),
+    ["citrus", "pepper", "phenolic"],
+  );
   // A pairing marker covers only the words right after it; the product's own flavour stays.
   assert.deepEqual(
     words("Residual sweetness accentuates malt character along with mild fruity esters.", "yeasts"),

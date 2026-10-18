@@ -10,7 +10,7 @@ Identity resolution uses role plus manufacturer/laboratory and product code, the
 
 Original Briess Carapils, Carapils Copper and reviewed Weyermann Carapils/Carafoam remain separate. Weyermann Carafoam supports light caramel/malty character and receives no original-Carapils body bonus. Carafa Special I is dehusked, whereas regular Carafa III is not given the dehusked rule. Briess Munich remains family-level with anomalous color preserved. Briess Special Roast is biscuit-style even when its provider category says Roasted. Hop variety is separate from physical form, origin and supplier. Descriptor resolution never establishes concentrated-product dose equivalence. Bare Hallertau resolves only to a labelled regional class, never a guessed variety. CTZ resolves through its sold designation (Columbus and Tomahawk names too; bare Zeus does not). Proprietary Arctic Blend remains an explicit unknown, and Styrian Goldings is ambiguous between reviewed regional products and remains unknown.
 
-Yeast tags represent fermentation expectations, never actual fruit/spice additions. Wyeast 3787 carries the fruity esters and phenolics its maker names. Diastatic strains are not classified as infection or souring. Whiteout has unknown souring applicability because its maker describes substantial acidity without a calibrated tartness measurement. The engine must inspect missing yeast and material acid/fruit/process evidence before asserting none expected.
+Yeast tags represent fermentation expectations, never actual fruit/spice additions. Wyeast 3787 carries the fruity esters and phenolics its maker names. Diastatic strains are not classified as infection or souring. A non-souring strain whose maker words are tart, sour or acidic (Imperial Whiteout's "significant amount of acidity") leaves tartness unknown, because no calibrated tartness measurement exists. The engine must inspect missing yeast and material acid/fruit/process evidence before asserting none expected.
 
 Lactose may be explicitly recorded in either fermentables or miscellaneous ingredients; both roles use the same validated mass/volume floor. This is an exact common-name material rule, not a producer intensity score.
 
@@ -40,13 +40,13 @@ Words come from a fixed lexicon (`scripts/flavor-sources/lexicon.ts`): only spel
 
 ### Yeasts
 
-`sourced/yeasts.json` holds every beer culture in the current catalogs of twelve labs, read from each lab's own sitemap, store listing or category pages within its robots.txt: White Labs, Wyeast, Omega, Escarpment Labs, Inland Island, Jasper, Propagate Lab, Bootleg Biology, Fermentis, Lallemand, CellarScience and Mangrove Jack's. The flavour text is only the lab's description, tasting notes or aroma fields; style lists, food pairings, reviews, equivalence tables and usage instructions are never read. Wine, cider, mead, sake, seltzer, malolactic, kombucha, baking and distilling cultures are out of scope, and products a lab resells for another maker (Pinnacle at Omega and White Labs, Lallemand at White Labs and Escarpment) are left to that maker.
+`sourced/yeasts.json` holds every beer culture in the current catalogs of thirteen labs, read from each lab's own sitemap, store listing or category pages within its robots.txt: White Labs, Wyeast, Imperial Yeast, Omega, Escarpment Labs, Inland Island, Jasper, Propagate Lab, Bootleg Biology, Fermentis, Lallemand, CellarScience and Mangrove Jack's. The flavour text is only the lab's description, tasting notes or aroma fields; style lists, food pairings, reviews, equivalence tables and usage instructions are never read. Wine, cider, mead, sake, seltzer, malolactic, kombucha, baking and distilling cultures are out of scope (Imperial's own "does not recommend … wort" marks its cider and seltzer strains), and products a lab resells for another maker (Pinnacle at Omega and White Labs, Lallemand at White Labs and Escarpment) are left to that maker.
 
 Souring follows what names the culture (species, strain type, category, product name and product type): a souring organism (Lactobacillus, Pediococcus, Brettanomyces, Lachancea, acetic or other bacteria) or sour style there makes it souring; otherwise a stated Saccharomyces species makes it not souring; otherwise a souring organism named only in the description (a blend partner or a suggested partner) leaves it unknown; otherwise an ordinary ale, lager, wheat or kveik yeast is not souring. "Blend", "culture" and "mixed culture" alone are not souring, because kveik is a mixed culture of Saccharomyces.
 
 Rebuild with `NODE_USE_ENV_PROXY=1 node scripts/flavor-sources/run.ts <lab…> [--refresh]` (lab ids are the file names in `scripts/flavor-sources/makers/`; `--refresh` re-reads cached pages to pick up new strains), review `data/flavor-sources/out/<lab>.json` (the text read, the words kept and left out, and pages that could not be read), then `node scripts/flavor-sources/run.ts --write yeasts`. The write step refuses two entries of one maker sharing a name or code.
 
-Not covered: Imperial Yeast keeps its hand-reviewed facts because its site terms forbid copying its content; Lallemand's withdrawn LalBrew Köln and London ESB have no current maker page (Köln keeps its reviewed identity without words); DrYeast has no maker site; GigaYeast and Yeast Bay are defunct.
+Not covered: Lallemand's withdrawn LalBrew Köln and London ESB have no current maker page (Köln keeps its reviewed identity without words); DrYeast has no maker site; GigaYeast and Yeast Bay are defunct.
 
 ### Hops
 
@@ -59,14 +59,6 @@ Bring the ingredient's exact Brewfather name, its maker and product code, and th
 ## Primary references
 
 - [Primary source](https://connect.lallemandbrewing.com/wp-content/uploads/2019/10/TDS_LPS_BREWINGYEAST_KOLN_ENG_A4.pdf): `lallemand-koln`.
-- [Primary source](https://www.imperialyeast.com/yeast-strains/juice): `imperial-a38`.
-- [Primary source](https://www.imperialyeast.com/yeast-strains/darkness): `imperial-a10`.
-- [Primary source](https://www.imperialyeast.com/yeast-strains/house): `imperial-a01`.
-- [Primary source](https://www.imperialyeast.com/yeast-strains/dieter): `imperial-g03`.
-- [Primary source](https://www.imperialyeast.com/yeast-strains/stefon): `imperial-g01`.
-- [Primary source](https://www.imperialyeast.com/yeast-strains/whiteout): `imperial-b44`.
-- [Primary source](https://www.imperialyeast.com/yeast-strains/rustic): `imperial-b56`.
-- [Primary source](https://www.imperialyeast.com/yeast-strains/napoleon): `imperial-b64`.
 - [Primary source](https://www.yakimachief.com/variety/citra-brand): `hop-citra-brand`.
 - [Primary source](https://www.yakimachief.com/variety/mosaic-brand): `hop-mosaic-brand`.
 - [Primary source](https://www.yakimachief.com/variety/cascade): `hop-cascade`.
