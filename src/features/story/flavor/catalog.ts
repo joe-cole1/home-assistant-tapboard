@@ -2,7 +2,7 @@ import type { BrewingIngredient, BrewingIngredientRole } from "../../beverages/b
 import type { FermentableFamily, IngredientFact, IngredientResolution } from "./catalog-types.ts";
 import { INGREDIENT_CLASSES, INGREDIENT_FACTS } from "./catalog-data.ts";
 
-export const CATALOG_VERSION = "tapboard-flavor-catalog-2";
+export const CATALOG_VERSION = "tapboard-flavor-catalog-3";
 
 /** Bounded exact identity normalization, never substring matching. Accents fold away so
  * "Mittelfruh" and "Mittelfrüh" are one name. */
@@ -193,24 +193,17 @@ function classResolution(
   role: BrewingIngredientRole,
   item: BrewingIngredient,
   name: string,
-  code: string,
   reason?: string,
 ): IngredientResolution | null {
   const type = identity(item.type);
-  const text = role === "yeasts" ? `${name} ${code}`.trim() : name;
-  if (
-    !name ||
-    // Souring cultures and lager strains are never named by an ale-family class.
-    (role === "yeasts" && (SOURING_CULTURE.test(text) || /lager/.test(text))) ||
-    (role === "fermentables" && /\bmalt|malz|wheat|rye|barley|spelt/.test(name))
-  )
+  if (!name || (role === "fermentables" && /\bmalt|malz|wheat|rye|barley|spelt/.test(name)))
     return null;
   const match = INGREDIENT_CLASSES.find(
     (candidate) =>
       candidate.roles.includes(role) &&
       (candidate.types.length === 0 || candidate.types.includes(type)) &&
-      candidate.pattern.test(text) &&
-      !candidate.exclude?.test(text),
+      candidate.pattern.test(name) &&
+      !candidate.exclude?.test(name),
   );
   if (!match) return null;
   return {
@@ -219,7 +212,7 @@ function classResolution(
     family: role === "fermentables" ? match.family : null,
     descriptors: match.descriptors,
     sourceUrls: [],
-    souring: match.souring,
+    souring: null,
     functions: match.functions,
     bodyClass: null,
     roastClass: "none",
@@ -256,7 +249,7 @@ export function resolveIngredient(
   const code = identity(item.productId);
   const facts = INGREDIENT_FACTS.filter((fact) => fact.role === role);
   const fallback = (reason: string) =>
-    classResolution(role, item, name, code, reason) ?? unresolved(reason);
+    classResolution(role, item, name, reason) ?? unresolved(reason);
   if (
     role === "hops" &&
     CONCENTRATED_HOP.test(`${item.name ?? ""} ${item.form ?? ""} ${item.type ?? ""}`)
@@ -305,7 +298,7 @@ export function resolveIngredient(
   // Exception only for a full exact branded name with no laboratory or product code.
   if (role === "yeasts" && !manufacturer && !code && name === "lallemand verdant ipa yeast") {
     return result(
-      INGREDIENT_FACTS.find((fact) => fact.id === "lallemand-verdant")!,
+      INGREDIENT_FACTS.find((fact) => fact.id === "lallemand-verdant-ipa")!,
       item,
       ["Laboratory established by exact branded product name."],
     );
@@ -359,7 +352,7 @@ export function resolveIngredient(
     }
     // Fruit, spices and processing aids listed as fermentables; grains, sugars and extracts never.
     if (["", "other", "adjunct"].includes(identity(item.type))) {
-      const adjunct = classResolution(role, item, name, code);
+      const adjunct = classResolution(role, item, name);
       if (adjunct) return adjunct;
     }
     const property = propertyResolution(item, name);

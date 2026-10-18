@@ -128,7 +128,7 @@ export function sensoryBand(key: SensoryAxis, value: number | null, manual = fal
           : "Very high";
 }
 
-export const MODEL_VERSION = "recipe-flavor-2";
+export const MODEL_VERSION = "recipe-flavor-3";
 /** Shared saturating dose→intensity map on the 0–5 scale. */
 function saturate(units: number): number {
   return -5 * Math.expm1(-units / 5);
@@ -468,6 +468,11 @@ function predictions(
           ["ale", "lager", "wheat"].includes(row.ingredient.type?.trim().toLowerCase() ?? "") &&
           !SOURING_CULTURE.test(yeastIdentity(row))),
     );
+  // A non-souring yeast whose maker says it gives tartness or acidity (Whiteout's "significant
+  // amount of acidity") does not support "none expected" either.
+  const yeastAcidity = yeasts.some((row) =>
+    row.resolution.descriptors.some((word) => ["tart", "sour", "acidic"].includes(word)),
+  );
   const gristShared = grist.fractions.some(({ fraction }) => fraction > 0);
   const acidulated = grist.fractions.some(
     ({ row, fraction }) =>
@@ -505,6 +510,7 @@ function predictions(
     );
   if (
     yeastKnown &&
+    !yeastAcidity &&
     miscsKnown &&
     !acidulated &&
     !unknownMaterial &&
@@ -524,9 +530,11 @@ function predictions(
         ? "souring_or_finished_acid_requires_separate_model"
         : !yeastKnown
           ? "missing_or_ambiguous_yeast"
-          : acidulated
-            ? "acidulated_malt_requires_review"
-            : "incomplete_absence_support",
+          : yeastAcidity
+            ? "yeast_maker_describes_acidity"
+            : acidulated
+              ? "acidulated_malt_requires_review"
+              : "incomplete_absence_support",
     ]);
   return axes;
 }
@@ -672,16 +680,15 @@ const GAP_ROLE: Readonly<Record<BrewingIngredientRole, string>> = {
   yeasts: "Yeast",
   miscs: "Misc",
 };
-/** Named ingredients a reviewed catalog entry would improve: unresolved rows of any role, and
- * yeasts that fell back to a generic class. Property-classified malts and spice classes are
- * complete, and an unnamed row needs a name in Brewfather rather than a catalog entry. */
+/** Named ingredients a catalog entry would improve: unresolved rows of any role. Property-classified
+ * malts and spice classes are complete, and an unnamed row needs a name in Brewfather rather than
+ * a catalog entry. */
 function catalogGaps(features: ReturnType<typeof resolveFeatures>): string[] {
   const gaps = new Set<string>();
   for (const role of ROLES)
     for (const { ingredient, resolution } of features.rows[role]) {
       const name = ingredient.name?.trim();
-      const generic = role === "yeasts" && resolution.id?.startsWith("class-") === true;
-      if (!name || (resolution.level !== "unresolved" && !generic)) continue;
+      if (!name || resolution.level !== "unresolved") continue;
       const maker = role === "yeasts" ? ingredient.laboratory : ingredient.supplier;
       const identity = [maker, ingredient.productId].filter((part) => part?.trim()).join(" ");
       gaps.add(

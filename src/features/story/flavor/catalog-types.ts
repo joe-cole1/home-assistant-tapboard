@@ -1,40 +1,44 @@
 import type { BrewingIngredientRole } from "../../beverages/brewing-types.ts";
-export type FermentableFamily =
-  | "pilsner"
-  | "pale"
-  | "wheat"
-  | "vienna"
-  | "munich"
-  | "biscuit"
-  | "aromatic"
-  | "crystal_light"
-  | "crystal_dark"
-  | "roasted"
-  | "chocolate"
-  | "dehusked_roast"
-  | "flaked"
-  | "rye"
-  | "carapils"
-  | "sugar"
-  | "lactose"
-  | "processing"
-  | "extract_pale"
-  | "extract_dark"
-  | "smoked"
-  | "peated";
-export type IngredientFunction =
-  | "nonextract"
-  | "lactose"
-  | "botanical"
-  | "mash_acid"
-  | "antioxidant"
-  | "aldc"
-  | "thiol_precursor"
-  | "finished_acid"
-  | "fermentable_sugar"
-  | "water_treatment"
-  | "processing"
-  | "fruit";
+export const FERMENTABLE_FAMILIES = [
+  "pilsner",
+  "pale",
+  "wheat",
+  "vienna",
+  "munich",
+  "biscuit",
+  "aromatic",
+  "crystal_light",
+  "crystal_dark",
+  "roasted",
+  "chocolate",
+  "dehusked_roast",
+  "flaked",
+  "rye",
+  "carapils",
+  "sugar",
+  "lactose",
+  "processing",
+  "extract_pale",
+  "extract_dark",
+  "smoked",
+  "peated",
+] as const;
+export type FermentableFamily = (typeof FERMENTABLE_FAMILIES)[number];
+export const INGREDIENT_FUNCTIONS = [
+  "nonextract",
+  "lactose",
+  "botanical",
+  "mash_acid",
+  "antioxidant",
+  "aldc",
+  "thiol_precursor",
+  "finished_acid",
+  "fermentable_sugar",
+  "water_treatment",
+  "processing",
+  "fruit",
+] as const;
+export type IngredientFunction = (typeof INGREDIENT_FUNCTIONS)[number];
 export interface IngredientResolution {
   readonly id: string | null;
   readonly level: "product" | "family" | "unresolved";
@@ -73,7 +77,7 @@ export interface IngredientClass {
   readonly id: string;
   readonly label: string;
   readonly roles: readonly BrewingIngredientRole[];
-  /** Tested against the accent-folded lowercase name (yeasts: name and product code). */
+  /** Tested against the accent-folded lowercase name. */
   readonly pattern: RegExp;
   readonly exclude: RegExp | null;
   /** Lowercase Brewfather types the class applies to; empty means any type. */
@@ -81,6 +85,5 @@ export interface IngredientClass {
   readonly family: FermentableFamily | null;
   readonly descriptors: readonly string[];
   readonly functions: readonly IngredientFunction[];
-  readonly souring: boolean | null;
   readonly noticeableGPerL: number | null;
 }

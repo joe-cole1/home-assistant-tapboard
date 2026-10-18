@@ -5,9 +5,13 @@ description: Add or update a Tapboard flavor-catalog ingredient (yeast, hop, mal
 
 # Add or update a flavor-catalog ingredient
 
-The catalog lives in `src/features/story/flavor/catalog-data.ts` and is resolved by
-`src/features/story/flavor/catalog.ts`. Read `docs/flavor-catalog-sources.md` ("Generic classes"
-and "Adding or updating an ingredient") before editing.
+The catalog lives in `src/features/story/flavor/catalog-data.ts` (hand-reviewed facts and classes)
+and `src/features/story/flavor/sourced/<role>.json` (entries generated from makers' own pages), and
+is resolved by `src/features/story/flavor/catalog.ts`. Read `docs/flavor-catalog-sources.md`
+("Maker-sourced datasets", "Generic classes" and "Adding or updating an ingredient") before editing.
+
+No guesses: an ingredient's words are only what its maker states, extracted by the same rules as
+the generated data. Never add a word because it is typical of a style.
 
 ## 1. Gather the identity
 
@@ -20,44 +24,65 @@ operator before editing. Check today's result:
 node scripts/flavor-resolve.ts yeasts "Hefeweizen IV" --maker "White Labs" --code WLP380 --type Wheat
 ```
 
-## 2. Read the source
+## 2. A yeast from a lab with a reader
 
-Prefer the data sheet the operator provides, then the maker's own product page. Keep 2–5 short,
-lowercase tags the maker names, most prominent first. Never copy descriptions, intensity scores or
-wheels. Producer sites can be blocked from cloud sessions; if you only saw a search summary or a
+The labs in `scripts/flavor-sources/makers/` are read in full. A missing or changed strain from one
+of them is a refresh, never a hand edit:
+
+```sh
+NODE_USE_ENV_PROXY=1 node scripts/flavor-sources/run.ts <lab> --refresh
+```
+
+Review `data/flavor-sources/out/<lab>.json`: the text read for the strain, the words kept, the
+mentions left out and any unreadable pages. Then `node scripts/flavor-sources/run.ts --write yeasts`.
+If Brewfather calls the product something the maker doesn't print, add the Brewfather name to
+`BREWFATHER_NAMES` in `catalog-data.ts` (identity only). A reader that misreads a page is fixed in
+its `makers/<lab>.ts` with the page structure described in its doc comment. Lallemand asks for 60
+seconds between requests and Wyeast 10, so a refresh of those labs is slow.
+
+## 3. Anything else: a reviewed fact from the maker's text
+
+For a product from a maker without a reader, a withdrawn product, or an operator-supplied data
+sheet, prefer the sheet, then the maker's own product page. Save the flavour text (or the PDF) and
+extract its words:
+
+```sh
+node scripts/flavor-sources/words.ts yeasts sheet.pdf
+```
+
+Use exactly the `words` it prints, in order (at most 8). If the maker's phrase is a real flavour the
+lexicon lacks (it shows up under `unmatched`), add it to `scripts/flavor-sources/lexicon.ts` with a
+test in `test/flavor-sources.test.ts`; only spelling, plural and part-of-speech variants may share a
+word. Never copy descriptions, intensity scores or wheels. If you only saw a search summary or a
 retailer copy, record that in `limitations`. An uploaded sheet with no public URL cites the maker's
-product page and adds the limitation "Reviewed from an operator-supplied data sheet dated YYYY-MM-DD."
+product page and adds the limitation "Reviewed from an operator-supplied data sheet dated
+YYYY-MM-DD."
 
-## 3. Choose fact or class
+Choose fact or class:
 
-- **Fact** (`INGREDIENT_FACTS`, built with `fact(...)`): one named product from one maker, such as a
+- **Fact** (`REVIEWED_FACTS`, built with `fact(...)`): one named product from one maker, such as a
   yeast strain, hop variety, branded malt or branded adjunct. Hop varieties go in `hopVarieties()`
   with `variety(...)`.
-- **Class** (`INGREDIENT_CLASSES`): a generic family whose members share character, such as a spice,
-  a fruit or a yeast style. The first matching class wins, so keep the order: yeast styles,
-  processing aids and Brewfather types, citrus peel/zest, fruit (before plants so acidity is never
-  hidden), plants, spirits, honey/maple.
+- **Class** (`INGREDIENT_CLASSES`): a generic adjunct family that names itself, such as a spice or a
+  fruit. There are no yeast classes. The first matching class wins, so keep the order: processing
+  aids and Brewfather types, citrus peel/zest, fruit (before plants so acidity is never hidden),
+  plants, spirits, honey/maple.
 
 Fields that matter:
 
-| Role         | Set                                                                                                                                                                                                                    |
-| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| yeasts       | `manufacturer` and `manufacturerAliases` (exact Brewfather laboratory spellings), `codes`, `aliases`, `descriptors`, `souring: false` for ordinary strains (`null` when the maker describes acidity or mixed cultures) |
-| hops         | `aliases` (common spellings), `descriptors`; no manufacturer                                                                                                                                                           |
-| fermentables | `manufacturer`, `aliases`, `family` (a `FermentableFamily`), `descriptors` from the maltster, `roastClass`/`bodyClass` when they apply                                                                                 |
-| miscs        | `functions` (`botanical`, `fruit`, `processing`, …), `descriptors`, `noticeableGPerL` (the g/L at which the addition is clearly noticeable)                                                                            |
+| Role         | Set                                                                                                                                                                                                                                                                         |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| yeasts       | `manufacturer` and `manufacturerAliases` (exact Brewfather laboratory spellings), `codes`, `aliases`, `descriptors`; `souring` true for a stated souring organism or sour culture, false for a stated Saccharomyces or ordinary ale/lager/wheat/kveik yeast, otherwise null |
+| hops         | `aliases` (common spellings), `descriptors`; no manufacturer                                                                                                                                                                                                                |
+| fermentables | `manufacturer`, `aliases`, `family` (a `FermentableFamily`), `descriptors` from the maltster, `roastClass`/`bodyClass` when they apply                                                                                                                                      |
+| miscs        | `functions` (`botanical`, `fruit`, `processing`, …), `descriptors`, `noticeableGPerL` (the g/L at which the addition is clearly noticeable)                                                                                                                                 |
 
-Reuse existing words and spellings ("tropical fruit", "stone fruit", "passion fruit"). Yeast words
-banana, clove, phenolic, pepper and spicy weigh more than other yeast words. List the current
-vocabulary with:
-
-```sh
-node --input-type=module -e 'const d = await import("./src/features/story/flavor/catalog-data.ts"); console.log([...new Set([...d.INGREDIENT_FACTS, ...d.INGREDIENT_CLASSES].flatMap((e) => e.descriptors))].sort().join(", "))'
-```
+Yeast words banana, clove, phenolic, pepper and spicy weigh more than other yeast words.
 
 ## 4. Record, test and version
 
-1. Add `- [Primary source](URL): \`fact-id\`.`to "Primary references" in`docs/flavor-catalog-sources.md`. The catalog test fails if a fact is missing there.
+1. Add a line of the form ``- [Primary source](URL): `fact-id`.`` to "Primary references" in
+   `docs/flavor-catalog-sources.md`. The catalog test fails if a reviewed fact is missing there.
 2. Add a resolution assertion to `test/flavor-catalog.test.ts` (exact name with maker and code,
    expected id and descriptors). When a corpus beer changes, add an expectation in
    `test/flavor-corpus.test.ts` and run `node scripts/report-flavor-corpus.ts`.

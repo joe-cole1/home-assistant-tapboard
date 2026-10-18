@@ -355,6 +355,21 @@ void test("tartness absence requires identified nonsouring yeast and complete re
       .value,
     null,
   );
+  // Whiteout is a non-souring yeast whose maker says it gives "a significant amount of acidity".
+  const whiteout = resolveFlavorProfile({
+    brewingInputs: withRows(input, "yeasts", [
+      ingredient({
+        name: "Whiteout",
+        laboratory: "Imperial Yeast",
+        productId: "B44",
+        type: "Ale",
+        grams: null,
+        stage: "unknown",
+      }),
+    ]),
+  }).axes.tartness;
+  assert.equal(whiteout.value, null);
+  assert.deepEqual(whiteout.reasons, ["yeast_maker_describes_acidity"]);
   assert.equal(
     resolveFlavorProfile({
       brewingInputs: withRows(input, "miscs", [ingredient({ name: "Unknown powder", grams: 1 })]),
@@ -576,38 +591,34 @@ void test("flavoured sugars name themselves from a meaningful grist share", () =
   assert.equal(sugar("Honey", 100).includes("honey"), false);
   assert.ok(sugar("Maple Syrup", 600).includes("maple"));
 });
-void test("a generic yeast class gives style words and the same tartness as the unresolved path", () => {
+void test("a yeast's words come only from its maker; an unknown strain adds none", () => {
   const malt = [grainRow("Pale Malt", 5000)];
   const hefe = profileOf(malt, [
     yeastRow({
-      name: "Hefeweizen IV",
+      name: "Hefeweizen IV Ale",
       laboratory: "White Labs",
       productId: "WLP380",
       type: "Wheat",
     }),
   ]);
-  assert.deepEqual(labelled(hefe, "yeasts").sort(), ["banana", "clove"]);
+  assert.deepEqual(labelled(hefe, "yeasts"), ["phenolic", "clove", "spicy"]);
   assert.equal(hefe.axes.tartness.value, 0);
+  // An unknown strain gets no style words but keeps the unresolved non-souring tartness path.
+  const unknown = profileOf(malt, [
+    yeastRow({ name: "Hefeweizen IV", laboratory: "Some Lab", productId: "X1", type: "Wheat" }),
+  ]);
+  assert.deepEqual(labelled(unknown, "yeasts"), []);
+  assert.equal(unknown.axes.tartness.value, 0);
   const untyped = profileOf(malt, [yeastRow({ name: "Belgian Saison", type: "" })]);
   assert.deepEqual(labelled(untyped, "yeasts"), []);
   assert.deepEqual(untyped.axes.tartness.reasons, ["missing_or_ambiguous_yeast"]);
 });
-void test("catalog gaps name unrecognised ingredients and generic yeasts for Admin only", () => {
+void test("catalog gaps name unrecognised ingredients for Admin only", () => {
   const calculation = profileOf(
     [grainRow("Pale Malt", 5000), grainRow("House Special Malt", 200)],
     [
-      yeastRow({
-        name: "Hefeweizen IV",
-        laboratory: "White Labs",
-        productId: "WLP380",
-        type: "Wheat",
-      }),
-      yeastRow({
-        name: "Hefeweizen IV",
-        laboratory: "White Labs",
-        productId: "WLP380",
-        type: "Wheat",
-      }),
+      yeastRow({ name: "Hefeweizen IV", laboratory: "Some Lab", productId: "X1", type: "Wheat" }),
+      yeastRow({ name: "Hefeweizen IV", laboratory: "Some Lab", productId: "X1", type: "Wheat" }),
     ],
     [
       ingredient({ name: "Cloves", type: "Spice", grams: 2, stage: "unknown" }),
@@ -619,11 +630,11 @@ void test("catalog gaps name unrecognised ingredients and generic yeasts for Adm
     calculation.catalogGaps.map((gap) => gap.split(":")[0]),
     [
       "Fermentable · House Special Malt",
-      "Yeast · Hefeweizen IV (White Labs WLP380)",
+      "Yeast · Hefeweizen IV (Some Lab X1)",
       "Misc · Mystery Spice",
     ],
   );
-  assert.ok(calculation.catalogGaps[1]!.includes("Generic hefeweizen class"));
+  assert.ok(calculation.catalogGaps[1]!.includes("outside the reviewed catalog"));
   const publicGuidance = JSON.stringify(publicFlavorGuidance(calculation));
   assert.equal(publicGuidance.includes("Mystery Spice"), false);
   assert.equal(publicGuidance.includes("catalogGaps"), false);

@@ -738,9 +738,9 @@ void test("normalized batch guidance preserves selected source and excludes dens
 });
 
 void test("Admin guidance names catalog gaps that public story JSON never carries", () => {
-  const { service } = fixture({ flavorBatch: batchFixture("B015") });
+  const { service } = fixture({ flavorBatch: batchFixture("B044") });
   const gaps = service.getAdminBeverageGuidance(BEVERAGE_ID).flavorDetails?.catalogGaps ?? [];
-  assert.ok(gaps.some((gap) => gap.startsWith("Yeast · Lutra Kveik (Omega OYL-071):")));
+  assert.ok(gaps.some((gap) => gap.startsWith("Yeast · Dry English Ale (DrYeast Y36):")));
   const publicJson = JSON.stringify(service.getStory(TAP_ID));
   assert.ok(!publicJson.includes("catalogGaps"));
   assert.ok(!publicJson.includes("outside the reviewed catalog"));
