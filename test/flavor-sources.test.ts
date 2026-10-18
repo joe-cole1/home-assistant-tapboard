@@ -128,6 +128,24 @@ void test("negated, conditional and pairing mentions are reported, never kept", 
     ),
     [],
   );
+  // Hop sources: "void of" negates a whole slash list, "notable for" and "can all be found"
+  // describe the hop itself, and adverbs do not hide pairing advice.
+  assert.deepEqual(words("Almost completely void of the resinous/piney character.", "hops"), []);
+  assert.deepEqual(words("Notable for its complexity of fruity and citrus flavors.", "hops"), [
+    "fruity",
+    "citrus",
+  ]);
+  assert.deepEqual(words("Peach-mango lemonade, papaya and guava can all be found.", "hops"), [
+    "peach",
+    "mango",
+    "papaya",
+    "guava",
+  ]);
+  assert.deepEqual(words("Pairs excellently with hops that bring resinous depth.", "hops"), []);
+  assert.deepEqual(
+    words("Melon, citrus-lime, apple blossom and green pepper; juniper and gin berries.", "hops"),
+    ["melon", "citrus", "lime", "floral", "green pepper", "juniper"],
+  );
   // Dried and dark fruit are yeast esters too, unlike caramel or bread.
   assert.deepEqual(words("Caramel, plum and dark fruit esters.", "yeasts"), ["plum", "dark fruit"]);
 });

@@ -19,17 +19,17 @@ export interface Extraction {
 // A negator reaches forward to the next comma in its clause: "low fruitiness and esters" negates
 // both, while "no diacetyl, fruity" keeps "fruity".
 const NEGATOR =
-  /\b(?:no|not|non|low|lower|minimal|minimum|without|free of|clear of|absence of|absent|lacks?|lacking|less|reduced|reduces?|suppress\w*|avoid\w*|never|nor|zero)\b/g;
+  /\b(?:no|not|non|low|lower|minimal|minimum|without|free of|clear of|void of|devoid of|none of|little of|absence of|absent|lacks?|lacking|less|reduced|reduces?|suppress\w*|avoid\w*|never|nor|zero)\b/g;
 // Conditional and temperature-dependent statements describe what can happen, not what the
 // product gives. A condition covers its own comma-separated part of the clause and everything
 // after it, so "fruity, especially at higher temperatures" keeps "fruity" while "at warmer
 // temperatures, banana" and "may produce banana, clove" leave every word out.
 const CONDITIONAL =
-  /\b(?:if|when|whenever|unless|depending|depends|can|could|may|might|potentially|optionally|at (?:the )?(?:higher|lower|warmer|cooler|high|low|warm|cool|upper)|with (?:warmer|cooler|higher|lower)|warmer temperatures|cooler temperatures|higher temperatures|lower temperatures)\b/;
+  /\b(?:if|when|whenever|unless|depending|depends|can(?! (?:all |also |often )?be (?:found|detected|noticed|tasted|smelled|perceived))|could|may|might|potentially|optionally|at (?:the )?(?:higher|lower|warmer|cooler|high|low|warm|cool|upper)|with (?:warmer|cooler|higher|lower)|warmer temperatures|cooler temperatures|higher temperatures|lower temperatures)\b/;
 // A pairing or use marker covers the next few words, which name other ingredients or beer
 // styles ("ideal for fruity Belgian ales"); flavour named later in the clause is the product's own.
 const PAIRING =
-  /\b(?:for|ideal for|suited (?:to|for)|recommended for|great for|perfect for|used in|use in|pairs?(?: well)? with|complement\w*|accentuat\w*|enhanc(?:e|es|ing)\b|matches up|showcas\w*|alongside|blends?(?: well)? with|works well with|similar to|substitute\w*|replacement for)\b/g;
+  /\b(?:(?<!\b(?:notable|celebrated|known|looking|aiming|prized|renowned|famous|valued|loved|noted|bred|selected|appreciated|recognised|recognized|revered) )for|ideal for|suited (?:to|for)|recommended for|great for|perfect for|used in|use in|pairs?(?: well| \w+ly)? with|complement\w*|accentuat\w*|enhanc(?:e|es|ing)\b|matches up|showcas\w*|alongside|blends?(?: well)? with|works well with|similar to|substitute\w*|replacement for)\b/g;
 const PAIRING_REACH_WORDS = 4;
 // A comparison names another product: its own phrase, and a "which…" phrase describing that
 // product ("unlike WLP840, which tends toward apple, WLP940…"), belong to it.
@@ -52,14 +52,19 @@ const STOPWORDS = new Set(
 );
 
 function normalise(text: string): string {
-  return text
-    .replace(/[®™℠]/g, "")
-    .normalize("NFKD")
-    .replace(/\p{M}/gu, "")
-    .toLowerCase()
-    .replace(/[‐‑–—-]/g, " ")
-    .replace(/[\/&+]/g, " , ")
-    .replace(/[^\S\n]+/g, " ");
+  return (
+    text
+      .replace(/[®™℠]/g, "")
+      .normalize("NFKD")
+      .replace(/\p{M}/gu, "")
+      .toLowerCase()
+      .replace(/[‐‑–—-]/g, " ")
+      // A slash joins alternatives inside one statement ("resinous/piney" shares its negation).
+      .replace(/\//g, " / ")
+      .replace(/&/g, " and ")
+      .replace(/\+/g, " , ")
+      .replace(/[^\S\n]+/g, " ")
+  );
 }
 const escape = (phrase: string) => phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const entries: readonly { readonly phrase: string; readonly term: LexiconTerm | null }[] = [
