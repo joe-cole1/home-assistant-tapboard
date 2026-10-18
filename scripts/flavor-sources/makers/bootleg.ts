@@ -7,6 +7,7 @@ import {
   souringFromStated,
   titleAliases,
   type MakerSource,
+  isBeerCulture,
 } from "../maker.ts";
 
 const ORIGIN = "https://bootlegbiology.com";
@@ -50,7 +51,7 @@ export const maker: MakerSource = {
         const text = await fragmentText(product.description);
         const type = /^\s*type\s*:\s*(.+)$/im.exec(text)?.[1]?.trim();
         // Bundles, gel packs and custom-blend services state no organisms.
-        if (!type) continue;
+        if (!type || !isBeerCulture(product.name)) continue;
         const profile =
           /^\s*flavou?r\s*\/?\s*aroma profile\s*:\s*(.+)$/im.exec(text)?.[1]?.trim() ?? "";
         const name = (await fragmentText(product.name))

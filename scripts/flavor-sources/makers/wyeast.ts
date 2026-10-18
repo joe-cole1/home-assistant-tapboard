@@ -1,6 +1,13 @@
 import type { ParsedProduct } from "../build.ts";
 import { fetchSource } from "../fetch.ts";
-import { inDom, makerSource, souringFromStated, titleAliases, type MakerSource } from "../maker.ts";
+import {
+  inDom,
+  makerSource,
+  souringFromStated,
+  titleAliases,
+  type MakerSource,
+  isBeerCulture,
+} from "../maker.ts";
 
 const ORIGIN = "https://wyeastlab.com";
 
@@ -8,10 +15,11 @@ const ORIGIN = "https://wyeastlab.com";
  * `.description` block with "Species:" and "Profile:" (the flavour text) before "Used in:". */
 function readPage() {
   const description = document.querySelector<HTMLElement>(".description")?.innerText ?? "";
+  const headline = document.querySelector("h2.headline")?.textContent ?? "";
   return {
-    code: (document.querySelector("h2.headline")?.textContent ?? "")
-      .replace(/^\s*strain:\s*/i, "")
-      .trim(),
+    // Only culture pages carry a "Strain:" headline; nutrients and finings do not.
+    culture: /^\s*strain:/i.test(headline),
+    code: headline.replace(/^\s*strain:\s*/i, "").trim(),
     name: (document.querySelector("h3.subheadline")?.textContent ?? "").trim(),
     species: /species:\s*([^\n]+)/i.exec(description)?.[1]?.trim() ?? "",
     profile: /profile:\s*([\s\S]*?)(?:\n\s*used in:|$)/i.exec(description)?.[1]?.trim() ?? "",
@@ -34,10 +42,12 @@ export const maker: MakerSource = {
       try {
         const source = await fetchSource(url);
         const page = await inDom(source.body, readPage);
+        if (!page.culture) continue;
         if (!page.code || !page.name) {
           gaps.push({ url, reason: "no strain code or name on the page" });
           continue;
         }
+        if (!isBeerCulture(page.name)) continue;
         products.push({
           id: `wyeast-${page.code.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
           role: "yeasts",

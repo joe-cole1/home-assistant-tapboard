@@ -6,6 +6,7 @@ import {
   souringFromStated,
   titleAliases,
   type MakerSource,
+  isBeerCulture,
 } from "../maker.ts";
 
 const ORIGIN = "https://inlandislandyeast.com";
@@ -44,6 +45,7 @@ export const maker: MakerSource = {
           continue;
         }
         const [, inis, name] = code as unknown as [string, string, string];
+        if (!isBeerCulture(name)) continue;
         const category =
           strain.class_list
             .find((item) => item.startsWith("yeast-strain-category-"))

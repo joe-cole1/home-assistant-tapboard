@@ -8,6 +8,7 @@ import {
   souringFromStated,
   titleAliases,
   type MakerSource,
+  isBeerCulture,
 } from "../maker.ts";
 
 const ORIGIN = "https://omegayeast.com";
@@ -40,7 +41,8 @@ export const maker: MakerSource = {
         ({ product }) =>
           /brewing yeast/i.test(product.product_type) &&
           !product.variants.some((variant) => /^PIN-/i.test(variant.sku ?? "")) &&
-          !/pinnacle/i.test(`${product.title} ${product.body_html ?? ""}`),
+          !/pinnacle/i.test(`${product.title} ${product.body_html ?? ""}`) &&
+          isBeerCulture(product.title),
       )
       .slice(0, limit);
     const products: ParsedProduct[] = [];

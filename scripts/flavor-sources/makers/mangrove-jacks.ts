@@ -7,6 +7,7 @@ import {
   souringFromStated,
   titleAliases,
   type MakerSource,
+  isBeerCulture,
 } from "../maker.ts";
 
 const ORIGIN = "https://mangrovejacks.com";
@@ -16,9 +17,7 @@ export const maker: MakerSource = {
   role: "yeasts",
   async read(limit) {
     const listed = (await shopifyProducts(ORIGIN))
-      .filter(
-        ({ product }) => /^M\d+\s/.test(product.title) && !/cider|mead|wine/i.test(product.title),
-      )
+      .filter(({ product }) => /^M\d+\s/.test(product.title) && isBeerCulture(product.title))
       .slice(0, limit);
     const products: ParsedProduct[] = [];
     const gaps: { url: string; reason: string }[] = [];

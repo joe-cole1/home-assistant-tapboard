@@ -5,7 +5,7 @@ import { extractDescriptors } from "../scripts/flavor-sources/extract.ts";
 import { buildEntry } from "../scripts/flavor-sources/build.ts";
 import { isBotChallenge, parseRobots, robotsAllows } from "../scripts/flavor-sources/fetch.ts";
 import { LEXICON } from "../scripts/flavor-sources/lexicon.ts";
-import { slug, souringFromStated } from "../scripts/flavor-sources/maker.ts";
+import { isBeerCulture, slug, souringFromStated } from "../scripts/flavor-sources/maker.ts";
 import { REVIEWED_FACTS } from "../src/features/story/flavor/catalog-data.ts";
 import { sourcedFacts } from "../src/features/story/flavor/sourced.ts";
 
@@ -71,6 +71,24 @@ void test("negated, conditional and pairing mentions are reported, never kept", 
     reasons("Clean and crisp, with the slightest hint of spice from hops.", "yeasts"),
     ["spicy:other ingredient"],
   );
+  assert.deepEqual(words("Horse blanket, fresh leather; funky and tart.", "yeasts"), [
+    "horse blanket",
+    "leather",
+    "funky",
+    "tart",
+  ]);
+  // Words naming another ingredient or material belong to it, but a hop maker's "fruity hop" is
+  // the hop itself.
+  assert.deepEqual(
+    words("Huge citrus and mango; emphasizes the juiciness of tropical hops.", "yeasts"),
+    ["citrus", "mango"],
+  );
+  assert.deepEqual(words("For honey based meads and grape derived products.", "yeasts"), []);
+  assert.deepEqual(words("A fruity hop with melon notes.", "hops"), ["fruity", "melon"]);
+  assert.deepEqual(reasons("Clean, steering clear of heavy esters or phenolics.", "yeasts"), [
+    "phenolic:negated",
+  ]);
+  assert.deepEqual(words("Citrus aromas this side of an orange grove.", "yeasts"), ["citrus"]);
   // Dried and dark fruit are yeast esters too, unlike caramel or bread.
   assert.deepEqual(words("Caramel, plum and dark fruit esters.", "yeasts"), ["plum", "dark fruit"]);
 });
@@ -216,7 +234,7 @@ void test("a built entry carries only extracted words and says when the maker na
   assert.ok(built.limitations.includes("The maker's text names no flavour words."));
   assert.deepEqual(
     extraction.excluded.map((item) => item.reason),
-    ["pairing"],
+    ["other ingredient"],
   );
   assert.doesNotThrow(() => sourcedFacts("yeasts", [built]));
 });
@@ -240,6 +258,21 @@ void test("souring follows what names the culture, and a description mention lea
     null,
   );
   assert.equal(souringFromStated("Wild Sacch"), null);
+  // Look-alike words are not souring organisms.
+  assert.equal(souringFromStated("West Coast Ale", "Diacetyl eliminated at the source."), false);
+  assert.equal(
+    souringFromStated("Kveik Ring", "Sourced from a farmhouse, isolated in our lab."),
+    false,
+  );
+  assert.equal(souringFromStated("Milkshake IPA Yeast", "Pairs with the lactose."), false);
+  assert.equal(souringFromStated("Blend of Saccharomyces cerevisiae, LAB"), true);
+  // Sour styles in a description are pairing advice; kveik is a mixed culture of yeasts.
+  assert.equal(
+    souringFromStated("Belgian Golden Ale Yeast", "From East Flanders; great for sours."),
+    false,
+  );
+  assert.equal(souringFromStated("Opshaug Kveik Ale Yeast", "A traditional mixed culture."), false);
+  assert.equal(souringFromStated("Flemish Ale Blend"), true);
   // A stated species outranks a pairing mention in the description.
   assert.equal(souringFromStated("Saccharomyces cerevisiae", "A good choice for sours."), false);
 });
@@ -247,4 +280,11 @@ void test("souring follows what names the culture, and a description mention lea
 void test("ids drop trademark signs before folding accents", () => {
   assert.equal(slug("SafBrew™ HA-18"), "safbrew-ha-18");
   assert.equal(slug("RØKKAR Kölsch®"), "rokkar-kolsch");
+});
+
+void test("the beer catalog leaves out wine, cider, mead and other non-beer cultures", () => {
+  assert.equal(isBeerCulture("WLP715 Champagne Yeast"), true);
+  assert.equal(isBeerCulture("Funky Cider Blend"), false);
+  assert.equal(isBeerCulture("Seltzer", "INIS-802 Seltzer Yeast"), false);
+  assert.equal(isBeerCulture("Malolactic Blend"), false);
 });

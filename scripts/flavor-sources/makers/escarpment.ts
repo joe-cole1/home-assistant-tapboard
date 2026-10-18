@@ -10,6 +10,7 @@ import {
   titleAliases,
   type MakerSource,
   type ShopifyProduct,
+  isBeerCulture,
 } from "../maker.ts";
 
 const ORIGIN = "https://escarpmentlabs.com";
@@ -36,7 +37,7 @@ export const maker: MakerSource = {
     const byCulture = new Map<string, ShopifyProduct>();
     for (const { product } of await shopifyProducts(ORIGIN)) {
       if (!/^(?:homebrew )?yeast$/i.test(product.product_type)) continue;
-      if (/^lalbrew/i.test(product.title)) continue;
+      if (/^lalbrew/i.test(product.title) || !isBeerCulture(product.title)) continue;
       if (product.variants.some((variant) => /^LAL-/i.test(variant.sku ?? ""))) continue;
       const key = culture(product.title).toLowerCase();
       const current = byCulture.get(key);
@@ -65,9 +66,10 @@ export const maker: MakerSource = {
           aliases: titleAliases(name, [], ["Yeast"]),
           flavorText: [facts["flavour description"] ?? "", description].join("\n"),
           source: makerSource(source),
+          // Tags are use facets ("Sour" marks strains suited to sour beers), not organisms.
           souring: souringFromStated(
-            `${product.product_type} ${product.tags.join(" ")} ${name}`,
-            description,
+            `${product.product_type} ${name}`,
+            `${product.tags.join(" ")}\n${description}`,
           ),
         });
       } catch (error) {

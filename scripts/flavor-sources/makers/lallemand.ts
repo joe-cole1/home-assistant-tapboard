@@ -47,9 +47,10 @@ export const maker: MakerSource = {
       ))
         slugs.add(match[1]!);
     }
-    const sitemap = await fetchSource(`${ORIGIN}/sitemap_en.xml`);
+    const sitemap = await fetchSource(`${ORIGIN}/sitemaps/sitemap_en.xml`);
+    if (!sitemap.body.includes("<urlset")) throw new Error(`${sitemap.url} is not a sitemap`);
     for (const match of sitemap.body.matchAll(
-      /<loc>https:\/\/www\.lallemandbrewing\.com\/en\/global\/products\/([a-z0-9-]+)\/<\/loc>/g,
+      /<loc>https:\/\/www\.lallemandbrewing\.com\/en\/global\/products\/([a-z0-9-]+)\/?<\/loc>/g,
     ))
       if (/yeast|lalbrew|wildbrew|sourvisiae/.test(match[1]!)) slugs.add(match[1]!);
     const candidates = [...slugs]

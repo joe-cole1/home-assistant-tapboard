@@ -75,6 +75,7 @@ export const LEXICON: readonly LexiconTerm[] = Object.freeze([
   ),
   term("apple", "apples", "green apple", "red apple"),
   term("pear", "pears"),
+  term("orchard fruit", "orchard fruits"),
   term("grape", "grapes", "white grape", "white grapes"),
   term("white wine", "wine like", "vinous"),
   term("fruity", "fruitiness", "fruit forward", "fruity esters", "fruity ester"),
@@ -117,6 +118,15 @@ export const LEXICON: readonly LexiconTerm[] = Object.freeze([
   term("bubblegum", "bubble gum"),
   term("phenolic", "phenols", "phenolics", "phenol"),
   term("honey", "honeyed", "honey like"),
+  // Wild and souring cultures
+  term("funky", "funk", "funkiness"),
+  term("leather", "leathery"),
+  term("barnyard"),
+  term("horse blanket"),
+  term("tart", "tartness"),
+  term("sour", "sourness"),
+  term("acidic", "acidity"),
+  term("yogurt", "yoghurt"),
   // Dried and dark fruit: crystal and dark malts, and the esters of Belgian and English yeasts.
   term("raisin", "raisins"),
   term("prune", "prunes"),
@@ -175,4 +185,6 @@ export const IGNORED_PHRASES: readonly string[] = Object.freeze([
   "grains of paradise",
   "spent grain",
   "orange pekoe",
+  "orange grove",
+  "orange groves",
 ]);

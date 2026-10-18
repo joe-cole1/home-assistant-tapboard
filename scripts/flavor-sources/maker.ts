@@ -84,24 +84,38 @@ export function titleAliases(
 }
 
 const SOURING_ORGANISM =
-  /lacto|pedio|bacteri|\blab\b|brett|lachancea|acetobacter|kombucha|\bsour|lambic|gueuze|geuze|berliner|flemish|flanders|roeselare|bruin|mixed (?:culture|ferment)/i;
+  /lacto(?!se)|pedio|bacteri|brett|lachancea|acetobacter|gluconobacter|kombucha/i;
+// "LAB" (lactic acid bacteria) counts only in capitals, so "our lab" is not an organism.
+const organism = (text: string) => SOURING_ORGANISM.test(text) || /\bLAB\b/.test(text);
+const SOUR_STYLE =
+  /\bsour(?:s|ed|ing|ness)?\b|sourvisiae|lambic|gueuze|geuze|berliner|flemish|flanders red|roeselare|bruin/i;
 const BREWING_SPECIES = /saccharomyces|cerevisiae|pastorianus|bayanus|uvarum/i;
 const ORDINARY_YEAST =
   /brewer.?s yeast|\bale\b|lager|wheat|weizen|kveik|\byeast\b|saison|k[oö]lsch/i;
 /** Souring from what a lab states about a culture. `stated` is what names the culture itself
- * (species, strain type, category, product name) and `text` is its description:
+ * (species, strain type, category, product name, product type) and `text` is its description
+ * and use tags:
  * - a souring organism or sour style in `stated` makes it souring;
  * - otherwise a stated Saccharomyces species makes it not souring;
- * - otherwise a souring organism mentioned in `text` (a blend partner or a pairing) leaves it
- *   unknown;
+ * - otherwise a souring organism in `text` (a blend partner, or a suggested partner) leaves it
+ *   unknown; sour styles there are pairing advice ("great for sours") and do not count;
  * - otherwise an ordinary ale, lager, wheat or kveik yeast is not souring, and anything else is
- *   unknown. A blend or culture is not souring by that word alone. */
+ *   unknown. "Blend", "culture" and "mixed culture" are not souring by themselves: kveik is a
+ *   mixed culture of Saccharomyces. */
 export function souringFromStated(stated: string, text = ""): boolean | null {
-  if (SOURING_ORGANISM.test(stated)) return true;
+  if (organism(stated) || SOUR_STYLE.test(stated)) return true;
   if (BREWING_SPECIES.test(stated)) return false;
-  if (SOURING_ORGANISM.test(text)) return null;
+  if (organism(text)) return null;
   return ORDINARY_YEAST.test(stated) ? false : null;
 }
+
+/** Whether a lab's name or category for a culture leaves it in the beer catalog: wine, cider,
+ * mead, sake, seltzer, kombucha, baking and distilling cultures are out of scope. Champagne
+ * yeasts stay, because brewers use them for strong beers and bottle conditioning. */
+export const isBeerCulture = (...labels: readonly string[]): boolean =>
+  !/\b(?:wine|cider|mead|sake|seltzer|malolactic|kombucha|sourdough|leaven|distill\w*)\b/i.test(
+    labels.join(" "),
+  );
 
 export interface ShopifyProduct {
   readonly handle: string;

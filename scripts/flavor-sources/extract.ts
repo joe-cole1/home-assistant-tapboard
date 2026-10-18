@@ -19,7 +19,7 @@ export interface Extraction {
 // A negator reaches forward to the next comma in its clause: "low fruitiness and esters" negates
 // both, while "no diacetyl, fruity" keeps "fruity".
 const NEGATOR =
-  /\b(?:no|not|non|low|lower|minimal|minimum|without|free of|absence of|absent|lacks?|lacking|less|reduced|reduces?|suppress\w*|avoid\w*|never|nor|zero)\b/g;
+  /\b(?:no|not|non|low|lower|minimal|minimum|without|free of|clear of|absence of|absent|lacks?|lacking|less|reduced|reduces?|suppress\w*|avoid\w*|never|nor|zero)\b/g;
 // Conditional and temperature-dependent statements describe what can happen, not what the
 // product gives, so every word in that clause is left out.
 const CONDITIONAL =
@@ -29,9 +29,17 @@ const CONDITIONAL =
 const PAIRING =
   /\b(?:for|ideal for|suited (?:to|for)|recommended for|great for|perfect for|used in|use in|pairs?(?: well)? with|complement\w*|accentuat\w*|enhanc\w*|matches up|showcas\w*|alongside|blends?(?: well)? with|works well with|similar to|substitute\w*|replacement for)\b/g;
 const PAIRING_REACH_WORDS = 4;
-// A flavour credited to another ingredient right after it ("a hint of spice from hops").
+// A flavour credited to another ingredient right after it ("a hint of spice from hops", "grape
+// derived products"), or naming another ingredient ("tropical hops" in yeast text; a hop maker's
+// "fruity hop" is the hop itself).
 const FROM_OTHER_INGREDIENT =
-  /^ (?:(?:that )?comes? )?from (?:the )?(?:hops?|malts?|grains?|grist|adjuncts?)\b/;
+  /^ (?:(?:(?:that )?comes? )?from (?:the )?(?:hops?|malts?|grains?|grist|adjuncts?)|based|derived)\b/;
+const OTHER_NOUN: Readonly<Record<BrewingIngredientRole, RegExp>> = {
+  fermentables: /^ hops?\b/,
+  hops: /^ malts?\b/,
+  yeasts: /^ (?:hops?|malts?)\b/,
+  miscs: /^ (?:hops?|malts?)\b/,
+};
 const STOPWORDS = new Set(
   "a an and are as at be been but by character characteristics contributes delivers distinct excellent flavor flavors flavour flavours from gives good great has have high hints imparts in into is it its known light medium mild moderate more most notes of on or over pleasant produces profile provides rich slightly strong subtle that the these this to touch very well which with aroma aromas aromatic taste tastes beer beers brewing brew style styles use used variety hop hops malt malts yeast strain also intense intensely nice clean crisp neutral balanced smooth dry sweet sweetness bitter bitterness body full finish mouthfeel".split(
     " ",
@@ -81,7 +89,8 @@ export function extractDescriptors(text: string, role: BrewingIngredientRole): E
       const negatedBy = negators.findLast((at) => at < match.index);
       const reason: ExcludedWord["reason"] | null =
         (term.maltOnly && (role === "yeasts" || role === "hops")) ||
-        FROM_OTHER_INGREDIENT.test(clause.slice(match.index + match[0].length))
+        FROM_OTHER_INGREDIENT.test(clause.slice(match.index + match[0].length)) ||
+        OTHER_NOUN[role].test(clause.slice(match.index + match[0].length))
           ? "other ingredient"
           : negatedBy !== undefined && !clause.slice(negatedBy, match.index).includes(",")
             ? "negated"

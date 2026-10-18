@@ -1,10 +1,17 @@
 import type { ParsedProduct } from "../build.ts";
 import { fetchSource } from "../fetch.ts";
-import { inDom, makerSource, souringFromStated, titleAliases, type MakerSource } from "../maker.ts";
+import {
+  inDom,
+  makerSource,
+  souringFromStated,
+  titleAliases,
+  type MakerSource,
+  isBeerCulture,
+} from "../maker.ts";
 
 const ORIGIN = "https://propagatelab.com";
 
-/** Propagate product pages: `h1` name, the SKU (their culture code), the product category link,
+/** Propagate product pages: `h1` name, the SKU (their culture code), the product's categories,
  * the attribute table (yeast pages list Flocculation and Attenuation) and the Description tab,
  * whose award lines ("2023 GABF Gold – …") follow the strain text and are never read. */
 function readPage() {
@@ -23,7 +30,10 @@ function readPage() {
   return {
     name: (document.querySelector("h1")?.textContent ?? "").trim(),
     sku: (document.querySelector(".sku")?.textContent ?? "").trim(),
-    category: (document.querySelector('a[href*="/product-category/"]')?.textContent ?? "").trim(),
+    // The product's own categories; the site menu links to every category.
+    category: [...document.querySelectorAll('.wp-block-post-terms a[href*="/product-category/"]')]
+      .map((link) => (link.textContent ?? "").trim())
+      .join(", "),
     attributes,
     description: lines.join("\n"),
   };
@@ -45,10 +55,9 @@ export const maker: MakerSource = {
       try {
         const source = await fetchSource(url);
         const page = await inDom(source.body, readPage);
-        // Nutrients, finings, lab services and kits have no fermentation attributes; sake and
-        // seltzer cultures are not beer ingredients.
+        // Nutrients, finings, lab services and kits have no fermentation attributes.
         if (!("flocculation" in page.attributes || "attenuation" in page.attributes)) continue;
-        if (/sake|seltzer|wine|cider|mead/i.test(`${page.category} ${page.name}`)) continue;
+        if (!isBeerCulture(page.category, page.name)) continue;
         if (!page.name) {
           gaps.push({ url, reason: "no product name on the page" });
           continue;
