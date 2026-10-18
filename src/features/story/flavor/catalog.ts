@@ -2,7 +2,7 @@ import type { BrewingIngredient, BrewingIngredientRole } from "../../beverages/b
 import type { FermentableFamily, IngredientFact, IngredientResolution } from "./catalog-types.ts";
 import { INGREDIENT_CLASSES, INGREDIENT_FACTS } from "./catalog-data.ts";
 
-export const CATALOG_VERSION = "tapboard-flavor-catalog-3";
+export const CATALOG_VERSION = "tapboard-flavor-catalog-4";
 
 /** Bounded exact identity normalization, never substring matching. Accents fold away so
  * "Mittelfruh" and "Mittelfrüh" are one name. */

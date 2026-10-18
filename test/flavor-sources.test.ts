@@ -445,6 +445,39 @@ void test("hop sources merge into one entry per variety, preferring owners that 
       ["hop-cascade", ["grapefruit"]],
     ],
   );
+  // A German growing region before the name and German adjective endings fold away.
+  const german = mergeHops([
+    {
+      maker: "hopsteiner",
+      entries: [hop("hop-hallertauer-tradition", ["Hallertauer Tradition"], ["floral"])],
+    },
+    {
+      maker: "charles-faram",
+      entries: [
+        hop("hop-tradition", ["Tradition"], ["herbal"]),
+        hop("hop-mittelfruh", ["Mittelfruh"], ["spicy"]),
+        hop("hop-tettnang", ["Tettnang"], ["earthy"]),
+        hop("hop-hallertau", ["Hallertau", "HALLERTAU"], ["floral"]),
+      ],
+    },
+    {
+      maker: "hpa",
+      entries: [hop("hop-hallertauer-mittelfrueher", ["Hallertauer Mittelfrueher"], ["herbal"])],
+    },
+    {
+      maker: "barthhaas",
+      entries: [hop("hop-tettnang-tettnanger", ["Tettnang Tettnanger"], ["woody"])],
+    },
+  ]).entries;
+  assert.deepEqual(
+    german.map((item) => [item.id, item.aliases]),
+    [
+      ["hop-hallertauer-tradition", ["Hallertauer Tradition", "Tradition"]],
+      ["hop-tettnang-tettnanger", ["Tettnang Tettnanger", "Tettnang"]],
+      ["hop-hallertauer-mittelfrueher", ["Hallertauer Mittelfrueher", "Mittelfruh"]],
+      ["hop-hallertau", ["Hallertau"]],
+    ],
+  );
   // A source without a place in the priority order cannot be merged silently.
   assert.throws(
     () => mergeHops([{ maker: "unknown-site", entries: [hop("hop-x", ["X"], [])] }]),
