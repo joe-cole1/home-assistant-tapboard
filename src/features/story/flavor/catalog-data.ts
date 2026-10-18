@@ -38,116 +38,6 @@ function fact(
  * `sourced/*.json` follow them and replace them product by product. */
 export const REVIEWED_FACTS: readonly IngredientFact[] = Object.freeze([
   fact(
-    "fermentis-us05",
-    "yeasts",
-    ["Safale American", "SafAle US-05"],
-    "https://fermentis.com/en/product/safale-us-05/",
-    { manufacturer: "Fermentis", codes: ["US-05"], souring: false },
-  ),
-  fact(
-    "fermentis-w3470",
-    "yeasts",
-    ["Saflager Lager", "SafLager W-34/70"],
-    "https://fermentis.com/en/product/saflager-w-34-70/",
-    {
-      manufacturer: "Fermentis",
-      codes: ["W-34/70"],
-      descriptors: ["floral", "fruity"],
-      souring: false,
-    },
-  ),
-  fact(
-    "fermentis-s04",
-    "yeasts",
-    ["SafAle English Ale", "SafAle S-04"],
-    "https://fermentis.com/en/product/safale-s-04/",
-    {
-      manufacturer: "Fermentis",
-      codes: ["S-04"],
-      descriptors: ["fruity", "floral"],
-      souring: false,
-    },
-  ),
-  fact(
-    "fermentis-s23",
-    "yeasts",
-    ["SafLager West European Lager", "SafLager S-23"],
-    "https://fermentis.com/en/product/saflager-s%E2%80%9123/",
-    { manufacturer: "Fermentis", codes: ["S-23"], descriptors: ["fruity"], souring: false },
-  ),
-  fact(
-    "fermentis-be134",
-    "yeasts",
-    ["Safale Belgian-Saison", "SafAle BE-134"],
-    "https://fermentis.com/en/product/safale-be-134/",
-    {
-      manufacturer: "Fermentis",
-      codes: ["BE-134"],
-      descriptors: ["fruity", "floral", "spicy"],
-      souring: false,
-    },
-  ),
-  fact(
-    "fermentis-wb06",
-    "yeasts",
-    ["Safbrew Wheat", "SafAle WB-06"],
-    "https://fermentis.com/en/product/safale-wb-06/",
-    {
-      manufacturer: "Fermentis",
-      codes: ["WB-06"],
-      descriptors: ["fruity", "phenolic"],
-      souring: false,
-    },
-  ),
-  fact(
-    "lallemand-verdant",
-    "yeasts",
-    ["Verdant IPA", "LalBrew Verdant IPA", "Lallemand Verdant IPA Yeast"],
-    "https://www.lallemandbrewing.com/en/africa/products/lalbrew-verdant-ipa/",
-    {
-      manufacturer: "Lallemand",
-      manufacturerAliases: ["Lallemand (LalBrew)", "LalBrew"],
-      descriptors: ["apricot", "tropical fruit", "citrus"],
-      souring: false,
-    },
-  ),
-  fact(
-    "lallemand-pomona",
-    "yeasts",
-    ["Pomona", "LalBrew Pomona"],
-    "https://www.lallemandbrewing.com/en/africa/products/lalbrew-pomona/",
-    {
-      manufacturer: "Lallemand",
-      manufacturerAliases: ["Lallemand (LalBrew)", "LalBrew"],
-      descriptors: ["peach", "citrus", "tropical fruit"],
-      souring: false,
-    },
-  ),
-  fact(
-    "lallemand-belle",
-    "yeasts",
-    ["Belle Saison", "LalBrew Belle Saison"],
-    "https://www.lallemandbrewing.com/en/united-states/products/belle-saison-beer-yeast/",
-    {
-      manufacturer: "Lallemand",
-      manufacturerAliases: ["Lallemand (LalBrew)", "LalBrew"],
-      descriptors: ["citrus", "pepper", "fruity", "spicy"],
-      souring: false,
-    },
-  ),
-  fact(
-    "lallemand-voss",
-    "yeasts",
-    ["Voss Kveik", "LalBrew Voss"],
-    "https://www.lallemandbrewing.com/en/united-states/products/lalbrew-voss-kveik-ale-yeast/",
-    {
-      manufacturer: "Lallemand",
-      manufacturerAliases: ["Lallemand (LalBrew)", "LalBrew"],
-      descriptors: ["orange", "citrus"],
-      souring: false,
-    },
-  ),
-  fact(
     "lallemand-koln",
     "yeasts",
     ["Köln Kölsch", "LalBrew Köln"],
@@ -158,114 +48,6 @@ export const REVIEWED_FACTS: readonly IngredientFact[] = Object.freeze([
       souring: false,
     },
   ),
-  fact(
-    "wyeast-3068",
-    "yeasts",
-    ["Weihenstephan Weizen"],
-    "https://wyeastlab.com/product/weihenstephan-weizen/",
-    {
-      manufacturer: "Wyeast",
-      manufacturerAliases: ["Wyeast Labs"],
-      codes: ["3068"],
-      descriptors: ["banana", "clove"],
-      souring: false,
-    },
-  ),
-  fact(
-    "wyeast-3787",
-    "yeasts",
-    ["Trappist High Gravity", "Belgian High Gravity"],
-    "https://wyeastlab.com/product/belgian-high-gravity/",
-    {
-      manufacturer: "Wyeast",
-      manufacturerAliases: ["Wyeast Labs"],
-      codes: ["3787"],
-      descriptors: ["fruity", "phenolic"],
-      souring: false,
-    },
-  ),
-  fact(
-    "white-labs-wlp833",
-    "yeasts",
-    ["German Bock Lager"],
-    "https://www.whitelabs.com/yeast-single?id=224&type=YEAST",
-    {
-      manufacturer: "White Labs",
-      manufacturerAliases: ["WhiteLabs"],
-      codes: ["WLP833"],
-      souring: false,
-    },
-  ),
-  fact(
-    "white-labs-wlp029",
-    "yeasts",
-    ["German Ale/Kolsch", "German/Kölsch Ale", "Kölsch Ale"],
-    "https://www.whitelabs.com/yeast-single?id=119&type=YEAST",
-    {
-      manufacturer: "White Labs",
-      manufacturerAliases: ["WhiteLabs"],
-      codes: ["WLP029"],
-      souring: false,
-    },
-  ),
-  fact(
-    "omega-cosmic",
-    "yeasts",
-    ["Cosmic Punch"],
-    "https://omegayeast.com/products/cosmic-punch-next",
-    {
-      manufacturer: "Omega",
-      manufacturerAliases: ["Omega Yeast", "Omega Yeast Labs"],
-      codes: ["OYL-402"],
-      limitations: [
-        "Thiol-oriented family context only; current NEXT generation cannot establish historical process specifications or thiol concentration.",
-      ],
-      souring: false,
-    },
-  ),
-  fact(
-    "fermentis-k97",
-    "yeasts",
-    ["SafAle German Ale", "SafAle K-97"],
-    "https://fermentis.com/en/product/safale-k%E2%80%9197/",
-    {
-      manufacturer: "Fermentis",
-      codes: ["K-97"],
-      descriptors: ["floral", "fruity"],
-      souring: false,
-    },
-  ),
-  fact(
-    "white-labs-wlp565",
-    "yeasts",
-    ["Belgian Saison I Ale"],
-    "https://www.whitelabs.com/yeast-single?id=168&type=YEAST",
-    {
-      manufacturer: "White Labs",
-      manufacturerAliases: ["WhiteLabs"],
-      codes: ["WLP565"],
-      descriptors: ["earthy", "pepper", "spicy"],
-      souring: false,
-    },
-  ),
-  fact(
-    "lallemand-nottingham",
-    "yeasts",
-    ["Nottingham Yeast", "Nottingham", "LalBrew Nottingham"],
-    "https://www.lallemandbrewing.com/en/asia/products/nottingham-high-performance-ale-yeast/",
-    {
-      manufacturer: "Lallemand",
-      manufacturerAliases: ["Lallemand (LalBrew)", "LalBrew"],
-      souring: false,
-    },
-  ),
-  fact("omega-wit", "yeasts", ["Wit"], "https://omegayeast.com/products/wit-standard", {
-    manufacturer: "Omega",
-    manufacturerAliases: ["Omega Yeast", "Omega Yeast Labs"],
-    codes: ["OYL-030"],
-    descriptors: ["spicy", "fruity"],
-    souring: false,
-  }),
   fact("imperial-a38", "yeasts", ["Juice"], "https://www.imperialyeast.com/yeast-strains/juice", {
     manufacturer: "Imperial Yeast",
     codes: ["A38"],
@@ -1039,78 +821,38 @@ export const REVIEWED_FACTS: readonly IngredientFact[] = Object.freeze([
       ],
     },
   ),
-  fact(
-    "white-labs-wlp013",
-    "yeasts",
-    ["London Ale", "London Ale Yeast"],
-    "https://www.whitelabs.com/yeast-bank/wlp013-london-ale-yeast",
-    {
-      manufacturer: "White Labs",
-      manufacturerAliases: ["WhiteLabs"],
-      codes: ["WLP013"],
-      descriptors: ["fruity"],
-      souring: false,
-    },
-  ),
-  fact(
-    "wyeast-1028",
-    "yeasts",
-    ["London Ale", "London Ale Yeast"],
-    "https://wyeastlab.com/product/london-ale",
-    {
-      manufacturer: "Wyeast",
-      manufacturerAliases: ["Wyeast Labs"],
-      codes: ["1028"],
-      descriptors: ["fruity"],
-      souring: false,
-    },
-  ),
-  fact(
-    "omega-voss",
-    "yeasts",
-    ["Voss Kveik"],
-    "https://omegayeast.com/yeast/norwegian-ales/voss-kveik",
-    {
-      manufacturer: "Omega",
-      manufacturerAliases: ["Omega Yeast", "Omega Yeast Labs"],
-      codes: ["OYL-061"],
-      descriptors: ["orange", "citrus"],
-      souring: false,
-    },
-  ),
-  fact(
-    "lallemand-new-england",
-    "yeasts",
-    ["New England", "LalBrew New England", "New England American East Coast Ale"],
-    "https://files.scottlab.com/uploads/NEW%20ENGLAND%20TDS.pdf",
-    {
-      manufacturer: "Lallemand",
-      manufacturerAliases: ["Lallemand (LalBrew)", "LalBrew"],
-      descriptors: ["stone fruit", "peach", "tropical fruit"],
-      souring: false,
-    },
-  ),
-  fact(
-    "mangrove-jacks-m21",
-    "yeasts",
-    ["Belgian Wit", "M21 Belgian Wit"],
-    "https://brouwland.com/en/yeast-and-bacteria/1942-dried-brewing-yeast-belgian-wit-m21-mangrove-jack-s-craft-series-10-g.html",
-    {
-      manufacturer: "Mangrove Jack's",
-      manufacturerAliases: ["Mangrove Jacks"],
-      codes: ["M21"],
-      descriptors: ["fruity", "spicy", "phenolic"],
-      souring: false,
-      limitations: [
-        "Manufacturer description as reproduced by a retailer; the official product page was not reviewed.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
-      ],
-    },
-  ),
 ]);
+/** Brewfather ingredient-library names for maker-sourced products whose maker prints another
+ * name. Each comes from the operator's own Brewfather rows for that maker and code (Lallemand
+ * rows carry no code), so a Brewfather row matches without a code/name conflict. They are
+ * identity only and add no flavour data. */
+export const BREWFATHER_NAMES: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  "fermentis-be-134": ["Safale Belgian-Saison"],
+  "fermentis-k-97": ["SafAle German Ale"],
+  "fermentis-s-04": ["SafAle English Ale"],
+  "fermentis-s-23": ["SafLager West European Lager"],
+  "fermentis-us-05": ["Safale American"],
+  "fermentis-w-34-70": ["Saflager Lager"],
+  "fermentis-wb-06": ["Safbrew Wheat"],
+  "lallemand-new-england": ["New England American East Coast Ale"],
+  "lallemand-nottingham": ["Nottingham Yeast"],
+  "lallemand-verdant-ipa": ["Lallemand Verdant IPA Yeast"],
+  "lallemand-voss": ["Voss Kveik"],
+  "omega-lutra-kveik-standard": ["Lutra Kveik"],
+  "omega-voss-kveik-standard": ["Voss Kveik"],
+  "white-labs-wlp007": ["Dry English Ale"],
+  "white-labs-wlp029": ["German Ale/Kolsch", "German/Kölsch Ale"],
+  "white-labs-wlp820": ["Octoberfest/Marzen Lager"],
+  "wyeast-1028": ["London Ale Yeast"],
+  "wyeast-3787": ["Trappist High Gravity"],
+});
 export const INGREDIENT_FACTS: readonly IngredientFact[] = Object.freeze([
   ...REVIEWED_FACTS,
-  ...SOURCED_FACTS,
+  ...SOURCED_FACTS.map((fact) =>
+    BREWFATHER_NAMES[fact.id]
+      ? { ...fact, aliases: [...fact.aliases, ...BREWFATHER_NAMES[fact.id]!] }
+      : fact,
+  ),
 ]);
 
 /** Variety pages reviewed 2026-10-17 through search summaries of the cited producer pages. */
@@ -1281,13 +1023,10 @@ function ingredientClass(
     family: null,
     descriptors: [],
     functions: [],
-    souring: null,
     noticeableGPerL: null,
     ...details,
   });
 }
-// Untyped yeasts stay unresolved so tartness keeps requiring a Brewfather Ale or Wheat type.
-const ALE_YEAST = ["ale", "wheat"];
 const ADJUNCT = ["miscs", "fermentables"] as const;
 const spice = (id: string, pattern: RegExp, word: string, noticeableGPerL: number) =>
   ingredientClass(id, word, ADJUNCT, pattern, {
@@ -1303,45 +1042,10 @@ const fruit = (id: string, pattern: RegExp, word: string, noticeableGPerL: numbe
   });
 
 /** Generic classes, tried in order after reviewed products and property rules. Patterns test the
- * accent-folded lowercase name (yeasts: name and product code). A yeast class names typical
- * style-family character; adjunct classes name the ingredient itself. `noticeableGPerL` is a
- * Tapboard heuristic near the low end of common homebrew doses, not a sensory threshold. */
+ * accent-folded lowercase name, and adjunct classes name the ingredient itself. There are no yeast
+ * classes: a strain's character comes only from its maker. `noticeableGPerL` is a Tapboard
+ * heuristic near the low end of common homebrew doses, not a sensory threshold. */
 export const INGREDIENT_CLASSES: readonly IngredientClass[] = Object.freeze([
-  // Yeast families whose strains share a defining character. Kveik, English, American, Kölsch and
-  // lager strains differ too much by strain to name.
-  ingredientClass(
-    "class-hefeweizen",
-    "hefeweizen",
-    ["yeasts"],
-    /hefe|weizen|weiss|weihenstephan|bavarian wheat/,
-    {
-      exclude: /american/,
-      types: ALE_YEAST,
-      descriptors: ["banana", "clove"],
-      souring: false,
-    },
-  ),
-  ingredientClass("class-wit", "witbier", ["yeasts"], /\bwit\b|witbier|blanche/, {
-    types: ALE_YEAST,
-    descriptors: ["spicy", "fruity"],
-    souring: false,
-  }),
-  ingredientClass("class-saison", "saison", ["yeasts"], /saison/, {
-    types: ALE_YEAST,
-    descriptors: ["pepper", "spicy", "fruity"],
-    souring: false,
-  }),
-  ingredientClass(
-    "class-belgian",
-    "Belgian ale",
-    ["yeasts"],
-    /abbey|abbaye|trappist|monastery|dubbel|tripel|belgian|ardennes/,
-    {
-      types: ALE_YEAST,
-      descriptors: ["fruity", "spicy"],
-      souring: false,
-    },
-  ),
   // Processing aids, then Brewfather misc types; the engine still checks acid addition stage.
   ingredientClass(
     "class-processing",

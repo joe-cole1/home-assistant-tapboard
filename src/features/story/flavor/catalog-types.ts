@@ -77,7 +77,7 @@ export interface IngredientClass {
   readonly id: string;
   readonly label: string;
   readonly roles: readonly BrewingIngredientRole[];
-  /** Tested against the accent-folded lowercase name (yeasts: name and product code). */
+  /** Tested against the accent-folded lowercase name. */
   readonly pattern: RegExp;
   readonly exclude: RegExp | null;
   /** Lowercase Brewfather types the class applies to; empty means any type. */
@@ -85,6 +85,5 @@ export interface IngredientClass {
   readonly family: FermentableFamily | null;
   readonly descriptors: readonly string[];
   readonly functions: readonly IngredientFunction[];
-  readonly souring: boolean | null;
   readonly noticeableGPerL: number | null;
 }

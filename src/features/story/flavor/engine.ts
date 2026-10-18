@@ -672,16 +672,15 @@ const GAP_ROLE: Readonly<Record<BrewingIngredientRole, string>> = {
   yeasts: "Yeast",
   miscs: "Misc",
 };
-/** Named ingredients a reviewed catalog entry would improve: unresolved rows of any role, and
- * yeasts that fell back to a generic class. Property-classified malts and spice classes are
- * complete, and an unnamed row needs a name in Brewfather rather than a catalog entry. */
+/** Named ingredients a catalog entry would improve: unresolved rows of any role. Property-classified
+ * malts and spice classes are complete, and an unnamed row needs a name in Brewfather rather than
+ * a catalog entry. */
 function catalogGaps(features: ReturnType<typeof resolveFeatures>): string[] {
   const gaps = new Set<string>();
   for (const role of ROLES)
     for (const { ingredient, resolution } of features.rows[role]) {
       const name = ingredient.name?.trim();
-      const generic = role === "yeasts" && resolution.id?.startsWith("class-") === true;
-      if (!name || (resolution.level !== "unresolved" && !generic)) continue;
+      if (!name || resolution.level !== "unresolved") continue;
       const maker = role === "yeasts" ? ingredient.laboratory : ingredient.supplier;
       const identity = [maker, ingredient.productId].filter((part) => part?.trim()).join(" ");
       gaps.add(

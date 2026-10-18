@@ -1,7 +1,7 @@
 {
   "format": "tapboard-flavor-corpus-report-1",
   "modelVersion": "recipe-flavor-2",
-  "catalogVersion": "tapboard-flavor-catalog-2",
+  "catalogVersion": "tapboard-flavor-catalog-3",
   "qualification": "Offline normalization and behavior acceptance; no sensory ground-truth labels or scientific validation.",
   "counts": { "batches": 61, "savedRecipes": 46, "total": 107 },
   "maximumSnapshotBytes": 21840,
@@ -930,7 +930,7 @@
       "caseId": "B001",
       "kind": "batch",
       "snapshotBytes": 13825,
-      "fingerprint": "dc12493e4af473829d599cdffb26462a476350507fadbbce8aec7abce4e6fa18",
+      "fingerprint": "f23eb71cb94c7f38e01ea32506ebd172fde646bc49806769befedccc0efc61c7",
       "selectedScalars": {
         "og": {
           "value": 1.064,
@@ -1111,7 +1111,6 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -1123,7 +1122,7 @@
       "caseId": "B002",
       "kind": "batch",
       "snapshotBytes": 13075,
-      "fingerprint": "60883c31539d0f174f068c0f4e22782479385a6e9f88bf557fbd010794320324",
+      "fingerprint": "784afd8c2da62655bfd12be1924e524233e22182581f7d15c1a1534fd920e477",
       "selectedScalars": {
         "og": {
           "value": 1.067,
@@ -1312,7 +1311,6 @@
         "Ingredient identity is outside the reviewed catalog.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -1329,7 +1327,7 @@
       "caseId": "B003",
       "kind": "batch",
       "snapshotBytes": 15247,
-      "fingerprint": "cc7009a10315a96a2b709db85358d7296e2f65d453aa80c6f04f36faad7a73f0",
+      "fingerprint": "d1b2281a663e7df8a5984941b87ae5904e1a48be20a5513ff2b613c53eb1ed5b",
       "selectedScalars": {
         "og": {
           "value": 1.056,
@@ -1509,7 +1507,6 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -1524,7 +1521,7 @@
       "caseId": "B004",
       "kind": "batch",
       "snapshotBytes": 15423,
-      "fingerprint": "32fccfbaf2ec5fb1ed5413d70e90058b9cdc27fd057cfeb2f5d589425244caea",
+      "fingerprint": "e93bc340f861ce89fb272b32c7a43263d6505d73f032fe98cc6756d10a58e32c",
       "selectedScalars": {
         "og": {
           "value": 1.088,
@@ -1708,7 +1705,7 @@
         "Sold as the CTZ designation; Columbus and Tomahawk names share one aroma class. Bare Zeus is not aliased.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -1721,7 +1718,7 @@
       "caseId": "B005",
       "kind": "batch",
       "snapshotBytes": 17332,
-      "fingerprint": "c8bc935bd67e56b3571ae80e285f829a7d9979e4bdef56fd2f52433f8d1518a6",
+      "fingerprint": "aca2da6b5c61a210346053447958dbe376c138833030d76afe0169fac7f0ca21",
       "selectedScalars": {
         "og": {
           "value": 1.08,
@@ -1902,7 +1899,6 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Regional class only: character named by at least two of the reviewed Hallertau aroma varieties (Mittelfrüh, Tradition, Hersbrucker); the variety is unknown.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -1922,7 +1918,7 @@
       "caseId": "B007",
       "kind": "batch",
       "snapshotBytes": 12486,
-      "fingerprint": "04ece52974dcedfffda03a9241a4170e1f7a8a127a5b32c440fa50d8cb22d83f",
+      "fingerprint": "d917770c1c5c1dee6ffbb663eb4b2d3ecc59ed37a6a47a34c7dad4a70e97f288",
       "selectedScalars": {
         "og": {
           "value": 1.067,
@@ -2147,7 +2143,7 @@
       "caseId": "B008",
       "kind": "batch",
       "snapshotBytes": 13857,
-      "fingerprint": "c95d1d7b42671af1c4cc849cb3622a820f814e59132cf77c69c17577e1d03418",
+      "fingerprint": "817007e698872dbe05bc202d57c1a63f4ba21af1ff3b27d48120c2727c3f884f",
       "selectedScalars": {
         "og": {
           "value": 1.047,
@@ -2326,7 +2322,6 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -2340,7 +2335,7 @@
       "caseId": "B009",
       "kind": "batch",
       "snapshotBytes": 14493,
-      "fingerprint": "53237ff712c0916d22f259154593f4763a1e783fd8ab33d8708f2a24c459c395",
+      "fingerprint": "9a764d1cce4d9fc1eb4e9486fc47776b2832cb0c3333bbbc476524be7935019f",
       "selectedScalars": {
         "og": {
           "value": 1.055,
@@ -2518,7 +2513,7 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -2534,7 +2529,7 @@
       "caseId": "B010",
       "kind": "batch",
       "snapshotBytes": 14580,
-      "fingerprint": "14c40822417726c73ca661ae3db72409332310e9067b7ae80d5549a87803ddb5",
+      "fingerprint": "5d5e16740653bb075f080e1da8256fd77dda732fd0ad4d10306282fb513e74f9",
       "selectedScalars": {
         "og": {
           "value": 1.075,
@@ -2715,7 +2710,6 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Regional class only: character named by at least two of the reviewed Hallertau aroma varieties (Mittelfrüh, Tradition, Hersbrucker); the variety is unknown.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -2731,7 +2725,7 @@
       "caseId": "B011",
       "kind": "batch",
       "snapshotBytes": 16686,
-      "fingerprint": "5c9409065608d52fd88044c2289c09e8168532544ef41bf9cca2cf6fc15cf1a0",
+      "fingerprint": "302c7716c1a1b69811c20e577b0d2c01ddf69dbd3876a1bbf330a3103bee7a44",
       "selectedScalars": {
         "og": {
           "value": 1.095,
@@ -2914,7 +2908,7 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -2929,7 +2923,7 @@
       "caseId": "B012",
       "kind": "batch",
       "snapshotBytes": 15983,
-      "fingerprint": "f0287034a22c3160ee12d1d44fa710b44c1899e567b027cbbd0e84e4c72263a5",
+      "fingerprint": "ce3a14100a200bf45f2a78b8e6142a022b52cd80337d05b351ea5c0853d4ff2d",
       "selectedScalars": {
         "og": {
           "value": 1.088,
@@ -3110,7 +3104,6 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Regional class only: character named by at least two of the reviewed Hallertau aroma varieties (Mittelfrüh, Tradition, Hersbrucker); the variety is unknown.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -3128,7 +3121,7 @@
       "caseId": "B013",
       "kind": "batch",
       "snapshotBytes": 15870,
-      "fingerprint": "4a659da72a9b57e09367673e0756d083d292d4b52df653b14aa7ed1a034cff99",
+      "fingerprint": "72d47ca66d5f5e5e042abe45e64639d0f04e267529a93d47953830eecc185d30",
       "selectedScalars": {
         "og": {
           "value": 1.061,
@@ -3317,8 +3310,6 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Ingredient identity is outside the reviewed catalog.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Manufacturer description as reproduced by a retailer; the official product page was not reviewed.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -3340,7 +3331,7 @@
       "caseId": "B014",
       "kind": "batch",
       "snapshotBytes": 11204,
-      "fingerprint": "10f619da8fcde87a4cc2bf914accb8c456372aa8642ed8dc4579fdb52834fa3c",
+      "fingerprint": "9eb50c868609200c2eae2a3208b1225c2f7ea0ee89247a265af4b0cd633bf576",
       "selectedScalars": {
         "og": {
           "value": 1.062,
@@ -3529,7 +3520,7 @@
       "caseId": "B015",
       "kind": "batch",
       "snapshotBytes": 13956,
-      "fingerprint": "111ba249169793f177e0f2a267ff71f94f4e3b40b2bdeb523fb105c66f2e291b",
+      "fingerprint": "4e6547a0ba8e72ec740853f8860c221089dcef2989ca78809dfa5f5edadccab8",
       "selectedScalars": {
         "og": {
           "value": 1.053995,
@@ -3613,17 +3604,6 @@
           "grams": 14.174762,
           "stage": "boil",
           "reasons": ["Ingredient name is missing; no identity inferred."]
-        },
-        {
-          "role": "yeasts",
-          "sourcePath": "recipe.yeasts[0]",
-          "name": "Lutra Kveik",
-          "supplier": null,
-          "laboratory": "Omega",
-          "productId": "OYL-071",
-          "grams": null,
-          "stage": "unknown",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
         }
       ],
       "axes": {
@@ -3707,7 +3687,7 @@
           "present": true,
           "complete": true,
           "acceptedCount": 1,
-          "resolvedCount": 0,
+          "resolvedCount": 1,
           "eligibleMassG": 0,
           "resolvedMassG": 0,
           "classifiedFraction": null
@@ -3729,7 +3709,7 @@
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Regional class only: character named by at least two of the reviewed Hallertau aroma varieties (Mittelfrüh, Tradition, Hersbrucker); the variety is unknown.",
         "Ingredient name is missing; no identity inferred.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -3745,7 +3725,7 @@
       "caseId": "B016",
       "kind": "batch",
       "snapshotBytes": 13996,
-      "fingerprint": "b55e491bef3f4459d9f8bf05daa0d922c6805215a08ab5b5f1e6d02cc0ba19b0",
+      "fingerprint": "9182efa6674220eaa2b4798406b9dfbb3217ee41a017143ecf9fc33ef9fbab6e",
       "selectedScalars": {
         "og": {
           "value": 1.042,
@@ -3922,7 +3902,6 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -3938,7 +3917,7 @@
       "caseId": "B017",
       "kind": "batch",
       "snapshotBytes": 6975,
-      "fingerprint": "2094e48667b93b82ca70c34a0675158f7899fee5ae1d1c64b12cfc72289eff38",
+      "fingerprint": "e8354da2f3eb2cc4531bd4ec5d035737fbb06a51d25b4cadae296c1ee9ddde0c",
       "selectedScalars": {
         "og": {
           "value": 1.049,
@@ -4114,14 +4093,14 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor."
+        "The maker's text names no flavour words."
       ]
     },
     {
       "caseId": "B018",
       "kind": "batch",
       "snapshotBytes": 13123,
-      "fingerprint": "56fc2808f6d351a8f27b0d8daa6f90c0ff25505779685e76d788695785039184",
+      "fingerprint": "058a35291f80c2fe846f9450ca6776a3e7b18f338511e872b079e763da3ca31b",
       "selectedScalars": {
         "og": {
           "value": 1.065,
@@ -4299,7 +4278,7 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -4313,7 +4292,7 @@
       "caseId": "B019",
       "kind": "batch",
       "snapshotBytes": 13240,
-      "fingerprint": "7306f49a3836665aee863b95e3694501fa0fcee53d8fe7b826e47880e72d4b42",
+      "fingerprint": "0285f2a1cc52baa7df06710126c8ecaaaaa0320038b86ef04350ccb6899431e8",
       "selectedScalars": {
         "og": {
           "value": 1.05,
@@ -4492,7 +4471,7 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -4505,7 +4484,7 @@
       "caseId": "B020",
       "kind": "batch",
       "snapshotBytes": 9227,
-      "fingerprint": "dfc41e71950ee3506156a153982e40cf4975ee2eacfbc8ef8a8691126179402f",
+      "fingerprint": "f94511919cef400350ea044b9b1c5c3ee7054505d500b5f7b1140d0a06bc632f",
       "selectedScalars": {
         "og": {
           "value": 1.05,
@@ -4683,7 +4662,6 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Regional class only: character named by at least two of the reviewed Hallertau aroma varieties (Mittelfrüh, Tradition, Hersbrucker); the variety is unknown.",
         "Regional class only: character named by at least two of the reviewed Hallertau aroma varieties (Mittelfrüh, Tradition, Hersbrucker); the variety is unknown.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment."
       ]
     },
@@ -4691,7 +4669,7 @@
       "caseId": "B021",
       "kind": "batch",
       "snapshotBytes": 16624,
-      "fingerprint": "e7e1a3d8105c1b179b69e03ed8bf67223bc50ec1c07ef1e261017ac8608a0fcc",
+      "fingerprint": "a1cc791bdc0532293c7e4cf893cb0baec77aff461c75cad61f74354639ae2585",
       "selectedScalars": {
         "og": {
           "value": 1.06,
@@ -4890,7 +4868,7 @@
       "caseId": "B022",
       "kind": "batch",
       "snapshotBytes": 10297,
-      "fingerprint": "d74aca9ff704911b419b1e2eb6e440fc3d739583203114c6e12cb6533bfdea0a",
+      "fingerprint": "377d3dcef967a5d5c51c40ea3d72f4e7620bfbbb3c6fac65a9bfbd39daf03652",
       "selectedScalars": {
         "og": {
           "value": 1.042,
@@ -5064,7 +5042,6 @@
         "Provider base-grain category supports family only; specific product character unresolved.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -5077,7 +5054,7 @@
       "caseId": "B023",
       "kind": "batch",
       "snapshotBytes": 11310,
-      "fingerprint": "ddcded6e69048961a2fb4676cf5b6e9afecb0b77458eea19dcea87ccd0d5d58b",
+      "fingerprint": "b89a183cc962381597d5444670a86dd50c23bdf3a806aa33ceca99636f7bf586",
       "selectedScalars": {
         "og": {
           "value": 1.075,
@@ -5254,7 +5231,6 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -5266,7 +5242,7 @@
       "caseId": "B025",
       "kind": "batch",
       "snapshotBytes": 13956,
-      "fingerprint": "e0190da96618526e51efd56ef459e977a0bb8dc5ed20e7e12e656c706a252fd4",
+      "fingerprint": "791350d4dad6f3804fa5c6fb0bea8b6a18cf33b274404e1f4f772f7f47aee68b",
       "selectedScalars": {
         "og": {
           "value": 1.065,
@@ -5446,7 +5422,7 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -5459,7 +5435,7 @@
       "caseId": "B026",
       "kind": "batch",
       "snapshotBytes": 14900,
-      "fingerprint": "3394cbe34554dd12c9a7d0ef3ea8abda59f3fc2f791be7b008cbd72d4a037eb8",
+      "fingerprint": "49d95eeb6873a894fe3065158f343f55006baa8bf82b8e903dfa3777ed31e38f",
       "selectedScalars": {
         "og": {
           "value": 1.101,
@@ -5640,7 +5616,7 @@
         "Sold as the CTZ designation; Columbus and Tomahawk names share one aroma class. Bare Zeus is not aliased.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Sold as the CTZ designation; Columbus and Tomahawk names share one aroma class. Bare Zeus is not aliased.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -5655,7 +5631,7 @@
       "caseId": "B027",
       "kind": "batch",
       "snapshotBytes": 11135,
-      "fingerprint": "94940ec9133c8abb7b305be3ce613f0be50cc5e0898affa8d3c8362d6803b8f5",
+      "fingerprint": "d392c7af7d48fa29cde8d5fde53d140eb7451596d0a6296b1c9f04b4121694b7",
       "selectedScalars": {
         "og": {
           "value": 1.048,
@@ -5844,7 +5820,7 @@
       "caseId": "B028",
       "kind": "batch",
       "snapshotBytes": 16715,
-      "fingerprint": "c4a92a91682d04df006e1a49c0ef4031a0d3ba93e95de4ce2403d9548407f65e",
+      "fingerprint": "aff07cadb26806dd9874e4e819e8a45eb221d9cbd3a3010f7db43445ed567939",
       "selectedScalars": {
         "og": {
           "value": 1.07,
@@ -6025,7 +6001,6 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Regional class only: character named by at least two of the reviewed Hallertau aroma varieties (Mittelfrüh, Tradition, Hersbrucker); the variety is unknown.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -6043,7 +6018,7 @@
       "caseId": "B029",
       "kind": "batch",
       "snapshotBytes": 12625,
-      "fingerprint": "1313cd4cfeaf2f96ea4e808a1165ae3712627ecfd84b9f6a3637822f39faf2f2",
+      "fingerprint": "1d27877a7a859be0a692785ccb2b25106050c3982eda606aa456d03929b6a69f",
       "selectedScalars": {
         "og": {
           "value": 1.045,
@@ -6116,19 +6091,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "yeasts",
-          "sourcePath": "recipe.yeasts[0]",
-          "name": "American Ale",
-          "supplier": null,
-          "laboratory": "Wyeast Labs",
-          "productId": "1056",
-          "grams": null,
-          "stage": "unknown",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 1.47789466868811,
@@ -6210,7 +6173,7 @@
           "present": true,
           "complete": true,
           "acceptedCount": 1,
-          "resolvedCount": 0,
+          "resolvedCount": 1,
           "eligibleMassG": 0,
           "resolvedMassG": 0,
           "classifiedFraction": null
@@ -6230,7 +6193,7 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -6247,7 +6210,7 @@
       "caseId": "B030",
       "kind": "batch",
       "snapshotBytes": 13885,
-      "fingerprint": "67b5e0a4bb0de5ff567d97649f04b85ea8a09c403fe22d6031cf25cfcd7116b6",
+      "fingerprint": "8ba12110984346cd8d72fdb5cefaaf7341cd8e920f3951e1a69dd0c6b622f5ec",
       "selectedScalars": {
         "og": {
           "value": 1.054,
@@ -6425,7 +6388,6 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -6440,7 +6402,7 @@
       "caseId": "B031",
       "kind": "batch",
       "snapshotBytes": 13467,
-      "fingerprint": "606510a925edbdac1ab04ace3f30c169cd68eaa56ded975f4f5adf5b93f43ecd",
+      "fingerprint": "b56e777cff90091bc40c79325ae59cafc50e7f31d65da292f55ae831ba9c2f19",
       "selectedScalars": {
         "og": {
           "value": 1.075,
@@ -6513,19 +6475,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "yeasts",
-          "sourcePath": "recipe.yeasts[0]",
-          "name": "Scottish Ale",
-          "supplier": null,
-          "laboratory": "Wyeast Labs",
-          "productId": "1728",
-          "grams": null,
-          "stage": "unknown",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 2.7219997711111734,
@@ -6607,7 +6557,7 @@
           "present": true,
           "complete": true,
           "acceptedCount": 1,
-          "resolvedCount": 0,
+          "resolvedCount": 1,
           "eligibleMassG": 0,
           "resolvedMassG": 0,
           "classifiedFraction": null
@@ -6629,7 +6579,7 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -6644,7 +6594,7 @@
       "caseId": "B032",
       "kind": "batch",
       "snapshotBytes": 15290,
-      "fingerprint": "82a99686e6f793194793494e729f8059b755e1b7ff1bd933dce2867681d8b2a9",
+      "fingerprint": "ee40d56ae5f262d2d6ca2035a5e3b60cfde15be0a086043b09d9257e0b240cb6",
       "selectedScalars": {
         "og": {
           "value": 1.05,
@@ -6846,7 +6796,6 @@
         "Ingredient identity is outside the reviewed catalog.",
         "Ingredient identity is outside the reviewed catalog.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -6864,7 +6813,7 @@
       "caseId": "B033",
       "kind": "batch",
       "snapshotBytes": 16241,
-      "fingerprint": "62094f920f6610de4372285c2037e159f33c2bada12f7a74073919090dfb5e8e",
+      "fingerprint": "c8bfd6308ab850f24caf56b41669d4d2e25abbea7547e4759f657c13066b9c97",
       "selectedScalars": {
         "og": {
           "value": 1.063,
@@ -7049,7 +6998,6 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -7060,7 +7008,7 @@
       "caseId": "B035",
       "kind": "batch",
       "snapshotBytes": 14737,
-      "fingerprint": "11f81229f9a74d2702a8c19a0572faf52df0c9b2e48b4c64ea3e12e4a5ad7a5f",
+      "fingerprint": "57494226b9973613fdfd124571f7cce574716f3ed9a3535cde831f0742ebdf07",
       "selectedScalars": {
         "og": {
           "value": 1.05,
@@ -7133,30 +7081,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "yeasts",
-          "sourcePath": "recipe.yeasts[0]",
-          "name": "Oktoberfest",
-          "supplier": null,
-          "laboratory": "Omega",
-          "productId": "OYL-107",
-          "grams": null,
-          "stage": "unknown",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "yeasts",
-          "sourcePath": "recipe.yeasts[1]",
-          "name": "Octoberfest/Marzen Lager",
-          "supplier": null,
-          "laboratory": "White Labs",
-          "productId": "WLP820",
-          "grams": null,
-          "stage": "unknown",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 2.712849160469915,
@@ -7238,7 +7163,7 @@
           "present": true,
           "complete": true,
           "acceptedCount": 2,
-          "resolvedCount": 0,
+          "resolvedCount": 2,
           "eligibleMassG": 0,
           "resolvedMassG": 0,
           "classifiedFraction": null
@@ -7261,8 +7186,8 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Ingredient identity is outside the reviewed catalog.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "The maker's text names no flavour words.",
+        "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -7277,7 +7202,7 @@
       "caseId": "B036",
       "kind": "batch",
       "snapshotBytes": 13391,
-      "fingerprint": "cbcf8e43f5fef704c9ca935c54ff17dcc28367435573930d58abb6428e4fde75",
+      "fingerprint": "d67d6910a55a2c9508300197e444bb2fed2b6a6f073d45fa1301f6a426e13e46",
       "selectedScalars": {
         "og": {
           "value": 1.054,
@@ -7350,19 +7275,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "yeasts",
-          "sourcePath": "recipe.yeasts[0]",
-          "name": "Kolsch II",
-          "supplier": null,
-          "laboratory": "Omega",
-          "productId": "OYL-044",
-          "grams": null,
-          "stage": "unknown",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 1.9247998457352038,
@@ -7444,7 +7357,7 @@
           "present": true,
           "complete": true,
           "acceptedCount": 1,
-          "resolvedCount": 0,
+          "resolvedCount": 1,
           "eligibleMassG": 0,
           "resolvedMassG": 0,
           "classifiedFraction": null
@@ -7465,7 +7378,6 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Ingredient identity is outside the reviewed catalog.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -7481,7 +7393,7 @@
       "caseId": "B037",
       "kind": "batch",
       "snapshotBytes": 12714,
-      "fingerprint": "b29d9175c30bc3b1f7c3d2361a62e61b3f410058fac9e078effcff91f1450262",
+      "fingerprint": "c9d4784bcdc04dd433cf6a9349d3069e907d0d1cd178afdefd2f88071a41bcb1",
       "selectedScalars": {
         "og": {
           "value": 1.052,
@@ -7655,7 +7567,6 @@
         "Provider base-grain category supports family only; specific product character unresolved.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -7672,7 +7583,7 @@
       "caseId": "B038",
       "kind": "batch",
       "snapshotBytes": 12645,
-      "fingerprint": "e6aed7aa3dbec254bb6022df7f64d97cf17fa7a8b07ff0c4781bd841377faa19",
+      "fingerprint": "dff93a9c6d0b3d799c970bf8249f189b42da9bf0619423b620a75eb5ae3739fa",
       "selectedScalars": {
         "og": {
           "value": 1.052,
@@ -7847,7 +7758,7 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -7863,7 +7774,7 @@
       "caseId": "B039",
       "kind": "batch",
       "snapshotBytes": 14863,
-      "fingerprint": "5a13ad353f03379449ef00b198695ff94c770d56d720aa76f691034e8b191659",
+      "fingerprint": "d653146b1193c34db40a8227175c74a0f1f7620c4b1369c2fc17ab13d64b0e75",
       "selectedScalars": {
         "og": {
           "value": 1.06,
@@ -8045,7 +7956,6 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -8057,7 +7967,7 @@
       "caseId": "B040",
       "kind": "batch",
       "snapshotBytes": 16990,
-      "fingerprint": "684f45817176f89b693b06f026024addef5709b26a73e36908ea3999379739ab",
+      "fingerprint": "935bfbbb4eb93b9b2b8615bd17e90d74450c78ad9d48ec5cb14e39ead6a184d9",
       "selectedScalars": {
         "og": {
           "value": 1.06,
@@ -8241,7 +8151,6 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Published Crystal descriptors conflict between suppliers; only the mild spicy/floral character is used.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -8256,7 +8165,7 @@
       "caseId": "B041",
       "kind": "batch",
       "snapshotBytes": 15987,
-      "fingerprint": "a26059ea312beb0da65239de0b892cd20768dc21c78b557e2ba5846e2af37a20",
+      "fingerprint": "342c839f7930bfc98afdcd2de4808cd2fb4f65d6ff01247548c034b2cac1142a",
       "selectedScalars": {
         "og": {
           "value": 1.05,
@@ -8435,8 +8344,6 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Manufacturer description as reproduced by a retailer; the official product page was not reviewed.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -8456,7 +8363,7 @@
       "caseId": "B042",
       "kind": "batch",
       "snapshotBytes": 15976,
-      "fingerprint": "4aae3e49e9fa0c996c65c25b6a0ccb9f3c08352f71f5f7af30f6dce86a7c0925",
+      "fingerprint": "dcd3fa08e7ca3729c1ca769106c1dec0c356c76496c020fb8724adc38e4fe069",
       "selectedScalars": {
         "og": {
           "value": 1.05,
@@ -8635,7 +8542,6 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -8655,7 +8561,7 @@
       "caseId": "B043",
       "kind": "batch",
       "snapshotBytes": 18083,
-      "fingerprint": "a2e87ea14eb0590249a7c21fd211fdf2a59f6fafe56a979f230a0bf8d12decda",
+      "fingerprint": "d7e5aa88ead99738d709368992b8e51a5df156120f5e43de625f45a17f18c023",
       "selectedScalars": {
         "og": {
           "value": 1.06,
@@ -8842,7 +8748,6 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -8853,7 +8758,7 @@
       "caseId": "B044",
       "kind": "batch",
       "snapshotBytes": 14499,
-      "fingerprint": "d98cfc8c86d1f1a306a2c935d55c6adf88335b31ac1a86861aaf1b8b68737521",
+      "fingerprint": "eba9547084d213b9b415687537fe4b1ce11d5c1f22633043b3922dfa819db70f",
       "selectedScalars": {
         "og": {
           "value": 1.058,
@@ -9058,7 +8963,7 @@
       "caseId": "B045",
       "kind": "batch",
       "snapshotBytes": 9925,
-      "fingerprint": "c7d80cd7b05582149f958152572f9aade4cb677ed5142c20ce37795267b359c6",
+      "fingerprint": "1fb4822d14c275c7373dac26e9ab8125c0a33a3a303eed96b0548c3be95658b1",
       "selectedScalars": {
         "og": {
           "value": 1.06,
@@ -9236,7 +9141,7 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment."
       ]
     },
@@ -9244,7 +9149,7 @@
       "caseId": "B046",
       "kind": "batch",
       "snapshotBytes": 14979,
-      "fingerprint": "82fe8f3f4b9841d72ce327e0afd317d504183fc5d10ca4d31b6c1883ae011f05",
+      "fingerprint": "f85d3b88929eb7e3994c87f9104eeb11eb6b177ae6d6b857d833501753bd0ede",
       "selectedScalars": {
         "og": {
           "value": 1.07,
@@ -9434,7 +9339,6 @@
         "Ingredient identity is outside the reviewed catalog.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -9452,7 +9356,7 @@
       "caseId": "B048",
       "kind": "batch",
       "snapshotBytes": 15741,
-      "fingerprint": "61a93d8244018415695220ba0db79ac7230066b9947bec9cfbc8e7c524e4bf39",
+      "fingerprint": "11748c9616ae1526a45651beb04862da6e6769db8cb45d4976e14557a9096084",
       "selectedScalars": {
         "og": {
           "value": 1.069,
@@ -9631,7 +9535,7 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -9647,7 +9551,7 @@
       "caseId": "B049",
       "kind": "batch",
       "snapshotBytes": 21840,
-      "fingerprint": "58ff7948390503482203adde853741bfb00bd15572ba0b7b7044b5da5b31c386",
+      "fingerprint": "420d8f43a195a7ac4eca9522b0af3ed5f04fef75aed27d41045d7cc626de3014",
       "selectedScalars": {
         "og": {
           "value": 1.065,
@@ -9835,7 +9739,6 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Thiol-oriented family context only; current NEXT generation cannot establish historical process specifications or thiol concentration.",
         "Generic processing aid class from the ingredient name; no reviewed product entry.",
         "Ingredient identity is outside the reviewed catalog.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -9852,7 +9755,7 @@
       "caseId": "B050",
       "kind": "batch",
       "snapshotBytes": 14183,
-      "fingerprint": "52a59da154bcfe78d87a87dfbbe3a90383901fd25a724f495457e20676b6efec",
+      "fingerprint": "9fbacac88ae52b0a7cd2ed08dd1191027ad0cccbec30f6a360f3890b963bd1ac",
       "selectedScalars": {
         "og": {
           "value": 1.058,
@@ -10045,7 +9948,7 @@
       "caseId": "B051",
       "kind": "batch",
       "snapshotBytes": 14316,
-      "fingerprint": "a9c15bd167403706963345e89483573feca788bf014e514ee00d462db48680df",
+      "fingerprint": "e9e4c451ee375fba3a6fbdf299aff0de2f8c25d1b9c43e60dfa300d2eba6df1a",
       "selectedScalars": {
         "og": {
           "value": 1.057,
@@ -10222,7 +10125,7 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -10238,7 +10141,7 @@
       "caseId": "B052",
       "kind": "batch",
       "snapshotBytes": 6663,
-      "fingerprint": "27a785ce7ee8332da248ebec558a7e3585a526b5b958623e70be29a03c0f6777",
+      "fingerprint": "a2e5a8def0ef24d9c9e2885786c17b51a102997bdc10e1b8efa594da2a31d39b",
       "selectedScalars": {
         "og": {
           "value": 1.048,
@@ -10412,7 +10315,6 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment."
       ]
     },
@@ -10420,7 +10322,7 @@
       "caseId": "B053",
       "kind": "batch",
       "snapshotBytes": 13135,
-      "fingerprint": "d653d73fc2fe6cb254b22e9c1afa43a5dbdd8bd5ffdbed830d3fe155071d07ba",
+      "fingerprint": "23a5feb32b2ba98599b4b83ad816d1feb97deb86a50bc7b4ca24bc872812eaed",
       "selectedScalars": {
         "og": {
           "value": 1.045,
@@ -10624,7 +10526,7 @@
       "caseId": "B054",
       "kind": "batch",
       "snapshotBytes": 15659,
-      "fingerprint": "329951dce3604cc79673ee499a9d5a64685161ac5cd802d9bfa9a83d3a905e7a",
+      "fingerprint": "a86d83516774170b625c59c5bc8bc61e0b7e915ee592c2c4ee9d2335a3f47f34",
       "selectedScalars": {
         "og": {
           "value": 1.065,
@@ -10807,7 +10709,6 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -10819,7 +10720,7 @@
       "caseId": "B055",
       "kind": "batch",
       "snapshotBytes": 14957,
-      "fingerprint": "7482531d1186da26e3336d6731e0b9c5b799ab74262a17a67fb2a7b0cb1e940c",
+      "fingerprint": "778e4cc2e1f47e02634a96bb4caf281de87ccf25c7ee0223bae8e7a4c2138f87",
       "selectedScalars": {
         "og": {
           "value": 1.04,
@@ -10999,7 +10900,6 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -11015,7 +10915,7 @@
       "caseId": "B056",
       "kind": "batch",
       "snapshotBytes": 16161,
-      "fingerprint": "4401aecb8b058067bc9f9e34ebaffb1958e4779c37c3b177f4a93041f7c8fc9e",
+      "fingerprint": "e0f7ed335e33af7d65ae8859841e85a19262d663c6f32b010a4720e5036b0618",
       "selectedScalars": {
         "og": {
           "value": 1.055,
@@ -11194,8 +11094,7 @@
         "Classified from Brewfather category and colour (19 °L); product character unresolved.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -11210,7 +11109,7 @@
       "caseId": "B057",
       "kind": "batch",
       "snapshotBytes": 12726,
-      "fingerprint": "c58d1dc4452d1898051011d945463079672514065da4272e611b113092f50d2f",
+      "fingerprint": "905b2ec36ec1b25f37e7b718e1ec32de3298988ecd4c3af19419642479e687a5",
       "selectedScalars": {
         "og": {
           "value": 1.045,
@@ -11388,7 +11287,7 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -11400,7 +11299,7 @@
       "caseId": "B058",
       "kind": "batch",
       "snapshotBytes": 14585,
-      "fingerprint": "62184bb2b56b71bc53cbc4a6b609408dc9c0dbb8cb8eeb1864a49b96e6231cfb",
+      "fingerprint": "e5da1a5fb15b1adf3febf79dfa93d202160ec8b9c1e03a8e703259ddd36ad4c4",
       "selectedScalars": {
         "og": {
           "value": 1.065,
@@ -11590,7 +11489,6 @@
         "Ingredient identity is outside the reviewed catalog.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -11608,7 +11506,7 @@
       "caseId": "B059",
       "kind": "batch",
       "snapshotBytes": 12032,
-      "fingerprint": "0577752245677ff17955420b0180f1af46288d8275f578c5711503f6cfae6ebf",
+      "fingerprint": "c3f6fc2d6aa22ff66451b78aaea06676c23402067bb5395eb18c845d83ef3ce3",
       "selectedScalars": {
         "og": {
           "value": 1.055,
@@ -11681,19 +11579,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "yeasts",
-          "sourcePath": "recipe.yeasts[0]",
-          "name": "Dry English Ale",
-          "supplier": null,
-          "laboratory": "White Labs",
-          "productId": "WLP007",
-          "grams": null,
-          "stage": "unknown",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 2.2597823941512676,
@@ -11775,7 +11661,7 @@
           "present": true,
           "complete": true,
           "acceptedCount": 1,
-          "resolvedCount": 0,
+          "resolvedCount": 1,
           "eligibleMassG": 0,
           "resolvedMassG": 0,
           "classifiedFraction": null
@@ -11799,7 +11685,7 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "The maker's text names no flavour words.",
         "Generic allspice class from the ingredient name; no reviewed product entry.",
         "Ingredient identity is outside the reviewed catalog.",
         "Generic cinnamon class from the ingredient name; no reviewed product entry.",
@@ -11812,7 +11698,7 @@
       "caseId": "B060",
       "kind": "batch",
       "snapshotBytes": 11404,
-      "fingerprint": "b9d2bab69471e4d482b69220dc52c4cb11aa93aa55b7dd568b0d3a2886b25c84",
+      "fingerprint": "4eeac10ed815d52bd9e195077ab75bbd85d3f54d72a06695b6b5ce24954bac28",
       "selectedScalars": {
         "og": {
           "value": 1.055,
@@ -11988,7 +11874,7 @@
         "Distinct from original Briess Carapils; no inherited no-flavor rule or numerical mouthfeel bonus.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -12001,7 +11887,7 @@
       "caseId": "B061",
       "kind": "batch",
       "snapshotBytes": 14092,
-      "fingerprint": "c47682d10a1ebbab8038e75ae8d48339c6cede46372721e89492f3b489ba1f74",
+      "fingerprint": "3f6d506b375c505656a308ee42d4b79297aea56f6bca5837c0486f31a252b3a9",
       "selectedScalars": {
         "og": {
           "value": 1.058,
@@ -12180,7 +12066,6 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -12194,7 +12079,7 @@
       "caseId": "B062",
       "kind": "batch",
       "snapshotBytes": 13384,
-      "fingerprint": "39b57cc2c695fd41f9a5cf3ed19d60e11e74c5dcdddd8961d6a313b903b4ea2b",
+      "fingerprint": "5c07512b42caffd66fc334bc59cb54d12e59fd8800cf1992622622f500702ae9",
       "selectedScalars": {
         "og": {
           "value": 1.055,
@@ -12388,7 +12273,7 @@
       "caseId": "B063",
       "kind": "batch",
       "snapshotBytes": 18562,
-      "fingerprint": "cb88baed813701c9ac970fccd443e233d58d280cecdaf5fe17f68e58769596c3",
+      "fingerprint": "8ed15128d794f080105fcdaa82f66ad3583e6fae1ef7655cd3350fa5b1710ed5",
       "selectedScalars": {
         "og": {
           "value": 1.06,
@@ -12573,7 +12458,6 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -12587,7 +12471,7 @@
       "caseId": "B064",
       "kind": "batch",
       "snapshotBytes": 13859,
-      "fingerprint": "7c5a56c72a80f1905d4a093c9e4ac9ff7e7e15980f878747353b8fb937bbd5aa",
+      "fingerprint": "0c1acfdaa0e95f687f26c982b843d273a0de780529ab7baf78529ac1939369a7",
       "selectedScalars": {
         "og": {
           "value": 1.05,
@@ -12766,7 +12650,7 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -12779,7 +12663,7 @@
       "caseId": "B065",
       "kind": "batch",
       "snapshotBytes": 13398,
-      "fingerprint": "262f9933477a7c58557c32f9fa7026b1918634e0f1a3e0438b933d591b201b7a",
+      "fingerprint": "7baa4624241f943996dc13072035aeb77217419e5fdcb13a06847259a7e0c97b",
       "selectedScalars": {
         "og": {
           "value": 1.057,
@@ -12957,7 +12841,6 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Regional class only: character named by at least two of the reviewed Hallertau aroma varieties (Mittelfrüh, Tradition, Hersbrucker); the variety is unknown.",
         "Regional class only: character named by at least two of the reviewed Hallertau aroma varieties (Mittelfrüh, Tradition, Hersbrucker); the variety is unknown.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -12971,7 +12854,7 @@
       "caseId": "R001",
       "kind": "recipe",
       "snapshotBytes": 14079,
-      "fingerprint": "09fbb512a7b4d5993a2a0574e336a2fbd31f4a06ed6ea858df7fe5508600ffc0",
+      "fingerprint": "d15c9ff3e2398f1341ce044904468968136fb690fb91a67efde76a5e7bc81713",
       "selectedScalars": {
         "og": {
           "value": 1.060692463,
@@ -13148,7 +13031,7 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -13164,7 +13047,7 @@
       "caseId": "R002",
       "kind": "recipe",
       "snapshotBytes": 14795,
-      "fingerprint": "7a5901f784c9fd79b4a8567fb81ff0a15771d48442992e11e5684ad7a86e84fd",
+      "fingerprint": "8e3b029bedecfe4cce210f5b097a8033ebff9ee29d3073743b2086645c5c2517",
       "selectedScalars": {
         "og": {
           "value": 1.060090564,
@@ -13344,7 +13227,6 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -13360,7 +13242,7 @@
       "caseId": "R003",
       "kind": "recipe",
       "snapshotBytes": 13797,
-      "fingerprint": "abcf5373c97db59983c5719b054c4d7d1ca2b274a0b4db882f08123e92dfbeaf",
+      "fingerprint": "0c6e53f561ec6a010779bb1eeb6ddfe2cb7fb0c7fd5a11247082707a2f0ff828",
       "selectedScalars": {
         "og": {
           "value": 1.060867013,
@@ -13540,7 +13422,7 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -13553,7 +13435,7 @@
       "caseId": "R004",
       "kind": "recipe",
       "snapshotBytes": 13077,
-      "fingerprint": "cdc134d44eee69f571eb9e02d8ecffecbcd2f06adb8526a5c38773e067edd7e4",
+      "fingerprint": "922337fda2970b1e7b6148ffbe1da013101341f317f9a09f2db6b45d07d7058a",
       "selectedScalars": {
         "og": {
           "value": 1.055209169,
@@ -13730,7 +13612,7 @@
         "Classified from Brewfather category and colour (120 °L); product character unresolved.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -13745,7 +13627,7 @@
       "caseId": "R005",
       "kind": "recipe",
       "snapshotBytes": 16468,
-      "fingerprint": "ee84f2b50081229ef367df9cea8699e38953e10d856c26868f61fd9360a69c7b",
+      "fingerprint": "e680b5540b3ffa4b15efa233366a822b0b2d82a89fafed6ae5f38d0fe00b31c2",
       "selectedScalars": {
         "og": {
           "value": 1.059121334,
@@ -13944,7 +13826,7 @@
       "caseId": "R006",
       "kind": "recipe",
       "snapshotBytes": 16863,
-      "fingerprint": "4ecb6b529e29a5c8f9e057f57ac66dea0e21aa3ac1ca67287800af7e9cdb95e8",
+      "fingerprint": "9006b8d70486767406a14dce5386526bf4968ce4c27a8a150bd7d583f3be72d0",
       "selectedScalars": {
         "og": {
           "value": 1.065436959,
@@ -14027,17 +13909,6 @@
           "productId": null,
           "grams": 12.1,
           "stage": "first_wort",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "yeasts",
-          "sourcePath": "recipe.yeasts[0]",
-          "name": "American Ale",
-          "supplier": null,
-          "laboratory": "Wyeast Labs",
-          "productId": "1056",
-          "grams": null,
-          "stage": "unknown",
           "reasons": ["Ingredient identity is outside the reviewed catalog."]
         }
       ],
@@ -14122,7 +13993,7 @@
           "present": true,
           "complete": true,
           "acceptedCount": 1,
-          "resolvedCount": 0,
+          "resolvedCount": 1,
           "eligibleMassG": 0,
           "resolvedMassG": 0,
           "classifiedFraction": null
@@ -14156,7 +14027,7 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Sold as the CTZ designation; Columbus and Tomahawk names share one aroma class. Bare Zeus is not aliased.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -14167,7 +14038,7 @@
       "caseId": "R007",
       "kind": "recipe",
       "snapshotBytes": 14024,
-      "fingerprint": "27dde437de79634a70f19a0f4b0d9665517933ddefaa9bb58ec5d8d91e96f1b1",
+      "fingerprint": "895a6ce2273540852f7288588b9f2742f7f58dc452e3a34bf420f469e247aea1",
       "selectedScalars": {
         "og": {
           "value": 1.058093466,
@@ -14360,7 +14231,7 @@
       "caseId": "R008",
       "kind": "recipe",
       "snapshotBytes": 12533,
-      "fingerprint": "83b8e9f4ed71f48a53ba20aa093c89eee705b611dfb81b249e6e4b8f5fe50df7",
+      "fingerprint": "fc940788bed35056f8ee81f300561d389c53d9108ecbf3d31e3f2080a9b70783",
       "selectedScalars": {
         "og": {
           "value": 1.062291094,
@@ -14443,17 +14314,6 @@
           "productId": null,
           "grams": 28.349523,
           "stage": "boil",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "yeasts",
-          "sourcePath": "recipe.yeasts[0]",
-          "name": "California Ale",
-          "supplier": null,
-          "laboratory": "White Labs",
-          "productId": "WLP001",
-          "grams": null,
-          "stage": "unknown",
           "reasons": ["Ingredient identity is outside the reviewed catalog."]
         }
       ],
@@ -14538,7 +14398,7 @@
           "present": true,
           "complete": true,
           "acceptedCount": 1,
-          "resolvedCount": 0,
+          "resolvedCount": 1,
           "eligibleMassG": 0,
           "resolvedMassG": 0,
           "classifiedFraction": null
@@ -14562,7 +14422,7 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -14574,7 +14434,7 @@
       "caseId": "R009",
       "kind": "recipe",
       "snapshotBytes": 15721,
-      "fingerprint": "84e8c6a468f4aff1487ae98410873ebf5837236b36cc7a709574d45226340f18",
+      "fingerprint": "0d5786ff609b52d400f47ea6338fb3bb59ce6115b1bf322620d6a0300be1d1f2",
       "selectedScalars": {
         "og": {
           "value": 1.05330248,
@@ -14764,8 +14624,6 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Ingredient identity is outside the reviewed catalog.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Generic witbier class from the ingredient name; no reviewed product entry.",
-        "Ingredient identity is outside the reviewed catalog.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -14786,7 +14644,7 @@
       "caseId": "R010",
       "kind": "recipe",
       "snapshotBytes": 11561,
-      "fingerprint": "91e90c76e51aec919bf0b4f0e9247489906aacdc4b7d71c842b5d2bea5b4bd7c",
+      "fingerprint": "98de49ad76abc1912128e06fa52af097c4500070dfaf17c297f9c8040118cb86",
       "selectedScalars": {
         "og": {
           "value": 1.071247352,
@@ -14966,8 +14824,6 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Generic Belgian ale class from the ingredient name; no reviewed product entry.",
-        "Ingredient identity is outside the reviewed catalog.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment."
       ]
@@ -14976,7 +14832,7 @@
       "caseId": "R011",
       "kind": "recipe",
       "snapshotBytes": 9530,
-      "fingerprint": "278b7a88693e3e10b1a6b6c543c118f58a5a447561f3877cff73ef96fcd0335c",
+      "fingerprint": "92b138ec7f59e12246c213e3442c4d17da4d613a0e2a56ac5c51f3728d2875c3",
       "selectedScalars": {
         "og": {
           "value": 1.060969337,
@@ -15154,7 +15010,7 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment."
       ]
     },
@@ -15162,7 +15018,7 @@
       "caseId": "R012",
       "kind": "recipe",
       "snapshotBytes": 13837,
-      "fingerprint": "f53eaf8874e226117ac5cf7dd0cb9711d5d467d881c79843c7e3a25fb4157ba8",
+      "fingerprint": "2a8bb88ae3a9626289389945f0914cf134db607f4dd52102e68e2ee558bbffaa",
       "selectedScalars": {
         "og": {
           "value": 1.042591735,
@@ -15339,7 +15195,6 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -15355,7 +15210,7 @@
       "caseId": "R013",
       "kind": "recipe",
       "snapshotBytes": 17196,
-      "fingerprint": "a3f88f644e2d33847ebe5e9bf051b08982ee8ef9df1164323a5faa566a36c4bc",
+      "fingerprint": "ca9d7f722673ef03f8ab84ba9d9f5cae2d9b3dfa9b9fd8ab0a2aff0c02b57a5b",
       "selectedScalars": {
         "og": {
           "value": 1.092962792,
@@ -15539,7 +15394,7 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -15554,7 +15409,7 @@
       "caseId": "R014",
       "kind": "recipe",
       "snapshotBytes": 9779,
-      "fingerprint": "5430e1a7dd9caeff64fa849d5b4c9cc20b7faaaa98ca6a15b19be913014d44be",
+      "fingerprint": "d9d8377c5f50303336acac6d6a9baf60118c26eb3dccf29c64a1af8a8aafc335",
       "selectedScalars": {
         "og": {
           "value": 1.052396348,
@@ -15742,7 +15597,7 @@
       "caseId": "R015",
       "kind": "recipe",
       "snapshotBytes": 15785,
-      "fingerprint": "d9ec4c84558321466f20e69e4d9d1b6da744a969d3225b1341c3a7b48e1dde0a",
+      "fingerprint": "640c8c155520a4ae81f44079236181492ab1b1e45f2bb440fd410d0fdf182714",
       "selectedScalars": {
         "og": {
           "value": 1.047094178,
@@ -15920,8 +15775,6 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Generic saison class from the ingredient name; no reviewed product entry.",
-        "Ingredient identity is outside the reviewed catalog.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -15940,7 +15793,7 @@
       "caseId": "R016",
       "kind": "recipe",
       "snapshotBytes": 12497,
-      "fingerprint": "fea20bbaebfe3a7d529ba9cbda30c553dadd846963948f2d6a0b25abc43c81f6",
+      "fingerprint": "2ae80a9c529229223abc03be592d434f20c7f7997e711e0b3760cdc0173ed03d",
       "selectedScalars": {
         "og": {
           "value": 1.09817792,
@@ -16117,7 +15970,7 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -16131,7 +15984,7 @@
       "caseId": "R017",
       "kind": "recipe",
       "snapshotBytes": 11285,
-      "fingerprint": "a24225991bf6c4dd3053142ae69db1a1cab032bf4b35ddac00ad63074713677e",
+      "fingerprint": "7540bf27295724c8f70cf4496200fbf79d50bb394da3c661b85bb3b4c3b6e93a",
       "selectedScalars": {
         "og": {
           "value": 1.044853498,
@@ -16320,7 +16173,7 @@
       "caseId": "R018",
       "kind": "recipe",
       "snapshotBytes": 15425,
-      "fingerprint": "5d990ee626812f046ad4a8ac48130bcc8d0274a142300a72f674bc4c754c83aa",
+      "fingerprint": "fd9f1894b51b49f7995c8ce562d4c84ad0f7cffb93f14e2595435d0a517f3145",
       "selectedScalars": {
         "og": {
           "value": 1.082077331,
@@ -16499,7 +16352,7 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -16515,7 +16368,7 @@
       "caseId": "R019",
       "kind": "recipe",
       "snapshotBytes": 11650,
-      "fingerprint": "38234993712784ac82b56c42aa01ca072fdd1409a5c2e9aaacc9515cb881d510",
+      "fingerprint": "e7c37ff1d90e2945f7e0b63ad27e26c4a921b6bf0e36ff79a5a14e06fd7fecf9",
       "selectedScalars": {
         "og": {
           "value": 1.072829765,
@@ -16598,17 +16451,6 @@
           "productId": null,
           "grams": 113.398093,
           "stage": "dry_hop",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        },
-        {
-          "role": "yeasts",
-          "sourcePath": "recipe.yeasts[0]",
-          "name": "London Ale III",
-          "supplier": null,
-          "laboratory": "Wyeast Labs",
-          "productId": "1318",
-          "grams": null,
-          "stage": "unknown",
           "reasons": ["Ingredient identity is outside the reviewed catalog."]
         }
       ],
@@ -16693,7 +16535,7 @@
           "present": true,
           "complete": true,
           "acceptedCount": 1,
-          "resolvedCount": 0,
+          "resolvedCount": 1,
           "eligibleMassG": 0,
           "resolvedMassG": 0,
           "classifiedFraction": null
@@ -16717,7 +16559,6 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Ingredient identity is outside the reviewed catalog.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Ingredient identity is outside the reviewed catalog.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -16728,7 +16569,7 @@
       "caseId": "R020",
       "kind": "recipe",
       "snapshotBytes": 12087,
-      "fingerprint": "c57400d30d0d789ee51c30b4ccc0b7ccc9776494c07f4aa17860f6e7ef1d4db5",
+      "fingerprint": "fb9689eba8514a2223a30549f4861bddf7556a6d4853d7579f7ac13f08bb0ea1",
       "selectedScalars": {
         "og": {
           "value": 1.055573063,
@@ -16905,7 +16746,6 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -16918,7 +16758,7 @@
       "caseId": "R021",
       "kind": "recipe",
       "snapshotBytes": 8257,
-      "fingerprint": "d1f9674a9386b45a258e5b35ca280324c7a800dc9ebb22c4599f9e71d0387902",
+      "fingerprint": "a5a0856e45d1d6190a2873145a27acdcd9161a206615772ff4b850e40759f94c",
       "selectedScalars": {
         "og": {
           "value": 1.07229709,
@@ -16991,19 +16831,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "yeasts",
-          "sourcePath": "recipe.yeasts[0]",
-          "name": "Bavarian Lager",
-          "supplier": null,
-          "laboratory": "Wyeast Labs",
-          "productId": "2206",
-          "grams": null,
-          "stage": "unknown",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 3.4141937069547454,
@@ -17085,7 +16913,7 @@
           "present": true,
           "complete": true,
           "acceptedCount": 2,
-          "resolvedCount": 1,
+          "resolvedCount": 2,
           "eligibleMassG": 0,
           "resolvedMassG": 0,
           "classifiedFraction": null
@@ -17106,8 +16934,8 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Ingredient identity is outside the reviewed catalog.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "The maker's text names no flavour words.",
+        "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment."
       ]
     },
@@ -17115,7 +16943,7 @@
       "caseId": "R022",
       "kind": "recipe",
       "snapshotBytes": 13308,
-      "fingerprint": "8104958c9b9cfcea2614ea54ccedb9a826aa1cb56cd54231e5bb4282cf9bbb42",
+      "fingerprint": "e78ccbad13f6f5938554d407ae29d3cd68bc2a5d51b570cbba3094ddf518930d",
       "selectedScalars": {
         "og": {
           "value": 1.080601175,
@@ -17188,19 +17016,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "yeasts",
-          "sourcePath": "recipe.yeasts[0]",
-          "name": "Scottish Ale",
-          "supplier": null,
-          "laboratory": "Wyeast Labs",
-          "productId": "1728",
-          "grams": null,
-          "stage": "unknown",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 2.7219997711111734,
@@ -17282,7 +17098,7 @@
           "present": true,
           "complete": true,
           "acceptedCount": 1,
-          "resolvedCount": 0,
+          "resolvedCount": 1,
           "eligibleMassG": 0,
           "resolvedMassG": 0,
           "classifiedFraction": null
@@ -17304,7 +17120,7 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -17319,7 +17135,7 @@
       "caseId": "R023",
       "kind": "recipe",
       "snapshotBytes": 16535,
-      "fingerprint": "ec3387aa76f6ccb2366b2bbcb5d44425ece7aea43acc5363aa38e661a665599b",
+      "fingerprint": "3e7d060a78ba6e5d5eed1bef48fcd38aedf2b72a2b61edbd74c459f70ea1f49d",
       "selectedScalars": {
         "og": {
           "value": 1.053973694,
@@ -17498,8 +17314,7 @@
         "Classified from Brewfather category and colour (19 °L); product character unresolved.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -17515,7 +17330,7 @@
       "caseId": "R024",
       "kind": "recipe",
       "snapshotBytes": 12717,
-      "fingerprint": "537b73fa6a3fa89cbc4eb5d5980d1b003d6dff5945b351ea9c1d919ee13994b5",
+      "fingerprint": "1d250fdf87d85ad7b420f5638d9e5cfc20ba65d458097b1510fee0db7f653ff8",
       "selectedScalars": {
         "og": {
           "value": 1.057187324,
@@ -17719,7 +17534,7 @@
       "caseId": "R025",
       "kind": "recipe",
       "snapshotBytes": 14075,
-      "fingerprint": "1820fc583887fa269da9c4b65016ee0b36653857752bf701bfeb5ff9f5be8103",
+      "fingerprint": "9682e09fd840e6c843c421d3989c83573bb474abd91f6a5c65f4555579e4edfe",
       "selectedScalars": {
         "og": {
           "value": 1.077406312,
@@ -17897,7 +17712,6 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -17912,7 +17726,7 @@
       "caseId": "R026",
       "kind": "recipe",
       "snapshotBytes": 15404,
-      "fingerprint": "a2c34c4505dcd567789175d9b923b74af24045e6999438631b7ac1df225d206a",
+      "fingerprint": "bdc5bc15683590ad22f9832f390a32fc4a1545a2fcc2ff037dd7a018125ea5ee",
       "selectedScalars": {
         "og": {
           "value": 1.069323708,
@@ -18129,7 +17943,6 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Ingredient identity is outside the reviewed catalog.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -18141,7 +17954,7 @@
       "caseId": "R027",
       "kind": "recipe",
       "snapshotBytes": 13936,
-      "fingerprint": "8634b3edc89258dbc8d72d655f5791307f7e80a2bf54fe0320d6513d77b9adc9",
+      "fingerprint": "e2b3ebd600edfb5501c2800f0892bf3256f90c694700a06bf0cea04fb9602118",
       "selectedScalars": {
         "og": {
           "value": 1.057570129,
@@ -18320,7 +18133,6 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -18334,7 +18146,7 @@
       "caseId": "R028",
       "kind": "recipe",
       "snapshotBytes": 13224,
-      "fingerprint": "7c2ed4ae0a73036b5e4852097174ddab3d0ab4a15e119bd17d5be0b40543492c",
+      "fingerprint": "19e011fc8eba2307478a0f6f8ade5aa5680302a9ad24e9e05980e7dff5c97340",
       "selectedScalars": {
         "og": {
           "value": 1.056577885,
@@ -18512,7 +18324,6 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Regional class only: character named by at least two of the reviewed Hallertau aroma varieties (Mittelfrüh, Tradition, Hersbrucker); the variety is unknown.",
         "Regional class only: character named by at least two of the reviewed Hallertau aroma varieties (Mittelfrüh, Tradition, Hersbrucker); the variety is unknown.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -18526,7 +18337,7 @@
       "caseId": "R029",
       "kind": "recipe",
       "snapshotBytes": 12715,
-      "fingerprint": "5c5dc618b83e78a1fb70b4ba11d0d920f5246ed1ffdbeadede1e9f1f70219fc4",
+      "fingerprint": "91016f99dc816874d6bf8050483609afb4ca953e6ee79b56cd3b42d56c4237d6",
       "selectedScalars": {
         "og": {
           "value": 1.043941205,
@@ -18717,7 +18528,7 @@
       "caseId": "R030",
       "kind": "recipe",
       "snapshotBytes": 13737,
-      "fingerprint": "1991c4930c40facf902ee7f8219f50b7e6afd9377ec314a8dfe2ce5960dbb02c",
+      "fingerprint": "617c9c5ed064c7f21273c9ed8667bc9c8523e31b55393d4400436bb0a750f049",
       "selectedScalars": {
         "og": {
           "value": 1.058544888,
@@ -18896,7 +18707,7 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -18909,7 +18720,7 @@
       "caseId": "R031",
       "kind": "recipe",
       "snapshotBytes": 16085,
-      "fingerprint": "3b1a688b4174b8e01d6fdaa9c625167909c148044f116b59886e9b548fc7ffb4",
+      "fingerprint": "4bc73fbc13a398577f8d6de4840a57b24c4a2de9fa5423d5ae26e0fffc4b6431",
       "selectedScalars": {
         "og": {
           "value": 1.064532861,
@@ -19094,7 +18905,6 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -19105,7 +18915,7 @@
       "caseId": "R032",
       "kind": "recipe",
       "snapshotBytes": 13147,
-      "fingerprint": "925035365553668d817ed07baccc75e846fb0de970d8d2a8aac69bc2486bd81d",
+      "fingerprint": "9ebe0fec2161d845e92ddc7a71d2139294848c75eb6d815ed94bedb889c2a0f2",
       "selectedScalars": {
         "og": {
           "value": 1.050370456,
@@ -19299,7 +19109,7 @@
       "caseId": "R033",
       "kind": "recipe",
       "snapshotBytes": 14402,
-      "fingerprint": "42238d1958c2ae53e6d402530043b8c155883b4d1db1a3088340fa1c9147d533",
+      "fingerprint": "f019034a1865f3f98bf0204a603ec8d7a3a354a6d5cc50ce3a3f329953ab10f3",
       "selectedScalars": {
         "og": {
           "value": 1.065950874,
@@ -19489,7 +19299,6 @@
         "Ingredient identity is outside the reviewed catalog.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -19507,7 +19316,7 @@
       "caseId": "R034",
       "kind": "recipe",
       "snapshotBytes": 11167,
-      "fingerprint": "c8b5da5ef19fa9da0f217ddfbd4368b1527350b1b0bd0153238f0e200d79197b",
+      "fingerprint": "a933ff06aa85b15554c60da9c9c4dd8bf4178ab6fc82539f20dc25581ea61d40",
       "selectedScalars": {
         "og": {
           "value": 1.054769783,
@@ -19580,19 +19389,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "yeasts",
-          "sourcePath": "recipe.yeasts[0]",
-          "name": "Dry English Ale",
-          "supplier": null,
-          "laboratory": "White Labs",
-          "productId": "WLP007",
-          "grams": null,
-          "stage": "unknown",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 2.2503234791797375,
@@ -19674,7 +19471,7 @@
           "present": true,
           "complete": true,
           "acceptedCount": 1,
-          "resolvedCount": 0,
+          "resolvedCount": 1,
           "eligibleMassG": 0,
           "resolvedMassG": 0,
           "classifiedFraction": null
@@ -19698,7 +19495,7 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "The maker's text names no flavour words.",
         "Generic allspice class from the ingredient name; no reviewed product entry.",
         "Ingredient identity is outside the reviewed catalog.",
         "Generic cinnamon class from the ingredient name; no reviewed product entry.",
@@ -19711,7 +19508,7 @@
       "caseId": "R035",
       "kind": "recipe",
       "snapshotBytes": 10515,
-      "fingerprint": "7c478c08d639705d44dc6c47789f37d08028c948ae58924bcafee069e161f54b",
+      "fingerprint": "df4ab0b2acb26c035f1933572dc7f53cd8d859d1105c01f56d68fde71ad66407",
       "selectedScalars": {
         "og": {
           "value": 1.053530322,
@@ -19889,7 +19686,6 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Regional class only: character named by at least two of the reviewed Hallertau aroma varieties (Mittelfrüh, Tradition, Hersbrucker); the variety is unknown.",
         "Regional class only: character named by at least two of the reviewed Hallertau aroma varieties (Mittelfrüh, Tradition, Hersbrucker); the variety is unknown.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment."
@@ -19899,7 +19695,7 @@
       "caseId": "R036",
       "kind": "recipe",
       "snapshotBytes": 14103,
-      "fingerprint": "1c5638a319d0bf185491fb8d5aede13a9b340f8f081db43bc5b58ce231ed4a78",
+      "fingerprint": "f7aec54e3756482ae36fd9e725054166ce12b9f8139c6b1aa95ca5fd2faaf60e",
       "selectedScalars": {
         "og": {
           "value": 1.060110996,
@@ -20095,7 +19891,7 @@
       "caseId": "R037",
       "kind": "recipe",
       "snapshotBytes": 13774,
-      "fingerprint": "626b3a82baebc3f70f52b47427dcc6bb2e2e72b182bda4751940bad5eb77ccda",
+      "fingerprint": "e7008d5f4fafe41a9c98a4a1a76dc9cc78233ae14b7a18cfbac88d1a0baa0328",
       "selectedScalars": {
         "og": {
           "value": 1.054410878,
@@ -20179,17 +19975,6 @@
           "grams": 14.174762,
           "stage": "boil",
           "reasons": ["Ingredient name is missing; no identity inferred."]
-        },
-        {
-          "role": "yeasts",
-          "sourcePath": "recipe.yeasts[0]",
-          "name": "Lutra Kveik",
-          "supplier": null,
-          "laboratory": "Omega",
-          "productId": "OYL-071",
-          "grams": null,
-          "stage": "unknown",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
         }
       ],
       "axes": {
@@ -20273,7 +20058,7 @@
           "present": true,
           "complete": true,
           "acceptedCount": 1,
-          "resolvedCount": 0,
+          "resolvedCount": 1,
           "eligibleMassG": 0,
           "resolvedMassG": 0,
           "classifiedFraction": null
@@ -20295,7 +20080,7 @@
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Regional class only: character named by at least two of the reviewed Hallertau aroma varieties (Mittelfrüh, Tradition, Hersbrucker); the variety is unknown.",
         "Ingredient name is missing; no identity inferred.",
-        "Ingredient identity is outside the reviewed catalog.",
+        "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -20311,7 +20096,7 @@
       "caseId": "R038",
       "kind": "recipe",
       "snapshotBytes": 21423,
-      "fingerprint": "c9438a755802f5de6bf7cfd216ff5468ca4342b1adbbb221424cd13b0a68d512",
+      "fingerprint": "609a1e312f7c7ee9491ca0155d61f419ed2a0649a5e49e9113937beb786d5f16",
       "selectedScalars": {
         "og": {
           "value": 1.08255624,
@@ -20499,7 +20284,6 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Thiol-oriented family context only; current NEXT generation cannot establish historical process specifications or thiol concentration.",
         "Generic processing aid class from the ingredient name; no reviewed product entry.",
         "Ingredient identity is outside the reviewed catalog.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -20516,7 +20300,7 @@
       "caseId": "R039",
       "kind": "recipe",
       "snapshotBytes": 17737,
-      "fingerprint": "d57a7c41643ac0f4719fb1e82ac4c35959e3d05fcf23e1188f0e97a778e39380",
+      "fingerprint": "f93bfe9a2e886a068bf8aad595bd1ef8a772024764ff6764d211c9555896cae7",
       "selectedScalars": {
         "og": {
           "value": 1.063539461,
@@ -20701,7 +20485,6 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -20714,7 +20497,7 @@
       "caseId": "R040",
       "kind": "recipe",
       "snapshotBytes": 11649,
-      "fingerprint": "f52af0fef97e22cb3026039bbcfbc19090f1bdee1311c3372f8b1d779b4b49c2",
+      "fingerprint": "a11eab937ae5fb61474fb2db93718b1575e9d25bad2d105cacb939a1c5bb3320",
       "selectedScalars": {
         "og": {
           "value": 1.06337995,
@@ -20889,7 +20672,6 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -20904,7 +20686,7 @@
       "caseId": "R041",
       "kind": "recipe",
       "snapshotBytes": 15982,
-      "fingerprint": "9747d3a348f00eab85db300d422d357a215ee3bdfecae11efeff6fc209882bc4",
+      "fingerprint": "ed2dffd903a42e68a469bbb5d98b17cfe13a39c2863882ec8c129efec14e5f89",
       "selectedScalars": {
         "og": {
           "value": 1.074537189,
@@ -21083,7 +20865,6 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Regional class only: character named by at least two of the reviewed Hallertau aroma varieties (Mittelfrüh, Tradition, Hersbrucker); the variety is unknown.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -21103,7 +20884,7 @@
       "caseId": "R042",
       "kind": "recipe",
       "snapshotBytes": 10309,
-      "fingerprint": "d00571af50639ecce159db5eef7e24c6fef11246bfbba0e39fc2f2bdbf4c38b7",
+      "fingerprint": "cc54eb9c1132b5539cc3ff6ecf7c402d7145d331b1134b6ab1604be57c0ad7d4",
       "selectedScalars": {
         "og": {
           "value": 1.033463853,
@@ -21281,8 +21062,6 @@
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Generic saison class from the ingredient name; no reviewed product entry.",
-        "Ingredient identity is outside the reviewed catalog.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment."
@@ -21292,7 +21071,7 @@
       "caseId": "R043",
       "kind": "recipe",
       "snapshotBytes": 14850,
-      "fingerprint": "9eb563a3f302d3b7579603495090ddddb1dcfad9141925198c11859fbec02abc",
+      "fingerprint": "e9a413f0f47ae32eff0d47659eab9fe41a3595e80bab8a1485639378055a34e1",
       "selectedScalars": {
         "og": {
           "value": 1.0971195,
@@ -21493,8 +21272,6 @@
         "Ingredient identity is outside the reviewed catalog.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Ingredient identity is outside the reviewed catalog.",
-        "Generic Belgian ale class from the ingredient name; no reviewed product entry.",
-        "Ingredient identity is outside the reviewed catalog.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -21510,7 +21287,7 @@
       "caseId": "R044",
       "kind": "recipe",
       "snapshotBytes": 13228,
-      "fingerprint": "6995e728846f6246d6e705a597c08ba42f81d5ba0b00d1cc2f49612a36a7fa73",
+      "fingerprint": "340cc7d42d39cda048864617b228ad85a67017d96a6589f6e8a8f5d02260c9ba",
       "selectedScalars": {
         "og": {
           "value": 1.050099892,
@@ -21583,19 +21360,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "yeasts",
-          "sourcePath": "recipe.yeasts[0]",
-          "name": "Kolsch II",
-          "supplier": null,
-          "laboratory": "Omega",
-          "productId": "OYL-044",
-          "grams": null,
-          "stage": "unknown",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 1.785782673943523,
@@ -21677,7 +21442,7 @@
           "present": true,
           "complete": true,
           "acceptedCount": 1,
-          "resolvedCount": 0,
+          "resolvedCount": 1,
           "eligibleMassG": 0,
           "resolvedMassG": 0,
           "classifiedFraction": null
@@ -21698,7 +21463,6 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Ingredient identity is outside the reviewed catalog.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -21714,7 +21478,7 @@
       "caseId": "R045",
       "kind": "recipe",
       "snapshotBytes": 12485,
-      "fingerprint": "838ead4bab838cc9eecaa5003557dd0147ed9de07e0aa07933b17a7d597b57e8",
+      "fingerprint": "2f87543d8f47a9fa0927ae2375244362197f73f9ca86bf7665e5a7ce837cf144",
       "selectedScalars": {
         "og": {
           "value": 1.047423604,
@@ -21787,19 +21551,7 @@
           "limitations": ["simple_apparent_attenuation"]
         }
       },
-      "unresolvedIngredients": [
-        {
-          "role": "yeasts",
-          "sourcePath": "recipe.yeasts[0]",
-          "name": "American Hefeweizen Ale",
-          "supplier": null,
-          "laboratory": "White Labs",
-          "productId": "WLP320",
-          "grams": null,
-          "stage": "unknown",
-          "reasons": ["Ingredient identity is outside the reviewed catalog."]
-        }
-      ],
+      "unresolvedIngredients": [],
       "axes": {
         "malt": {
           "value": 1.5574909227016946,
@@ -21881,7 +21633,7 @@
           "present": true,
           "complete": true,
           "acceptedCount": 1,
-          "resolvedCount": 0,
+          "resolvedCount": 1,
           "eligibleMassG": 0,
           "resolvedMassG": 0,
           "classifiedFraction": null
@@ -21901,7 +21653,6 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Descriptors are expectations, not guaranteed batch flavor.",
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
-        "Ingredient identity is outside the reviewed catalog.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -21918,7 +21669,7 @@
       "caseId": "R046",
       "kind": "recipe",
       "snapshotBytes": 14136,
-      "fingerprint": "4a771c874252f9cf2d2619e97c9f54ca317eff7fca5a716c7ae42ff083fef6bb",
+      "fingerprint": "612263932f3254562d00dc505d0558c661bd4d83dd42c3f64aed05b9c1c1473a",
       "selectedScalars": {
         "og": {
           "value": 1.071195965,
@@ -22124,7 +21875,6 @@
         "Variety character only; supplier, origin and concentrated form equivalence are not established. Woody aroma does not establish wood contact.",
         "Ingredient identity is outside the reviewed catalog.",
         "Laboratory established by exact branded product name.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",

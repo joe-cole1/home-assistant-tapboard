@@ -3,6 +3,7 @@ import test from "node:test";
 import { readFileSync } from "node:fs";
 import { resolveIngredient, CATALOG_VERSION } from "../src/features/story/flavor/catalog.ts";
 import {
+  BREWFATHER_NAMES,
   INGREDIENT_CLASSES,
   INGREDIENT_FACTS,
   REVIEWED_FACTS,
@@ -100,7 +101,7 @@ void test("specific blank-code names resolve only within matching laboratory", (
   assert.equal(resolveIngredient("yeasts", ingredient({ name: "Pomona" })).level, "unresolved");
   assert.equal(
     resolveIngredient("yeasts", ingredient({ name: "Lallemand Verdant IPA Yeast" })).id,
-    "lallemand-verdant",
+    "lallemand-verdant-ipa",
   );
 });
 void test("lab and code win with diagnostic; unknown codes and generic names do not resolve", () => {
@@ -108,7 +109,7 @@ void test("lab and code win with diagnostic; unknown codes and generic names do 
     "yeasts",
     ingredient({ name: "Wrong", laboratory: "Wyeast Labs", productId: "3068" }),
   );
-  assert.deepEqual(yeast.descriptors, ["banana", "clove"]);
+  assert.deepEqual(yeast.descriptors, ["banana", "clove", "phenolic"]);
   assert.ok(yeast.diagnostics.some((value) => value.includes("conflict")));
   assert.equal(
     resolveIngredient(
@@ -117,7 +118,7 @@ void test("lab and code win with diagnostic; unknown codes and generic names do 
     ).level,
     "unresolved",
   );
-  // An unknown code blocks the product; a typed wheat yeast's name still earns the generic class.
+  // An unknown code blocks the product, and no style class stands in for it.
   const unknownCode = resolveIngredient(
     "yeasts",
     ingredient({
@@ -127,7 +128,8 @@ void test("lab and code win with diagnostic; unknown codes and generic names do 
       type: "Wheat",
     }),
   );
-  assert.equal(unknownCode.id, "class-hefeweizen");
+  assert.equal(unknownCode.level, "unresolved");
+  assert.deepEqual(unknownCode.descriptors, []);
   assert.ok(unknownCode.diagnostics.some((value) => value.includes("Unknown/conflicting")));
   assert.equal(
     resolveIngredient("yeasts", ingredient({ name: "German Lager", type: "Lager" })).souring,
@@ -154,7 +156,7 @@ void test("exact hop identity never fabricates missing varieties or blend consti
   assert.equal(hallertau.level, "family");
   assert.ok(hallertau.diagnostics.some((value) => value.includes("variety is unknown")));
 });
-void test("reviewed hop varieties and flavourful yeasts resolve by exact name and laboratory", () => {
+void test("reviewed hop varieties and maker-sourced yeasts resolve by exact name and laboratory", () => {
   const hops: readonly [string, string][] = [
     ["Tettnang", "hop-tettnanger"],
     ["Hersbrucker", "hop-hersbrucker-spat"],
@@ -175,7 +177,7 @@ void test("reviewed hop varieties and flavourful yeasts resolve by exact name an
   const yeasts: readonly [string, string, string, string][] = [
     ["London Ale", "White Labs", "WLP013", "white-labs-wlp013"],
     ["London Ale Yeast", "Wyeast Labs", "1028", "wyeast-1028"],
-    ["Voss Kveik", "Omega", "OYL-061", "omega-voss"],
+    ["Voss Kveik", "Omega", "OYL-061", "omega-voss-kveik-standard"],
     ["New England", "Lallemand (LalBrew)", "", "lallemand-new-england"],
     ["Belgian Wit", "Mangrove Jack's", "M21", "mangrove-jacks-m21"],
   ];
@@ -417,39 +419,60 @@ void test("verified priority products retain manufacturer guards and family-only
     "lactose",
   ]);
 });
-void test("generic yeast classes name style-family character only after reviewed strains", () => {
+void test("a yeast's character comes only from its maker; no style class names an unknown strain", () => {
   const yeast = (name: string, productId: string, type = "Ale", laboratory = "Some Lab") =>
     resolveIngredient("yeasts", ingredient({ name, laboratory, productId, type }));
-  const hefe = yeast("Hefeweizen IV", "WLP380", "Wheat", "White Labs");
-  assert.equal(hefe.id, "class-hefeweizen");
-  assert.equal(hefe.level, "family");
-  assert.deepEqual(hefe.descriptors, ["banana", "clove"]);
-  assert.equal(hefe.souring, false);
-  assert.equal(yeast("Belgian Witbier", "3944", "Wheat").id, "class-wit");
-  assert.equal(yeast("French Saison", "3711").id, "class-saison");
-  assert.equal(yeast("Abbey Ale", "WLP530").id, "class-belgian");
-  assert.equal(
-    yeast("Weihenstephan Weizen", "3068", "Wheat", "Wyeast Labs").id,
-    "wyeast-3068",
-    "a reviewed strain wins over its class",
-  );
-  // Clean American wheat, kveik, lager, wine, untyped and souring cultures differ too much to name.
   for (const [name, type] of [
+    ["Hefeweizen IV", "Wheat"],
+    ["Belgian Witbier", "Wheat"],
+    ["French Saison", "Ale"],
+    ["Abbey Ale", "Ale"],
     ["American Hefeweizen Ale", "Wheat"],
     ["Lutra Kveik", "Ale"],
     ["Belgian Lager", "Lager"],
-    ["Belgian Lager", "Ale"],
-    ["Lagerhefe Weihenstephan", "Ale"],
-    ["Belgian Saison", ""],
-    ["White Wine", "Wine"],
     ["Saison Brett Blend", "Ale"],
     ["Berliner Weisse Blend", "Ale"],
-  ] as const)
-    assert.equal(yeast(name, "X1", type).level, "unresolved", name);
+  ] as const) {
+    const unknown = yeast(name, "X1", type);
+    assert.equal(unknown.level, "unresolved", name);
+    assert.deepEqual(unknown.descriptors, [], name);
+  }
+  // The same names from their makers carry the makers' own words.
+  assert.deepEqual(yeast("Hefeweizen IV Ale", "WLP380", "Wheat", "White Labs").descriptors, [
+    "phenolic",
+    "clove",
+    "spicy",
+    "banana",
+    "bubblegum",
+  ]);
+  assert.deepEqual(yeast("French Saison", "3711", "Ale", "Wyeast Labs").descriptors, [
+    "pepper",
+    "spicy",
+    "citrus",
+  ]);
   assert.deepEqual(yeast("Trappist High Gravity", "3787", "Ale", "Wyeast Labs").descriptors, [
     "fruity",
     "phenolic",
   ]);
+});
+void test("Brewfather library names match their maker-sourced products without a conflict", () => {
+  for (const [id, names] of Object.entries(BREWFATHER_NAMES)) {
+    const fact = INGREDIENT_FACTS.find((candidate) => candidate.id === id);
+    assert.ok(fact, `${id} is not a catalog product`);
+    for (const name of names) {
+      const resolved = resolveIngredient(
+        "yeasts",
+        ingredient({
+          name,
+          laboratory: fact.manufacturer,
+          productId: fact.codes[0] ?? "",
+          type: "Ale",
+        }),
+      );
+      assert.equal(resolved.id, id, name);
+      assert.ok(!resolved.diagnostics.some((value) => value.includes("conflict")), name);
+    }
+  }
 });
 void test("hop origin and form words fall away; concentrated forms stay unknown with a reason", () => {
   const hop = (name: string, form = "Pellet") =>
