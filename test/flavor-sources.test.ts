@@ -393,6 +393,28 @@ void test("hop sources merge into one entry per variety, preferring owners that 
   assert.ok(mittelfruh.limitations.some((text) => text.includes("barthhaas")));
   assert.equal(entries.length, 2);
   assert.equal(merged.length, 1);
+  // An owner ranks as a grower for a variety outside its home region or a regional growing.
+  const origin = (id: string, aliases: string[], words: string[], where: string) =>
+    ({ ...(hop(id, aliases, words) as object), limitations: [`Origin: ${where}.`] }) as never;
+  const regional = mergeHops([
+    {
+      maker: "nz-hops",
+      entries: [origin("hop-nz-fuggle", ["NZ Fuggle", "Fuggle"], ["spicy"], "New Zealand")],
+    },
+    {
+      maker: "british-hops",
+      entries: [origin("hop-fuggle", ["Fuggle"], ["earthy"], "United Kingdom")],
+    },
+    { maker: "hpa", entries: [origin("hop-cascade", ["Cascade"], ["citrus"], "United States")] },
+    { maker: "hopsteiner", entries: [hop("hop-cascade", ["Cascade"], ["grapefruit"])] },
+  ]).entries;
+  assert.deepEqual(
+    regional.map((item) => [item.id, item.descriptors.map((word) => word.word)]),
+    [
+      ["hop-fuggle", ["earthy"]],
+      ["hop-cascade", ["grapefruit"]],
+    ],
+  );
   // A source without a place in the priority order cannot be merged silently.
   assert.throws(
     () => mergeHops([{ maker: "unknown-site", entries: [hop("hop-x", ["X"], [])] }]),
