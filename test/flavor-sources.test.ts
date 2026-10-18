@@ -5,7 +5,13 @@ import { extractDescriptors } from "../scripts/flavor-sources/extract.ts";
 import { buildEntry } from "../scripts/flavor-sources/build.ts";
 import { isBotChallenge, parseRobots, robotsAllows } from "../scripts/flavor-sources/fetch.ts";
 import { LEXICON } from "../scripts/flavor-sources/lexicon.ts";
-import { isBeerCulture, slug, souringFromStated } from "../scripts/flavor-sources/maker.ts";
+import {
+  hopName,
+  isBeerCulture,
+  slug,
+  souringFromStated,
+} from "../scripts/flavor-sources/maker.ts";
+import { mergeHops } from "../scripts/flavor-sources/merge.ts";
 import { REVIEWED_FACTS } from "../src/features/story/flavor/catalog-data.ts";
 import { sourcedFacts } from "../src/features/story/flavor/sourced.ts";
 
@@ -320,4 +326,59 @@ void test("the beer catalog leaves out wine, cider, mead and other non-beer cult
   assert.equal(isBeerCulture("Funky Cider Blend"), false);
   assert.equal(isBeerCulture("Seltzer", "INIS-802 Seltzer Yeast"), false);
   assert.equal(isBeerCulture("Malolactic Blend"), false);
+});
+
+void test("hop sources merge into one entry per variety, preferring owners that name flavours", () => {
+  const hop = (id: string, aliases: string[], words: string[]) =>
+    entry({
+      id,
+      manufacturer: null,
+      codes: [],
+      aliases,
+      descriptors: words.map((word) => ({ word, evidence: word })),
+      souring: null,
+    }) as never;
+  const { entries, merged } = mergeHops([
+    { maker: "charles-faram", entries: [hop("hop-citra", ["Citra"], ["grapefruit"])] },
+    { maker: "hbc", entries: [hop("hop-citra", ["Citra"], ["lime", "passion fruit"])] },
+    // A wordless breeder page gives way to the next source that names flavours.
+    {
+      maker: "barthhaas",
+      entries: [hop("hop-hallertauer-mittelfruh", ["Hallertauer Mittelfrüh"], [])],
+    },
+    {
+      maker: "crosby",
+      entries: [
+        hop(
+          "hop-hallertau-mittelfrueh",
+          ["Hallertau Mittelfrueh", "Hallertauer Mittelfrueh"],
+          ["floral"],
+        ),
+      ],
+    },
+  ]);
+  const citra = entries.find((item) => item.id === "hop-citra")!;
+  assert.deepEqual(
+    citra.descriptors.map((item) => item.word),
+    ["lime", "passion fruit"],
+  );
+  const mittelfruh = entries.find((item) => item.id === "hop-hallertau-mittelfrueh")!;
+  assert.deepEqual(
+    mittelfruh.descriptors.map((item) => item.word),
+    ["floral"],
+  );
+  assert.deepEqual(mittelfruh.aliases, [
+    "Hallertauer Mittelfrüh",
+    "Hallertau Mittelfrueh",
+    "Hallertauer Mittelfrueh",
+  ]);
+  assert.ok(mittelfruh.limitations.some((text) => text.includes("barthhaas")));
+  assert.equal(entries.length, 2);
+  assert.equal(merged.length, 1);
+  // A source without a place in the priority order cannot be merged silently.
+  assert.throws(
+    () => mergeHops([{ maker: "unknown-site", entries: [hop("hop-x", ["X"], [])] }]),
+    Error,
+  );
+  assert.equal(hopName("Citra® Hops (US)"), "Citra");
 });

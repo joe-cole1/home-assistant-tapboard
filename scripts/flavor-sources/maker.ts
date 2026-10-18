@@ -117,6 +117,40 @@ export const isBeerCulture = (...labels: readonly string[]): boolean =>
     labels.join(" "),
   );
 
+/** A hop variety's name as a source prints it, without trademark signs, a parenthesised origin
+ * or form ("Citra® (US)", "Saaz Pellets") and without a trailing "hop" or "hops". */
+export const hopName = (printed: string): string =>
+  printed
+    .replace(/[®™℠]/g, "")
+    .replace(/\s*\([^)]*\)\s*$/, "")
+    .replace(/\s+(?:hops?|pellets?|t-?90|whole(?: leaf| cone)?)$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+/** One hop variety as one source describes it. Hops have no manufacturer: a variety matches by
+ * name, and the dataset keeps one source per variety, chosen by `HOP_SOURCES` order in run.ts.
+ * `aliases` are other names the source itself gives the variety ("also known as"). */
+export function hopVariety(
+  source: CachedSource,
+  printed: string,
+  flavorText: string,
+  details: { aliases?: readonly string[]; limitations?: readonly string[] } = {},
+): ParsedProduct {
+  const name = hopName(printed);
+  return {
+    id: `hop-${slug(name)}`,
+    role: "hops",
+    manufacturer: null,
+    manufacturerAliases: [],
+    codes: [],
+    aliases: [...new Set([name, ...(details.aliases ?? []).map(hopName)])],
+    flavorText,
+    source: makerSource(source),
+    souring: null,
+    limitations: details.limitations ?? [],
+  };
+}
+
 export interface ShopifyProduct {
   readonly handle: string;
   readonly title: string;

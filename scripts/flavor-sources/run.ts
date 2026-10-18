@@ -5,6 +5,7 @@ import type { SourcedEntry } from "../../src/features/story/flavor/sourced.ts";
 import { buildEntry } from "./build.ts";
 import { CACHE_DIR, refreshPages } from "./fetch.ts";
 import { closeDom, type MakerSource } from "./maker.ts";
+import { mergeHops } from "./merge.ts";
 
 // Usage:
 //   NODE_USE_ENV_PROXY=1 node scripts/flavor-sources/run.ts white-labs [--limit 5] [--refresh]
@@ -56,10 +57,16 @@ async function readMaker(id: string): Promise<void> {
 }
 
 async function writeRole(role: string): Promise<void> {
-  const entries: SourcedEntry[] = [];
+  const outputs: MakerOutput[] = [];
   for (const file of (await readdir(OUT_DIR)).filter((name) => name.endsWith(".json"))) {
     const output = JSON.parse(await readFile(join(OUT_DIR, file), "utf8")) as MakerOutput;
-    if (output.role === role) entries.push(...output.entries);
+    if (output.role === role) outputs.push(output);
+  }
+  let entries = outputs.flatMap((output) => output.entries);
+  if (role === "hops") {
+    const merge = mergeHops(outputs);
+    entries = merge.entries;
+    for (const line of merge.merged) process.stdout.write(`merged ${line}\n`);
   }
   entries.sort((a, b) => a.id.localeCompare(b.id));
   // Within one maker, an alias or code naming two entries would make both unmatchable.
