@@ -63,7 +63,6 @@ export const REVIEWED_FACTS: readonly IngredientFact[] = Object.freeze([
     {
       manufacturer: "Briess",
       family: "biscuit",
-      descriptors: ["toasty", "malty"],
       limitations: ["Distinct product; do not inherit original Carapils no-flavor rule."],
     },
   ),
@@ -86,7 +85,6 @@ export const REVIEWED_FACTS: readonly IngredientFact[] = Object.freeze([
     {
       manufacturer: "Briess",
       family: "biscuit",
-      descriptors: ["toasty", "biscuity"],
       limitations: [
         "Biscuit-style malt; not black roasted grain despite provider Roasted category.",
       ],
@@ -97,7 +95,7 @@ export const REVIEWED_FACTS: readonly IngredientFact[] = Object.freeze([
     "fermentables",
     ["American Honey Malt"],
     "https://brewingwithbriess.com/products/kilned-malts/",
-    { manufacturer: "Briess", family: "aromatic", descriptors: ["honey", "bread", "biscuit"] },
+    { manufacturer: "Briess", family: "aromatic" },
   ),
   fact(
     "family-pilsner-53",
@@ -388,7 +386,6 @@ export const REVIEWED_FACTS: readonly IngredientFact[] = Object.freeze([
       manufacturer: "Murphy & Rude Malting Co.",
       manufacturerAliases: ["Murphy & Rude", "Murphy & Rude Malting Co"],
       family: "crystal_light",
-      descriptors: ["brown sugar", "vanilla", "stone fruit"],
       limitations: [
         "Current producer color ranges differ; source color remains unchanged, and light-crystal coefficient is a Tapboard heuristic.",
       ],
@@ -403,7 +400,6 @@ export const REVIEWED_FACTS: readonly IngredientFact[] = Object.freeze([
       manufacturer: "Gambrinus",
       manufacturerAliases: ["Gambrinus Malting", "Cargill (Gambrinus)"],
       family: "aromatic",
-      descriptors: ["bread crust", "honey", "toast", "toffee"],
       limitations: [
         "Brumalt specialty, not honey sugar; aromatic-family coefficient is an explicit Tapboard heuristic classification.",
       ],
@@ -500,14 +496,13 @@ export const REVIEWED_FACTS: readonly IngredientFact[] = Object.freeze([
     },
   ),
   fact(
-    "weyermann-carafoam",
+    "weyermann-carafoam-family",
     "fermentables",
     ["Carafoam", "Carapils/Carafoam", "Carapils"],
     "https://www.weyermann.de/en-us/product/weyermann-carafoam/",
     {
       manufacturer: "Weyermann",
       family: "crystal_light",
-      descriptors: ["malty", "light caramel"],
       limitations: [
         "Distinct from original Briess Carapils; no inherited no-flavor rule or numerical mouthfeel bonus.",
       ],
@@ -522,7 +517,6 @@ export const REVIEWED_FACTS: readonly IngredientFact[] = Object.freeze([
       manufacturer: "Weyermann",
       family: "dehusked_roast",
       roastClass: "dehusked",
-      descriptors: ["coffee", "cocoa"],
     },
   ),
   fact(
@@ -534,7 +528,6 @@ export const REVIEWED_FACTS: readonly IngredientFact[] = Object.freeze([
       manufacturer: "Weyermann",
       family: "roasted",
       roastClass: "black",
-      descriptors: ["coffee", "cocoa"],
     },
   ),
   fact(
@@ -542,21 +535,21 @@ export const REVIEWED_FACTS: readonly IngredientFact[] = Object.freeze([
     "fermentables",
     ["Caramel Malt 10L"],
     "https://brewingwithbriess.com/products/roasted-caramel-malts/",
-    { manufacturer: "Briess", family: "crystal_light", descriptors: ["caramel"] },
+    { manufacturer: "Briess", family: "crystal_light" },
   ),
   fact(
     "briess-caramel-40",
     "fermentables",
     ["Caramel Malt 40L"],
     "https://brewingwithbriess.com/products/roasted-caramel-malts/",
-    { manufacturer: "Briess", family: "crystal_light", descriptors: ["caramel", "toffee"] },
+    { manufacturer: "Briess", family: "crystal_light" },
   ),
   fact(
     "briess-caramel-120",
     "fermentables",
     ["Caramel Malt 120L"],
     "https://brewingwithbriess.com/products/roasted-caramel-malts/",
-    { manufacturer: "Briess", family: "crystal_dark", descriptors: ["caramel", "dried fruit"] },
+    { manufacturer: "Briess", family: "crystal_dark" },
   ),
   fact(
     "briess-golden-light-extract",
@@ -566,7 +559,6 @@ export const REVIEWED_FACTS: readonly IngredientFact[] = Object.freeze([
     {
       manufacturer: "Briess",
       family: "extract_pale",
-      descriptors: ["malty"],
       limitations: [
         "Reviewed pale barley extract only; generic dark/wheat extracts require their own composition rule.",
       ],
@@ -578,6 +570,22 @@ export const REVIEWED_FACTS: readonly IngredientFact[] = Object.freeze([
  * rows carry no code) or, for hops, for that variety, so a Brewfather row matches without a
  * code/name conflict. They are identity only and add no flavour data. */
 export const BREWFATHER_NAMES: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  "avangard-munich-malt": ["Munich Malt, Germany"],
+  "avangard-pilsener-malt": ["Pilsner Malt"],
+  "briess-aromatic-munich-malt-20l": ["Aromatic Malt"],
+  "briess-brewers-barley-flakes": ["Barley, Flaked"],
+  "briess-brewers-malt": ["Brewers Malt 2-Row"],
+  "briess-brewers-oat-flakes": ["Oats, Flaked"],
+  "briess-caramel-munich-malt-60l": ["Caramel Munich 60L Malt"],
+  "briess-carapils-malt": ["Carapils"],
+  // Briess's only 350 °L chocolate malt; Dark Chocolate is 420 °L.
+  "briess-chocolate-malt": ["Chocolate"],
+  "briess-goldpils-vienna-malt": ["Vienna Malt"],
+  "briess-pale-ale-malt": ["Pale Ale Malt 2-Row"],
+  "briess-special-roast-malt": ["Special Roast"],
+  "briess-wheat-malt-red": ["Wheat Red Malt"],
+  "briess-wheat-malt-white": ["Wheat White Malt"],
+  "fawcett-golden-promise-pale-ale-malt": ["Pale Malt, Golden Promise"],
   "fermentis-be-134": ["Safale Belgian-Saison"],
   "fermentis-k-97": ["SafAle German Ale"],
   "fermentis-s-04": ["SafAle English Ale"],
@@ -585,17 +593,35 @@ export const BREWFATHER_NAMES: Readonly<Record<string, readonly string[]>> = Obj
   "fermentis-us-05": ["Safale American"],
   "fermentis-w-34-70": ["Saflager Lager"],
   "fermentis-wb-06": ["Safbrew Wheat"],
+  "gambrinus-pilsner-malt": ["Pilsner 2-Row"],
+  "great-western-crystal-15-malt": ["Crystal 2-Row"],
+  "great-western-premium-two-row-malt": ["Brewer's Malt, 2-Row, Premium"],
   // Hopsteiner sells Columbus as CTZ.
   "hop-columbus": ["Columbus/Tomahawk/Zeus (CTZ)"],
   "hop-east-kent-goldings": ["East Kent Goldings (EKG)"],
   "hop-hallertauer-mittelfruh": ["Hallertauer Mittelfrueh"],
   "hop-idaho-7": ["Idaho #7"],
   "lallemand-new-england": ["New England American East Coast Ale"],
+  "murphy-rude-crystal-40": ["Crystal 40L (Murphy & Rude)"],
   "lallemand-nottingham": ["Nottingham Yeast"],
   "lallemand-verdant-ipa": ["Lallemand Verdant IPA Yeast"],
   "lallemand-voss": ["Voss Kveik"],
   "omega-lutra-kveik-standard": ["Lutra Kveik"],
   "omega-voss-kveik-standard": ["Voss Kveik"],
+  "proximity-crystal-15": ["Crystal 15L"],
+  "proximity-crystal-40": ["Crystal 40L"],
+  "proximity-prox-crystal-munich-style-60": ["CaraMunich 60L"],
+  "proximity-prox-crystal-vienna-style-20": ["Caravienne 20"],
+  "viking-pilsner-malt": ["Pilsner"],
+  "weyermann-acidulated-malt": ["Acidulated"],
+  "weyermann-carafa-special-type-1": ["Carafa Special I"],
+  "weyermann-caramunich-type-1": ["Caramunich I"],
+  "weyermann-caramunich-type-2": ["Caramunich II"],
+  // One malt sold as CARAPILS® in Europe and CARAFOAM® in the US.
+  "weyermann-carapils": ["Carapils/Carafoam"],
+  "weyermann-chocolate-rye-malt": ["Chocolate Rye"],
+  "weyermann-munich-malt-type-1": ["Munich I"],
+  "weyermann-wheat-malt-pale": ["Wheat Malt, Pale"],
   "white-labs-wlp007": ["Dry English Ale"],
   "white-labs-wlp029": ["German Ale/Kolsch", "German/Kölsch Ale"],
   "white-labs-wlp820": ["Octoberfest/Marzen Lager"],

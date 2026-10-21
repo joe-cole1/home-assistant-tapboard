@@ -356,11 +356,14 @@ void test("reviewed yeast priorities and dehusked/product families retain guards
       .roastClass,
     "black",
   );
-  assert.equal(
-    resolveIngredient("fermentables", ingredient({ name: "Caramel Malt 120L", supplier: "Briess" }))
-      .id,
-    "briess-caramel-120",
+  // The maltster's entry names the product and its words; the reviewed guard keeps its family.
+  const caramel = resolveIngredient(
+    "fermentables",
+    ingredient({ name: "Caramel Malt 120L", supplier: "Briess" }),
   );
+  assert.equal(caramel.id, "briess-caramel-malt-120l");
+  assert.equal(caramel.family, "crystal_dark");
+  assert.ok(caramel.descriptors.includes("caramel"));
   assert.equal(
     resolveIngredient(
       "fermentables",

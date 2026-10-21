@@ -822,7 +822,7 @@ void test("flavor summary follows the sensory reveal and renders only without a 
   const described = fixture({ flavorBatch: batchFixture("B011") });
   const withDescription = described.service.getStory(TAP_ID)!;
   const summary = withDescription.flavor?.summary;
-  assert.ok(summary?.startsWith("Coffee, chocolate and roast character"));
+  assert.ok(summary?.startsWith("Coffee, malty and roast character"));
   assert.equal(html(withDescription).includes(summary!), false);
   const bare = fixture({
     flavorBatch: batchFixture("B011"),

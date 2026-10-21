@@ -30,7 +30,7 @@ const CONDITIONAL =
 // A pairing or use marker covers the next few words, which name other ingredients or beer
 // styles ("ideal for fruity Belgian ales"); flavour named later in the clause is the product's own.
 const PAIRING =
-  /\b(?:(?<!\b(?:notable|celebrated|known|looking|aiming|prized|renowned|famous|valued|loved|noted|bred|selected|appreciated|recognised|recognized|revered) )for|ideal for|suited (?:to|for)|recommended for|great for|perfect for|used in|use(?: it)? in|pair(?:s|ed)?(?: well| \w+ly)? with|complement\w*|accentuat\w*|enhanc(?:e|es|ing)\b|matches up|showcas\w*|alongside|blends?(?: well)? with|works well with|similar to|substitute\w*|replacement for)\b/g;
+  /\b(?:(?<!\b(?:notable|celebrated|known|looking|aiming|prized|renowned|famous|valued|loved|noted|bred|selected|appreciated|recognised|recognized|revered) )for|ideal for|suited (?:to|for)|recommended for|great for|perfect for|used in|use(?: it)? in|pair(?:s|ed)?(?: well| \w+ly)? with|complement\w*|accentuat\w*|enhanc(?:e|es|ing)\b|matches up|showcas\w*|alongside|in the presence of|blends?(?: well)? with|works well with|similar to|substitute\w*|replacement for)\b/g;
 const PAIRING_REACH_WORDS = 4;
 // A comparison names another product: its own phrase, and a "which…" phrase describing that
 // product ("unlike WLP840, which tends toward apple, WLP940…"), belong to it.

@@ -1,6 +1,6 @@
 {
   "format": "tapboard-flavor-corpus-report-1",
-  "modelVersion": "recipe-flavor-3",
+  "modelVersion": "recipe-flavor-4",
   "catalogVersion": "tapboard-flavor-catalog-4",
   "qualification": "Offline normalization and behavior acceptance; no sensory ground-truth labels or scientific validation.",
   "counts": { "batches": 61, "savedRecipes": 46, "total": 107 },
@@ -930,7 +930,7 @@
       "caseId": "B001",
       "kind": "batch",
       "snapshotBytes": 13825,
-      "fingerprint": "895321f70777c3816a81bc0de2ec08ec50229b1c9e1400552a7d8617c539a676",
+      "fingerprint": "11ca9b1b79b00870c103d0c9cdf545fffc400a83857f4e7b0d0cfdb4c3168032",
       "selectedScalars": {
         "og": {
           "value": 1.064,
@@ -1101,8 +1101,11 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 3.5 SRM.",
+        "Family pale from family-pale-54, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 2.5 SRM.",
+        "Family flaked from family-flaked-58, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Aroma tags read from https://yakimachiefranches.com/create/brands/.",
@@ -1121,7 +1124,7 @@
       "caseId": "B002",
       "kind": "batch",
       "snapshotBytes": 13075,
-      "fingerprint": "465621ef9a78b8e0c6c7462d4d58f97fd92f0d01347cd156173ec392bfe5c4ee",
+      "fingerprint": "d1551c232868c7d16ed1df4f71d82afde5e150a5148119e87624efd5c291cb15",
       "selectedScalars": {
         "og": {
           "value": 1.067,
@@ -1304,9 +1307,13 @@
         }
       },
       "diagnostics": [
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-4 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-5 EBC.",
+        "Family wheat from family-wheat-55, not from the maltster.",
         "Ingredient identity is outside the reviewed catalog.",
         "Origin: United Kingdom.",
         "Origin: Czech Republic.",
@@ -1326,7 +1333,7 @@
       "caseId": "B003",
       "kind": "batch",
       "snapshotBytes": 15247,
-      "fingerprint": "080e13ab1b3d6ae444b79ec9ae91e5d767c69d041d4624b80c76d85759624639",
+      "fingerprint": "b996eaf7cb489b798eb2a9e2750bbf30cecee78c6dc09b5c1cef1b36f8b8eb95",
       "selectedScalars": {
         "og": {
           "value": 1.056,
@@ -1497,10 +1504,16 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Classified from Brewfather category and colour (12 °L); product character unresolved.",
-        "Provider base-grain category supports family only; specific product character unresolved.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 1.8-2.2 SRM.",
+        "Family pale from family-pale-54, not from the maltster.",
+        "Maltster colour: 12-18 SRM.",
+        "Family crystal_light from property-crystal_light, not from the maltster.",
+        "Maltster colour: 11 – 20 EBC / 4.6 – 8.0 L.",
+        "Family munich from category-munich, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 1.5 SRM.",
+        "Family carapils from briess-carapils, not from the maltster.",
         "Origin: Oregon, United States.",
         "Origin: Oregon, United States.",
         "Origin: Oregon, United States.",
@@ -1520,7 +1533,7 @@
       "caseId": "B004",
       "kind": "batch",
       "snapshotBytes": 15423,
-      "fingerprint": "a2308835bc1940e6c1d3872c56f1fbd73a1725bd69153b0e8e53b9c1277b0fe8",
+      "fingerprint": "a99ce52e9355de4c5b5add310bf9c838b65e0eeb481c1cceacefa273f2c32c7c",
       "selectedScalars": {
         "og": {
           "value": 1.088,
@@ -1691,15 +1704,20 @@
         }
       },
       "diagnostics": [
+        "Maltster colour: 2.1 SRM.",
+        "Family pale from family-pale-54, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 2.5 SRM.",
+        "Family flaked from family-flaked-58, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 1.8 SRM.",
+        "Family flaked from family-flaked-60, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Roasted ingredient identity/color conflict retained.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 300 SRM.",
+        "Family roasted from family-roasted-67, not from the maltster.",
+        "Maltster colour: 400 – 700 EBC / 151.3 – 264.4 Lovibond.",
+        "Family chocolate from family-chocolate-66, not from the maltster.",
         "Origin: United States.",
         "Origin: Oregon, United States.",
         "Origin: Oregon, United States.",
@@ -1716,7 +1734,7 @@
       "caseId": "B005",
       "kind": "batch",
       "snapshotBytes": 17332,
-      "fingerprint": "60612c1bd90c5d92ced622bb60f2053f0f24d98c6ab821eb96f27c65e4b6820a",
+      "fingerprint": "de936a76a029e06c7ecd169bf7d70e51b8101da17c6a4e7bab96cf33a733432a",
       "selectedScalars": {
         "og": {
           "value": 1.08,
@@ -1901,12 +1919,14 @@
       "diagnostics": [
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Classified from Brewfather category and colour (30 °L); product character unresolved.",
+        "Maltster colour: 2.8 SRM.",
+        "Family wheat from family-wheat-55, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Special Roast is biscuit-style; provider category does not establish black roast.",
-        "Biscuit-style malt; not black roasted grain despite provider Roasted category.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 40 SRM.",
+        "Family biscuit from briess-special-roast, not from the maltster.",
+        "Maltster colour: 1.200 – 1.400 EBC / 450 – 529 L.",
+        "Family roasted from family-roasted-67, not from the maltster.",
         "Origin: Oregon, United States.",
         "Ingredient identity is outside the reviewed catalog.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -1928,7 +1948,7 @@
       "caseId": "B007",
       "kind": "batch",
       "snapshotBytes": 12486,
-      "fingerprint": "2a83bff3118336eb53ae5ee04d70c569182beb2c6133ffce09e7ca178f54c28f",
+      "fingerprint": "cadd4ef4da545b66f202da53c8404d6f4d411ab5d6b40bca195de822d2e87308",
       "selectedScalars": {
         "og": {
           "value": 1.067,
@@ -2134,7 +2154,9 @@
       },
       "diagnostics": [
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 2.5 SRM.",
+        "Family flaked from family-flaked-58, not from the maltster.",
         "Proprietary blend composition is not published.",
         "Proprietary blend composition is not published.",
         "Proprietary blend composition is not published.",
@@ -2152,7 +2174,7 @@
       "caseId": "B008",
       "kind": "batch",
       "snapshotBytes": 13857,
-      "fingerprint": "6bdb5547cc933dd7cdff38c0b230fed9297eefb39ee78ba67cb956386da99376",
+      "fingerprint": "482c5bea4fbd6ce00a7165538f96f8f138eef9f2e280ce71b720ee72373760ad",
       "selectedScalars": {
         "og": {
           "value": 1.047,
@@ -2323,10 +2345,14 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "Maltster colour: 3.5 SRM.",
+        "Family pale from family-pale-54, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 1.5 SRM.",
+        "Family carapils from briess-carapils, not from the maltster.",
         "Classified from Brewfather category and colour (10 °L); product character unresolved.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 3.5 SRM.",
+        "Family vienna from family-vienna-56, not from the maltster.",
         "Origin: Oregon, United States.",
         "Origin: Oregon, United States.",
         "Origin: Oregon, United States.",
@@ -2344,7 +2370,7 @@
       "caseId": "B009",
       "kind": "batch",
       "snapshotBytes": 14493,
-      "fingerprint": "c4769c99888e9015cbd165c747e87854716b83dcda69c5305edcee57b40f6305",
+      "fingerprint": "ae0a5bdeb47ca4a1bde8f58062aae33ab01ec0ea1c6b676f7373612c300a10cd",
       "selectedScalars": {
         "og": {
           "value": 1.055,
@@ -2515,7 +2541,9 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-4 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
         "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -2532,7 +2560,7 @@
       "caseId": "B010",
       "kind": "batch",
       "snapshotBytes": 14580,
-      "fingerprint": "fa87847423bb5dface4429ee764a6096c04a36f0d76e8e20e9995809108494ab",
+      "fingerprint": "7d85f87d4a96a689ce43310090fcd7757cf9db3a7321dabfb4f15ed165fca283",
       "selectedScalars": {
         "og": {
           "value": 1.075,
@@ -2717,12 +2745,14 @@
       "diagnostics": [
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Classified from Brewfather category and colour (30 °L); product character unresolved.",
+        "Maltster colour: 2.8 SRM.",
+        "Family wheat from family-wheat-55, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Special Roast is biscuit-style; provider category does not establish black roast.",
-        "Biscuit-style malt; not black roasted grain despite provider Roasted category.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 40 SRM.",
+        "Family biscuit from briess-special-roast, not from the maltster.",
+        "Maltster colour: 1.200 – 1.400 EBC / 450 – 529 L.",
+        "Family roasted from family-roasted-67, not from the maltster.",
         "Origin: Oregon, United States.",
         "Ingredient identity is outside the reviewed catalog.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -2740,7 +2770,7 @@
       "caseId": "B011",
       "kind": "batch",
       "snapshotBytes": 16686,
-      "fingerprint": "479ca7d0f561cb13c483b710ae4fa99b0b489f6c0a2bef0dcdd64f7db3861668",
+      "fingerprint": "3dc3c893b507a16d20d6c92b5e8d9e5377db890145a547d039977592bfe27995",
       "selectedScalars": {
         "og": {
           "value": 1.095,
@@ -2911,15 +2941,20 @@
         }
       },
       "diagnostics": [
+        "Maltster colour: 2.1 SRM.",
+        "Family pale from family-pale-54, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 2.5 SRM.",
+        "Family flaked from family-flaked-58, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 1.8 SRM.",
+        "Family flaked from family-flaked-60, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Roasted ingredient identity/color conflict retained.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 300 SRM.",
+        "Family roasted from family-roasted-67, not from the maltster.",
+        "Maltster colour: 400 – 700 EBC / 151.3 – 264.4 Lovibond.",
+        "Family chocolate from family-chocolate-66, not from the maltster.",
         "Origin: Oregon, United States.",
         "Origin: Oregon, United States.",
         "Origin: Oregon, United States.",
@@ -2938,7 +2973,7 @@
       "caseId": "B012",
       "kind": "batch",
       "snapshotBytes": 15983,
-      "fingerprint": "0aef4a6b91d85a0f95d99f54bee5d2a0f5ca897a04712df56e1262bd9144557c",
+      "fingerprint": "02179c26a9b5ede466c4b810e37f54d03c2efae28df1a87342f90dbda963bb05",
       "selectedScalars": {
         "og": {
           "value": 1.088,
@@ -3123,12 +3158,14 @@
       "diagnostics": [
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Classified from Brewfather category and colour (40 °L); product character unresolved.",
+        "Maltster colour: 2.8 SRM.",
+        "Family wheat from family-wheat-55, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Special Roast is biscuit-style; provider category does not establish black roast.",
-        "Biscuit-style malt; not black roasted grain despite provider Roasted category.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 40 SRM.",
+        "Family biscuit from briess-special-roast, not from the maltster.",
+        "Maltster colour: 1.200 – 1.400 EBC / 450 – 529 L.",
+        "Family roasted from family-roasted-67, not from the maltster.",
         "Origin: Oregon, United States.",
         "Ingredient identity is outside the reviewed catalog.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -3148,7 +3185,7 @@
       "caseId": "B013",
       "kind": "batch",
       "snapshotBytes": 15870,
-      "fingerprint": "7ac2d49b56cc147e35db5096c2b61c9573836d314c6dd9a1ad064d18a7930bf3",
+      "fingerprint": "033f90ec7ffcb05294f30464ef784e10b535e28135119fb01934067ffe535883",
       "selectedScalars": {
         "og": {
           "value": 1.061,
@@ -3319,8 +3356,11 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 3.5 SRM.",
+        "Family pale from family-pale-54, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-5 EBC.",
+        "Family wheat from family-wheat-55, not from the maltster.",
         "Origin: United States.",
         "Origin: United States.",
         "Origin: Oregon, United States.",
@@ -3346,7 +3386,7 @@
       "caseId": "B014",
       "kind": "batch",
       "snapshotBytes": 11204,
-      "fingerprint": "c2381ea9003a3c45c0ff4a62ecd482b7fc2bdcf4f8ff560e5cc82c1587fa3b55",
+      "fingerprint": "bff3bbb1a13957f69dbfecafa89f7169aae97b5651815ee492c8c4b676e359e3",
       "selectedScalars": {
         "og": {
           "value": 1.062,
@@ -3517,10 +3557,18 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-5 EBC.",
+        "Family wheat from family-wheat-55, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-4 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 1.5 SRM.",
+        "Family carapils from briess-carapils, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 0 SRM.",
+        "Family processing from family-processing-70, not from the maltster.",
         "Origin: Germany.",
         "Origin: Germany.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -3534,7 +3582,7 @@
       "caseId": "B015",
       "kind": "batch",
       "snapshotBytes": 13956,
-      "fingerprint": "a2687d009a91b813df2349bbbaa3377ee0fab54b7ac8cae2354d7089d7a5bcb8",
+      "fingerprint": "46f1a0ad4e75feb4e079954212ebe168ba2d8371c15a1f9539a397015af02071",
       "selectedScalars": {
         "og": {
           "value": 1.053995,
@@ -3728,10 +3776,16 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 8-12 EBC.",
+        "Family vienna from family-vienna-56, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-4 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
+        "Maltster colour: 15-32 EBC.",
+        "Family munich from family-munich-57, not from the maltster.",
+        "Maltster colour: 800 – 1000 EBC / 302.1 – 377.5 Lovibond.",
+        "Family dehusked_roast from weyermann-carafa-special-i, not from the maltster.",
         "Ingredient identity is outside the reviewed catalog.",
         "Ingredient name is missing; no identity inferred.",
         "The maker's text names no flavour words.",
@@ -3750,7 +3804,7 @@
       "caseId": "B016",
       "kind": "batch",
       "snapshotBytes": 13996,
-      "fingerprint": "f566bec2aab87a36059980ead9b09f5b0d594c848262e8c591fc90099a518e87",
+      "fingerprint": "667e71ae682b79bc7386796307c07704dcc054fc3b75043e209ba7645f893a2c",
       "selectedScalars": {
         "og": {
           "value": 1.042,
@@ -3921,9 +3975,11 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 3.0 – 4.9 EBC / 1.6 – 2.3 L.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
         "Classified from Brewfather category and colour (4 °L); product character unresolved.",
-        "Classified from Brewfather category and colour (19 °L); product character unresolved.",
+        "Maltster colour: 41 – 60 EBC / 16 – 23 L.",
+        "Family crystal_light from property-crystal_light, not from the maltster.",
         "Origin: United Kingdom.",
         "Origin: Oregon, United States.",
         "Origin: United Kingdom.",
@@ -3942,7 +3998,7 @@
       "caseId": "B017",
       "kind": "batch",
       "snapshotBytes": 6975,
-      "fingerprint": "1153373cac256c50c4ab01441703c60da52ee9f292ba7d8256703b0c48108365",
+      "fingerprint": "4b1e203a324e24b4130df43e80010e9d9dc8a7e4de008380f9864812f8940d40",
       "selectedScalars": {
         "og": {
           "value": 1.049,
@@ -4125,7 +4181,7 @@
       "caseId": "B018",
       "kind": "batch",
       "snapshotBytes": 13123,
-      "fingerprint": "1371ccf5c012d280c1db2e7724ae44a4052adcb9c54ae24080b38989d4c2552a",
+      "fingerprint": "9e59955e78b3b8fd663ab128a9df8dcf54cc4b7cfa794306fc82405385a1d355",
       "selectedScalars": {
         "og": {
           "value": 1.065,
@@ -4296,7 +4352,9 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-4 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
         "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -4311,7 +4369,7 @@
       "caseId": "B019",
       "kind": "batch",
       "snapshotBytes": 13240,
-      "fingerprint": "395dd70c4a8778400344e8536b79343d2849513494d0cb6d73a1c7087469b065",
+      "fingerprint": "c2c7449b6ae5a5469a2cf6fde35000689d9ace036325ed8346557a44eaed72a0",
       "selectedScalars": {
         "og": {
           "value": 1.05,
@@ -4482,9 +4540,12 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 2.1 SRM.",
+        "Family pale from family-pale-54, not from the maltster.",
+        "Maltster colour: 2.8 SRM.",
+        "Family wheat from family-wheat-55, not from the maltster.",
+        "Maltster colour: 20 SRM.",
+        "Family aromatic from family-aromatic-63, not from the maltster.",
         "Origin: USA.",
         "Origin: USA.",
         "Origin: USA.",
@@ -4503,7 +4564,7 @@
       "caseId": "B020",
       "kind": "batch",
       "snapshotBytes": 9227,
-      "fingerprint": "eefea55650cb6d714a90954915fbea0e8d4face7c7f93b33f6c842573d9a1f79",
+      "fingerprint": "204854a4e7938e74cdd23e654c08ddf34688ec9fe4a49ec16bc8eb735f775c42",
       "selectedScalars": {
         "og": {
           "value": 1.05,
@@ -4699,9 +4760,12 @@
       "diagnostics": [
         "Munich family requires product disambiguation.",
         "Munich family only; intended product and corrected color cannot be inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 3.0–4.2 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
+        "Maltster colour: 110 – 130 EBC / 41.9 – 49.5 Lovibond.",
+        "Family crystal_light from family-crystal_light-65, not from the maltster.",
+        "Maltster colour: 260-320 EBC/ 98.1-120.6 Lovibond.",
+        "Family crystal_dark from family-crystal_dark-64, not from the maltster.",
         "Ingredient identity is outside the reviewed catalog.",
         "Ingredient identity is outside the reviewed catalog.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment."
@@ -4711,7 +4775,7 @@
       "caseId": "B021",
       "kind": "batch",
       "snapshotBytes": 16624,
-      "fingerprint": "68e8c83188bb0e878415b0063ee26aa8919872a9996e3ea95adc496ccdde80b5",
+      "fingerprint": "40f242a6fe68f41e3832e17b573ac433f323dfe3b8d9f7e45e7130d5046a68e8",
       "selectedScalars": {
         "og": {
           "value": 1.06,
@@ -4882,10 +4946,15 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "Maltster colour: 3.5 SRM.",
+        "Family pale from family-pale-54, not from the maltster.",
+        "Maltster colour: 350 SRM.",
+        "Family chocolate from family-chocolate-66, not from the maltster.",
+        "Maltster colour: 15-32 EBC.",
+        "Family munich from family-munich-57, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 1.5 SRM.",
+        "Family carapils from briess-carapils, not from the maltster.",
         "Classified from Brewfather category and colour (120 °L); product character unresolved.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Origin: United States.",
@@ -4909,7 +4978,7 @@
       "caseId": "B022",
       "kind": "batch",
       "snapshotBytes": 10297,
-      "fingerprint": "878cfc59d934308432b6f9c43e059962a8a66d037629deb4a8f60e20f18c8fbe",
+      "fingerprint": "e7b18c03bf08b2180e8f788151c92e49bed154bec8803a0ee037d8d297e8f58a",
       "selectedScalars": {
         "og": {
           "value": 1.042,
@@ -5080,8 +5149,11 @@
         }
       },
       "diagnostics": [
-        "Provider base-grain category supports family only; specific product character unresolved.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 3.0 – 5.0 EBC / 1.6 – 2.3 Lovibond.",
+        "Family wheat from category-wheat, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-4 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
         "Origin: Germany.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -5095,7 +5167,7 @@
       "caseId": "B023",
       "kind": "batch",
       "snapshotBytes": 11310,
-      "fingerprint": "f5b9d0a50f719bb9ecae844651b2ffc3a8b6113630a511ea967afd417675f893",
+      "fingerprint": "0b68647c2bdace809dfa3b0e04032e430928dab615d81353b3adf0639d5bc930",
       "selectedScalars": {
         "og": {
           "value": 1.075,
@@ -5266,9 +5338,11 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 3.0–4.2 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
         "Classified from Brewfather category and colour (0 °L); product character unresolved.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 2.8 SRM.",
+        "Family wheat from family-wheat-55, not from the maltster.",
         "Aroma tags read from https://yakimachiefranches.com/create/brands/.",
         "Origin: USA.",
         "Origin: Oregon, United States.",
@@ -5283,7 +5357,7 @@
       "caseId": "B025",
       "kind": "batch",
       "snapshotBytes": 13956,
-      "fingerprint": "350fe4e0e2c2d12762d70403bb40e3b37dec81e6604e1b33bf4dd6a03ef99398",
+      "fingerprint": "63eac5e3e5adee257f805813785fd2a923aa4bf5121f0bfb5c1ce43946e1133b",
       "selectedScalars": {
         "og": {
           "value": 1.065,
@@ -5455,7 +5529,8 @@
       },
       "diagnostics": [
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 15-32 EBC.",
+        "Family munich from family-munich-57, not from the maltster.",
         "Classified from Brewfather category and colour (40 °L); product character unresolved.",
         "Classified from Brewfather category and colour (120 °L); product character unresolved.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
@@ -5476,7 +5551,7 @@
       "caseId": "B026",
       "kind": "batch",
       "snapshotBytes": 14900,
-      "fingerprint": "365e620ac6477555b47fe942afc49e0789637c77507612976568fa58c6bcba46",
+      "fingerprint": "f674cbc88e5ce345f056ccd9b87acccb6cd5dbc14279a1c1c80e2300eb31dab0",
       "selectedScalars": {
         "og": {
           "value": 1.101,
@@ -5647,12 +5722,18 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Provider base-grain category supports family only; specific product character unresolved.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 1.8-2.2 SRM.",
+        "Family pale from family-pale-54, not from the maltster.",
+        "Maltster colour: 7.2 - 10.9° Lovibond, 9.0 - 14.0 SRM, 17.7 - 27.6 EBC.",
+        "Family munich from category-munich, not from the maltster.",
         "Classified from Brewfather category and colour (56 °L); product character unresolved.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 900 – 1100 °EBC; 450 – 550 °SRM.",
+        "Family chocolate from family-chocolate-66, not from the maltster.",
+        "Maltster colour: 1200 – 1500 °EBC; 550 – 650 °SRM.",
+        "Family roasted from family-roasted-67, not from the maltster.",
+        "Maltster colour: 1200 – 1500 °EBC; 550 – 650 °SRM.",
+        "Family roasted from family-roasted-67, not from the maltster.",
         "Origin: United States.",
         "Origin: United States.",
         "The maker's text names no flavour words.",
@@ -5670,7 +5751,7 @@
       "caseId": "B027",
       "kind": "batch",
       "snapshotBytes": 11135,
-      "fingerprint": "8de225b4d9d0b541a180ee68dcba3e85e57714dbda9d135cad26f9728d602222",
+      "fingerprint": "07c62a32dd7e6fa6085fe897d37cf6bc1cbf9fdee6661448ff105767fc2f203b",
       "selectedScalars": {
         "og": {
           "value": 1.048,
@@ -5841,7 +5922,8 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 3.0 – 4.9 EBC / 1.6 – 2.3 L.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
         "Origin: Germany.",
         "Origin: Germany.",
         "Descriptors are expectations, not guaranteed batch flavor.",
@@ -5859,7 +5941,7 @@
       "caseId": "B028",
       "kind": "batch",
       "snapshotBytes": 16715,
-      "fingerprint": "5c929f96866f4ba8ee846c1267d1d25be35da48a65bd8af0540eb517a12d7672",
+      "fingerprint": "a988ca46269f57b8aaff04d629f5a0ebeb60092200de5c7475eacfff07695aeb",
       "selectedScalars": {
         "og": {
           "value": 1.07,
@@ -6043,13 +6125,17 @@
       },
       "diagnostics": [
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 2.8 SRM.",
+        "Family wheat from family-wheat-55, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Classified from Brewfather category and colour (40 °L); product character unresolved.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "Maltster colour: 270 - 350 EBC.",
+        "Family crystal_dark from family-crystal_dark-64, not from the maltster.",
+        "Maltster colour: 120 SRM.",
+        "Family crystal_dark from briess-caramel-120, not from the maltster.",
         "Classified from Brewfather category and colour (26 °L); product character unresolved.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 1.200 – 1.400 EBC / 450 – 529 L.",
+        "Family roasted from family-roasted-67, not from the maltster.",
         "Origin: Oregon, United States.",
         "Ingredient identity is outside the reviewed catalog.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -6069,7 +6155,7 @@
       "caseId": "B029",
       "kind": "batch",
       "snapshotBytes": 12625,
-      "fingerprint": "882ace37fe1105b80e8e34f6ce105456b161fd6247cdca4d778858a620868a42",
+      "fingerprint": "2432a415fd429437561e7b17f1134cf9d5f4b665648838f2e4ea14da74a3bb8b",
       "selectedScalars": {
         "og": {
           "value": 1.045,
@@ -6240,9 +6326,13 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "Maltster colour: 2.8 SRM.",
+        "Family wheat from family-wheat-55, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 1.8-2.2 SRM.",
+        "Family pale from family-pale-54, not from the maltster.",
+        "Maltster colour: 10 SRM.",
+        "Family crystal_light from briess-caramel-10, not from the maltster.",
         "Origin: United States.",
         "Higher-priority sources name no flavour words: indie-hops.",
         "The maker's text names no flavour words.",
@@ -6262,7 +6352,7 @@
       "caseId": "B030",
       "kind": "batch",
       "snapshotBytes": 13885,
-      "fingerprint": "2c0c46586fac642b73803fbb9ec198311afb8bc5bba60da9cd30b0308a40b3bf",
+      "fingerprint": "620b9074d6f95826382f0f54436660cac532ec017e744ef1d7d0fc358c78668c",
       "selectedScalars": {
         "og": {
           "value": 1.054,
@@ -6433,9 +6523,13 @@
         }
       },
       "diagnostics": [
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-4 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 1.5 SRM.",
+        "Family carapils from briess-carapils, not from the maltster.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -6450,7 +6544,7 @@
       "caseId": "B031",
       "kind": "batch",
       "snapshotBytes": 13467,
-      "fingerprint": "a796921c09e25f82b3c90fdbd7bdaefb31c9a5cf969222699d162e740fc3eb10",
+      "fingerprint": "4090a9438f2d0f52fc0cc37d66147a82ba7fc3d83d368d2ba392463164887a19",
       "selectedScalars": {
         "og": {
           "value": 1.075,
@@ -6621,11 +6715,16 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 3.5 SRM.",
+        "Family pale from family-pale-54, not from the maltster.",
+        "Maltster colour: 40 SRM.",
+        "Family crystal_light from briess-caramel-40, not from the maltster.",
+        "Maltster colour: 40,0 – 50,0 EBC / 15.5 – 19.3 Lovibond.",
+        "Family aromatic from family-aromatic-63, not from the maltster.",
+        "Maltster colour: 270 - 350 EBC.",
+        "Family crystal_dark from family-crystal_dark-64, not from the maltster.",
+        "Maltster colour: 1200 – 1500 °EBC; 550 – 650 °SRM.",
+        "Family roasted from family-roasted-67, not from the maltster.",
         "Origin: Germany.",
         "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -6642,7 +6741,7 @@
       "caseId": "B032",
       "kind": "batch",
       "snapshotBytes": 15290,
-      "fingerprint": "2205d7bb589cad2224a05cf437660b1eaeacb7a228a6700b7cfe111b009e1ed0",
+      "fingerprint": "ee45734cd7d513e17ac4a18ddd2563807cc647ad61a741be47c5e03babfb404e",
       "selectedScalars": {
         "og": {
           "value": 1.05,
@@ -6836,9 +6935,13 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-4 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
+        "Maltster colour: 3.7 SRM.",
+        "Family rye from family-rye-61, not from the maltster.",
+        "Maltster colour: 2.8 SRM.",
+        "Family wheat from family-wheat-55, not from the maltster.",
         "Classified from Brewfather category and colour (37 °L); product character unresolved.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Ingredient identity is outside the reviewed catalog.",
@@ -6861,7 +6964,7 @@
       "caseId": "B033",
       "kind": "batch",
       "snapshotBytes": 16241,
-      "fingerprint": "0a08fe997a6464a728a3f0a16b034868941b4c66781238bb944471d27b887400",
+      "fingerprint": "2486f06ac191c3a0f152194c6c469b4f3199844e4411a1e08742b328f2e8b6a8",
       "selectedScalars": {
         "og": {
           "value": 1.063,
@@ -7032,12 +7135,16 @@
         }
       },
       "diagnostics": [
+        "Maltster colour: 3.0–4.2 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
+        "Maltster colour: 5.0 - 7.5 °EBC; 2.3 - 3.3 °Lovibond.",
+        "Family pale from family-fawcett-golden-promise, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Exact pale-ale malt identity only; bare Golden Promise can identify distilling malt and is not an alias.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Brumalt specialty, not honey sugar; aromatic-family coefficient is an explicit Tapboard heuristic classification.",
+        "Family flaked from family-flaked-60, not from the maltster.",
+        "Maltster colour: 2.8 SRM.",
+        "Family wheat from family-wheat-55, not from the maltster.",
+        "Maltster colour: 15.3 - 22.7° Lovibond, 20 - 30 SRM, 39.4 - 59.1 EBC.",
+        "Family aromatic from gambrinus-honey, not from the maltster.",
         "Origin: USA.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -7049,7 +7156,7 @@
       "caseId": "B035",
       "kind": "batch",
       "snapshotBytes": 14737,
-      "fingerprint": "6ee9153c35aff10531ff0a3ee266be252738c0f94369c249dd2c7a775f03862f",
+      "fingerprint": "7f54121d57d3dc584a4672d3f81fdb0b55ceb35b371304626fd1192164fc2b3f",
       "selectedScalars": {
         "og": {
           "value": 1.05,
@@ -7222,9 +7329,12 @@
       "diagnostics": [
         "Munich family requires product disambiguation.",
         "Munich family only; intended product and corrected color cannot be inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Classified from Brewfather category and colour (40 °L); product character unresolved.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 3.0–4.2 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
+        "Maltster colour: 40 (no unit stated).",
+        "Family crystal_light from property-crystal_light, not from the maltster.",
+        "Maltster colour: 260-320 EBC/ 98.1-120.6 Lovibond.",
+        "Family crystal_dark from family-crystal_dark-64, not from the maltster.",
         "Variety matched after removing origin or form words; growing region and lot can change character.",
         "Origin: Germany.",
         "Variety matched after removing origin or form words; growing region and lot can change character.",
@@ -7245,7 +7355,7 @@
       "caseId": "B036",
       "kind": "batch",
       "snapshotBytes": 13391,
-      "fingerprint": "25a26cb13b5a2b53a801c2aa41bbb5017c4e25c8dbd11cad9ad9ee50d5bf746c",
+      "fingerprint": "79be347a3ec90e910bdd627f2c3524a95b17e81ea572ae62543c856c6c0286bc",
       "selectedScalars": {
         "og": {
           "value": 1.054,
@@ -7416,9 +7526,13 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-4 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
         "Classified from Brewfather category and colour (49 °L); product character unresolved.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 800 – 1.000 EBC / 300 – 380 L.",
+        "Family chocolate from family-chocolate-66, not from the maltster.",
         "Origin: Germany.",
         "Origin: United States.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -7436,7 +7550,7 @@
       "caseId": "B037",
       "kind": "batch",
       "snapshotBytes": 12714,
-      "fingerprint": "5d59f1017c419ba8a86f6b1ab1cadfeda9e21ea90fa23d17ec25ee94ab3160d2",
+      "fingerprint": "b6bf6e1c053314c31c0b4c08fc550f610c02e3d01e8d0b06810559c2e195fb24",
       "selectedScalars": {
         "og": {
           "value": 1.052,
@@ -7607,8 +7721,11 @@
         }
       },
       "diagnostics": [
-        "Provider base-grain category supports family only; specific product character unresolved.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 3.0 – 5.0 EBC / 1.6 – 2.3 Lovibond.",
+        "Family wheat from category-wheat, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-4 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
         "Origin: Germany.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -7626,7 +7743,7 @@
       "caseId": "B038",
       "kind": "batch",
       "snapshotBytes": 12645,
-      "fingerprint": "2d24d838129ba97f3ab42b6018df674c95811672636a26a6e96728e8f1461755",
+      "fingerprint": "b37939212fe92fcf6bb2833c558624a0ea3ab43c212ef309fd8b627cb9b55c47",
       "selectedScalars": {
         "og": {
           "value": 1.052,
@@ -7797,8 +7914,10 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 3.0 – 4.9 EBC / 1.6 – 2.3 L.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
+        "Maltster colour: 2.8 SRM.",
+        "Family wheat from family-wheat-55, not from the maltster.",
         "Origin: United States.",
         "Higher-priority sources name no flavour words: indie-hops.",
         "Origin: Germany.",
@@ -7818,7 +7937,7 @@
       "caseId": "B039",
       "kind": "batch",
       "snapshotBytes": 14863,
-      "fingerprint": "5c256a701c6a8a521f0fafedf6d2588175bb2ceb3e02a91eaf748514c3628dc4",
+      "fingerprint": "e46697bd62315c2d51f9a95b400e8153644ed19c864d5e76dc307f6f494309f0",
       "selectedScalars": {
         "og": {
           "value": 1.06,
@@ -7989,9 +8108,13 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 3.0–4.2 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 2.5 SRM.",
+        "Family flaked from family-flaked-58, not from the maltster.",
+        "Maltster colour: 2.8 SRM.",
+        "Family wheat from family-wheat-55, not from the maltster.",
         "Origin: USA.",
         "Origin: United States.",
         "Aroma tags read from https://yakimachiefranches.com/create/brands/.",
@@ -8009,7 +8132,7 @@
       "caseId": "B040",
       "kind": "batch",
       "snapshotBytes": 16990,
-      "fingerprint": "4e4ccacb235b225e3e6ba6f2045825b7df845637d0649e073c285a2c0c7e8783",
+      "fingerprint": "0b5955fc5a6de966f9398555fcb98da6ff2c9625f3f0b6963617f20ddf46bd31",
       "selectedScalars": {
         "og": {
           "value": 1.06,
@@ -8180,10 +8303,15 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "Maltster colour: 3.5 SRM.",
+        "Family pale from family-pale-54, not from the maltster.",
+        "Maltster colour: 350 SRM.",
+        "Family chocolate from family-chocolate-66, not from the maltster.",
+        "Maltster colour: 15-32 EBC.",
+        "Family munich from family-munich-57, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 1.5 SRM.",
+        "Family carapils from briess-carapils, not from the maltster.",
         "Classified from Brewfather category and colour (120 °L); product character unresolved.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Origin: United States.",
@@ -8206,7 +8334,7 @@
       "caseId": "B041",
       "kind": "batch",
       "snapshotBytes": 15987,
-      "fingerprint": "b90ee183d97b5cbcdd8175127ccc62d72be37c7a67a31b1455cbd9cd89d38ce3",
+      "fingerprint": "33e747d666e9891257d9e9d085de97729db1a9a3d79e27c53ea8b1737af72ccd",
       "selectedScalars": {
         "og": {
           "value": 1.05,
@@ -8377,13 +8505,18 @@
         }
       },
       "diagnostics": [
-        "Provider base-grain category supports family only; specific product character unresolved.",
+        "Maltster colour: 1.5 - 1.8° Lovibond, 1.3 - 1.7 SRM, 2.6 - 3.3 EBC.",
+        "Family pilsner from category-pilsner, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Provider base-grain category supports family only; specific product character unresolved.",
+        "Maltster colour: 3 SRM.",
+        "Family wheat from category-wheat, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 0 SRM.",
+        "Family processing from family-processing-70, not from the maltster.",
+        "Maltster colour: 12,0 – 18,0 EBC / 5.0 – 7.2 Lovibond.",
+        "Family munich from family-munich-57, not from the maltster.",
         "Origin: Czech Republic.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -8404,7 +8537,7 @@
       "caseId": "B042",
       "kind": "batch",
       "snapshotBytes": 15976,
-      "fingerprint": "ecccfe74b13dd6959fa5abe8ce543930e5eec162a4a4bc0c16961ac2f7cc3cf8",
+      "fingerprint": "0c2140033ce1ce68d6c5f88925eda08fc65ccc0152caa739b5cb197010a607ee",
       "selectedScalars": {
         "og": {
           "value": 1.05,
@@ -8575,13 +8708,18 @@
         }
       },
       "diagnostics": [
-        "Provider base-grain category supports family only; specific product character unresolved.",
+        "Maltster colour: 1.5 - 1.8° Lovibond, 1.3 - 1.7 SRM, 2.6 - 3.3 EBC.",
+        "Family pilsner from category-pilsner, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Provider base-grain category supports family only; specific product character unresolved.",
+        "Maltster colour: 3 SRM.",
+        "Family wheat from category-wheat, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 0 SRM.",
+        "Family processing from family-processing-70, not from the maltster.",
+        "Maltster colour: 12,0 – 18,0 EBC / 5.0 – 7.2 Lovibond.",
+        "Family munich from family-munich-57, not from the maltster.",
         "Origin: Czech Republic.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -8602,7 +8740,7 @@
       "caseId": "B043",
       "kind": "batch",
       "snapshotBytes": 18083,
-      "fingerprint": "4e816fffc97b196487e7a7e83daa20ab4b1d9584f4db25864f793116c661f6a1",
+      "fingerprint": "a3e802f2ebebe6262334426c6ee5f0c577d4eaece13bb28b83f4a0d5944a0d8b",
       "selectedScalars": {
         "og": {
           "value": 1.06,
@@ -8773,12 +8911,16 @@
         }
       },
       "diagnostics": [
+        "Maltster colour: 3.0–4.2 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
+        "Maltster colour: 5.0 - 7.5 °EBC; 2.3 - 3.3 °Lovibond.",
+        "Family pale from family-fawcett-golden-promise, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Exact pale-ale malt identity only; bare Golden Promise can identify distilling malt and is not an alias.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Brumalt specialty, not honey sugar; aromatic-family coefficient is an explicit Tapboard heuristic classification.",
+        "Family flaked from family-flaked-60, not from the maltster.",
+        "Maltster colour: 2.8 SRM.",
+        "Family wheat from family-wheat-55, not from the maltster.",
+        "Maltster colour: 15.3 - 22.7° Lovibond, 20 - 30 SRM, 39.4 - 59.1 EBC.",
+        "Family aromatic from gambrinus-honey, not from the maltster.",
         "Origin: USA.",
         "Origin: USA.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -8791,7 +8933,7 @@
       "caseId": "B044",
       "kind": "batch",
       "snapshotBytes": 14499,
-      "fingerprint": "55e1458137c59ff5a584b5d0fc084eaf7a5ffc3f729bd802e7d0ce196df8db83",
+      "fingerprint": "afdba1f0d3818de89d83e39cb7af8b6c493404277922d57beea2cf5795389d52",
       "selectedScalars": {
         "og": {
           "value": 1.058,
@@ -8975,11 +9117,16 @@
       },
       "diagnostics": [
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 120 SRM.",
+        "Family crystal_dark from briess-caramel-120, not from the maltster.",
+        "Maltster colour: 40,0 – 50,0 EBC / 15.5 – 19.3 Lovibond.",
+        "Family aromatic from family-aromatic-63, not from the maltster.",
+        "Maltster colour: 60 SRM.",
+        "Family crystal_light from family-crystal_light-65, not from the maltster.",
+        "Maltster colour: 1200 – 1500 °EBC; 550 – 650 °SRM.",
+        "Family roasted from family-roasted-67, not from the maltster.",
+        "Maltster colour: 270 - 350 EBC.",
+        "Family crystal_dark from family-crystal_dark-64, not from the maltster.",
         "Origin: Germany.",
         "Origin: Oregon, United States.",
         "Ingredient identity is outside the reviewed catalog.",
@@ -8996,7 +9143,7 @@
       "caseId": "B045",
       "kind": "batch",
       "snapshotBytes": 9925,
-      "fingerprint": "f9f71e3e0cbd8e9b1e4bb8dfc03c7567e13e5627e776ca9c5d1db32babd90342",
+      "fingerprint": "1719db1402af99deed9f9d97e526be7e7cf09f8e0ddbca9d4242a84649d2578b",
       "selectedScalars": {
         "og": {
           "value": 1.06,
@@ -9167,11 +9314,16 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Classified from Brewfather category and colour (60 °L); product character unresolved.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 3.0–4.2 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
+        "Maltster colour: 12,0 – 18,0 EBC / 5.0 – 7.2 Lovibond.",
+        "Family munich from family-munich-57, not from the maltster.",
+        "Maltster colour: 40,0 – 50,0 EBC / 15.5 – 19.3 Lovibond.",
+        "Family aromatic from family-aromatic-63, not from the maltster.",
+        "Maltster colour: 60 (no unit stated).",
+        "Family crystal_light from property-crystal_light, not from the maltster.",
+        "Maltster colour: 20 (no unit stated).",
+        "Family crystal_light from family-crystal_light-65, not from the maltster.",
         "Origin: Germany.",
         "Origin: Czech Republic.",
         "The maker's text names no flavour words.",
@@ -9182,7 +9334,7 @@
       "caseId": "B046",
       "kind": "batch",
       "snapshotBytes": 14979,
-      "fingerprint": "28d33b4e89f0eacca444ff1313c7aa27b254e020fe0ffc57f7cc61bdada1ef81",
+      "fingerprint": "d195a4fd32166dd5efcabd22b36257ec7b550cb41fc0dc0cb969a232560e1569",
       "selectedScalars": {
         "og": {
           "value": 1.07,
@@ -9365,10 +9517,15 @@
         }
       },
       "diagnostics": [
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-4 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 3.7 SRM.",
+        "Family rye from family-rye-61, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-5 EBC.",
+        "Family wheat from family-wheat-55, not from the maltster.",
         "Ingredient identity is outside the reviewed catalog.",
         "Origin: United Kingdom.",
         "Origin: Czech Republic.",
@@ -9389,7 +9546,7 @@
       "caseId": "B048",
       "kind": "batch",
       "snapshotBytes": 15741,
-      "fingerprint": "4371ea72a595ad52ed208777554b8b9d232c5b3b9e802182fb4f44d32e2f5645",
+      "fingerprint": "00419f82ef38e1076babe7aae0e8fbd451ab98241d9143886af1cb7589464518",
       "selectedScalars": {
         "og": {
           "value": 1.069,
@@ -9560,10 +9717,17 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
-        "Classified from Brewfather category and colour (15 °L); product character unresolved.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-4 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 8-12 EBC.",
+        "Family vienna from family-vienna-56, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 1.5 SRM.",
+        "Family carapils from briess-carapils, not from the maltster.",
+        "Maltster colour: 15 (no unit stated).",
+        "Family crystal_light from property-crystal_light, not from the maltster.",
         "Origin: Germany.",
         "Origin: Germany.",
         "Origin: Czech Republic.",
@@ -9584,7 +9748,7 @@
       "caseId": "B049",
       "kind": "batch",
       "snapshotBytes": 21840,
-      "fingerprint": "f4ddcace60ae8834799ee28ffe95fb4e1ebca90048bf62f5dfb621a292bd379f",
+      "fingerprint": "a93b9c9fca660a3275a14154296d8a2124929d35d14408f46ad41b489b5adfc2",
       "selectedScalars": {
         "og": {
           "value": 1.065,
@@ -9755,14 +9919,20 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 3.5 SRM.",
+        "Family pale from family-pale-54, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 2.5 SRM.",
+        "Family flaked from family-flaked-58, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Classified from Brewfather category and colour (3 °L); product character unresolved.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 0 SRM.",
+        "Family processing from family-processing-70, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Provider base-grain category supports family only; specific product character unresolved.",
-        "Classified from Brewfather category and colour (2 °L); product character unresolved.",
+        "Maltster colour: 2.0 – 5.0 EBC / 1.2 – 2.3 Lovibond.",
+        "Family pilsner from property-acidulated, not from the maltster.",
         "Origin: USA.",
         "Origin: Oregon, United States.",
         "Origin: Australia.",
@@ -9785,7 +9955,7 @@
       "caseId": "B050",
       "kind": "batch",
       "snapshotBytes": 14183,
-      "fingerprint": "3fd1ad66b1c7c557f6536e2a779f994a909fd591a2a9e2331ccffcd3a774208f",
+      "fingerprint": "2d7982edd6e4c0ee0b6f9c27428c1cdbe38e7a6f9c02fecae1f9e56aeccbe018",
       "selectedScalars": {
         "og": {
           "value": 1.058,
@@ -9957,11 +10127,16 @@
       },
       "diagnostics": [
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 120 SRM.",
+        "Family crystal_dark from briess-caramel-120, not from the maltster.",
+        "Maltster colour: 40,0 – 50,0 EBC / 15.5 – 19.3 Lovibond.",
+        "Family aromatic from family-aromatic-63, not from the maltster.",
+        "Maltster colour: 60 SRM.",
+        "Family crystal_light from family-crystal_light-65, not from the maltster.",
+        "Maltster colour: 1200 – 1500 °EBC; 550 – 650 °SRM.",
+        "Family roasted from family-roasted-67, not from the maltster.",
+        "Maltster colour: 270 - 350 EBC.",
+        "Family crystal_dark from family-crystal_dark-64, not from the maltster.",
         "Origin: Germany.",
         "Origin: Oregon, United States.",
         "The maker's text names no flavour words.",
@@ -9978,7 +10153,7 @@
       "caseId": "B051",
       "kind": "batch",
       "snapshotBytes": 14316,
-      "fingerprint": "659955b5058062d111469986c5f45db28daf4aab9a9df31d2c6ab5de25ef4e20",
+      "fingerprint": "5d666d5e04bf40abc3a5c7bbf9d1f57b03f0932b4be813faa019afc88478202f",
       "selectedScalars": {
         "og": {
           "value": 1.057,
@@ -10149,10 +10324,15 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Classified from Brewfather category and colour (46 °L); product character unresolved.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-4 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
+        "Maltster colour: 40,0 – 50,0 EBC / 15.5 – 19.3 Lovibond.",
+        "Family aromatic from family-aromatic-63, not from the maltster.",
+        "Maltster colour: 110 – 130 EBC / 42 – 49 L.",
+        "Family crystal_light from property-crystal_light, not from the maltster.",
+        "Maltster colour: 20 (no unit stated).",
+        "Family crystal_light from family-crystal_light-65, not from the maltster.",
         "Origin: Germany.",
         "Origin: United States.",
         "The maker's text names no flavour words.",
@@ -10171,7 +10351,7 @@
       "caseId": "B052",
       "kind": "batch",
       "snapshotBytes": 6663,
-      "fingerprint": "a8f70351c62942e3aa43b9a2fe6438c9b86f12f0b794ec16a0659db02292c941",
+      "fingerprint": "83b22dda3d4e6efd69c905c4d4997dfd96b21980759fd1704d0d84c3906197ef",
       "selectedScalars": {
         "og": {
           "value": 1.048,
@@ -10342,7 +10522,8 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 2.8 SRM.",
+        "Family wheat from family-wheat-55, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Origin: Germany.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment."
@@ -10352,7 +10533,7 @@
       "caseId": "B053",
       "kind": "batch",
       "snapshotBytes": 13135,
-      "fingerprint": "733c629f7248cfaf979a102f8a3bfa4ef034136356997295da6a4c60b7e47434",
+      "fingerprint": "fe943d36839661ffc36cf44cba9c57a72d9e60c239c127ee4152733ba59ffc4f",
       "selectedScalars": {
         "og": {
           "value": 1.045,
@@ -10536,8 +10717,11 @@
       },
       "diagnostics": [
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Classified from Brewfather category and colour (10 °L); product character unresolved.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "Maltster colour: 12-18 SRM.",
+        "Family crystal_light from property-crystal_light, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 1.5 SRM.",
+        "Family carapils from briess-carapils, not from the maltster.",
         "Origin: Germany.",
         "Ingredient name is missing; no identity inferred.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -10554,7 +10738,7 @@
       "caseId": "B054",
       "kind": "batch",
       "snapshotBytes": 15659,
-      "fingerprint": "a78080516ba6b369dcc5901a768c0738973ee2eb0476ee06c162cc00742df17e",
+      "fingerprint": "109493ae48c96f2e4e378cb2b13e22f53cbd2856a4fcc41361b3cd2b4e88f857",
       "selectedScalars": {
         "og": {
           "value": 1.065,
@@ -10725,11 +10909,17 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-4 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
+        "Maltster colour: 2.8 SRM.",
+        "Family wheat from family-wheat-55, not from the maltster.",
+        "Maltster colour: 25 SRM.",
+        "Family aromatic from briess-honey, not from the maltster.",
         "Classified from Brewfather category and colour (37 °L); product character unresolved.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 2.5 SRM.",
+        "Family flaked from family-flaked-58, not from the maltster.",
         "Origin: United States.",
         "Origin: United States.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -10743,7 +10933,7 @@
       "caseId": "B055",
       "kind": "batch",
       "snapshotBytes": 14957,
-      "fingerprint": "e914edc72b9c903fec3ee2e2467c6bb4a6de64487109027306d25d00a4fdb9aa",
+      "fingerprint": "927a3b737f176e5cfc043d237c6a6b4e30dbbdbc342437bfea1a0c61b7afe2fe",
       "selectedScalars": {
         "og": {
           "value": 1.04,
@@ -10914,13 +11104,18 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-4 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
         "Munich family requires product disambiguation.",
         "Munich identity/color conflict retained; not reclassified as roasted grain.",
         "Munich family only; intended product and corrected color cannot be inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Classified from Brewfather category and colour (60 °L); product character unresolved.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 40,0 – 50,0 EBC / 15.5 – 19.3 Lovibond.",
+        "Family aromatic from family-aromatic-63, not from the maltster.",
+        "Maltster colour: 110 – 130 EBC / 42 – 49 L.",
+        "Family crystal_light from property-crystal_light, not from the maltster.",
+        "Maltster colour: 20 (no unit stated).",
+        "Family crystal_light from family-crystal_light-65, not from the maltster.",
         "Origin: Germany.",
         "Origin: Czech Republic.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -10938,7 +11133,7 @@
       "caseId": "B056",
       "kind": "batch",
       "snapshotBytes": 16161,
-      "fingerprint": "dd92e200f3986bb27ac969cca06fff9a2492acbab7d40c14aabb2608237fccc0",
+      "fingerprint": "56ca8be77ad4cba501a585087f4d80e3e2f3a2fa035846b51a233622fc78ccc4",
       "selectedScalars": {
         "og": {
           "value": 1.055,
@@ -11109,12 +11304,19 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Classified from Brewfather category and colour (38 °L); product character unresolved.",
-        "Distinct from original Briess Carapils; no inherited no-flavor rule or numerical mouthfeel bonus.",
-        "Classified from Brewfather category and colour (19 °L); product character unresolved.",
+        "Maltster colour: 3.0 – 4.9 EBC / 1.6 – 2.3 L.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
+        "Maltster colour: 15-32 EBC.",
+        "Family munich from family-munich-57, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 8-12 EBC.",
+        "Family vienna from family-vienna-56, not from the maltster.",
+        "Maltster colour: 80,0 – 100,0 EBC / 30.6 – 38.2 Lovibond.",
+        "Family crystal_light from property-crystal_light, not from the maltster.",
+        "Maltster colour: 2.5 – 6.5 EBC / 1.4 – 2.9 Lovibond.",
+        "Family crystal_light from weyermann-carafoam-family, not from the maltster.",
+        "Maltster colour: 45.0 – 55.0 EBC / 17.4 – 21.2 L.",
+        "Family biscuit from property-biscuit, not from the maltster.",
         "Origin: Germany.",
         "Origin: Germany.",
         "The maker's text names no flavour words.",
@@ -11132,7 +11334,7 @@
       "caseId": "B057",
       "kind": "batch",
       "snapshotBytes": 12726,
-      "fingerprint": "6c9169feb0ab067e8862d0bb00a0bd6d04433acda57ac6d27b0cd683df5e17de",
+      "fingerprint": "b5fb27b7a7cc1c53f85bc53fbaaf8214ce0f4d1efc354660b5f65139bd1adea8",
       "selectedScalars": {
         "og": {
           "value": 1.045,
@@ -11303,10 +11505,15 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Provider base-grain category supports family only; specific product character unresolved.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 15-32 EBC.",
+        "Family munich from family-munich-57, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-4 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
+        "Maltster colour: 21 – 35 EBC / 8.4 – 13.7 L.",
+        "Family munich from category-munich, not from the maltster.",
+        "Maltster colour: 110 – 130 EBC / 41.9 – 49.5 Lovibond.",
+        "Family crystal_light from family-crystal_light-65, not from the maltster.",
         "Origin: Germany.",
         "Origin: Germany.",
         "Origin: Germany.",
@@ -11322,7 +11529,7 @@
       "caseId": "B058",
       "kind": "batch",
       "snapshotBytes": 14585,
-      "fingerprint": "16f5750409715ab9bfe2b2438b317a3293b83acdb80c8b24b8f1a86431208b96",
+      "fingerprint": "2318faf483c97af1be523c94c2a4063dca60904a9a2295fb40c62f506d306b23",
       "selectedScalars": {
         "og": {
           "value": 1.065,
@@ -11505,10 +11712,14 @@
         }
       },
       "diagnostics": [
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-4 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 3.7 SRM.",
+        "Family rye from family-rye-61, not from the maltster.",
+        "Maltster colour: 2.8 SRM.",
+        "Family wheat from family-wheat-55, not from the maltster.",
         "Ingredient identity is outside the reviewed catalog.",
         "Origin: United Kingdom.",
         "Origin: Czech Republic.",
@@ -11529,7 +11740,7 @@
       "caseId": "B059",
       "kind": "batch",
       "snapshotBytes": 12032,
-      "fingerprint": "9466d2aa765dd8ec395a8da25b835c6721c8a333dcac2e4760c153c7f04cee1c",
+      "fingerprint": "e383617fee2b7ebee1243dc18b063445c5a0d5cfebca359428b3fbd31b5dd22b",
       "selectedScalars": {
         "og": {
           "value": 1.055,
@@ -11700,12 +11911,17 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "Maltster colour: 3.5 SRM.",
+        "Family pale from family-pale-54, not from the maltster.",
+        "Maltster colour: 120 SRM.",
+        "Family crystal_dark from briess-caramel-120, not from the maltster.",
         "Classified from Brewfather category and colour (17 °L); product character unresolved.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 25 SRM.",
+        "Family aromatic from briess-honey, not from the maltster.",
+        "Maltster colour: 1200 – 1500 °EBC; 550 – 650 °SRM.",
+        "Family roasted from family-roasted-67, not from the maltster.",
+        "Maltster colour: 270 - 350 EBC.",
+        "Family crystal_dark from family-crystal_dark-64, not from the maltster.",
         "Origin: Germany.",
         "Origin: Oregon, United States.",
         "The maker's text names no flavour words.",
@@ -11721,7 +11937,7 @@
       "caseId": "B060",
       "kind": "batch",
       "snapshotBytes": 11404,
-      "fingerprint": "a71bdf28da4d1b5384cddb0285a00fb276d28ce609a01f726037cf410fc95a14",
+      "fingerprint": "5120b44a8403b0b4611062fde9c12421619cfd67406a80fb40a583510eec9318",
       "selectedScalars": {
         "og": {
           "value": 1.055,
@@ -11892,9 +12108,13 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Distinct from original Briess Carapils; no inherited no-flavor rule or numerical mouthfeel bonus.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-4 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
+        "Maltster colour: 15-32 EBC.",
+        "Family munich from family-munich-57, not from the maltster.",
+        "Maltster colour: 2.5 – 6.5 EBC / 1.4 – 2.9 Lovibond.",
+        "Family crystal_light from weyermann-carafoam-family, not from the maltster.",
         "Origin: Oregon, United States.",
         "Origin: Oregon, United States.",
         "The maker's text names no flavour words.",
@@ -11910,7 +12130,7 @@
       "caseId": "B061",
       "kind": "batch",
       "snapshotBytes": 14092,
-      "fingerprint": "f5f3e9860e1bbaa37b7853a1b7c7702de064a3019694934a245a8da77890d4e0",
+      "fingerprint": "16af9db5028b067927f65251b351006b37854de24e60b63f4c28a1b0d70cdf5f",
       "selectedScalars": {
         "og": {
           "value": 1.058,
@@ -12081,11 +12301,16 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 3.5 SRM.",
+        "Family pale from family-pale-54, not from the maltster.",
+        "Maltster colour: 900 – 1100 °EBC; 450 – 550 °SRM.",
+        "Family chocolate from family-chocolate-66, not from the maltster.",
         "Classified from Brewfather category and colour (111 °L); product character unresolved.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 1.5 SRM.",
+        "Family carapils from briess-carapils, not from the maltster.",
+        "Maltster colour: 2.8 SRM.",
+        "Family wheat from family-wheat-55, not from the maltster.",
         "Origin: United States.",
         "Origin: Oregon, United States.",
         "Origin: Germany.",
@@ -12102,7 +12327,7 @@
       "caseId": "B062",
       "kind": "batch",
       "snapshotBytes": 13384,
-      "fingerprint": "b4367a1268aad0c65925dcbcfba0158c6014e7b4f88ea0e1e9a7eb0d31e3acba",
+      "fingerprint": "6a31619cf552cfaf33f99dbcce17586837aab7f61f2f9fe151282184f22f2e5a",
       "selectedScalars": {
         "og": {
           "value": 1.055,
@@ -12273,9 +12498,13 @@
         }
       },
       "diagnostics": [
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-4 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 2.5 SRM.",
+        "Family flaked from family-flaked-58, not from the maltster.",
         "Origin: Czech Republic.",
         "Origin: Czech Republic.",
         "Origin: Czech Republic.",
@@ -12295,7 +12524,7 @@
       "caseId": "B063",
       "kind": "batch",
       "snapshotBytes": 18562,
-      "fingerprint": "0d1ba91461a8a2ba177b5a2211b82e885df3274833615ab8de7469494660fb66",
+      "fingerprint": "c2464f029607afe384f53a2351aa097bf611f72759e3a8ad7ecd42857e8282bc",
       "selectedScalars": {
         "og": {
           "value": 1.06,
@@ -12466,12 +12695,19 @@
         }
       },
       "diagnostics": [
+        "Maltster colour: 3.5 SRM.",
+        "Family pale from family-pale-54, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 2.5 SRM.",
+        "Family flaked from family-flaked-58, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 1.5 SRM.",
+        "Family carapils from briess-carapils, not from the maltster.",
+        "Maltster colour: 2.8 SRM.",
+        "Family wheat from family-wheat-55, not from the maltster.",
+        "Maltster colour: 25 SRM.",
+        "Family aromatic from briess-honey, not from the maltster.",
         "Aroma tags read from https://yakimachiefranches.com/create/brands/.",
         "Origin: USA.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -12487,7 +12723,7 @@
       "caseId": "B064",
       "kind": "batch",
       "snapshotBytes": 13859,
-      "fingerprint": "6d523f609ee8d702d8f54af767aaf668a37eaac74e0f48f3b5ca77dab1c1f61a",
+      "fingerprint": "5cdc18841326af18abcafc1e47f809cbcc9f44ac45a5452f9502052dcf91645c",
       "selectedScalars": {
         "og": {
           "value": 1.05,
@@ -12659,9 +12895,13 @@
       },
       "diagnostics": [
         "Reviewed base-malt family only; no product flavor coefficient claimed.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Current producer color ranges differ; source color remains unchanged, and light-crystal coefficient is a Tapboard heuristic.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "Maltster colour: 15-32 EBC.",
+        "Family munich from family-munich-57, not from the maltster.",
+        "Maltster colour: 40-42L.",
+        "Family crystal_light from murphy-rude-crystal40, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 1.5 SRM.",
+        "Family carapils from briess-carapils, not from the maltster.",
         "Origin: Germany.",
         "Origin: Oregon, United States.",
         "Origin: Oregon, United States.",
@@ -12679,7 +12919,7 @@
       "caseId": "B065",
       "kind": "batch",
       "snapshotBytes": 13398,
-      "fingerprint": "a2e4d6ea4151b0c67048783efaa19dae2eddbbfe9dcdb7c777033de1ffd73bac",
+      "fingerprint": "ff7041811a7a61b8eacf20b911ae57003ecadb3424126f3dee14cb05e50fc431",
       "selectedScalars": {
         "og": {
           "value": 1.057,
@@ -12875,9 +13115,12 @@
       "diagnostics": [
         "Munich family requires product disambiguation.",
         "Munich family only; intended product and corrected color cannot be inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 3.0–4.2 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
+        "Maltster colour: 110 – 130 EBC / 41.9 – 49.5 Lovibond.",
+        "Family crystal_light from family-crystal_light-65, not from the maltster.",
+        "Maltster colour: 260-320 EBC/ 98.1-120.6 Lovibond.",
+        "Family crystal_dark from family-crystal_dark-64, not from the maltster.",
         "Ingredient identity is outside the reviewed catalog.",
         "Ingredient identity is outside the reviewed catalog.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -12893,7 +13136,7 @@
       "caseId": "R001",
       "kind": "recipe",
       "snapshotBytes": 14079,
-      "fingerprint": "940c1a27df45af1e55738b36e494134df8b15fcb45be9671e117532687b5cefa",
+      "fingerprint": "53a554166f6f526fce2fcfe31dc5e23295dad6ecb5c2b1d9ea7dfbfd61a565e4",
       "selectedScalars": {
         "og": {
           "value": 1.060692463,
@@ -13064,10 +13307,15 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Classified from Brewfather category and colour (46 °L); product character unresolved.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-4 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
+        "Maltster colour: 40,0 – 50,0 EBC / 15.5 – 19.3 Lovibond.",
+        "Family aromatic from family-aromatic-63, not from the maltster.",
+        "Maltster colour: 110 – 130 EBC / 42 – 49 L.",
+        "Family crystal_light from property-crystal_light, not from the maltster.",
+        "Maltster colour: 20 (no unit stated).",
+        "Family crystal_light from family-crystal_light-65, not from the maltster.",
         "Origin: Germany.",
         "Origin: United States.",
         "The maker's text names no flavour words.",
@@ -13086,7 +13334,7 @@
       "caseId": "R002",
       "kind": "recipe",
       "snapshotBytes": 14795,
-      "fingerprint": "4c5be309a894e832775a1dbe192bc9fea72a8121f04cc447db9b5c61a2e6b4cf",
+      "fingerprint": "1263375c0f6a3017fcfef5464763820e94fa8e36d4c03aa35a1c163c4a2dfde0",
       "selectedScalars": {
         "og": {
           "value": 1.060090564,
@@ -13257,13 +13505,18 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-4 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
         "Munich family requires product disambiguation.",
         "Munich identity/color conflict retained; not reclassified as roasted grain.",
         "Munich family only; intended product and corrected color cannot be inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Classified from Brewfather category and colour (60 °L); product character unresolved.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 40,0 – 50,0 EBC / 15.5 – 19.3 Lovibond.",
+        "Family aromatic from family-aromatic-63, not from the maltster.",
+        "Maltster colour: 110 – 130 EBC / 42 – 49 L.",
+        "Family crystal_light from property-crystal_light, not from the maltster.",
+        "Maltster colour: 20 (no unit stated).",
+        "Family crystal_light from family-crystal_light-65, not from the maltster.",
         "Origin: Germany.",
         "Origin: Czech Republic.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -13281,7 +13534,7 @@
       "caseId": "R003",
       "kind": "recipe",
       "snapshotBytes": 13797,
-      "fingerprint": "a205fe58b5c2003c092cdeac9c884a868fde608cca690cd72e384c651c62eba0",
+      "fingerprint": "38f1df63e47b18d7e74221bf71e0fc69e6f80487fb0f2f51e7976a959ff7fa60",
       "selectedScalars": {
         "og": {
           "value": 1.060867013,
@@ -13453,7 +13706,8 @@
       },
       "diagnostics": [
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 15-32 EBC.",
+        "Family munich from family-munich-57, not from the maltster.",
         "Classified from Brewfather category and colour (40 °L); product character unresolved.",
         "Classified from Brewfather category and colour (120 °L); product character unresolved.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
@@ -13474,7 +13728,7 @@
       "caseId": "R004",
       "kind": "recipe",
       "snapshotBytes": 13077,
-      "fingerprint": "bf9f985dd66fadf36ff02efcd43c2d66e2369fee75e3a7042362d71182234bf1",
+      "fingerprint": "b8dfbc22557b7643874220ef1e0ad2dab14ba1a08c1d928ca69a942545f68c6d",
       "selectedScalars": {
         "og": {
           "value": 1.055209169,
@@ -13645,9 +13899,12 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Classified from Brewfather category and colour (56 °L); product character unresolved.",
-        "Classified from Brewfather category and colour (40 °L); product character unresolved.",
+        "Maltster colour: 2.1 SRM.",
+        "Family pale from family-pale-54, not from the maltster.",
+        "Maltster colour: 63–71 °Lovibond; 184–209 °EBC.",
+        "Family crystal_light from property-crystal_light, not from the maltster.",
+        "Maltster colour: 40 (no unit stated).",
+        "Family crystal_light from property-crystal_light, not from the maltster.",
         "Classified from Brewfather category and colour (120 °L); product character unresolved.",
         "Origin: Oregon, United States.",
         "Origin: Czech Republic.",
@@ -13666,7 +13923,7 @@
       "caseId": "R005",
       "kind": "recipe",
       "snapshotBytes": 16468,
-      "fingerprint": "0f8864be1502b873ebb01549916a15a2afb50abc963f3599f4284edd6a99ef88",
+      "fingerprint": "92abdcf2e12769253db47d0cc071cde7026cd75eec694302db911c1111a61f6d",
       "selectedScalars": {
         "og": {
           "value": 1.059121334,
@@ -13837,10 +14094,15 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "Maltster colour: 3.5 SRM.",
+        "Family pale from family-pale-54, not from the maltster.",
+        "Maltster colour: 350 SRM.",
+        "Family chocolate from family-chocolate-66, not from the maltster.",
+        "Maltster colour: 15-32 EBC.",
+        "Family munich from family-munich-57, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 1.5 SRM.",
+        "Family carapils from briess-carapils, not from the maltster.",
         "Classified from Brewfather category and colour (120 °L); product character unresolved.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Origin: United States.",
@@ -13864,7 +14126,7 @@
       "caseId": "R006",
       "kind": "recipe",
       "snapshotBytes": 16863,
-      "fingerprint": "af65a2d65e1a7e27b1143dbaaf4b91c0a80e0ca31d78f8ca2946be3bfcd2ea66",
+      "fingerprint": "c6f9c70ba82b4e892a78045f626c98e674e1454f8ce4d6a8036703737e9db187",
       "selectedScalars": {
         "og": {
           "value": 1.065436959,
@@ -14058,7 +14320,8 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 3.5 SRM.",
+        "Family pale from family-pale-54, not from the maltster.",
         "Classified from Brewfather category and colour (2 °L); product character unresolved.",
         "Classified from Brewfather category and colour (45 °L); product character unresolved.",
         "Origin: Oregon, United States.",
@@ -14083,7 +14346,7 @@
       "caseId": "R007",
       "kind": "recipe",
       "snapshotBytes": 14024,
-      "fingerprint": "2572d49c162f357a026020aad7d165791212b7facc74ff393bbe682d5eabaf04",
+      "fingerprint": "9e94cd41f79d6db6fa153318b2f7b4b19bceb5c94cb25683e60f0a8db3fa2d2a",
       "selectedScalars": {
         "og": {
           "value": 1.058093466,
@@ -14255,11 +14518,16 @@
       },
       "diagnostics": [
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 120 SRM.",
+        "Family crystal_dark from briess-caramel-120, not from the maltster.",
+        "Maltster colour: 40,0 – 50,0 EBC / 15.5 – 19.3 Lovibond.",
+        "Family aromatic from family-aromatic-63, not from the maltster.",
+        "Maltster colour: 60 SRM.",
+        "Family crystal_light from family-crystal_light-65, not from the maltster.",
+        "Maltster colour: 1200 – 1500 °EBC; 550 – 650 °SRM.",
+        "Family roasted from family-roasted-67, not from the maltster.",
+        "Maltster colour: 270 - 350 EBC.",
+        "Family crystal_dark from family-crystal_dark-64, not from the maltster.",
         "Origin: Germany.",
         "Origin: Oregon, United States.",
         "The maker's text names no flavour words.",
@@ -14276,7 +14544,7 @@
       "caseId": "R008",
       "kind": "recipe",
       "snapshotBytes": 12533,
-      "fingerprint": "055ec2f220aa35220b78b96f7daabee6761c1c3569eb007d59d50bb7d897c094",
+      "fingerprint": "196f0cde4aa11d326f302cc77cb462855581e1da5f0222704c6705996461cd87",
       "selectedScalars": {
         "og": {
           "value": 1.062291094,
@@ -14448,7 +14716,8 @@
       },
       "diagnostics": [
         "Classified from Brewfather category and colour (2 °L); product character unresolved.",
-        "Classified from Brewfather category and colour (46 °L); product character unresolved.",
+        "Maltster colour: 110 – 130 EBC / 42 – 49 L.",
+        "Family crystal_light from property-crystal_light, not from the maltster.",
         "Provider base-grain category supports family only; specific product character unresolved.",
         "Classified from Brewfather category and colour (12 °L); product character unresolved.",
         "Origin: Oregon, United States.",
@@ -14467,7 +14736,7 @@
       "caseId": "R009",
       "kind": "recipe",
       "snapshotBytes": 15721,
-      "fingerprint": "690b7396b86c0960b35f00c133f24bddd399a884853efe2a199811c1becbc7ac",
+      "fingerprint": "3584d0802959cacd6ae5bb3620b51c4cdc9222e9dabf69bc2daa7107332872ce",
       "selectedScalars": {
         "og": {
           "value": 1.05330248,
@@ -14638,9 +14907,13 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 3.5 SRM.",
+        "Family pale from family-pale-54, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-5 EBC.",
+        "Family wheat from family-wheat-55, not from the maltster.",
+        "Maltster colour: 3.7 SRM.",
+        "Family rye from family-rye-61, not from the maltster.",
         "Origin: United States.",
         "Origin: United States.",
         "Origin: Oregon, United States.",
@@ -14665,7 +14938,7 @@
       "caseId": "R010",
       "kind": "recipe",
       "snapshotBytes": 11561,
-      "fingerprint": "a56ec04d41075794bba7f526154065175b38a51888d4b0319f4faeb472d8f29d",
+      "fingerprint": "28aa040ac439aafef9d8fbe5938f2e7ae0981612d347adee70a7124f6d2670e9",
       "selectedScalars": {
         "og": {
           "value": 1.071247352,
@@ -14853,7 +15126,7 @@
       "caseId": "R011",
       "kind": "recipe",
       "snapshotBytes": 9530,
-      "fingerprint": "6f6690f33ac8c8f01159905557ea6be2f570e6c829556c1c19f73ed813744adf",
+      "fingerprint": "0b836450de394755d5b0b3a787331e63203451f337049efc4c2f59e938362a70",
       "selectedScalars": {
         "og": {
           "value": 1.060969337,
@@ -15024,11 +15297,16 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Classified from Brewfather category and colour (60 °L); product character unresolved.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 3.0–4.2 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
+        "Maltster colour: 12,0 – 18,0 EBC / 5.0 – 7.2 Lovibond.",
+        "Family munich from family-munich-57, not from the maltster.",
+        "Maltster colour: 40,0 – 50,0 EBC / 15.5 – 19.3 Lovibond.",
+        "Family aromatic from family-aromatic-63, not from the maltster.",
+        "Maltster colour: 60 (no unit stated).",
+        "Family crystal_light from property-crystal_light, not from the maltster.",
+        "Maltster colour: 20 (no unit stated).",
+        "Family crystal_light from family-crystal_light-65, not from the maltster.",
         "Origin: Germany.",
         "Origin: Czech Republic.",
         "The maker's text names no flavour words.",
@@ -15039,7 +15317,7 @@
       "caseId": "R012",
       "kind": "recipe",
       "snapshotBytes": 13837,
-      "fingerprint": "8ca621d5ee9da3e96085ecc937d7d1213c5dd0b82efb5568b016aa6f25c33926",
+      "fingerprint": "10644f77ea18901d73a81c7d18c3439155b81ffe2fbb3657edc0b09161d8e9b4",
       "selectedScalars": {
         "og": {
           "value": 1.042591735,
@@ -15210,9 +15488,11 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 3.0 – 4.9 EBC / 1.6 – 2.3 L.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
         "Classified from Brewfather category and colour (4 °L); product character unresolved.",
-        "Classified from Brewfather category and colour (19 °L); product character unresolved.",
+        "Maltster colour: 41 – 60 EBC / 16 – 23 L.",
+        "Family crystal_light from property-crystal_light, not from the maltster.",
         "Origin: United Kingdom.",
         "Origin: Oregon, United States.",
         "Origin: United Kingdom.",
@@ -15231,7 +15511,7 @@
       "caseId": "R013",
       "kind": "recipe",
       "snapshotBytes": 17196,
-      "fingerprint": "b1b43f51504626b548fa433327125550436a806e023d294181464cd0105f3041",
+      "fingerprint": "c210b7c13f7164056389ebaeedc16b029cd18e3b89d116971a3379ef3e781874",
       "selectedScalars": {
         "og": {
           "value": 1.092962792,
@@ -15402,15 +15682,20 @@
         }
       },
       "diagnostics": [
+        "Maltster colour: 2.1 SRM.",
+        "Family pale from family-pale-54, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 2.5 SRM.",
+        "Family flaked from family-flaked-58, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 1.8 SRM.",
+        "Family flaked from family-flaked-60, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Roasted ingredient identity/color conflict retained.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 400 – 700 EBC / 151.3 – 264.4 Lovibond.",
+        "Family chocolate from family-chocolate-66, not from the maltster.",
+        "Maltster colour: 300 SRM.",
+        "Family roasted from family-roasted-67, not from the maltster.",
         "Origin: Oregon, United States.",
         "Origin: Oregon, United States.",
         "Origin: Oregon, United States.",
@@ -15430,7 +15715,7 @@
       "caseId": "R014",
       "kind": "recipe",
       "snapshotBytes": 9779,
-      "fingerprint": "d1a667e9df7b2a6e95abf958e8b5af1f8a5c1e08ea954d32e0e398749a9090e2",
+      "fingerprint": "2bdba4135dc759f54c8f68488f4b33770a58cab8c54a0d7ff905aa30636269bd",
       "selectedScalars": {
         "og": {
           "value": 1.052396348,
@@ -15601,9 +15886,13 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Distinct from original Briess Carapils; no inherited no-flavor rule or numerical mouthfeel bonus.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-4 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
+        "Maltster colour: 15-32 EBC.",
+        "Family munich from family-munich-57, not from the maltster.",
+        "Maltster colour: 2.5 – 6.5 EBC / 1.4 – 2.9 Lovibond.",
+        "Family crystal_light from weyermann-carafoam-family, not from the maltster.",
         "Origin: Oregon, United States.",
         "Origin: Oregon, United States.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -15618,7 +15907,7 @@
       "caseId": "R015",
       "kind": "recipe",
       "snapshotBytes": 15785,
-      "fingerprint": "18b1adb774c8ef8158ff41291997ea49fad12d6e48afeb7c24f5a9024de4b717",
+      "fingerprint": "3835d2d4097756dc8ee8577ff762015bb440e6718342f8516ae09f2bfbe5300f",
       "selectedScalars": {
         "og": {
           "value": 1.047094178,
@@ -15789,8 +16078,12 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-4 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-5 EBC.",
+        "Family wheat from family-wheat-55, not from the maltster.",
         "Classified from Brewfather category and colour (2 °L); product character unresolved.",
         "Origin: United Kingdom.",
         "Origin: Czech Republic.",
@@ -15814,7 +16107,7 @@
       "caseId": "R016",
       "kind": "recipe",
       "snapshotBytes": 12497,
-      "fingerprint": "75db7912540da769f08b0edc2f83b9c16cef332f917fa6b3ea4adf7801372817",
+      "fingerprint": "1da22718eea427c8d7adafe80e3203386b8ab55ed3f6140caaf4922191e1b991",
       "selectedScalars": {
         "og": {
           "value": 1.09817792,
@@ -15985,12 +16278,18 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Provider base-grain category supports family only; specific product character unresolved.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 1.8-2.2 SRM.",
+        "Family pale from family-pale-54, not from the maltster.",
+        "Maltster colour: 7.2 - 10.9° Lovibond, 9.0 - 14.0 SRM, 17.7 - 27.6 EBC.",
+        "Family munich from category-munich, not from the maltster.",
         "Classified from Brewfather category and colour (56 °L); product character unresolved.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 900 – 1100 °EBC; 450 – 550 °SRM.",
+        "Family chocolate from family-chocolate-66, not from the maltster.",
+        "Maltster colour: 1200 – 1500 °EBC; 550 – 650 °SRM.",
+        "Family roasted from family-roasted-67, not from the maltster.",
+        "Maltster colour: 1200 – 1500 °EBC; 550 – 650 °SRM.",
+        "Family roasted from family-roasted-67, not from the maltster.",
         "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -16005,7 +16304,7 @@
       "caseId": "R017",
       "kind": "recipe",
       "snapshotBytes": 11285,
-      "fingerprint": "a542180301675038a164d799f18477b7913705ee5c16dfeaba10af495b256bea",
+      "fingerprint": "b15d69f8449f2ea2a48d440d5139a5675f06cefd74716d8dab6ffb55b301a09d",
       "selectedScalars": {
         "og": {
           "value": 1.044853498,
@@ -16176,7 +16475,8 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 3.0 – 4.9 EBC / 1.6 – 2.3 L.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
         "Origin: Germany.",
         "Origin: Germany.",
         "Descriptors are expectations, not guaranteed batch flavor.",
@@ -16194,7 +16494,7 @@
       "caseId": "R018",
       "kind": "recipe",
       "snapshotBytes": 15425,
-      "fingerprint": "c11f085e047fcb420b6cec11e9c3ff9122740cc9ef30191f7a75f6158dc905f3",
+      "fingerprint": "d7cb6cdbc9e810dc928aba7a7f2bb894fa00593aa0d71896de0466e8c0901865",
       "selectedScalars": {
         "og": {
           "value": 1.082077331,
@@ -16365,10 +16665,17 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
-        "Classified from Brewfather category and colour (15 °L); product character unresolved.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-4 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 8-12 EBC.",
+        "Family vienna from family-vienna-56, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 1.5 SRM.",
+        "Family carapils from briess-carapils, not from the maltster.",
+        "Maltster colour: 15 (no unit stated).",
+        "Family crystal_light from property-crystal_light, not from the maltster.",
         "Origin: Germany.",
         "Origin: Germany.",
         "Origin: Czech Republic.",
@@ -16389,7 +16696,7 @@
       "caseId": "R019",
       "kind": "recipe",
       "snapshotBytes": 11650,
-      "fingerprint": "52f3a450ccc0da46742fa22c1e497a73b9d772e29e897c98f51504488e951d13",
+      "fingerprint": "f7065a953393aee16cb4739ff001e9b2f473f9a6fb4399d3a6202853e8fec0cf",
       "selectedScalars": {
         "og": {
           "value": 1.072829765,
@@ -16560,9 +16867,11 @@
         }
       },
       "diagnostics": [
+        "Maltster colour: 3.5 SRM.",
+        "Family pale from family-pale-54, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 2.8 SRM.",
+        "Family wheat from family-wheat-55, not from the maltster.",
         "Origin: Australia.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -16574,7 +16883,7 @@
       "caseId": "R020",
       "kind": "recipe",
       "snapshotBytes": 12087,
-      "fingerprint": "c602749c77f323697dc1cac701cde64bedfa19ef5ef39b335203d44e7c83c302",
+      "fingerprint": "0faaea29b8dc8de4b707e7d2ca44c9738d1359e2eaff9fcad1aef4637e9f5ff3",
       "selectedScalars": {
         "og": {
           "value": 1.055573063,
@@ -16745,10 +17054,18 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-5 EBC.",
+        "Family wheat from family-wheat-55, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-4 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 1.5 SRM.",
+        "Family carapils from briess-carapils, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 0 SRM.",
+        "Family processing from family-processing-70, not from the maltster.",
         "Origin: Germany.",
         "Origin: Germany.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -16763,7 +17080,7 @@
       "caseId": "R021",
       "kind": "recipe",
       "snapshotBytes": 8257,
-      "fingerprint": "a2121b2c2709ba59179907847d8d53a024e24ae9e8c3116cf48be514ba225e93",
+      "fingerprint": "957cf7e64b16cf96af5cc7b8e148a7617e55ff9a6701fb222caddc6a6e63cf2f",
       "selectedScalars": {
         "og": {
           "value": 1.07229709,
@@ -16934,9 +17251,14 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Provider base-grain category supports family only; specific product character unresolved.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-4 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
+        "Maltster colour: 7.2 - 10.9° Lovibond, 9.0 - 14.0 SRM, 17.7 - 27.6 EBC.",
+        "Family munich from category-munich, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 8-12 EBC.",
+        "Family vienna from family-vienna-56, not from the maltster.",
         "Origin: Germany.",
         "Origin: Germany.",
         "The maker's text names no flavour words.",
@@ -16948,7 +17270,7 @@
       "caseId": "R022",
       "kind": "recipe",
       "snapshotBytes": 13308,
-      "fingerprint": "7f8ebb2d0b9f4d3809123ce5c63d828e9e655af35221d175eb07ea95c2fdef29",
+      "fingerprint": "5aa0ec114194a1168ed1ae7d5d9d41791711e19b7ba9e2432930f35332578e2f",
       "selectedScalars": {
         "og": {
           "value": 1.080601175,
@@ -17119,11 +17441,16 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 3.5 SRM.",
+        "Family pale from family-pale-54, not from the maltster.",
+        "Maltster colour: 40 SRM.",
+        "Family crystal_light from briess-caramel-40, not from the maltster.",
+        "Maltster colour: 40,0 – 50,0 EBC / 15.5 – 19.3 Lovibond.",
+        "Family aromatic from family-aromatic-63, not from the maltster.",
+        "Maltster colour: 270 - 350 EBC.",
+        "Family crystal_dark from family-crystal_dark-64, not from the maltster.",
+        "Maltster colour: 1200 – 1500 °EBC; 550 – 650 °SRM.",
+        "Family roasted from family-roasted-67, not from the maltster.",
         "Origin: Germany.",
         "The maker's text names no flavour words.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -17140,7 +17467,7 @@
       "caseId": "R023",
       "kind": "recipe",
       "snapshotBytes": 16535,
-      "fingerprint": "d21ed265976cc9014a10afa97ebdbd62f21ebd459fc08119c3711f1b998a6648",
+      "fingerprint": "275437cf16294dd3042ea51b90cb67d30bb7db5020212997208ee7f565acd4e0",
       "selectedScalars": {
         "og": {
           "value": 1.053973694,
@@ -17311,12 +17638,19 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Classified from Brewfather category and colour (38 °L); product character unresolved.",
-        "Distinct from original Briess Carapils; no inherited no-flavor rule or numerical mouthfeel bonus.",
-        "Classified from Brewfather category and colour (19 °L); product character unresolved.",
+        "Maltster colour: 3.0 – 4.9 EBC / 1.6 – 2.3 L.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
+        "Maltster colour: 15-32 EBC.",
+        "Family munich from family-munich-57, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 8-12 EBC.",
+        "Family vienna from family-vienna-56, not from the maltster.",
+        "Maltster colour: 80,0 – 100,0 EBC / 30.6 – 38.2 Lovibond.",
+        "Family crystal_light from property-crystal_light, not from the maltster.",
+        "Maltster colour: 2.5 – 6.5 EBC / 1.4 – 2.9 Lovibond.",
+        "Family crystal_light from weyermann-carafoam-family, not from the maltster.",
+        "Maltster colour: 45.0 – 55.0 EBC / 17.4 – 21.2 L.",
+        "Family biscuit from property-biscuit, not from the maltster.",
         "Origin: Germany.",
         "Origin: Germany.",
         "The maker's text names no flavour words.",
@@ -17335,7 +17669,7 @@
       "caseId": "R024",
       "kind": "recipe",
       "snapshotBytes": 12717,
-      "fingerprint": "133cddc540edafe4b1c5759c124757396111d0871f1186e63cd3adfbedc74832",
+      "fingerprint": "e69e87a0cf816f46244410165adf49f49f99e04e88de720c9153e0dcbfaacc40",
       "selectedScalars": {
         "og": {
           "value": 1.057187324,
@@ -17526,7 +17860,7 @@
       "caseId": "R025",
       "kind": "recipe",
       "snapshotBytes": 14075,
-      "fingerprint": "3d8bf9f2c440710f85296aa831ef41e7edd346295bac51460b50a5127f6e7560",
+      "fingerprint": "1121b4d0ba686d25c76c05c4b047a225ca1d20b485b6ea5728651311d08adcc8",
       "selectedScalars": {
         "og": {
           "value": 1.077406312,
@@ -17697,9 +18031,11 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 3.0–4.2 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
         "Classified from Brewfather category and colour (0 °L); product character unresolved.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 2.8 SRM.",
+        "Family wheat from family-wheat-55, not from the maltster.",
         "Origin: Germany.",
         "Aroma tags read from https://yakimachiefranches.com/create/brands/.",
         "Origin: USA.",
@@ -17718,7 +18054,7 @@
       "caseId": "R026",
       "kind": "recipe",
       "snapshotBytes": 15404,
-      "fingerprint": "2810f0a2482b92ac012134680f64497ae8699af2cd451818677c557c051b7cfd",
+      "fingerprint": "18113b1ae1324dc2e9ae79c3335e8ba42ba4bfdc1bdbf1e6bc16f80c8bdbcc01",
       "selectedScalars": {
         "og": {
           "value": 1.069323708,
@@ -17889,10 +18225,15 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "Maltster colour: 3.0–4.2 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 2.5 SRM.",
+        "Family flaked from family-flaked-58, not from the maltster.",
+        "Maltster colour: 2.8 SRM.",
+        "Family wheat from family-wheat-55, not from the maltster.",
+        "Maltster colour: 25 SRM.",
+        "Family aromatic from briess-honey, not from the maltster.",
         "Origin: USA.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -17905,7 +18246,7 @@
       "caseId": "R027",
       "kind": "recipe",
       "snapshotBytes": 13936,
-      "fingerprint": "b493bddd2976a8652acd84e9aa12db54b66235ccfa395fac2580a844de58406b",
+      "fingerprint": "9848addce23a765ebe06895f5ee238a6e0416ee42486b055ad3759d28e638760",
       "selectedScalars": {
         "og": {
           "value": 1.057570129,
@@ -18076,11 +18417,16 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 3.5 SRM.",
+        "Family pale from family-pale-54, not from the maltster.",
+        "Maltster colour: 900 – 1100 °EBC; 450 – 550 °SRM.",
+        "Family chocolate from family-chocolate-66, not from the maltster.",
         "Classified from Brewfather category and colour (111 °L); product character unresolved.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 1.5 SRM.",
+        "Family carapils from briess-carapils, not from the maltster.",
+        "Maltster colour: 2.8 SRM.",
+        "Family wheat from family-wheat-55, not from the maltster.",
         "Origin: United States.",
         "Origin: Oregon, United States.",
         "Origin: Germany.",
@@ -18097,7 +18443,7 @@
       "caseId": "R028",
       "kind": "recipe",
       "snapshotBytes": 13224,
-      "fingerprint": "4c344ac9eecab6bc85075a17a70d09b3ebb65ac932afc8a998c00aed5de54cb2",
+      "fingerprint": "ae04d31d62a054c7030644223b4cf1fa0661b63f16200ac9101d69ca7435f7de",
       "selectedScalars": {
         "og": {
           "value": 1.056577885,
@@ -18293,9 +18639,12 @@
       "diagnostics": [
         "Munich family requires product disambiguation.",
         "Munich family only; intended product and corrected color cannot be inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 3.0–4.2 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
+        "Maltster colour: 110 – 130 EBC / 41.9 – 49.5 Lovibond.",
+        "Family crystal_light from family-crystal_light-65, not from the maltster.",
+        "Maltster colour: 260-320 EBC/ 98.1-120.6 Lovibond.",
+        "Family crystal_dark from family-crystal_dark-64, not from the maltster.",
         "Ingredient identity is outside the reviewed catalog.",
         "Ingredient identity is outside the reviewed catalog.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -18311,7 +18660,7 @@
       "caseId": "R029",
       "kind": "recipe",
       "snapshotBytes": 12715,
-      "fingerprint": "da44e47e62dec8119dd499bb9a31476fd10d59b17f269d1b6337cf2b4ed29414",
+      "fingerprint": "61a45e87ec70019125429ed402270b969489bf47b5a63335b4d89dda71a76c43",
       "selectedScalars": {
         "og": {
           "value": 1.043941205,
@@ -18482,8 +18831,10 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 3.0 – 4.9 EBC / 1.6 – 2.3 L.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
+        "Maltster colour: 2.8 SRM.",
+        "Family wheat from family-wheat-55, not from the maltster.",
         "Origin: United States.",
         "Higher-priority sources name no flavour words: indie-hops.",
         "Origin: Germany.",
@@ -18503,7 +18854,7 @@
       "caseId": "R030",
       "kind": "recipe",
       "snapshotBytes": 13737,
-      "fingerprint": "7d529228ada897c1f14611ef5d52e7c95f10972754d1060205eee71182f23edd",
+      "fingerprint": "8822ef979bbff512d08ccf574a41c6c965183ae81e5998e642cd44c19b64e9d5",
       "selectedScalars": {
         "og": {
           "value": 1.058544888,
@@ -18675,9 +19026,13 @@
       },
       "diagnostics": [
         "Reviewed base-malt family only; no product flavor coefficient claimed.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Current producer color ranges differ; source color remains unchanged, and light-crystal coefficient is a Tapboard heuristic.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "Maltster colour: 15-32 EBC.",
+        "Family munich from family-munich-57, not from the maltster.",
+        "Maltster colour: 40-42L.",
+        "Family crystal_light from murphy-rude-crystal40, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 1.5 SRM.",
+        "Family carapils from briess-carapils, not from the maltster.",
         "Origin: Germany.",
         "Origin: Oregon, United States.",
         "Origin: Oregon, United States.",
@@ -18695,7 +19050,7 @@
       "caseId": "R031",
       "kind": "recipe",
       "snapshotBytes": 16085,
-      "fingerprint": "6de37a33123a2ef4c04e8aa3fb29624c6db71e7801a327f9e836fa99d1d9ca5f",
+      "fingerprint": "78b09daebff878dd55316974a060075ef0f30a26bfdf4801cbf75acb2b9251ab",
       "selectedScalars": {
         "og": {
           "value": 1.064532861,
@@ -18866,12 +19221,16 @@
         }
       },
       "diagnostics": [
+        "Maltster colour: 3.0–4.2 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
+        "Maltster colour: 5.0 - 7.5 °EBC; 2.3 - 3.3 °Lovibond.",
+        "Family pale from family-fawcett-golden-promise, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Exact pale-ale malt identity only; bare Golden Promise can identify distilling malt and is not an alias.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Brumalt specialty, not honey sugar; aromatic-family coefficient is an explicit Tapboard heuristic classification.",
+        "Family flaked from family-flaked-60, not from the maltster.",
+        "Maltster colour: 2.8 SRM.",
+        "Family wheat from family-wheat-55, not from the maltster.",
+        "Maltster colour: 15.3 - 22.7° Lovibond, 20 - 30 SRM, 39.4 - 59.1 EBC.",
+        "Family aromatic from gambrinus-honey, not from the maltster.",
         "Origin: USA.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -18883,7 +19242,7 @@
       "caseId": "R032",
       "kind": "recipe",
       "snapshotBytes": 13147,
-      "fingerprint": "8a9215993af10f22e54c829d39ab78b58578bcecabad5c97b3635d460be55412",
+      "fingerprint": "dec4844728c8a53124db9035639e7eaf0965567d3ad2575196546ad98292e08f",
       "selectedScalars": {
         "og": {
           "value": 1.050370456,
@@ -19054,9 +19413,13 @@
         }
       },
       "diagnostics": [
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-4 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 2.5 SRM.",
+        "Family flaked from family-flaked-58, not from the maltster.",
         "Origin: Czech Republic.",
         "Origin: Czech Republic.",
         "Origin: Czech Republic.",
@@ -19076,7 +19439,7 @@
       "caseId": "R033",
       "kind": "recipe",
       "snapshotBytes": 14402,
-      "fingerprint": "302943154dbd45bee40282a841c2daa9c87fb303d275337b1a8bbdbe42b29f1f",
+      "fingerprint": "43c05f85527f43581bc646ccb8cdf9897c29de53f019f73719934b88c1565ef9",
       "selectedScalars": {
         "og": {
           "value": 1.065950874,
@@ -19259,10 +19622,15 @@
         }
       },
       "diagnostics": [
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-4 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 3.7 SRM.",
+        "Family rye from family-rye-61, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-5 EBC.",
+        "Family wheat from family-wheat-55, not from the maltster.",
         "Ingredient identity is outside the reviewed catalog.",
         "Origin: United Kingdom.",
         "Origin: Czech Republic.",
@@ -19283,7 +19651,7 @@
       "caseId": "R034",
       "kind": "recipe",
       "snapshotBytes": 11167,
-      "fingerprint": "3e620a676353a97a6d2d1ba9f14d17cc6ca199b7c75340bc8dff400adc779f28",
+      "fingerprint": "9f8f769d88be1407d0c15223033c2546c9ad0849c17fb72bc29570dca67d2958",
       "selectedScalars": {
         "og": {
           "value": 1.054769783,
@@ -19454,12 +19822,17 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "Maltster colour: 3.5 SRM.",
+        "Family pale from family-pale-54, not from the maltster.",
+        "Maltster colour: 120 SRM.",
+        "Family crystal_dark from briess-caramel-120, not from the maltster.",
         "Classified from Brewfather category and colour (17 °L); product character unresolved.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 25 SRM.",
+        "Family aromatic from briess-honey, not from the maltster.",
+        "Maltster colour: 1200 – 1500 °EBC; 550 – 650 °SRM.",
+        "Family roasted from family-roasted-67, not from the maltster.",
+        "Maltster colour: 270 - 350 EBC.",
+        "Family crystal_dark from family-crystal_dark-64, not from the maltster.",
         "Origin: Germany.",
         "Origin: Oregon, United States.",
         "The maker's text names no flavour words.",
@@ -19475,7 +19848,7 @@
       "caseId": "R035",
       "kind": "recipe",
       "snapshotBytes": 10515,
-      "fingerprint": "686b4451bfc1b628e6a288e4fa0d8c799e4a09a00049d580159a09a5d499e47a",
+      "fingerprint": "e2185f3fd22f69cce530c5d1e2531a5036b77c88435a8970742d60ed49335305",
       "selectedScalars": {
         "og": {
           "value": 1.053530322,
@@ -19671,9 +20044,12 @@
       "diagnostics": [
         "Munich family requires product disambiguation.",
         "Munich family only; intended product and corrected color cannot be inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 3.0–4.2 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
+        "Maltster colour: 110 – 130 EBC / 41.9 – 49.5 Lovibond.",
+        "Family crystal_light from family-crystal_light-65, not from the maltster.",
+        "Maltster colour: 260-320 EBC/ 98.1-120.6 Lovibond.",
+        "Family crystal_dark from family-crystal_dark-64, not from the maltster.",
         "Ingredient identity is outside the reviewed catalog.",
         "Ingredient identity is outside the reviewed catalog.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -19685,7 +20061,7 @@
       "caseId": "R036",
       "kind": "recipe",
       "snapshotBytes": 14103,
-      "fingerprint": "360771bd561b01241550f2421682efbc62ae0f04b3e5c4ba2c79544fa5a83a41",
+      "fingerprint": "72a1c2e3d2ca230a18962c360eafc7da2227cd34afb8ef76c61a8883dcf2039f",
       "selectedScalars": {
         "og": {
           "value": 1.060110996,
@@ -19880,7 +20256,7 @@
       "caseId": "R037",
       "kind": "recipe",
       "snapshotBytes": 13774,
-      "fingerprint": "ccc07f9bd957a7303b6a179a62957da8b841b92c8aa5a4caa29ff3193ef36a20",
+      "fingerprint": "df2d737cf4bb29a5c9dad03166b109250231e6d320103a0e0bb146bed96dfe97",
       "selectedScalars": {
         "og": {
           "value": 1.054410878,
@@ -20074,10 +20450,16 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 8-12 EBC.",
+        "Family vienna from family-vienna-56, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-4 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
+        "Maltster colour: 15-32 EBC.",
+        "Family munich from family-munich-57, not from the maltster.",
+        "Maltster colour: 800 – 1000 EBC / 302.1 – 377.5 Lovibond.",
+        "Family dehusked_roast from weyermann-carafa-special-i, not from the maltster.",
         "Ingredient identity is outside the reviewed catalog.",
         "Ingredient name is missing; no identity inferred.",
         "The maker's text names no flavour words.",
@@ -20096,7 +20478,7 @@
       "caseId": "R038",
       "kind": "recipe",
       "snapshotBytes": 21423,
-      "fingerprint": "097bc81590431b7a64ee4fa7c3610a6dff9a1b1392404efa65b416d8ea89e267",
+      "fingerprint": "93ef2a6463f9c751e37f7987d1dcefef34e083e0744d48dc61a2ae965d3ae8c7",
       "selectedScalars": {
         "og": {
           "value": 1.08255624,
@@ -20267,14 +20649,20 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 3.5 SRM.",
+        "Family pale from family-pale-54, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 2.5 SRM.",
+        "Family flaked from family-flaked-58, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Classified from Brewfather category and colour (3 °L); product character unresolved.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 0 SRM.",
+        "Family processing from family-processing-70, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Provider base-grain category supports family only; specific product character unresolved.",
-        "Classified from Brewfather category and colour (2 °L); product character unresolved.",
+        "Maltster colour: 2.0 – 5.0 EBC / 1.2 – 2.3 Lovibond.",
+        "Family pilsner from property-acidulated, not from the maltster.",
         "Origin: USA.",
         "Origin: Oregon, United States.",
         "Origin: Australia.",
@@ -20297,7 +20685,7 @@
       "caseId": "R039",
       "kind": "recipe",
       "snapshotBytes": 17737,
-      "fingerprint": "4e8fa3ad0139d7243d967f6fe65f12004e276ddac2b972eff81b71d0ae331f70",
+      "fingerprint": "f83f2bc0a0d976a43c4ae0e22cff0f2fbad96eabfcd2211d4cae0a4b5f4eae3e",
       "selectedScalars": {
         "og": {
           "value": 1.063539461,
@@ -20468,12 +20856,19 @@
         }
       },
       "diagnostics": [
+        "Maltster colour: 3.5 SRM.",
+        "Family pale from family-pale-54, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 2.5 SRM.",
+        "Family flaked from family-flaked-58, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 1.5 SRM.",
+        "Family carapils from briess-carapils, not from the maltster.",
+        "Maltster colour: 2.8 SRM.",
+        "Family wheat from family-wheat-55, not from the maltster.",
+        "Maltster colour: 25 SRM.",
+        "Family aromatic from briess-honey, not from the maltster.",
         "Aroma tags read from https://yakimachiefranches.com/create/brands/.",
         "Origin: USA.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -20488,7 +20883,7 @@
       "caseId": "R040",
       "kind": "recipe",
       "snapshotBytes": 11649,
-      "fingerprint": "bf62eeaa702c8a8b682558a987feafb26994d33812aec6a07aa85bba45567d76",
+      "fingerprint": "f8aaa62cf0d4e0d111baaf6ee893c8255ddfe19bd18deb3dd0cddcf33ffb973f",
       "selectedScalars": {
         "og": {
           "value": 1.06337995,
@@ -20659,7 +21054,9 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-4 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -20674,7 +21071,7 @@
       "caseId": "R041",
       "kind": "recipe",
       "snapshotBytes": 15982,
-      "fingerprint": "e67e140eb5130fac3a379402ffdfc90fbd6606de0a338fcaf721cf1ee6c07b7e",
+      "fingerprint": "85ba9d80649ff0c3fbbe4977f5f22bb46166edd017eae40c73ac99070ffa017d",
       "selectedScalars": {
         "og": {
           "value": 1.074537189,
@@ -20860,9 +21257,12 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Classified from Brewfather category and colour (40 °L); product character unresolved.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 2.8 SRM.",
+        "Family wheat from family-wheat-55, not from the maltster.",
+        "Maltster colour: 270 - 350 EBC.",
+        "Family crystal_dark from family-crystal_dark-64, not from the maltster.",
+        "Maltster colour: 1.200 – 1.400 EBC / 450 – 529 L.",
+        "Family roasted from family-roasted-67, not from the maltster.",
         "Origin: Oregon, United States.",
         "Ingredient identity is outside the reviewed catalog.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -20884,7 +21284,7 @@
       "caseId": "R042",
       "kind": "recipe",
       "snapshotBytes": 10309,
-      "fingerprint": "007c45151386da4341b56f77160cef2a6086561dde21a58b9dd5d0dbffd355df",
+      "fingerprint": "ab9c60c4aaad3183cd027cb22cb9924650dc995ad1300b502dca602f40466620",
       "selectedScalars": {
         "og": {
           "value": 1.033463853,
@@ -21055,12 +21455,15 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-4 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Descriptors are expectations, not guaranteed batch flavor.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 270 - 350 EBC.",
+        "Family crystal_dark from family-crystal_dark-64, not from the maltster.",
         "Origin: Germany.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -21071,7 +21474,7 @@
       "caseId": "R043",
       "kind": "recipe",
       "snapshotBytes": 14850,
-      "fingerprint": "49f84d0b1be13c8bb03888d212ef45ab20ac0fb3847c8fec0cbb9262d732601c",
+      "fingerprint": "c59e456cceb716f377ead0b0611f840255b2f8fb52638a74ee3adc7b5b4fe9ad",
       "selectedScalars": {
         "og": {
           "value": 1.0971195,
@@ -21265,8 +21668,10 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Classified from Brewfather category and colour (3 °L); product character unresolved.",
+        "Maltster colour: 3.0 – 4.9 EBC / 1.6 – 2.3 L.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
+        "Maltster colour: 5.0 – 7.0 EBC / 2.3 – 3.1 L.",
+        "Family pale from property-pale, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Ingredient identity is outside the reviewed catalog.",
@@ -21287,7 +21692,7 @@
       "caseId": "R044",
       "kind": "recipe",
       "snapshotBytes": 13228,
-      "fingerprint": "1d0e54b027a7ccf3e0d16859fe81c32efd7a566b6f179c867b8ff011e36fe857",
+      "fingerprint": "f0fdb44f2d513adf9fe70c3673db829496c441d31c70d409b54848c9cf254d83",
       "selectedScalars": {
         "og": {
           "value": 1.050099892,
@@ -21458,9 +21863,13 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-4 EBC.",
+        "Family pilsner from family-pilsner-53, not from the maltster.",
         "Classified from Brewfather category and colour (49 °L); product character unresolved.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 800 – 1.000 EBC / 300 – 380 L.",
+        "Family chocolate from family-chocolate-66, not from the maltster.",
         "Origin: Germany.",
         "Origin: United States.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -21478,7 +21887,7 @@
       "caseId": "R045",
       "kind": "recipe",
       "snapshotBytes": 12485,
-      "fingerprint": "982e71669a905c77953decbd83a99d8b11d6d4eeac900b585c3ba751cc7f4a18",
+      "fingerprint": "a934c169c2a64ad5e45718d9acb40f1f5cd0a884aa680d533cafa079b915a061",
       "selectedScalars": {
         "og": {
           "value": 1.047423604,
@@ -21649,9 +22058,13 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "Maltster colour: 2.8 SRM.",
+        "Family wheat from family-wheat-55, not from the maltster.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 1.8-2.2 SRM.",
+        "Family pale from family-pale-54, not from the maltster.",
+        "Maltster colour: 10 SRM.",
+        "Family crystal_light from briess-caramel-10, not from the maltster.",
         "Origin: United States.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment.",
@@ -21669,7 +22082,7 @@
       "caseId": "R046",
       "kind": "recipe",
       "snapshotBytes": 14136,
-      "fingerprint": "e514d554dc191b20e0b079210898c8481fd34ed84318ecd6ac328f52e6f881d1",
+      "fingerprint": "b0bc9a21141e751d33963129d6a292e45b6974afbb7334b314daa232b434be24",
       "selectedScalars": {
         "og": {
           "value": 1.071195965,
@@ -21857,7 +22270,9 @@
         "Classified from Brewfather category and colour (2 °L); product character unresolved.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 3-5 EBC.",
+        "Family wheat from family-wheat-55, not from the maltster.",
         "Ingredient identity is outside the reviewed catalog.",
         "Origin: Australia.",
         "Origin: Australia.",

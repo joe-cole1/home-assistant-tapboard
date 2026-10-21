@@ -220,7 +220,7 @@ export const LEXICON: readonly LexiconTerm[] = Object.freeze([
   malt("coffee", "espresso"),
   malt("roast", "roasty", "roasted", "roastiness", "roasted notes"),
   malt("burnt"),
-  malt("smoky", "smoke", "smoked", "smokiness"),
+  malt("smoky", "smoke", "smoked", "smokiness", "smokey"),
   malt("peaty", "peat"),
 ]);
 
@@ -266,6 +266,12 @@ export const IGNORED_PHRASES: readonly string[] = Object.freeze([
   "roast house",
   "orange hue",
   "orange hues",
+  "orange colour",
+  "orange color",
+  "grape nuts",
+  "malt forward beers",
+  "spiced beers",
+  "this roast",
   "caramel colour",
   "caramel colouring",
   "caramel color",

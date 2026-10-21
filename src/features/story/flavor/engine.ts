@@ -123,7 +123,7 @@ export function sensoryBand(key: SensoryAxis, value: number | null, manual = fal
           : "Very high";
 }
 
-export const MODEL_VERSION = "recipe-flavor-3";
+export const MODEL_VERSION = "recipe-flavor-4";
 /** Shared saturating dose→intensity map on the 0–5 scale. */
 function saturate(units: number): number {
   return -5 * Math.expm1(-units / 5);

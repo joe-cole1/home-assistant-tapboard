@@ -89,6 +89,10 @@ void test("negated, conditional and pairing mentions are reported, never kept", 
     "fruity:conditional",
   ]);
   assert.deepEqual(words("A strain ideal for fruity Belgian ales.", "yeasts"), []);
+  assert.deepEqual(
+    words("Body in the presence of piney, juicy hop profiles; bread and toast.", "fermentables"),
+    ["bready", "toasty"],
+  );
   assert.deepEqual(words("Use it in a sour fruited beer to maximize aromatics.", "yeasts"), []);
   // "When paired with" is pairing advice and "when all is said and done" an idiom: neither is a
   // condition on the product's own flavour.
@@ -191,6 +195,13 @@ void test("negated, conditional and pairing mentions are reported, never kept", 
       "fermentables",
     ),
     ["grainy", "roast"],
+  );
+  assert.deepEqual(
+    words(
+      "A golden-orange colour for malt-forward beers; smokey, like Grape Nuts.",
+      "fermentables",
+    ),
+    ["smoky"],
   );
   // Dried and dark fruit are yeast esters too, unlike caramel or bread.
   assert.deepEqual(words("Caramel, plum and dark fruit esters.", "yeasts"), ["plum", "dark fruit"]);
