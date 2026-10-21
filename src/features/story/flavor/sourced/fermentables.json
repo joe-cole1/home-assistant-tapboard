@@ -10844,7 +10844,7 @@
   {
     "id": "gambrinus-bc-pale-malt",
     "manufacturer": "Gambrinus",
-    "manufacturerAliases": ["Cargill (Gambrinus)", "Gambrinus Malting"],
+    "manufacturerAliases": ["Cargill (Gambrinus)", "Cargill", "Gambrinus Malting"],
     "codes": [],
     "aliases": ["Gambrinus BC Pale Malt", "BC Pale Malt"],
     "descriptors": [
@@ -10860,7 +10860,7 @@
       "kind": "maker",
       "via": null,
       "retrieved": "2026-10-21",
-      "sha256": "b4d5c54732142a40d0c00fb6275f4d4d8f4aa004b41b5f77d5c322c8fd51c445"
+      "sha256": "a9e112f494779bf5d4d56da82673999085e3dadae20cea55168ad8d2f0480166"
     },
     "family": null,
     "souring": null,
@@ -10873,7 +10873,7 @@
   {
     "id": "gambrinus-bc-pilsner-malt",
     "manufacturer": "Gambrinus",
-    "manufacturerAliases": ["Cargill (Gambrinus)", "Gambrinus Malting"],
+    "manufacturerAliases": ["Cargill (Gambrinus)", "Cargill", "Gambrinus Malting"],
     "codes": [],
     "aliases": ["Gambrinus BC Pilsner Malt", "BC Pilsner Malt"],
     "descriptors": [
@@ -10886,7 +10886,7 @@
       "kind": "maker",
       "via": null,
       "retrieved": "2026-10-21",
-      "sha256": "af65dbb24687b20e06dba455e24aaca316b1a2d0be5c7ee1477301bebf1cf56c"
+      "sha256": "deff100482496d4d8096e91b72e1b9b957e451f77436c07458dec33335ab8142"
     },
     "family": null,
     "souring": null,
@@ -10899,7 +10899,7 @@
   {
     "id": "gambrinus-chit-malt",
     "manufacturer": "Gambrinus",
-    "manufacturerAliases": ["Cargill (Gambrinus)", "Gambrinus Malting"],
+    "manufacturerAliases": ["Cargill (Gambrinus)", "Cargill", "Gambrinus Malting"],
     "codes": [],
     "aliases": ["Gambrinus Chit Malt", "Chit Malt"],
     "descriptors": [],
@@ -10908,7 +10908,7 @@
       "kind": "maker",
       "via": null,
       "retrieved": "2026-10-21",
-      "sha256": "6a5097ac511406d696d8f988e5336ba1beb5e76a15921ad157f97bca0b09986d"
+      "sha256": "d3b11b4198d3af7c1cfb0726da47c5977b1c3b8adc7223c33d0dd998c61c945c"
     },
     "family": null,
     "souring": null,
@@ -10921,7 +10921,7 @@
   {
     "id": "gambrinus-esb-pale-malt",
     "manufacturer": "Gambrinus",
-    "manufacturerAliases": ["Cargill (Gambrinus)", "Gambrinus Malting"],
+    "manufacturerAliases": ["Cargill (Gambrinus)", "Cargill", "Gambrinus Malting"],
     "codes": [],
     "aliases": ["Gambrinus ESB Pale Malt", "ESB Pale Malt"],
     "descriptors": [
@@ -10936,7 +10936,7 @@
       "kind": "maker",
       "via": null,
       "retrieved": "2026-10-21",
-      "sha256": "c7973fd47e23d248fbedb7956646903b2d1b37d4c8e221221a1f26265e20500b"
+      "sha256": "31faa0692451b4a88231a34cb0fd1ef0923bb3fc52b4cbe72aac72d8a23ec7a1"
     },
     "family": null,
     "souring": null,
@@ -10949,7 +10949,7 @@
   {
     "id": "gambrinus-honey-malt",
     "manufacturer": "Gambrinus",
-    "manufacturerAliases": ["Cargill (Gambrinus)", "Gambrinus Malting"],
+    "manufacturerAliases": ["Cargill (Gambrinus)", "Cargill", "Gambrinus Malting"],
     "codes": [],
     "aliases": ["Gambrinus Honey Malt®", "Gambrinus Honey Malt", "Honey Malt"],
     "descriptors": [
@@ -10966,7 +10966,7 @@
       "kind": "maker",
       "via": null,
       "retrieved": "2026-10-21",
-      "sha256": "3df383dcfa37d5c17e4d06ae78be83c2e2b7d0700968a309bc682f21b34cf180"
+      "sha256": "23ae56761c0931ed19f0ce6315050a70526255f2f8417cb390edbb40670a0ea7"
     },
     "family": null,
     "souring": null,
@@ -10979,7 +10979,7 @@
   {
     "id": "gambrinus-honey-malted-oats",
     "manufacturer": "Gambrinus",
-    "manufacturerAliases": ["Cargill (Gambrinus)", "Gambrinus Malting"],
+    "manufacturerAliases": ["Cargill (Gambrinus)", "Cargill", "Gambrinus Malting"],
     "codes": [],
     "aliases": ["Gambrinus Honey Malted Oats", "Honey Malted Oats"],
     "descriptors": [],
@@ -10988,7 +10988,7 @@
       "kind": "maker",
       "via": null,
       "retrieved": "2026-10-21",
-      "sha256": "0db7123b1ebdc9c00cdd6ea483c351eb76b88139b161ad5979a87a67199a75ab"
+      "sha256": "b205daf7fc288ecf2f04d4e314112370a482876f14795898b5db915261ee4944"
     },
     "family": null,
     "souring": null,
@@ -11004,7 +11004,7 @@
   {
     "id": "gambrinus-ipa-malt",
     "manufacturer": "Gambrinus",
-    "manufacturerAliases": ["Cargill (Gambrinus)", "Gambrinus Malting"],
+    "manufacturerAliases": ["Cargill (Gambrinus)", "Cargill", "Gambrinus Malting"],
     "codes": [],
     "aliases": ["Gambrinus IPA Malt", "IPA Malt"],
     "descriptors": [
@@ -11018,7 +11018,7 @@
       "kind": "maker",
       "via": null,
       "retrieved": "2026-10-21",
-      "sha256": "85eaf9e371f2b2949c966eb6dd11d22d88f45a31cbaa6dc6a12040f32d3630f4"
+      "sha256": "b7ec13344cc1a0aa9d7f33d6f0a8135f4ab1222f630375ca9f2d9191212a6c93"
     },
     "family": null,
     "souring": null,
@@ -11031,7 +11031,7 @@
   {
     "id": "gambrinus-mars-malt",
     "manufacturer": "Gambrinus",
-    "manufacturerAliases": ["Cargill (Gambrinus)", "Gambrinus Malting"],
+    "manufacturerAliases": ["Cargill (Gambrinus)", "Cargill", "Gambrinus Malting"],
     "codes": [],
     "aliases": ["Gambrinus Mars Malt®", "Gambrinus Mars Malt", "Mars Malt"],
     "descriptors": [{ "word": "roast", "evidence": "roasty" }],
@@ -11040,7 +11040,7 @@
       "kind": "maker",
       "via": null,
       "retrieved": "2026-10-21",
-      "sha256": "3bc35ccd4fd1155d6d310a63ace7a34827addf5ee467ddf8342d4639f4dc0f4e"
+      "sha256": "96462d456eb96b8b135ebe6d9b1230776cf5f403d5ca06e114467b17ec6f5b1c"
     },
     "family": null,
     "souring": null,
@@ -11053,7 +11053,7 @@
   {
     "id": "gambrinus-munich-dark",
     "manufacturer": "Gambrinus",
-    "manufacturerAliases": ["Cargill (Gambrinus)", "Gambrinus Malting"],
+    "manufacturerAliases": ["Cargill (Gambrinus)", "Cargill", "Gambrinus Malting"],
     "codes": [],
     "aliases": ["Gambrinus Munich Dark", "Munich Dark"],
     "descriptors": [
@@ -11069,7 +11069,7 @@
       "kind": "maker",
       "via": null,
       "retrieved": "2026-10-21",
-      "sha256": "8f2f8d9b669e3a62b1952c8e13e554253a3ce34a762337a93bdce3dbfafc24f5"
+      "sha256": "24de2cc49e8bc51302372816f60b5401e1399bf733ab9b64ffc7e61d1e06f209"
     },
     "family": null,
     "souring": null,
@@ -11082,7 +11082,7 @@
   {
     "id": "gambrinus-munich-light",
     "manufacturer": "Gambrinus",
-    "manufacturerAliases": ["Cargill (Gambrinus)", "Gambrinus Malting"],
+    "manufacturerAliases": ["Cargill (Gambrinus)", "Cargill", "Gambrinus Malting"],
     "codes": [],
     "aliases": ["Gambrinus Munich Light", "Munich Light"],
     "descriptors": [
@@ -11099,7 +11099,7 @@
       "kind": "maker",
       "via": null,
       "retrieved": "2026-10-21",
-      "sha256": "d246939a71f722e29e6bc8655e317308a8ccdbd16cb7d68dfb893162363896b0"
+      "sha256": "aaa55066f1b2ed769504c418d3b22f548f285db1333f1b4bf92e0bd1e8d2f28d"
     },
     "family": null,
     "souring": null,
@@ -11112,7 +11112,7 @@
   {
     "id": "gambrinus-organic-munich-light",
     "manufacturer": "Gambrinus",
-    "manufacturerAliases": ["Cargill (Gambrinus)", "Gambrinus Malting"],
+    "manufacturerAliases": ["Cargill (Gambrinus)", "Cargill", "Gambrinus Malting"],
     "codes": [],
     "aliases": ["Gambrinus Organic Munich Light", "Organic Munich Light"],
     "descriptors": [
@@ -11129,7 +11129,7 @@
       "kind": "maker",
       "via": null,
       "retrieved": "2026-10-21",
-      "sha256": "b0651991fa51fd79b8e340d04bcf07b83f07192f640b334f43df677f84d618c9"
+      "sha256": "c8de97b60ca63c432db07ce783afc5eedbe359847e80bcc98b882bd76c34e676"
     },
     "family": null,
     "souring": null,
@@ -11142,7 +11142,7 @@
   {
     "id": "gambrinus-organic-pale-malt",
     "manufacturer": "Gambrinus",
-    "manufacturerAliases": ["Cargill (Gambrinus)", "Gambrinus Malting"],
+    "manufacturerAliases": ["Cargill (Gambrinus)", "Cargill", "Gambrinus Malting"],
     "codes": [],
     "aliases": ["Gambrinus Organic Pale Malt", "Organic Pale Malt"],
     "descriptors": [
@@ -11158,7 +11158,7 @@
       "kind": "maker",
       "via": null,
       "retrieved": "2026-10-21",
-      "sha256": "68f5e34572d1946b3c262bad4be0171421c0d0182c2011c642183bbe85858a45"
+      "sha256": "3c16462b02ba8a5ee27c4c5bc80a25bab674e7b8623e1e89172a3dbe34a1445a"
     },
     "family": null,
     "souring": null,
@@ -11171,7 +11171,7 @@
   {
     "id": "gambrinus-organic-pilsner-malt",
     "manufacturer": "Gambrinus",
-    "manufacturerAliases": ["Cargill (Gambrinus)", "Gambrinus Malting"],
+    "manufacturerAliases": ["Cargill (Gambrinus)", "Cargill", "Gambrinus Malting"],
     "codes": [],
     "aliases": ["Gambrinus Organic Pilsner Malt", "Organic Pilsner Malt"],
     "descriptors": [
@@ -11184,7 +11184,7 @@
       "kind": "maker",
       "via": null,
       "retrieved": "2026-10-21",
-      "sha256": "f7ccbd557dc6c43e3648319a1c84cc343c9dafda3d4b251cea0f9b6c20fc3bcd"
+      "sha256": "63ea6252ff3042d24f234fbf6b7e05422f34279c78b584559947ed6315e047be"
     },
     "family": null,
     "souring": null,
@@ -11197,7 +11197,7 @@
   {
     "id": "gambrinus-organic-wheat-malt",
     "manufacturer": "Gambrinus",
-    "manufacturerAliases": ["Cargill (Gambrinus)", "Gambrinus Malting"],
+    "manufacturerAliases": ["Cargill (Gambrinus)", "Cargill", "Gambrinus Malting"],
     "codes": [],
     "aliases": ["Gambrinus Organic Wheat Malt", "Organic Wheat Malt"],
     "descriptors": [],
@@ -11206,7 +11206,7 @@
       "kind": "maker",
       "via": null,
       "retrieved": "2026-10-21",
-      "sha256": "aa56b9e50829b0aa8cbcfb95847227ad7b482e037e6599461b75a8fddaca64df"
+      "sha256": "e56bc56e5a4ff876bbe663a3a29a5ea57802f229a5037060da9edc1d203cf246"
     },
     "family": null,
     "souring": null,
@@ -11219,7 +11219,7 @@
   {
     "id": "gambrinus-pale-malt",
     "manufacturer": "Gambrinus",
-    "manufacturerAliases": ["Cargill (Gambrinus)", "Gambrinus Malting"],
+    "manufacturerAliases": ["Cargill (Gambrinus)", "Cargill", "Gambrinus Malting"],
     "codes": [],
     "aliases": ["Gambrinus Pale Malt", "Pale Malt"],
     "descriptors": [
@@ -11235,7 +11235,7 @@
       "kind": "maker",
       "via": null,
       "retrieved": "2026-10-21",
-      "sha256": "781703350048aff2271dfc15f98f65463ef07cd34aae1aecfc24c8865a6eedb1"
+      "sha256": "2010bf363781a0195dd978a71e4a7bb4d976e26b400a6950e1ccb109b84fc8b0"
     },
     "family": null,
     "souring": null,
@@ -11248,7 +11248,7 @@
   {
     "id": "gambrinus-pilsner-malt",
     "manufacturer": "Gambrinus",
-    "manufacturerAliases": ["Cargill (Gambrinus)", "Gambrinus Malting"],
+    "manufacturerAliases": ["Cargill (Gambrinus)", "Cargill", "Gambrinus Malting"],
     "codes": [],
     "aliases": ["Gambrinus Pilsner Malt", "Pilsner Malt"],
     "descriptors": [
@@ -11261,7 +11261,7 @@
       "kind": "maker",
       "via": null,
       "retrieved": "2026-10-21",
-      "sha256": "2fb3029b77bd01b363bbf75bd289b998feef2663356b976e5e199015d244645d"
+      "sha256": "0160b1543b6af5b478095dc3dc9dc4cda78c0bf7634ee807bc45c26da75dd911"
     },
     "family": null,
     "souring": null,
@@ -11274,7 +11274,7 @@
   {
     "id": "gambrinus-rye-malt",
     "manufacturer": "Gambrinus",
-    "manufacturerAliases": ["Cargill (Gambrinus)", "Gambrinus Malting"],
+    "manufacturerAliases": ["Cargill (Gambrinus)", "Cargill", "Gambrinus Malting"],
     "codes": [],
     "aliases": ["Gambrinus Rye Malt", "Rye Malt"],
     "descriptors": [
@@ -11290,7 +11290,7 @@
       "kind": "maker",
       "via": null,
       "retrieved": "2026-10-21",
-      "sha256": "62cb8b3276f163211341f06335345c77e8cbe00e1ae4fef542453ee22a9e823b"
+      "sha256": "ad3f6ea63015cc034873de682a52eb904c720ee3ae90e8af38e7e16ef3c375d5"
     },
     "family": null,
     "souring": null,
@@ -11303,7 +11303,7 @@
   {
     "id": "gambrinus-vienna-malt",
     "manufacturer": "Gambrinus",
-    "manufacturerAliases": ["Cargill (Gambrinus)", "Gambrinus Malting"],
+    "manufacturerAliases": ["Cargill (Gambrinus)", "Cargill", "Gambrinus Malting"],
     "codes": [],
     "aliases": ["Gambrinus Vienna Malt", "Vienna Malt"],
     "descriptors": [
@@ -11320,7 +11320,7 @@
       "kind": "maker",
       "via": null,
       "retrieved": "2026-10-21",
-      "sha256": "877d068811bf112044c035f9f7ca4159250c3c0396a0d3c6e2b413025f83bcec"
+      "sha256": "e6544cd8d8f0ba40608ca01afe57d82c68c1168d48eb3d6025a08e851e92ebe5"
     },
     "family": null,
     "souring": null,

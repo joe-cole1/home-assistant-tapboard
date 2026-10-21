@@ -1,7 +1,7 @@
 {
   "format": "tapboard-flavor-corpus-report-1",
   "modelVersion": "recipe-flavor-4",
-  "catalogVersion": "tapboard-flavor-catalog-4",
+  "catalogVersion": "tapboard-flavor-catalog-5",
   "qualification": "Offline normalization and behavior acceptance; no sensory ground-truth labels or scientific validation.",
   "counts": { "batches": 61, "savedRecipes": 46, "total": 107 },
   "maximumSnapshotBytes": 21840,
@@ -930,7 +930,7 @@
       "caseId": "B001",
       "kind": "batch",
       "snapshotBytes": 13825,
-      "fingerprint": "11ca9b1b79b00870c103d0c9cdf545fffc400a83857f4e7b0d0cfdb4c3168032",
+      "fingerprint": "97f644469f359ec3496926a410ff608a00a7cc30988c3b4cce9806db10bda89b",
       "selectedScalars": {
         "og": {
           "value": 1.064,
@@ -1124,7 +1124,7 @@
       "caseId": "B002",
       "kind": "batch",
       "snapshotBytes": 13075,
-      "fingerprint": "d1551c232868c7d16ed1df4f71d82afde5e150a5148119e87624efd5c291cb15",
+      "fingerprint": "e26d095e55d35f600c8e3d5d3b7b676e341496a93a9029c358cedc407d040f30",
       "selectedScalars": {
         "og": {
           "value": 1.067,
@@ -1333,7 +1333,7 @@
       "caseId": "B003",
       "kind": "batch",
       "snapshotBytes": 15247,
-      "fingerprint": "b996eaf7cb489b798eb2a9e2750bbf30cecee78c6dc09b5c1cef1b36f8b8eb95",
+      "fingerprint": "9266dec4801450ef80dd4f4879cb4575510e7a79c0a13185937b44b05192f2e4",
       "selectedScalars": {
         "og": {
           "value": 1.056,
@@ -1533,7 +1533,7 @@
       "caseId": "B004",
       "kind": "batch",
       "snapshotBytes": 15423,
-      "fingerprint": "a99ce52e9355de4c5b5add310bf9c838b65e0eeb481c1cceacefa273f2c32c7c",
+      "fingerprint": "8d0a5d0b3d06a3f379c6cbf2ffb9d22becfb0903803e00a954083dcd22558694",
       "selectedScalars": {
         "og": {
           "value": 1.088,
@@ -1716,6 +1716,7 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Maltster colour: 300 SRM.",
         "Family roasted from family-roasted-67, not from the maltster.",
+        "Roasted ingredient identity/color conflict retained.",
         "Maltster colour: 400 – 700 EBC / 151.3 – 264.4 Lovibond.",
         "Family chocolate from family-chocolate-66, not from the maltster.",
         "Origin: United States.",
@@ -1734,7 +1735,7 @@
       "caseId": "B005",
       "kind": "batch",
       "snapshotBytes": 17332,
-      "fingerprint": "de936a76a029e06c7ecd169bf7d70e51b8101da17c6a4e7bab96cf33a733432a",
+      "fingerprint": "66e3d055f6abba10b4fdc4753aa03ef78bd2f8ce161e11d954f7196edda0ef6d",
       "selectedScalars": {
         "og": {
           "value": 1.08,
@@ -1917,8 +1918,12 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Classified from Brewfather category and colour (30 °L); product character unresolved.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 1.8 - 2.4 SRM.",
+        "Family pale from family-pale-54, not from the maltster.",
+        "Maltster colour: 30 SRM.",
+        "Product picked by colour: 30.1 °L matches the maltster's stated 30 °L to the whole number.",
+        "Family crystal_light from property-crystal_light, not from the maltster.",
         "Maltster colour: 2.8 SRM.",
         "Family wheat from family-wheat-55, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
@@ -1948,7 +1953,7 @@
       "caseId": "B007",
       "kind": "batch",
       "snapshotBytes": 12486,
-      "fingerprint": "cadd4ef4da545b66f202da53c8404d6f4d411ab5d6b40bca195de822d2e87308",
+      "fingerprint": "7d0bdfd9c65058ce9fceab379a4790cc1fe0eb48cf561a97334f9ae987c1e7e9",
       "selectedScalars": {
         "og": {
           "value": 1.067,
@@ -2153,7 +2158,9 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 1.8 - 2.4 SRM.",
+        "Family pale from family-pale-54, not from the maltster.",
         "The maker's text names no flavour words.",
         "Maltster colour: 2.5 SRM.",
         "Family flaked from family-flaked-58, not from the maltster.",
@@ -2174,7 +2181,7 @@
       "caseId": "B008",
       "kind": "batch",
       "snapshotBytes": 13857,
-      "fingerprint": "482c5bea4fbd6ce00a7165538f96f8f138eef9f2e280ce71b720ee72373760ad",
+      "fingerprint": "6634043632d2a8413da1ee127edab17024e414f44b1f008d03ac0f810e7b9b55",
       "selectedScalars": {
         "og": {
           "value": 1.047,
@@ -2350,7 +2357,9 @@
         "The maker's text names no flavour words.",
         "Maltster colour: 1.5 SRM.",
         "Family carapils from briess-carapils, not from the maltster.",
-        "Classified from Brewfather category and colour (10 °L); product character unresolved.",
+        "Maltster colour: 15 – 35 °EBC; 13 – 17 °SRM.",
+        "Product picked by colour: 12.8 SRM matches the maltster's stated 13–17 SRM to the whole number.",
+        "Family crystal_light from property-crystal_light, not from the maltster.",
         "Maltster colour: 3.5 SRM.",
         "Family vienna from family-vienna-56, not from the maltster.",
         "Origin: Oregon, United States.",
@@ -2370,7 +2379,7 @@
       "caseId": "B009",
       "kind": "batch",
       "snapshotBytes": 14493,
-      "fingerprint": "ae0a5bdeb47ca4a1bde8f58062aae33ab01ec0ea1c6b676f7373612c300a10cd",
+      "fingerprint": "d8bdb625cc0667614f49b0d91e2fd357c5b69ab842f9a1923b773321731f3290",
       "selectedScalars": {
         "og": {
           "value": 1.055,
@@ -2560,7 +2569,7 @@
       "caseId": "B010",
       "kind": "batch",
       "snapshotBytes": 14580,
-      "fingerprint": "7d85f87d4a96a689ce43310090fcd7757cf9db3a7321dabfb4f15ed165fca283",
+      "fingerprint": "5cbd71006e8d6f5b6a4f3497de7b7ee854c8584fa3749eef40b4936fa0803e46",
       "selectedScalars": {
         "og": {
           "value": 1.075,
@@ -2743,8 +2752,12 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Classified from Brewfather category and colour (30 °L); product character unresolved.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 1.8 - 2.4 SRM.",
+        "Family pale from family-pale-54, not from the maltster.",
+        "Maltster colour: 30 SRM.",
+        "Product picked by colour: 30.1 °L matches the maltster's stated 30 °L to the whole number.",
+        "Family crystal_light from property-crystal_light, not from the maltster.",
         "Maltster colour: 2.8 SRM.",
         "Family wheat from family-wheat-55, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
@@ -2770,7 +2783,7 @@
       "caseId": "B011",
       "kind": "batch",
       "snapshotBytes": 16686,
-      "fingerprint": "3dc3c893b507a16d20d6c92b5e8d9e5377db890145a547d039977592bfe27995",
+      "fingerprint": "ba661597a5320df1be59d697cef7b75ecc07071cec2cfecc3a8d1c7389dace85",
       "selectedScalars": {
         "og": {
           "value": 1.095,
@@ -2953,6 +2966,7 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Maltster colour: 300 SRM.",
         "Family roasted from family-roasted-67, not from the maltster.",
+        "Roasted ingredient identity/color conflict retained.",
         "Maltster colour: 400 – 700 EBC / 151.3 – 264.4 Lovibond.",
         "Family chocolate from family-chocolate-66, not from the maltster.",
         "Origin: Oregon, United States.",
@@ -2973,7 +2987,7 @@
       "caseId": "B012",
       "kind": "batch",
       "snapshotBytes": 15983,
-      "fingerprint": "02179c26a9b5ede466c4b810e37f54d03c2efae28df1a87342f90dbda963bb05",
+      "fingerprint": "18b9d7c2d4c37292ca665c6676058df8116cddb0d8fd3eefd82b3e85877cc1b5",
       "selectedScalars": {
         "og": {
           "value": 1.088,
@@ -3156,8 +3170,12 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Classified from Brewfather category and colour (40 °L); product character unresolved.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 1.8 - 2.4 SRM.",
+        "Family pale from family-pale-54, not from the maltster.",
+        "Maltster colour: 40 SRM.",
+        "Product picked by colour: 40 °L matches the maltster's stated 40 °L to the whole number.",
+        "Family crystal_light from property-crystal_light, not from the maltster.",
         "Maltster colour: 2.8 SRM.",
         "Family wheat from family-wheat-55, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
@@ -3185,7 +3203,7 @@
       "caseId": "B013",
       "kind": "batch",
       "snapshotBytes": 15870,
-      "fingerprint": "033f90ec7ffcb05294f30464ef784e10b535e28135119fb01934067ffe535883",
+      "fingerprint": "e83fcdf42ca5db23fa33488e4a1d9ccb7dff20c626dffd853b19a66f2394e7cf",
       "selectedScalars": {
         "og": {
           "value": 1.061,
@@ -3386,7 +3404,7 @@
       "caseId": "B014",
       "kind": "batch",
       "snapshotBytes": 11204,
-      "fingerprint": "bff3bbb1a13957f69dbfecafa89f7169aae97b5651815ee492c8c4b676e359e3",
+      "fingerprint": "738b287af70ba8eacd44c5c6fc37dcda8fc37e9880e05ccbc534144968d63952",
       "selectedScalars": {
         "og": {
           "value": 1.062,
@@ -3582,7 +3600,7 @@
       "caseId": "B015",
       "kind": "batch",
       "snapshotBytes": 13956,
-      "fingerprint": "46f1a0ad4e75feb4e079954212ebe168ba2d8371c15a1f9539a397015af02071",
+      "fingerprint": "27d68b57f042c85889479ff01f8f3a16396a096fe73c9b52467cfaa7390fb951",
       "selectedScalars": {
         "og": {
           "value": 1.053995,
@@ -3804,7 +3822,7 @@
       "caseId": "B016",
       "kind": "batch",
       "snapshotBytes": 13996,
-      "fingerprint": "667e71ae682b79bc7386796307c07704dcc054fc3b75043e209ba7645f893a2c",
+      "fingerprint": "489874f5106f868942e034327eb8320a3d589e68471a04f3f22602c89c0758ba",
       "selectedScalars": {
         "og": {
           "value": 1.042,
@@ -3977,7 +3995,8 @@
       "diagnostics": [
         "Maltster colour: 3.0 – 4.9 EBC / 1.6 – 2.3 L.",
         "Family pilsner from family-pilsner-53, not from the maltster.",
-        "Classified from Brewfather category and colour (4 °L); product character unresolved.",
+        "Maltster colour: 5.5-7.2 EBC; 2.5-3.1 °L.",
+        "Family pale from property-pale, not from the maltster.",
         "Maltster colour: 41 – 60 EBC / 16 – 23 L.",
         "Family crystal_light from property-crystal_light, not from the maltster.",
         "Origin: United Kingdom.",
@@ -3998,7 +4017,7 @@
       "caseId": "B017",
       "kind": "batch",
       "snapshotBytes": 6975,
-      "fingerprint": "4b1e203a324e24b4130df43e80010e9d9dc8a7e4de008380f9864812f8940d40",
+      "fingerprint": "3c28d89a51132a17eebd79a269a17b2068a5253f64854a3772b261b697d88498",
       "selectedScalars": {
         "og": {
           "value": 1.049,
@@ -4169,7 +4188,8 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 1.9 - 2.4° Lovibond, 1.8 - 2.5 SRM, 3.5 - 4.9 EBC.",
+        "Family pale from family-pale-54, not from the maltster.",
         "Origin: Oregon, United States.",
         "Origin: Oregon, United States.",
         "Origin: Oregon, United States.",
@@ -4181,7 +4201,7 @@
       "caseId": "B018",
       "kind": "batch",
       "snapshotBytes": 13123,
-      "fingerprint": "9e59955e78b3b8fd663ab128a9df8dcf54cc4b7cfa794306fc82405385a1d355",
+      "fingerprint": "96dca532ca41198f6d6e140b6e6a40ffdd8cc282b965998cedf958766f7afda7",
       "selectedScalars": {
         "og": {
           "value": 1.065,
@@ -4369,7 +4389,7 @@
       "caseId": "B019",
       "kind": "batch",
       "snapshotBytes": 13240,
-      "fingerprint": "c2c7449b6ae5a5469a2cf6fde35000689d9ace036325ed8346557a44eaed72a0",
+      "fingerprint": "daf392de59face6395addee6f9137ca94c4569749e37680113427659223c75bc",
       "selectedScalars": {
         "og": {
           "value": 1.05,
@@ -4564,7 +4584,7 @@
       "caseId": "B020",
       "kind": "batch",
       "snapshotBytes": 9227,
-      "fingerprint": "204854a4e7938e74cdd23e654c08ddf34688ec9fe4a49ec16bc8eb735f775c42",
+      "fingerprint": "ab1c2be9b6dbdf372afb364e036cd9ff4b5fb954757535ef48978ccd56bdbf48",
       "selectedScalars": {
         "og": {
           "value": 1.05,
@@ -4758,8 +4778,8 @@
         }
       },
       "diagnostics": [
-        "Munich family requires product disambiguation.",
-        "Munich family only; intended product and corrected color cannot be inferred.",
+        "Maltster colour: 10 SRM.",
+        "Family munich from briess-munich, not from the maltster.",
         "Maltster colour: 3.0–4.2 EBC.",
         "Family pilsner from family-pilsner-53, not from the maltster.",
         "Maltster colour: 110 – 130 EBC / 41.9 – 49.5 Lovibond.",
@@ -4775,7 +4795,7 @@
       "caseId": "B021",
       "kind": "batch",
       "snapshotBytes": 16624,
-      "fingerprint": "40f242a6fe68f41e3832e17b573ac433f323dfe3b8d9f7e45e7130d5046a68e8",
+      "fingerprint": "d9a0171bdf746cd42ebe0125adade334cb0b59ad1f9bd6f21bb09018f0fd88ca",
       "selectedScalars": {
         "og": {
           "value": 1.06,
@@ -4955,7 +4975,9 @@
         "The maker's text names no flavour words.",
         "Maltster colour: 1.5 SRM.",
         "Family carapils from briess-carapils, not from the maltster.",
-        "Classified from Brewfather category and colour (120 °L); product character unresolved.",
+        "Maltster colour: 270 – 350 °EBC; 135 – 165 °SRM.",
+        "Product picked by colour: 161.8 SRM matches the maltster's stated 135–165 SRM to the whole number.",
+        "Family crystal_dark from property-crystal_dark, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Origin: United States.",
         "Higher-priority sources name no flavour words: indie-hops.",
@@ -4978,7 +5000,7 @@
       "caseId": "B022",
       "kind": "batch",
       "snapshotBytes": 10297,
-      "fingerprint": "e7b18c03bf08b2180e8f788151c92e49bed154bec8803a0ee037d8d297e8f58a",
+      "fingerprint": "ebbe0c98732004e2e0111d2e73a573da8ae446c7e0b34f9165e7d772ce5e683e",
       "selectedScalars": {
         "og": {
           "value": 1.042,
@@ -5167,7 +5189,7 @@
       "caseId": "B023",
       "kind": "batch",
       "snapshotBytes": 11310,
-      "fingerprint": "0b68647c2bdace809dfa3b0e04032e430928dab615d81353b3adf0639d5bc930",
+      "fingerprint": "3a32c6f10676421486568043dde51d0ce004875f57b7b2edfd48976df2a9c68d",
       "selectedScalars": {
         "og": {
           "value": 1.075,
@@ -5357,7 +5379,7 @@
       "caseId": "B025",
       "kind": "batch",
       "snapshotBytes": 13956,
-      "fingerprint": "63eac5e3e5adee257f805813785fd2a923aa4bf5121f0bfb5c1ce43946e1133b",
+      "fingerprint": "eadf0908c5e128d34a8e6fb1bb617573afeb55cb707b50bab87af32bc1ab595d",
       "selectedScalars": {
         "og": {
           "value": 1.065,
@@ -5528,11 +5550,16 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 1.9 - 2.4° Lovibond, 1.8 - 2.5 SRM, 3.5 - 4.9 EBC.",
+        "Family pale from family-pale-54, not from the maltster.",
         "Maltster colour: 15-32 EBC.",
         "Family munich from family-munich-57, not from the maltster.",
-        "Classified from Brewfather category and colour (40 °L); product character unresolved.",
-        "Classified from Brewfather category and colour (120 °L); product character unresolved.",
+        "Maltster colour: 80 – 110 °EBC; 50 – 60 °SRM.",
+        "Product picked by colour: 53.4 SRM matches the maltster's stated 50–60 SRM to the whole number.",
+        "Family crystal_light from property-crystal_light, not from the maltster.",
+        "Maltster colour: 270 – 350 °EBC; 135 – 165 °SRM.",
+        "Product picked by colour: 161.8 SRM matches the maltster's stated 135–165 SRM to the whole number.",
+        "Family crystal_dark from property-crystal_dark, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Origin: Oregon, United States.",
         "Origin: United Kingdom.",
@@ -5551,7 +5578,7 @@
       "caseId": "B026",
       "kind": "batch",
       "snapshotBytes": 14900,
-      "fingerprint": "f674cbc88e5ce345f056ccd9b87acccb6cd5dbc14279a1c1c80e2300eb31dab0",
+      "fingerprint": "ca70aa3551e4a52dc5894a98ad08e3f9172acad5664847a07aad808a69c371ae",
       "selectedScalars": {
         "og": {
           "value": 1.101,
@@ -5727,7 +5754,9 @@
         "Family pale from family-pale-54, not from the maltster.",
         "Maltster colour: 7.2 - 10.9° Lovibond, 9.0 - 14.0 SRM, 17.7 - 27.6 EBC.",
         "Family munich from category-munich, not from the maltster.",
-        "Classified from Brewfather category and colour (56 °L); product character unresolved.",
+        "Maltster colour: 140 – 160 °EBC; 70 – 80 °SRM.",
+        "Product picked by colour: 75 SRM matches the maltster's stated 70–80 SRM to the whole number.",
+        "Family crystal_light from property-crystal_light, not from the maltster.",
         "Maltster colour: 900 – 1100 °EBC; 450 – 550 °SRM.",
         "Family chocolate from family-chocolate-66, not from the maltster.",
         "Maltster colour: 1200 – 1500 °EBC; 550 – 650 °SRM.",
@@ -5751,7 +5780,7 @@
       "caseId": "B027",
       "kind": "batch",
       "snapshotBytes": 11135,
-      "fingerprint": "07c62a32dd7e6fa6085fe897d37cf6bc1cbf9fdee6661448ff105767fc2f203b",
+      "fingerprint": "0e22f4843546779352a8f42b84a6e8bcc31b9fcb3e76457fa0ea931371f85bb3",
       "selectedScalars": {
         "og": {
           "value": 1.048,
@@ -5941,7 +5970,7 @@
       "caseId": "B028",
       "kind": "batch",
       "snapshotBytes": 16715,
-      "fingerprint": "a988ca46269f57b8aaff04d629f5a0ebeb60092200de5c7475eacfff07695aeb",
+      "fingerprint": "6e22ffa730adcaa0e2c27e375599d35067dcac8c1acffd37af366f2c4cb509b9",
       "selectedScalars": {
         "og": {
           "value": 1.07,
@@ -6124,11 +6153,15 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 1.8 - 2.4 SRM.",
+        "Family pale from family-pale-54, not from the maltster.",
         "Maltster colour: 2.8 SRM.",
         "Family wheat from family-wheat-55, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Classified from Brewfather category and colour (40 °L); product character unresolved.",
+        "Maltster colour: 40 SRM.",
+        "Product picked by colour: 40 °L matches the maltster's stated 40 °L to the whole number.",
+        "Family crystal_light from property-crystal_light, not from the maltster.",
         "Maltster colour: 270 - 350 EBC.",
         "Family crystal_dark from family-crystal_dark-64, not from the maltster.",
         "Maltster colour: 120 SRM.",
@@ -6155,7 +6188,7 @@
       "caseId": "B029",
       "kind": "batch",
       "snapshotBytes": 12625,
-      "fingerprint": "2432a415fd429437561e7b17f1134cf9d5f4b665648838f2e4ea14da74a3bb8b",
+      "fingerprint": "c9fd916bda861c07a2382585ac3f632d53bd26052d00c10ce17b710521cf4762",
       "selectedScalars": {
         "og": {
           "value": 1.045,
@@ -6352,7 +6385,7 @@
       "caseId": "B030",
       "kind": "batch",
       "snapshotBytes": 13885,
-      "fingerprint": "620b9074d6f95826382f0f54436660cac532ec017e744ef1d7d0fc358c78668c",
+      "fingerprint": "1f7fbeb608fa27affc45d5afe8ba827957f1ef4ef637eed6549635c5f6906abb",
       "selectedScalars": {
         "og": {
           "value": 1.054,
@@ -6544,7 +6577,7 @@
       "caseId": "B031",
       "kind": "batch",
       "snapshotBytes": 13467,
-      "fingerprint": "4090a9438f2d0f52fc0cc37d66147a82ba7fc3d83d368d2ba392463164887a19",
+      "fingerprint": "1722f936ac7d6427a0714153aaf3684e8b687c53d14bed43a808189f114fdb42",
       "selectedScalars": {
         "og": {
           "value": 1.075,
@@ -6741,7 +6774,7 @@
       "caseId": "B032",
       "kind": "batch",
       "snapshotBytes": 15290,
-      "fingerprint": "ee45734cd7d513e17ac4a18ddd2563807cc647ad61a741be47c5e03babfb404e",
+      "fingerprint": "6766b32422f2042091f4851b72c110ab1cf4258df8cb6ad6489602eeaf6e80b6",
       "selectedScalars": {
         "og": {
           "value": 1.05,
@@ -6964,7 +6997,7 @@
       "caseId": "B033",
       "kind": "batch",
       "snapshotBytes": 16241,
-      "fingerprint": "2486f06ac191c3a0f152194c6c469b4f3199844e4411a1e08742b328f2e8b6a8",
+      "fingerprint": "68ecd62b4de052913d9aef7a33519f155875e458ba1068a74dca185bcd8bfaa8",
       "selectedScalars": {
         "og": {
           "value": 1.063,
@@ -7156,7 +7189,7 @@
       "caseId": "B035",
       "kind": "batch",
       "snapshotBytes": 14737,
-      "fingerprint": "7f54121d57d3dc584a4672d3f81fdb0b55ceb35b371304626fd1192164fc2b3f",
+      "fingerprint": "d30bbd36fdaa0c3ba22038a66a94fef7d7e451862bec2252f7c10bdb4d6cf88b",
       "selectedScalars": {
         "og": {
           "value": 1.05,
@@ -7327,8 +7360,8 @@
         }
       },
       "diagnostics": [
-        "Munich family requires product disambiguation.",
-        "Munich family only; intended product and corrected color cannot be inferred.",
+        "Maltster colour: 10 SRM.",
+        "Family munich from briess-munich, not from the maltster.",
         "Maltster colour: 3.0–4.2 EBC.",
         "Family pilsner from family-pilsner-53, not from the maltster.",
         "Maltster colour: 40 (no unit stated).",
@@ -7355,7 +7388,7 @@
       "caseId": "B036",
       "kind": "batch",
       "snapshotBytes": 13391,
-      "fingerprint": "79be347a3ec90e910bdd627f2c3524a95b17e81ea572ae62543c856c6c0286bc",
+      "fingerprint": "9206a436639909bfac7f4930dbe59592c3647ab935ae551af10112fbeffc820b",
       "selectedScalars": {
         "og": {
           "value": 1.054,
@@ -7550,7 +7583,7 @@
       "caseId": "B037",
       "kind": "batch",
       "snapshotBytes": 12714,
-      "fingerprint": "b6bf6e1c053314c31c0b4c08fc550f610c02e3d01e8d0b06810559c2e195fb24",
+      "fingerprint": "7242973b5fc6d16a34bb6ae7d51ec36ddc9fd09bcf8e07c23818c787024fea9b",
       "selectedScalars": {
         "og": {
           "value": 1.052,
@@ -7743,7 +7776,7 @@
       "caseId": "B038",
       "kind": "batch",
       "snapshotBytes": 12645,
-      "fingerprint": "b37939212fe92fcf6bb2833c558624a0ea3ab43c212ef309fd8b627cb9b55c47",
+      "fingerprint": "bc94e3cbb53d28025745ded2b59eaf7c61eced3d0b2b829d648a7fe232ea998d",
       "selectedScalars": {
         "og": {
           "value": 1.052,
@@ -7937,7 +7970,7 @@
       "caseId": "B039",
       "kind": "batch",
       "snapshotBytes": 14863,
-      "fingerprint": "e46697bd62315c2d51f9a95b400e8153644ed19c864d5e76dc307f6f494309f0",
+      "fingerprint": "de94e221b3eb68ba964df3077036a62ebbe933addaf651c559b1e8a92a90ddd8",
       "selectedScalars": {
         "og": {
           "value": 1.06,
@@ -8132,7 +8165,7 @@
       "caseId": "B040",
       "kind": "batch",
       "snapshotBytes": 16990,
-      "fingerprint": "0b5955fc5a6de966f9398555fcb98da6ff2c9625f3f0b6963617f20ddf46bd31",
+      "fingerprint": "6cc44fb7b74b713e51398b79a325a112ce2b0b80bb58b329acc3d81130840b3f",
       "selectedScalars": {
         "og": {
           "value": 1.06,
@@ -8312,7 +8345,9 @@
         "The maker's text names no flavour words.",
         "Maltster colour: 1.5 SRM.",
         "Family carapils from briess-carapils, not from the maltster.",
-        "Classified from Brewfather category and colour (120 °L); product character unresolved.",
+        "Maltster colour: 270 – 350 °EBC; 135 – 165 °SRM.",
+        "Product picked by colour: 161.8 SRM matches the maltster's stated 135–165 SRM to the whole number.",
+        "Family crystal_dark from property-crystal_dark, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Origin: United States.",
         "Higher-priority sources name no flavour words: indie-hops.",
@@ -8334,7 +8369,7 @@
       "caseId": "B041",
       "kind": "batch",
       "snapshotBytes": 15987,
-      "fingerprint": "33e747d666e9891257d9e9d085de97729db1a9a3d79e27c53ea8b1737af72ccd",
+      "fingerprint": "939480171d5f7ffe95731214b853b1fac110ea4a70a847ef249177eb74665836",
       "selectedScalars": {
         "og": {
           "value": 1.05,
@@ -8537,7 +8572,7 @@
       "caseId": "B042",
       "kind": "batch",
       "snapshotBytes": 15976,
-      "fingerprint": "0c2140033ce1ce68d6c5f88925eda08fc65ccc0152caa739b5cb197010a607ee",
+      "fingerprint": "7fb3095c4439db4d7be3e3525fc83645a2ecb7320e01a6ff4cbdb18a521aa778",
       "selectedScalars": {
         "og": {
           "value": 1.05,
@@ -8740,7 +8775,7 @@
       "caseId": "B043",
       "kind": "batch",
       "snapshotBytes": 18083,
-      "fingerprint": "a3e802f2ebebe6262334426c6ee5f0c577d4eaece13bb28b83f4a0d5944a0d8b",
+      "fingerprint": "7f38cd8884e76d4918d67bc2eb83e5b4f6efb066a053bb8de02ebe6328445115",
       "selectedScalars": {
         "og": {
           "value": 1.06,
@@ -8933,7 +8968,7 @@
       "caseId": "B044",
       "kind": "batch",
       "snapshotBytes": 14499,
-      "fingerprint": "afdba1f0d3818de89d83e39cb7af8b6c493404277922d57beea2cf5795389d52",
+      "fingerprint": "fa744e7cfaba8c1fc0a8b1cb004293b189141a9d2f169d07b3a63eafc74dc7af",
       "selectedScalars": {
         "og": {
           "value": 1.058,
@@ -9143,7 +9178,7 @@
       "caseId": "B045",
       "kind": "batch",
       "snapshotBytes": 9925,
-      "fingerprint": "1719db1402af99deed9f9d97e526be7e7cf09f8e0ddbca9d4242a84649d2578b",
+      "fingerprint": "968d6a194027ff71617fbf9e14efff444791174237e2f730f30b5963a84e9ddb",
       "selectedScalars": {
         "og": {
           "value": 1.06,
@@ -9334,7 +9369,7 @@
       "caseId": "B046",
       "kind": "batch",
       "snapshotBytes": 14979,
-      "fingerprint": "d195a4fd32166dd5efcabd22b36257ec7b550cb41fc0dc0cb969a232560e1569",
+      "fingerprint": "9305dc278956da0d4d25f6fb5227d0d5bcc76f450985030279a00c0cb41e038b",
       "selectedScalars": {
         "og": {
           "value": 1.07,
@@ -9546,7 +9581,7 @@
       "caseId": "B048",
       "kind": "batch",
       "snapshotBytes": 15741,
-      "fingerprint": "00419f82ef38e1076babe7aae0e8fbd451ab98241d9143886af1cb7589464518",
+      "fingerprint": "2259774ee93ef7c60b4b96244edafa0474ad6d5509af16aadaaf77b971e2113b",
       "selectedScalars": {
         "og": {
           "value": 1.069,
@@ -9748,7 +9783,7 @@
       "caseId": "B049",
       "kind": "batch",
       "snapshotBytes": 21840,
-      "fingerprint": "a93b9c9fca660a3275a14154296d8a2124929d35d14408f46ad41b489b5adfc2",
+      "fingerprint": "9ce3ef800e04071f75076d671dca04f41a089678a6ba6e724e6c2d363601ee4b",
       "selectedScalars": {
         "og": {
           "value": 1.065,
@@ -9930,7 +9965,9 @@
         "Maltster colour: 0 SRM.",
         "Family processing from family-processing-70, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Provider base-grain category supports family only; specific product character unresolved.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 1.8 - 3.0 SRM.",
+        "Family wheat from category-wheat, not from the maltster.",
         "Maltster colour: 2.0 – 5.0 EBC / 1.2 – 2.3 Lovibond.",
         "Family pilsner from property-acidulated, not from the maltster.",
         "Origin: USA.",
@@ -9955,7 +9992,7 @@
       "caseId": "B050",
       "kind": "batch",
       "snapshotBytes": 14183,
-      "fingerprint": "2d7982edd6e4c0ee0b6f9c27428c1cdbe38e7a6f9c02fecae1f9e56aeccbe018",
+      "fingerprint": "9df91e3c1d74da86a6bc31e3b31ccd8c03e289c6a2fcf824bebdc453501d9160",
       "selectedScalars": {
         "og": {
           "value": 1.058,
@@ -10153,7 +10190,7 @@
       "caseId": "B051",
       "kind": "batch",
       "snapshotBytes": 14316,
-      "fingerprint": "5d666d5e04bf40abc3a5c7bbf9d1f57b03f0932b4be813faa019afc88478202f",
+      "fingerprint": "2e170b65b9247b87230c44c8e9be3b8011659897368874a3a123732f3dd6a8fb",
       "selectedScalars": {
         "og": {
           "value": 1.057,
@@ -10351,7 +10388,7 @@
       "caseId": "B052",
       "kind": "batch",
       "snapshotBytes": 6663,
-      "fingerprint": "83b22dda3d4e6efd69c905c4d4997dfd96b21980759fd1704d0d84c3906197ef",
+      "fingerprint": "58189be29f51550a6d6e0355b7b4ae4768c2a1c7c6e17767b29b1889ddf1d7f4",
       "selectedScalars": {
         "og": {
           "value": 1.048,
@@ -10524,7 +10561,8 @@
       "diagnostics": [
         "Maltster colour: 2.8 SRM.",
         "Family wheat from family-wheat-55, not from the maltster.",
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 1.9 - 2.4° Lovibond, 1.8 - 2.5 SRM, 3.5 - 4.9 EBC.",
+        "Family pale from family-pale-54, not from the maltster.",
         "Origin: Germany.",
         "Identity/function only. Addition stage must determine relevance; no finished-beer acidity or absence claim from water treatment."
       ]
@@ -10533,7 +10571,7 @@
       "caseId": "B053",
       "kind": "batch",
       "snapshotBytes": 13135,
-      "fingerprint": "fe943d36839661ffc36cf44cba9c57a72d9e60c239c127ee4152733ba59ffc4f",
+      "fingerprint": "751c1dcb472b1c5fcc658ec84e4741e9c682acc53b67be1a597041209fc2b9f5",
       "selectedScalars": {
         "og": {
           "value": 1.045,
@@ -10716,7 +10754,8 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 1.9 - 2.4° Lovibond, 1.8 - 2.5 SRM, 3.5 - 4.9 EBC.",
+        "Family pale from family-pale-54, not from the maltster.",
         "Maltster colour: 12-18 SRM.",
         "Family crystal_light from property-crystal_light, not from the maltster.",
         "The maker's text names no flavour words.",
@@ -10738,7 +10777,7 @@
       "caseId": "B054",
       "kind": "batch",
       "snapshotBytes": 15659,
-      "fingerprint": "109493ae48c96f2e4e378cb2b13e22f53cbd2856a4fcc41361b3cd2b4e88f857",
+      "fingerprint": "623891fcce2384ee91dc2671acd81519f61b828d9da03d37daa15ea3f3319f54",
       "selectedScalars": {
         "og": {
           "value": 1.065,
@@ -10933,7 +10972,7 @@
       "caseId": "B055",
       "kind": "batch",
       "snapshotBytes": 14957,
-      "fingerprint": "927a3b737f176e5cfc043d237c6a6b4e30dbbdbc342437bfea1a0c61b7afe2fe",
+      "fingerprint": "b984aef84876c93b393681e867edf670ff9a7b36b8f3f4b0c2107aa2e7392d69",
       "selectedScalars": {
         "og": {
           "value": 1.04,
@@ -11107,9 +11146,9 @@
         "The maker's text names no flavour words.",
         "Maltster colour: 3-4 EBC.",
         "Family pilsner from family-pilsner-53, not from the maltster.",
-        "Munich family requires product disambiguation.",
+        "Maltster colour: 10 SRM.",
+        "Family munich from briess-munich, not from the maltster.",
         "Munich identity/color conflict retained; not reclassified as roasted grain.",
-        "Munich family only; intended product and corrected color cannot be inferred.",
         "Maltster colour: 40,0 – 50,0 EBC / 15.5 – 19.3 Lovibond.",
         "Family aromatic from family-aromatic-63, not from the maltster.",
         "Maltster colour: 110 – 130 EBC / 42 – 49 L.",
@@ -11133,7 +11172,7 @@
       "caseId": "B056",
       "kind": "batch",
       "snapshotBytes": 16161,
-      "fingerprint": "56ca8be77ad4cba501a585087f4d80e3e2f3a2fa035846b51a233622fc78ccc4",
+      "fingerprint": "7c716616afc3be1ee34cfcab2307aac354b117b7941ad55cd5e7c3bd1b970876",
       "selectedScalars": {
         "og": {
           "value": 1.055,
@@ -11334,7 +11373,7 @@
       "caseId": "B057",
       "kind": "batch",
       "snapshotBytes": 12726,
-      "fingerprint": "b5fb27b7a7cc1c53f85bc53fbaaf8214ce0f4d1efc354660b5f65139bd1adea8",
+      "fingerprint": "6b2e22acfaa34513d5fffc9016a900a49308b82fba0504951665d985d926c994",
       "selectedScalars": {
         "og": {
           "value": 1.045,
@@ -11529,7 +11568,7 @@
       "caseId": "B058",
       "kind": "batch",
       "snapshotBytes": 14585,
-      "fingerprint": "2318faf483c97af1be523c94c2a4063dca60904a9a2295fb40c62f506d306b23",
+      "fingerprint": "3a14ab8430f353c8a91c5a91e2471f117cf7350400a68423b930fcd2450d472e",
       "selectedScalars": {
         "og": {
           "value": 1.065,
@@ -11740,7 +11779,7 @@
       "caseId": "B059",
       "kind": "batch",
       "snapshotBytes": 12032,
-      "fingerprint": "e383617fee2b7ebee1243dc18b063445c5a0d5cfebca359428b3fbd31b5dd22b",
+      "fingerprint": "5c04dd9eb135d1baeeeff7a19cec0816fb3bbd75f197aef28612d9533e70ca7c",
       "selectedScalars": {
         "og": {
           "value": 1.055,
@@ -11937,7 +11976,7 @@
       "caseId": "B060",
       "kind": "batch",
       "snapshotBytes": 11404,
-      "fingerprint": "5120b44a8403b0b4611062fde9c12421619cfd67406a80fb40a583510eec9318",
+      "fingerprint": "34e92a8181d04c07d1189e90ef39cbfc7d9a80a7083ef92bf9832ff862056a31",
       "selectedScalars": {
         "og": {
           "value": 1.055,
@@ -12130,7 +12169,7 @@
       "caseId": "B061",
       "kind": "batch",
       "snapshotBytes": 14092,
-      "fingerprint": "16af9db5028b067927f65251b351006b37854de24e60b63f4c28a1b0d70cdf5f",
+      "fingerprint": "6341c792b7f3d085ec1afa2ab5e7ebc2170acd7dda80c9395a2a8a14f91221b8",
       "selectedScalars": {
         "og": {
           "value": 1.058,
@@ -12305,7 +12344,9 @@
         "Family pale from family-pale-54, not from the maltster.",
         "Maltster colour: 900 – 1100 °EBC; 450 – 550 °SRM.",
         "Family chocolate from family-chocolate-66, not from the maltster.",
-        "Classified from Brewfather category and colour (111 °L); product character unresolved.",
+        "Maltster colour: 270 – 350 °EBC; 135 – 165 °SRM.",
+        "Product picked by colour: 150 SRM matches the maltster's stated 135–165 SRM to the whole number.",
+        "Family crystal_dark from property-crystal_dark, not from the maltster.",
         "The maker's text names no flavour words.",
         "Maltster colour: 1.5 SRM.",
         "Family carapils from briess-carapils, not from the maltster.",
@@ -12327,7 +12368,7 @@
       "caseId": "B062",
       "kind": "batch",
       "snapshotBytes": 13384,
-      "fingerprint": "6a31619cf552cfaf33f99dbcce17586837aab7f61f2f9fe151282184f22f2e5a",
+      "fingerprint": "1d3b35a0c2c4d902051ed9f5440b2fac4c40e368b7d47c80bc90bfa5b726399e",
       "selectedScalars": {
         "og": {
           "value": 1.055,
@@ -12524,7 +12565,7 @@
       "caseId": "B063",
       "kind": "batch",
       "snapshotBytes": 18562,
-      "fingerprint": "c2464f029607afe384f53a2351aa097bf611f72759e3a8ad7ecd42857e8282bc",
+      "fingerprint": "d6533a85524ac0680718c6a15f340312854c71e463fcb0b3fe05f1f3212aa900",
       "selectedScalars": {
         "og": {
           "value": 1.06,
@@ -12723,7 +12764,7 @@
       "caseId": "B064",
       "kind": "batch",
       "snapshotBytes": 13859,
-      "fingerprint": "5cdc18841326af18abcafc1e47f809cbcc9f44ac45a5452f9502052dcf91645c",
+      "fingerprint": "8fe597704cbb1642400b8fbc0c31a0d1f6c995f8dd226f7463441dcccda538cf",
       "selectedScalars": {
         "og": {
           "value": 1.05,
@@ -12919,7 +12960,7 @@
       "caseId": "B065",
       "kind": "batch",
       "snapshotBytes": 13398,
-      "fingerprint": "ff7041811a7a61b8eacf20b911ae57003ecadb3424126f3dee14cb05e50fc431",
+      "fingerprint": "25ad64fda4dc8afaf584cfffedd72614a359521bdb2bf958d1c3ebb946f85763",
       "selectedScalars": {
         "og": {
           "value": 1.057,
@@ -13113,8 +13154,8 @@
         }
       },
       "diagnostics": [
-        "Munich family requires product disambiguation.",
-        "Munich family only; intended product and corrected color cannot be inferred.",
+        "Maltster colour: 10 SRM.",
+        "Family munich from briess-munich, not from the maltster.",
         "Maltster colour: 3.0–4.2 EBC.",
         "Family pilsner from family-pilsner-53, not from the maltster.",
         "Maltster colour: 110 – 130 EBC / 41.9 – 49.5 Lovibond.",
@@ -13136,7 +13177,7 @@
       "caseId": "R001",
       "kind": "recipe",
       "snapshotBytes": 14079,
-      "fingerprint": "53a554166f6f526fce2fcfe31dc5e23295dad6ecb5c2b1d9ea7dfbfd61a565e4",
+      "fingerprint": "a2f8a19bb492eec1ed4a4fa43bbb6caa6fe306c8616cb1bc06cc5ba08a4e7ce7",
       "selectedScalars": {
         "og": {
           "value": 1.060692463,
@@ -13334,7 +13375,7 @@
       "caseId": "R002",
       "kind": "recipe",
       "snapshotBytes": 14795,
-      "fingerprint": "1263375c0f6a3017fcfef5464763820e94fa8e36d4c03aa35a1c163c4a2dfde0",
+      "fingerprint": "5c6cf34d9589fb89fbbf257840655e6834f095a93a0e19649da94f24d23db04f",
       "selectedScalars": {
         "og": {
           "value": 1.060090564,
@@ -13508,9 +13549,9 @@
         "The maker's text names no flavour words.",
         "Maltster colour: 3-4 EBC.",
         "Family pilsner from family-pilsner-53, not from the maltster.",
-        "Munich family requires product disambiguation.",
+        "Maltster colour: 10 SRM.",
+        "Family munich from briess-munich, not from the maltster.",
         "Munich identity/color conflict retained; not reclassified as roasted grain.",
-        "Munich family only; intended product and corrected color cannot be inferred.",
         "Maltster colour: 40,0 – 50,0 EBC / 15.5 – 19.3 Lovibond.",
         "Family aromatic from family-aromatic-63, not from the maltster.",
         "Maltster colour: 110 – 130 EBC / 42 – 49 L.",
@@ -13534,7 +13575,7 @@
       "caseId": "R003",
       "kind": "recipe",
       "snapshotBytes": 13797,
-      "fingerprint": "38f1df63e47b18d7e74221bf71e0fc69e6f80487fb0f2f51e7976a959ff7fa60",
+      "fingerprint": "f514a23d2a7035fafcf12e7bfc65da2e64e8ca69086bf9efdaf5739735652143",
       "selectedScalars": {
         "og": {
           "value": 1.060867013,
@@ -13705,11 +13746,16 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
+        "Maltster colour: 1.9 - 2.4° Lovibond, 1.8 - 2.5 SRM, 3.5 - 4.9 EBC.",
+        "Family pale from family-pale-54, not from the maltster.",
         "Maltster colour: 15-32 EBC.",
         "Family munich from family-munich-57, not from the maltster.",
-        "Classified from Brewfather category and colour (40 °L); product character unresolved.",
-        "Classified from Brewfather category and colour (120 °L); product character unresolved.",
+        "Maltster colour: 80 – 110 °EBC; 50 – 60 °SRM.",
+        "Product picked by colour: 53.4 SRM matches the maltster's stated 50–60 SRM to the whole number.",
+        "Family crystal_light from property-crystal_light, not from the maltster.",
+        "Maltster colour: 270 – 350 °EBC; 135 – 165 °SRM.",
+        "Product picked by colour: 161.8 SRM matches the maltster's stated 135–165 SRM to the whole number.",
+        "Family crystal_dark from property-crystal_dark, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Origin: Oregon, United States.",
         "Origin: United Kingdom.",
@@ -13728,7 +13774,7 @@
       "caseId": "R004",
       "kind": "recipe",
       "snapshotBytes": 13077,
-      "fingerprint": "b8dfbc22557b7643874220ef1e0ad2dab14ba1a08c1d928ca69a942545f68c6d",
+      "fingerprint": "dfe6c0067df8c0e893487719e2c2290d3795b9240703a1142f7d1fc0f7f2269d",
       "selectedScalars": {
         "og": {
           "value": 1.055209169,
@@ -13905,7 +13951,8 @@
         "Family crystal_light from property-crystal_light, not from the maltster.",
         "Maltster colour: 40 (no unit stated).",
         "Family crystal_light from property-crystal_light, not from the maltster.",
-        "Classified from Brewfather category and colour (120 °L); product character unresolved.",
+        "Maltster colour: 120 (no unit stated).",
+        "Family crystal_dark from property-crystal_dark, not from the maltster.",
         "Origin: Oregon, United States.",
         "Origin: Czech Republic.",
         "The maker's text names no flavour words.",
@@ -13923,7 +13970,7 @@
       "caseId": "R005",
       "kind": "recipe",
       "snapshotBytes": 16468,
-      "fingerprint": "92abdcf2e12769253db47d0cc071cde7026cd75eec694302db911c1111a61f6d",
+      "fingerprint": "a46f5737057f133e4f4461350defb350adae4c18f843a22e726b41e07b004d16",
       "selectedScalars": {
         "og": {
           "value": 1.059121334,
@@ -14103,7 +14150,9 @@
         "The maker's text names no flavour words.",
         "Maltster colour: 1.5 SRM.",
         "Family carapils from briess-carapils, not from the maltster.",
-        "Classified from Brewfather category and colour (120 °L); product character unresolved.",
+        "Maltster colour: 270 – 350 °EBC; 135 – 165 °SRM.",
+        "Product picked by colour: 161.8 SRM matches the maltster's stated 135–165 SRM to the whole number.",
+        "Family crystal_dark from property-crystal_dark, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Origin: United States.",
         "Higher-priority sources name no flavour words: indie-hops.",
@@ -14126,7 +14175,7 @@
       "caseId": "R006",
       "kind": "recipe",
       "snapshotBytes": 16863,
-      "fingerprint": "c6f9c70ba82b4e892a78045f626c98e674e1454f8ce4d6a8036703737e9db187",
+      "fingerprint": "8dea085c284e308037500a4dd915ebd782933ddba1366d93d60df932e4b4d165",
       "selectedScalars": {
         "og": {
           "value": 1.065436959,
@@ -14346,7 +14395,7 @@
       "caseId": "R007",
       "kind": "recipe",
       "snapshotBytes": 14024,
-      "fingerprint": "9e94cd41f79d6db6fa153318b2f7b4b19bceb5c94cb25683e60f0a8db3fa2d2a",
+      "fingerprint": "cf8f3e6a8dea2650714b6963a2bc841b5aa3a023f8817dbe75521087590dd3b7",
       "selectedScalars": {
         "og": {
           "value": 1.058093466,
@@ -14544,7 +14593,7 @@
       "caseId": "R008",
       "kind": "recipe",
       "snapshotBytes": 12533,
-      "fingerprint": "196f0cde4aa11d326f302cc77cb462855581e1da5f0222704c6705996461cd87",
+      "fingerprint": "e2aedc6cf45541497f869e05155898829957a9c8ee237728e015f9cb2cf6113c",
       "selectedScalars": {
         "og": {
           "value": 1.062291094,
@@ -14715,10 +14764,12 @@
         }
       },
       "diagnostics": [
-        "Classified from Brewfather category and colour (2 °L); product character unresolved.",
+        "Maltster colour: 5.0 – 7.0 EBC / 2.3 – 3.1 L.",
+        "Family pilsner from property-pilsner, not from the maltster.",
         "Maltster colour: 110 – 130 EBC / 42 – 49 L.",
         "Family crystal_light from property-crystal_light, not from the maltster.",
-        "Provider base-grain category supports family only; specific product character unresolved.",
+        "Maltster colour: 21 – 35 EBC / 8.4 – 13.7 L.",
+        "Family munich from category-munich, not from the maltster.",
         "Classified from Brewfather category and colour (12 °L); product character unresolved.",
         "Origin: Oregon, United States.",
         "Origin: Oregon, United States.",
@@ -14736,7 +14787,7 @@
       "caseId": "R009",
       "kind": "recipe",
       "snapshotBytes": 15721,
-      "fingerprint": "3584d0802959cacd6ae5bb3620b51c4cdc9222e9dabf69bc2daa7107332872ce",
+      "fingerprint": "b6325e0a3ac9df7d2098808cc5128130da5193a20a374ae48e0245343ec5521b",
       "selectedScalars": {
         "og": {
           "value": 1.05330248,
@@ -14938,7 +14989,7 @@
       "caseId": "R010",
       "kind": "recipe",
       "snapshotBytes": 11561,
-      "fingerprint": "28aa040ac439aafef9d8fbe5938f2e7ae0981612d347adee70a7124f6d2670e9",
+      "fingerprint": "9c6e49641157fc033fc0342c7ea3f8ec2d791a2d5d427cef23b39c0c12e249d7",
       "selectedScalars": {
         "og": {
           "value": 1.071247352,
@@ -15126,7 +15177,7 @@
       "caseId": "R011",
       "kind": "recipe",
       "snapshotBytes": 9530,
-      "fingerprint": "0b836450de394755d5b0b3a787331e63203451f337049efc4c2f59e938362a70",
+      "fingerprint": "49e7b24e5fa6aefa725a70e0337195f3edb87082da4613ca577976a190c294d3",
       "selectedScalars": {
         "og": {
           "value": 1.060969337,
@@ -15317,7 +15368,7 @@
       "caseId": "R012",
       "kind": "recipe",
       "snapshotBytes": 13837,
-      "fingerprint": "10644f77ea18901d73a81c7d18c3439155b81ffe2fbb3657edc0b09161d8e9b4",
+      "fingerprint": "6986105be82cbfef5407c210de9078f18d149052152f6e66873514fa7963e4ec",
       "selectedScalars": {
         "og": {
           "value": 1.042591735,
@@ -15490,7 +15541,8 @@
       "diagnostics": [
         "Maltster colour: 3.0 – 4.9 EBC / 1.6 – 2.3 L.",
         "Family pilsner from family-pilsner-53, not from the maltster.",
-        "Classified from Brewfather category and colour (4 °L); product character unresolved.",
+        "Maltster colour: 5.5-7.2 EBC; 2.5-3.1 °L.",
+        "Family pale from property-pale, not from the maltster.",
         "Maltster colour: 41 – 60 EBC / 16 – 23 L.",
         "Family crystal_light from property-crystal_light, not from the maltster.",
         "Origin: United Kingdom.",
@@ -15511,7 +15563,7 @@
       "caseId": "R013",
       "kind": "recipe",
       "snapshotBytes": 17196,
-      "fingerprint": "c210b7c13f7164056389ebaeedc16b029cd18e3b89d116971a3379ef3e781874",
+      "fingerprint": "38c85ddd742409dfb80ae6feda66adbb24930063de3bf9e0b384fd52d0b7c79e",
       "selectedScalars": {
         "og": {
           "value": 1.092962792,
@@ -15696,6 +15748,7 @@
         "Family chocolate from family-chocolate-66, not from the maltster.",
         "Maltster colour: 300 SRM.",
         "Family roasted from family-roasted-67, not from the maltster.",
+        "Roasted ingredient identity/color conflict retained.",
         "Origin: Oregon, United States.",
         "Origin: Oregon, United States.",
         "Origin: Oregon, United States.",
@@ -15715,7 +15768,7 @@
       "caseId": "R014",
       "kind": "recipe",
       "snapshotBytes": 9779,
-      "fingerprint": "2bdba4135dc759f54c8f68488f4b33770a58cab8c54a0d7ff905aa30636269bd",
+      "fingerprint": "27ef236ce20e2a332268b1af852d3b1cfade25d7f7d94d78d23bd3a55829a7e4",
       "selectedScalars": {
         "og": {
           "value": 1.052396348,
@@ -15907,7 +15960,7 @@
       "caseId": "R015",
       "kind": "recipe",
       "snapshotBytes": 15785,
-      "fingerprint": "3835d2d4097756dc8ee8577ff762015bb440e6718342f8516ae09f2bfbe5300f",
+      "fingerprint": "139a3b419140456a2cb351dcb3478f246d01bc5b9bb9be02c16fa10a6c28b12c",
       "selectedScalars": {
         "og": {
           "value": 1.047094178,
@@ -16107,7 +16160,7 @@
       "caseId": "R016",
       "kind": "recipe",
       "snapshotBytes": 12497,
-      "fingerprint": "1da22718eea427c8d7adafe80e3203386b8ab55ed3f6140caaf4922191e1b991",
+      "fingerprint": "577ba913d339340cd02f37e0928ac2a50db2a9e2961f8aec692f9f402a898ea1",
       "selectedScalars": {
         "og": {
           "value": 1.09817792,
@@ -16283,7 +16336,9 @@
         "Family pale from family-pale-54, not from the maltster.",
         "Maltster colour: 7.2 - 10.9° Lovibond, 9.0 - 14.0 SRM, 17.7 - 27.6 EBC.",
         "Family munich from category-munich, not from the maltster.",
-        "Classified from Brewfather category and colour (56 °L); product character unresolved.",
+        "Maltster colour: 140 – 160 °EBC; 70 – 80 °SRM.",
+        "Product picked by colour: 75 SRM matches the maltster's stated 70–80 SRM to the whole number.",
+        "Family crystal_light from property-crystal_light, not from the maltster.",
         "Maltster colour: 900 – 1100 °EBC; 450 – 550 °SRM.",
         "Family chocolate from family-chocolate-66, not from the maltster.",
         "Maltster colour: 1200 – 1500 °EBC; 550 – 650 °SRM.",
@@ -16304,7 +16359,7 @@
       "caseId": "R017",
       "kind": "recipe",
       "snapshotBytes": 11285,
-      "fingerprint": "b15d69f8449f2ea2a48d440d5139a5675f06cefd74716d8dab6ffb55b301a09d",
+      "fingerprint": "71fc3a3e9b8a1d6410da099d5cc507b4a6bdbfe11b86b8153d415f8fa5b115bf",
       "selectedScalars": {
         "og": {
           "value": 1.044853498,
@@ -16494,7 +16549,7 @@
       "caseId": "R018",
       "kind": "recipe",
       "snapshotBytes": 15425,
-      "fingerprint": "d7cb6cdbc9e810dc928aba7a7f2bb894fa00593aa0d71896de0466e8c0901865",
+      "fingerprint": "ce246d313fd84bbde996a8815d5460a3bf9398cf4f29b525d240137a4dac380d",
       "selectedScalars": {
         "og": {
           "value": 1.082077331,
@@ -16696,7 +16751,7 @@
       "caseId": "R019",
       "kind": "recipe",
       "snapshotBytes": 11650,
-      "fingerprint": "f7065a953393aee16cb4739ff001e9b2f473f9a6fb4399d3a6202853e8fec0cf",
+      "fingerprint": "ce9c01f21b0ea5b598fe33edf425c8e8c5083d86653f0ccf61456c12ce600980",
       "selectedScalars": {
         "og": {
           "value": 1.072829765,
@@ -16883,7 +16938,7 @@
       "caseId": "R020",
       "kind": "recipe",
       "snapshotBytes": 12087,
-      "fingerprint": "0faaea29b8dc8de4b707e7d2ca44c9738d1359e2eaff9fcad1aef4637e9f5ff3",
+      "fingerprint": "ca5a9f9a14160f132386f48a6100264ce71a8ce1f312b8b9bfb6329f4eef4c08",
       "selectedScalars": {
         "og": {
           "value": 1.055573063,
@@ -17080,7 +17135,7 @@
       "caseId": "R021",
       "kind": "recipe",
       "snapshotBytes": 8257,
-      "fingerprint": "957cf7e64b16cf96af5cc7b8e148a7617e55ff9a6701fb222caddc6a6e63cf2f",
+      "fingerprint": "a5ca8ea6f4880b521b608ca666034077aee01b37b85f5b0b30fd125e6d8c3e6c",
       "selectedScalars": {
         "og": {
           "value": 1.07229709,
@@ -17270,7 +17325,7 @@
       "caseId": "R022",
       "kind": "recipe",
       "snapshotBytes": 13308,
-      "fingerprint": "5aa0ec114194a1168ed1ae7d5d9d41791711e19b7ba9e2432930f35332578e2f",
+      "fingerprint": "f59867a8c7e391f0e5572ea346a5d17824c85519a75904a72c9203224fe4d242",
       "selectedScalars": {
         "og": {
           "value": 1.080601175,
@@ -17467,7 +17522,7 @@
       "caseId": "R023",
       "kind": "recipe",
       "snapshotBytes": 16535,
-      "fingerprint": "275437cf16294dd3042ea51b90cb67d30bb7db5020212997208ee7f565acd4e0",
+      "fingerprint": "298122e011b25816059aeebb3425576741790a17c32906105f891588b906ee43",
       "selectedScalars": {
         "og": {
           "value": 1.053973694,
@@ -17669,7 +17724,7 @@
       "caseId": "R024",
       "kind": "recipe",
       "snapshotBytes": 12717,
-      "fingerprint": "e69e87a0cf816f46244410165adf49f49f99e04e88de720c9153e0dcbfaacc40",
+      "fingerprint": "972368fa91da3db06f8a1d37c76fec81a22d69774bdb080315ea775321790aba",
       "selectedScalars": {
         "og": {
           "value": 1.057187324,
@@ -17860,7 +17915,7 @@
       "caseId": "R025",
       "kind": "recipe",
       "snapshotBytes": 14075,
-      "fingerprint": "1121b4d0ba686d25c76c05c4b047a225ca1d20b485b6ea5728651311d08adcc8",
+      "fingerprint": "3af02b1e8d95aa7f213977e85375a6f155287c1a0b5a4e109fcea869fab3013c",
       "selectedScalars": {
         "og": {
           "value": 1.077406312,
@@ -18054,7 +18109,7 @@
       "caseId": "R026",
       "kind": "recipe",
       "snapshotBytes": 15404,
-      "fingerprint": "18113b1ae1324dc2e9ae79c3335e8ba42ba4bfdc1bdbf1e6bc16f80c8bdbcc01",
+      "fingerprint": "36333125830e8e69cc2e7ac13e31544d9a1a9359f9dab406c3c187791f1ce736",
       "selectedScalars": {
         "og": {
           "value": 1.069323708,
@@ -18246,7 +18301,7 @@
       "caseId": "R027",
       "kind": "recipe",
       "snapshotBytes": 13936,
-      "fingerprint": "9848addce23a765ebe06895f5ee238a6e0416ee42486b055ad3759d28e638760",
+      "fingerprint": "4e8b18935aaaa9a1f6b19ac60f0cb6676e1741b859299b98c94ff856108c915e",
       "selectedScalars": {
         "og": {
           "value": 1.057570129,
@@ -18421,7 +18476,9 @@
         "Family pale from family-pale-54, not from the maltster.",
         "Maltster colour: 900 – 1100 °EBC; 450 – 550 °SRM.",
         "Family chocolate from family-chocolate-66, not from the maltster.",
-        "Classified from Brewfather category and colour (111 °L); product character unresolved.",
+        "Maltster colour: 270 – 350 °EBC; 135 – 165 °SRM.",
+        "Product picked by colour: 150 SRM matches the maltster's stated 135–165 SRM to the whole number.",
+        "Family crystal_dark from property-crystal_dark, not from the maltster.",
         "The maker's text names no flavour words.",
         "Maltster colour: 1.5 SRM.",
         "Family carapils from briess-carapils, not from the maltster.",
@@ -18443,7 +18500,7 @@
       "caseId": "R028",
       "kind": "recipe",
       "snapshotBytes": 13224,
-      "fingerprint": "ae04d31d62a054c7030644223b4cf1fa0661b63f16200ac9101d69ca7435f7de",
+      "fingerprint": "3eed8ee50e03072d571c2f933ce8e699eedf6d994304044602913582084f4fec",
       "selectedScalars": {
         "og": {
           "value": 1.056577885,
@@ -18637,8 +18694,8 @@
         }
       },
       "diagnostics": [
-        "Munich family requires product disambiguation.",
-        "Munich family only; intended product and corrected color cannot be inferred.",
+        "Maltster colour: 10 SRM.",
+        "Family munich from briess-munich, not from the maltster.",
         "Maltster colour: 3.0–4.2 EBC.",
         "Family pilsner from family-pilsner-53, not from the maltster.",
         "Maltster colour: 110 – 130 EBC / 41.9 – 49.5 Lovibond.",
@@ -18660,7 +18717,7 @@
       "caseId": "R029",
       "kind": "recipe",
       "snapshotBytes": 12715,
-      "fingerprint": "61a45e87ec70019125429ed402270b969489bf47b5a63335b4d89dda71a76c43",
+      "fingerprint": "36d868ac5904c2dbf6c72160bef35f71a66ff92c269ad2cd0db13adfc32da9a1",
       "selectedScalars": {
         "og": {
           "value": 1.043941205,
@@ -18854,7 +18911,7 @@
       "caseId": "R030",
       "kind": "recipe",
       "snapshotBytes": 13737,
-      "fingerprint": "8822ef979bbff512d08ccf574a41c6c965183ae81e5998e642cd44c19b64e9d5",
+      "fingerprint": "7818c34669f9430f6644dceafc25498729a48cf7bd516bb453b848a6e872c9b3",
       "selectedScalars": {
         "og": {
           "value": 1.058544888,
@@ -19050,7 +19107,7 @@
       "caseId": "R031",
       "kind": "recipe",
       "snapshotBytes": 16085,
-      "fingerprint": "78b09daebff878dd55316974a060075ef0f30a26bfdf4801cbf75acb2b9251ab",
+      "fingerprint": "15e2c267728b1c7a90e6299dac1d1e13f733be3d134b8a3f1fadae9d3cf96e9d",
       "selectedScalars": {
         "og": {
           "value": 1.064532861,
@@ -19242,7 +19299,7 @@
       "caseId": "R032",
       "kind": "recipe",
       "snapshotBytes": 13147,
-      "fingerprint": "dec4844728c8a53124db9035639e7eaf0965567d3ad2575196546ad98292e08f",
+      "fingerprint": "0bc5202880b2982e01a9e36efdefb372f62df842744013400c151878cda5f606",
       "selectedScalars": {
         "og": {
           "value": 1.050370456,
@@ -19439,7 +19496,7 @@
       "caseId": "R033",
       "kind": "recipe",
       "snapshotBytes": 14402,
-      "fingerprint": "43c05f85527f43581bc646ccb8cdf9897c29de53f019f73719934b88c1565ef9",
+      "fingerprint": "b27355586e1825528d6141012a7fe98a053bdf91dcf40c03586471b85b974802",
       "selectedScalars": {
         "og": {
           "value": 1.065950874,
@@ -19651,7 +19708,7 @@
       "caseId": "R034",
       "kind": "recipe",
       "snapshotBytes": 11167,
-      "fingerprint": "9f8f769d88be1407d0c15223033c2546c9ad0849c17fb72bc29570dca67d2958",
+      "fingerprint": "19f6274affabbab2f2991d221c2e48dde266cdf8d4c72e94b6cb8158e70f1948",
       "selectedScalars": {
         "og": {
           "value": 1.054769783,
@@ -19848,7 +19905,7 @@
       "caseId": "R035",
       "kind": "recipe",
       "snapshotBytes": 10515,
-      "fingerprint": "e2185f3fd22f69cce530c5d1e2531a5036b77c88435a8970742d60ed49335305",
+      "fingerprint": "f80f52f4cd83626015d5ff3948dbfd2003ddbe136ee62eda8e6252d8b5baf883",
       "selectedScalars": {
         "og": {
           "value": 1.053530322,
@@ -20042,8 +20099,8 @@
         }
       },
       "diagnostics": [
-        "Munich family requires product disambiguation.",
-        "Munich family only; intended product and corrected color cannot be inferred.",
+        "Maltster colour: 10 SRM.",
+        "Family munich from briess-munich, not from the maltster.",
         "Maltster colour: 3.0–4.2 EBC.",
         "Family pilsner from family-pilsner-53, not from the maltster.",
         "Maltster colour: 110 – 130 EBC / 41.9 – 49.5 Lovibond.",
@@ -20061,7 +20118,7 @@
       "caseId": "R036",
       "kind": "recipe",
       "snapshotBytes": 14103,
-      "fingerprint": "72a1c2e3d2ca230a18962c360eafc7da2227cd34afb8ef76c61a8883dcf2039f",
+      "fingerprint": "3c214b54e033005ef53153a2fa033cdfa3d0f299475fdd57310fe045a41b80a9",
       "selectedScalars": {
         "og": {
           "value": 1.060110996,
@@ -20256,7 +20313,7 @@
       "caseId": "R037",
       "kind": "recipe",
       "snapshotBytes": 13774,
-      "fingerprint": "df2d737cf4bb29a5c9dad03166b109250231e6d320103a0e0bb146bed96dfe97",
+      "fingerprint": "076197214b88c89c78e0c1c6c05659f1f9c2c165912fbb72985c92c67a6ba65f",
       "selectedScalars": {
         "og": {
           "value": 1.054410878,
@@ -20478,7 +20535,7 @@
       "caseId": "R038",
       "kind": "recipe",
       "snapshotBytes": 21423,
-      "fingerprint": "93ef2a6463f9c751e37f7987d1dcefef34e083e0744d48dc61a2ae965d3ae8c7",
+      "fingerprint": "878fb81a28fbeb4f7ff26fe3b2a09958c01091edab35355f530ffa6aadf42577",
       "selectedScalars": {
         "og": {
           "value": 1.08255624,
@@ -20660,7 +20717,9 @@
         "Maltster colour: 0 SRM.",
         "Family processing from family-processing-70, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Provider base-grain category supports family only; specific product character unresolved.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 1.8 - 3.0 SRM.",
+        "Family wheat from category-wheat, not from the maltster.",
         "Maltster colour: 2.0 – 5.0 EBC / 1.2 – 2.3 Lovibond.",
         "Family pilsner from property-acidulated, not from the maltster.",
         "Origin: USA.",
@@ -20685,7 +20744,7 @@
       "caseId": "R039",
       "kind": "recipe",
       "snapshotBytes": 17737,
-      "fingerprint": "f83f2bc0a0d976a43c4ae0e22cff0f2fbad96eabfcd2211d4cae0a4b5f4eae3e",
+      "fingerprint": "883af0a41c323a05ee49125f572cb3c52244fb8c9a552aeeb00cf14d0b0a7e6d",
       "selectedScalars": {
         "og": {
           "value": 1.063539461,
@@ -20883,7 +20942,7 @@
       "caseId": "R040",
       "kind": "recipe",
       "snapshotBytes": 11649,
-      "fingerprint": "f8aaa62cf0d4e0d111baaf6ee893c8255ddfe19bd18deb3dd0cddcf33ffb973f",
+      "fingerprint": "94db268f395306795b7f2075d5d5783a938e58a9ded5f7dbeeb93fd5b1d302e9",
       "selectedScalars": {
         "og": {
           "value": 1.06337995,
@@ -21071,7 +21130,7 @@
       "caseId": "R041",
       "kind": "recipe",
       "snapshotBytes": 15982,
-      "fingerprint": "85ba9d80649ff0c3fbbe4977f5f22bb46166edd017eae40c73ac99070ffa017d",
+      "fingerprint": "7395a0bec150337b07ce010cee3880c34015c1210f3b52729be7af8dbb316ee8",
       "selectedScalars": {
         "og": {
           "value": 1.074537189,
@@ -21254,8 +21313,12 @@
         }
       },
       "diagnostics": [
-        "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Classified from Brewfather category and colour (40 °L); product character unresolved.",
+        "The maker's text names no flavour words.",
+        "Maltster colour: 1.8 - 2.4 SRM.",
+        "Family pale from family-pale-54, not from the maltster.",
+        "Maltster colour: 40 SRM.",
+        "Product picked by colour: 40 °L matches the maltster's stated 40 °L to the whole number.",
+        "Family crystal_light from property-crystal_light, not from the maltster.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Maltster colour: 2.8 SRM.",
         "Family wheat from family-wheat-55, not from the maltster.",
@@ -21284,7 +21347,7 @@
       "caseId": "R042",
       "kind": "recipe",
       "snapshotBytes": 10309,
-      "fingerprint": "ab9c60c4aaad3183cd027cb22cb9924650dc995ad1300b502dca602f40466620",
+      "fingerprint": "f4a89382d15c991d8cf794a148b732c1f6c3fdb2cdf13da4243abf235c5f7d7a",
       "selectedScalars": {
         "og": {
           "value": 1.033463853,
@@ -21461,7 +21524,8 @@
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
-        "Descriptors are expectations, not guaranteed batch flavor.",
+        "Maltster colour: 1300 – 1500 EBC / 490.6 – 566.0 Lovibond.",
+        "Family roasted from weyermann-carafa-iii, not from the maltster.",
         "Maltster colour: 270 - 350 EBC.",
         "Family crystal_dark from family-crystal_dark-64, not from the maltster.",
         "Origin: Germany.",
@@ -21474,7 +21538,7 @@
       "caseId": "R043",
       "kind": "recipe",
       "snapshotBytes": 14850,
-      "fingerprint": "c59e456cceb716f377ead0b0611f840255b2f8fb52638a74ee3adc7b5b4fe9ad",
+      "fingerprint": "2b2f2592c708e750f82127ed11d535539a5d09ec787b3cf5a1c2b5f8b861385f",
       "selectedScalars": {
         "og": {
           "value": 1.0971195,
@@ -21692,7 +21756,7 @@
       "caseId": "R044",
       "kind": "recipe",
       "snapshotBytes": 13228,
-      "fingerprint": "f0fdb44f2d513adf9fe70c3673db829496c441d31c70d409b54848c9cf254d83",
+      "fingerprint": "89d5af6df90d8ab8c7f70bf957d10506891e97631d2331cdd2371f780ff3e520",
       "selectedScalars": {
         "og": {
           "value": 1.050099892,
@@ -21887,7 +21951,7 @@
       "caseId": "R045",
       "kind": "recipe",
       "snapshotBytes": 12485,
-      "fingerprint": "a934c169c2a64ad5e45718d9acb40f1f5cd0a884aa680d533cafa079b915a061",
+      "fingerprint": "7c0944e2f22b49dbb91bdc26889927ac8b00ae056b00188eb95bebf443c7c959",
       "selectedScalars": {
         "og": {
           "value": 1.047423604,
@@ -22082,7 +22146,7 @@
       "caseId": "R046",
       "kind": "recipe",
       "snapshotBytes": 14136,
-      "fingerprint": "b0bc9a21141e751d33963129d6a292e45b6974afbb7334b314daa232b434be24",
+      "fingerprint": "d936e9ebc75ec9edc5d0592548a5689f8af5033f0462111460d899d8f7c17097",
       "selectedScalars": {
         "og": {
           "value": 1.071195965,
@@ -22265,8 +22329,10 @@
         }
       },
       "diagnostics": [
-        "Classified from Brewfather category and colour (2 °L); product character unresolved.",
-        "Classified from Brewfather category and colour (2 °L); product character unresolved.",
+        "Maltster colour: 2.8-3.9 EBC; 1.5-1.9 °L.",
+        "Family pilsner from property-pilsner, not from the maltster.",
+        "Maltster colour: 2.1–2.8 °Lovibond; 4.4–6.6 °EBC.",
+        "Family pilsner from property-pilsner, not from the maltster.",
         "Classified from Brewfather category and colour (2 °L); product character unresolved.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",
         "Reviewed generic composition family only; no manufacturer/product sensory specifications inferred.",

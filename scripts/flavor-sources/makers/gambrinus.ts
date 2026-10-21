@@ -64,7 +64,8 @@ export const maker: MakerSource = {
           id: `gambrinus-${slug(page.title.replace(/^Gambrinus\s+/i, ""))}`,
           role: "fermentables",
           manufacturer: "Gambrinus",
-          manufacturerAliases: ["Cargill (Gambrinus)", "Gambrinus Malting"],
+          // Cargill owns Gambrinus; the operator's plain "Cargill" rows are Gambrinus bags.
+          manufacturerAliases: ["Cargill (Gambrinus)", "Cargill", "Gambrinus Malting"],
           codes: [],
           // No generic-suffix aliases: "Honey" would hide the flavour word in its own text.
           aliases: titleAliases(page.title, ["Gambrinus"]),

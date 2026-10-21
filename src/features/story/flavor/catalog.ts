@@ -1,8 +1,8 @@
 import type { BrewingIngredient, BrewingIngredientRole } from "../../beverages/brewing-types.ts";
 import type { FermentableFamily, IngredientFact, IngredientResolution } from "./catalog-types.ts";
-import { INGREDIENT_CLASSES, INGREDIENT_FACTS } from "./catalog-data.ts";
+import { BREWFATHER_COLOUR_SERIES, INGREDIENT_CLASSES, INGREDIENT_FACTS } from "./catalog-data.ts";
 
-export const CATALOG_VERSION = "tapboard-flavor-catalog-4";
+export const CATALOG_VERSION = "tapboard-flavor-catalog-5";
 
 /** Bounded exact identity normalization, never substring matching. Accents fold away so
  * "Mittelfruh" and "Mittelfrüh" are one name. */
@@ -248,6 +248,38 @@ const MALTSTER_PRODUCTS = INGREDIENT_FACTS.filter(
 );
 const CLASSIFYING_FACTS = INGREDIENT_FACTS.filter((fact) => !MALTSTER_PRODUCTS.includes(fact));
 
+/** The product of a Brewfather colour series whose stated range holds the row's colour. */
+function seriesProduct(
+  item: BrewingIngredient,
+  name: string,
+  supplier: string,
+): { product: IngredientFact; note: string } | null {
+  const entry = Object.entries(BREWFATHER_COLOUR_SERIES).find(
+    ([seriesName]) => identity(seriesName) === name,
+  );
+  if (!entry) return null;
+  const { unit, ranges } = entry[1];
+  const colour = unit === "srm" ? item.color : lovibondOf(item);
+  if (colour === null || !Number.isFinite(colour)) return null;
+  const rounded = Math.round(colour);
+  const matches = MALTSTER_PRODUCTS.filter((fact) => {
+    const range = ranges[fact.id];
+    return (
+      range !== undefined &&
+      manufacturerMatches(fact, supplier) &&
+      range[0] <= rounded &&
+      rounded <= range[1]
+    );
+  });
+  if (matches.length !== 1) return null;
+  const [min, max] = ranges[matches[0]!.id]!;
+  const symbol = unit === "srm" ? "SRM" : "°L";
+  return {
+    product: matches[0]!,
+    note: `Product picked by colour: ${Number(colour.toFixed(1))} ${symbol} matches the maltster's stated ${min === max ? min : `${min}–${max}`} ${symbol} to the whole number.`,
+  };
+}
+
 export function resolveIngredient(
   role: BrewingIngredientRole,
   item: BrewingIngredient,
@@ -255,13 +287,21 @@ export function resolveIngredient(
   if (role !== "fermentables") return resolveFrom(role, item, CLASSIFYING_FACTS);
   const name = identity(item.name);
   const supplier = identity(item.supplier);
+  const classification = resolveFrom(role, item, CLASSIFYING_FACTS);
+  if (!name || !supplier) return classification;
   const named = MALTSTER_PRODUCTS.filter(
     (fact) =>
       manufacturerMatches(fact, supplier) && fact.aliases.some((alias) => identity(alias) === name),
   );
-  const classification = resolveFrom(role, item, CLASSIFYING_FACTS);
-  if (named.length !== 1 || !name || !supplier) return classification;
-  const product = named[0]!;
+  // An exact name wins; a colour series applies only when no product has the row's name.
+  const match =
+    named.length === 1
+      ? { product: named[0]!, note: null }
+      : named.length === 0
+        ? seriesProduct(item, name, supplier)
+        : null;
+  if (!match) return classification;
+  const { product, note } = match;
   return {
     ...classification,
     id: product.id,
@@ -270,9 +310,14 @@ export function resolveIngredient(
     sourceUrls: product.sourceUrls,
     diagnostics: [
       ...product.limitations,
-      classification.level === "unresolved"
-        ? `Family unknown: ${classification.diagnostics[0] ?? "no classification rule applies."}`
-        : `Family ${classification.family} from ${classification.id}, not from the maltster.`,
+      ...(note ? [note] : []),
+      ...(classification.level === "unresolved"
+        ? [`Family unknown: ${classification.diagnostics[0] ?? "no classification rule applies."}`]
+        : [
+            `Family ${classification.family} from ${classification.id}, not from the maltster.`,
+            // A data-entry error stays visible even when the product is known.
+            ...classification.diagnostics.filter((value) => value.includes("conflict")),
+          ]),
     ],
   };
 }
