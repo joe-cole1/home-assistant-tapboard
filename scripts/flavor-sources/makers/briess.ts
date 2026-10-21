@@ -59,7 +59,7 @@ const INSTRUCTION =
   /\b(?:can|may) (?:also )?be (?:used|added|incorporated)\b|\bis (?:often|frequently) used\b|^use\b|\byou can (?:use|add)\b/i;
 const PROCESS = /\bdrum[- ]roast(?:ed|ing)\b|\broasted(?= process\b)/gi;
 const COLOR_NAMES =
-  /\b(?:(?:gold(?:en)?|amber|orange|red|brown|copper|straw|mahogany|yellow)(?:\/[a-z]+)?,? (?:and )?)+(?=hues?\b|tones?\b|colou?rs?\b)/gi;
+  /\b(?:(?:gold(?:en)?|amber|orange|red|brown|copper|straw|mahogany|yellow)(?:\/[a-z]+)?,? (?:and )?)+(?:hues?|tones?|colou?rs?)\b/gi;
 function flavorSentences(paragraphs: readonly string[]): string[] {
   return paragraphs
     .map((paragraph) =>

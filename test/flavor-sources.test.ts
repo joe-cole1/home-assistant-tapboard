@@ -176,6 +176,15 @@ void test("negated, conditional and pairing mentions are reported, never kept", 
     "quince",
     "currant",
   ]);
+  // Maltster text: the wood a malt is smoked over and "grains" as kernels are not flavours.
+  assert.deepEqual(words("Smoked over beech wood for a smoky aroma.", "fermentables"), ["smoky"]);
+  assert.deepEqual(
+    words(
+      "The sweet malty flavor of other malted grains; pastry and raisiny notes.",
+      "fermentables",
+    ),
+    ["malty", "pastry", "raisin"],
+  );
   // Dried and dark fruit are yeast esters too, unlike caramel or bread.
   assert.deepEqual(words("Caramel, plum and dark fruit esters.", "yeasts"), ["plum", "dark fruit"]);
 });
@@ -305,6 +314,12 @@ void test("robots.txt rules for every agent decide what the fetcher may read", (
   assert.equal(robotsAllows(fermentis, "/sheet.pdf"), false);
   assert.equal(robotsAllows(fermentis, "/sheet.pdf.html"), true);
   assert.equal(parseRobots(fermentis).crawlDelaySeconds, 10);
+  // A delay above every group applies to all agents.
+  assert.equal(
+    parseRobots("Crawl-delay: 10\nUser-agent: Googlebot\nDisallow: /x").crawlDelaySeconds,
+    10,
+  );
+  assert.equal(robotsAllows("Crawl-delay: 10\nUser-agent: Googlebot\nDisallow: /x", "/x"), true);
 });
 
 void test("a built entry carries only extracted words and says when the maker names none", () => {

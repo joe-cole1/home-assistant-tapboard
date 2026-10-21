@@ -50,7 +50,9 @@ export interface RobotsPolicy {
   readonly crawlDelaySeconds: number | null;
 }
 export function parseRobots(robots: string): RobotsPolicy {
-  let applies = false;
+  // A Crawl-delay above the first User-agent line ("Crawl-delay: 10" alone at the top) is for
+  // every agent.
+  let applies = true;
   let inGroupHeader = false;
   let crawlDelaySeconds: number | null = null;
   const rules: { allow: boolean; pattern: string }[] = [];

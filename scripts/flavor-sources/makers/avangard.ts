@@ -106,7 +106,8 @@ export const maker: MakerSource = {
         manufacturer: "Avangard",
         manufacturerAliases: ["Avangard Malz", "Avangard-Malz", "Avangard Malz AG"],
         codes: [],
-        aliases: titleAliases(row.name),
+        // The caramel sheet calls them "Dark caramel" and "light caramel" as well.
+        aliases: [...titleAliases(row.name), ...(colour ? [row.name.replace(/ malt$/i, "")] : [])],
         flavorText: [...sentences(row.use), ...sheetText].join("\n"),
         source: makerSource(sheet ?? page),
         limitations: row.colour ? [`Maltster colour: ${row.colour} EBC.`] : [],

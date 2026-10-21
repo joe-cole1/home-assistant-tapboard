@@ -1,4 +1,3 @@
-import { setTimeout as delay } from "node:timers/promises";
 import type { ParsedProduct } from "../build.ts";
 import { fetchSource } from "../fetch.ts";
 import { inDom, makerSource, slug, titleAliases, type MakerSource } from "../maker.ts";
@@ -73,11 +72,7 @@ export const maker: MakerSource = {
     const gaps: { url: string; reason: string }[] = [];
     for (const url of urls) {
       try {
-        const started = Date.now();
         const source = await fetchSource(url);
-        // robots.txt asks for "Crawl-delay: 10" above its only group, where fetchSource does not
-        // read it; a page that came over the network (not from the cache) is followed by the rest.
-        if (Date.now() - started > 500) await delay(8000);
         const page = await inDom(source.body, readPage);
         if (page.name === "") {
           gaps.push({ url, reason: "no product name in the page" });

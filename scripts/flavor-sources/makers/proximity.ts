@@ -12,8 +12,9 @@ interface Page {
 /** Proximity product pages (WooCommerce, `/product/<slug>/`): inside `.summary.entry-summary`,
  * the `h2.product_title` is followed by sections whose headings are bold paragraphs ("TYPICAL
  * ANALYSIS", "BEST SUITED FOR", "FLAVOR PROFILE", "STORAGE/SHELF LIFE", "DISCLAIMER"), each
- * followed by a list or paragraphs. Only the FLAVOR PROFILE section is read; the colour is a
- * "COLOR:" line of the analysis. */
+ * followed by a list or paragraphs. Only the FLAVOR PROFILE section is read, minus the carbon
+ * sentence that ReGenMalt pages put on a line of its own after it; the colour is the "COLOR:" line
+ * of the analysis, printed without a unit. */
 function readPage(): Page {
   const summary = document.querySelector(".summary.entry-summary");
   const sections: Record<string, string[]> = {};
@@ -24,10 +25,13 @@ function readPage(): Page {
       heading = (bold.textContent ?? "").replace(/\s+/g, " ").trim().toUpperCase();
       sections[heading] ??= [];
     } else if (heading !== "" && element.matches("p, ul, ol")) {
-      const lines = element.matches("p")
-        ? [element.textContent ?? ""]
-        : [...element.querySelectorAll("li")].map((item) => item.textContent ?? "");
-      sections[heading]!.push(...lines.map((line) => line.replace(/\s+/g, " ").trim()));
+      // A line break inside a paragraph separates statements, so lines are read from innerText.
+      sections[heading]!.push(
+        ...(element as HTMLElement).innerText
+          .split("\n")
+          .map((line) => line.replace(/\s+/g, " ").trim())
+          .filter((line) => line !== ""),
+      );
     }
   }
   return {
@@ -54,6 +58,14 @@ export const maker: MakerSource = {
           gaps.push({ url, reason: "no product title in the page" });
           continue;
         }
+        // Spirits-only malts say so under "BEST SUITED FOR" (Distillers: "Malt Whiskey", "Scotch
+        // Whiskey", "Most Spirits as a substitute for raw grains").
+        const suited = (page.sections["BEST SUITED FOR"] ?? []).join(" ");
+        if (
+          /whisk(?:e)?y|spirits/i.test(suited) &&
+          !/\b(?:beers?|brew\w*|ales?|lagers?)\b/i.test(suited)
+        )
+          continue;
         const color = page.sections["TYPICAL ANALYSIS"]
           ?.map((line) => /^color:\s*(.+)$/i.exec(line)?.[1])
           .find((value) => value !== undefined);
@@ -63,10 +75,12 @@ export const maker: MakerSource = {
           manufacturer: "Proximity Malt",
           manufacturerAliases: ["Proximity"],
           codes: [],
-          aliases: titleAliases(page.title),
-          flavorText: (page.sections["FLAVOR PROFILE"] ?? []).join("\n"),
+          aliases: titleAliases(page.title, ["Prox"]),
+          flavorText: (page.sections["FLAVOR PROFILE"] ?? [])
+            .filter((line) => !/\bcarbon emissions\b/i.test(line))
+            .join("\n"),
           source: makerSource(source),
-          limitations: color === undefined ? [] : [`Maltster colour: ${color}.`],
+          limitations: color === undefined ? [] : [`Maltster colour: ${color} (no unit stated).`],
         });
       } catch (error) {
         gaps.push({ url, reason: error instanceof Error ? error.message : String(error) });

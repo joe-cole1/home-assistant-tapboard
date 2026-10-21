@@ -77,6 +77,9 @@ export const maker: MakerSource = {
           gaps.push({ url, reason: "no product name in the page" });
           continue;
         }
+        // The organic-malt and toll-malting pages describe a certification and a service: they
+        // have no "Malt details" labels, analysis tabs or flavour profile.
+        if (Object.keys(page.labelled).length === 0) continue;
         // The IOB tab states its colour in EBC by another method; EBC and ASBC (SRM) are read.
         const colour = ["EBC", "ASBC"]
           .map((tab) => page.colours[tab])
@@ -88,7 +91,14 @@ export const maker: MakerSource = {
           manufacturer: "Bairds",
           manufacturerAliases: ["Bairds Malt"],
           codes: [],
-          aliases: [...new Set([...titleAliases(page.title), ...titleAliases(menuLabel)])],
+          aliases: [
+            ...new Map(
+              [...titleAliases(page.title), ...titleAliases(menuLabel)].map((name) => [
+                name.toLowerCase(),
+                name,
+              ]),
+            ).values(),
+          ],
           flavorText: [page.introduction, page.labelled["flavour profile"] ?? ""]
             .filter((line) => line !== "")
             .join("\n"),
