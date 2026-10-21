@@ -146,15 +146,19 @@ void test("lab and code win with diagnostic; unknown codes and generic names do 
 void test("exact hop identity never fabricates missing varieties or blend constituents", () => {
   assert.equal(
     resolveIngredient("hops", ingredient({ name: "Mosaic", type: "Whole" })).id,
-    "hop-mosaic-brand",
+    "hop-mosaic",
   );
-  for (const name of [null, "Arctic Blend", "Citra clone", "Citra extract", "Zeus"])
+  // Bare Hallertau names a region, not a variety, and Styrian Goldings is either Savinjski
+  // Golding or Celeia: neither is guessed.
+  for (const name of [
+    null,
+    "Arctic Blend",
+    "Citra clone",
+    "Citra extract",
+    "Hallertau",
+    "Styrian Goldings",
+  ])
     assert.equal(resolveIngredient("hops", ingredient({ name })).level, "unresolved");
-  // Bare Hallertau is a labelled regional class, never a guessed variety.
-  const hallertau = resolveIngredient("hops", ingredient({ name: "Hallertau" }));
-  assert.equal(hallertau.id, "family-hop-hallertau");
-  assert.equal(hallertau.level, "family");
-  assert.ok(hallertau.diagnostics.some((value) => value.includes("variety is unknown")));
 });
 void test("reviewed hop varieties and maker-sourced yeasts resolve by exact name and laboratory", () => {
   const hops: readonly [string, string][] = [
@@ -163,14 +167,18 @@ void test("reviewed hop varieties and maker-sourced yeasts resolve by exact name
     ["Perle", "hop-perle"],
     ["Nugget", "hop-nugget"],
     ["Crystal", "hop-crystal"],
-    ["Mount Hood", "hop-mt-hood"],
+    ["Mount Hood", "hop-mount-hood"],
     ["Fuggle", "hop-fuggle"],
     ["Centennial", "hop-centennial"],
     ["El Dorado", "hop-el-dorado"],
     ["Bravo", "hop-bravo"],
     ["Mandarina Bavaria", "hop-mandarina-bavaria"],
     ["German Tradition", "hop-hallertauer-tradition"],
-    ["Columbus/Tomahawk/Zeus (CTZ)", "hop-ctz"],
+    ["Columbus/Tomahawk/Zeus (CTZ)", "hop-columbus"],
+    ["East Kent Goldings (EKG)", "hop-east-kent-goldings"],
+    ["Hallertauer Mittelfrueh", "hop-hallertauer-mittelfruh"],
+    ["Idaho #7", "hop-idaho-7"],
+    ["Pahto", "hop-terraflux"],
   ];
   for (const [name, id] of hops)
     assert.equal(resolveIngredient("hops", ingredient({ name })).id, id);
@@ -348,11 +356,14 @@ void test("reviewed yeast priorities and dehusked/product families retain guards
       .roastClass,
     "black",
   );
-  assert.equal(
-    resolveIngredient("fermentables", ingredient({ name: "Caramel Malt 120L", supplier: "Briess" }))
-      .id,
-    "briess-caramel-120",
+  // The maltster's entry names the product and its words; the reviewed guard keeps its family.
+  const caramel = resolveIngredient(
+    "fermentables",
+    ingredient({ name: "Caramel Malt 120L", supplier: "Briess" }),
   );
+  assert.equal(caramel.id, "briess-caramel-malt-120l");
+  assert.equal(caramel.family, "crystal_dark");
+  assert.ok(caramel.descriptors.includes("caramel"));
   assert.equal(
     resolveIngredient(
       "fermentables",
@@ -468,13 +479,15 @@ void test("Brewfather library names match their maker-sourced products without a
     assert.ok(fact, `${id} is not a catalog product`);
     for (const name of names) {
       const resolved = resolveIngredient(
-        "yeasts",
-        ingredient({
-          name,
-          laboratory: fact.manufacturer,
-          productId: fact.codes[0] ?? "",
-          type: "Ale",
-        }),
+        fact.role,
+        fact.role === "yeasts"
+          ? ingredient({
+              name,
+              laboratory: fact.manufacturer,
+              productId: fact.codes[0] ?? "",
+              type: "Ale",
+            })
+          : ingredient({ name, supplier: fact.manufacturer }),
       );
       assert.equal(resolved.id, id, name);
       assert.ok(!resolved.diagnostics.some((value) => value.includes("conflict")), name);
@@ -484,13 +497,12 @@ void test("Brewfather library names match their maker-sourced products without a
 void test("hop origin and form words fall away; concentrated forms stay unknown with a reason", () => {
   const hop = (name: string, form = "Pellet") =>
     resolveIngredient("hops", ingredient({ name, form }));
-  assert.equal(hop("Hallertau Mittelfruh").id, "hop-hallertauer-mittelfruher");
-  assert.equal(hop("Hallertau Magnum").id, "hop-magnum");
+  assert.equal(hop("Hallertau Mittelfruh").id, "hop-hallertauer-mittelfruh");
   // Trademark signs never block an exact name.
-  assert.equal(hop("Citra™").id, "hop-citra-brand");
+  assert.equal(hop("Citra™").id, "hop-citra");
   for (const [name, id] of [
-    ["German Magnum", "hop-magnum"],
-    ["Saaz (CZ)", "hop-saaz-saz01"],
+    ["German Magnum", "hop-hallertauer-magnum"],
+    ["Saaz (CZ)", "hop-saaz"],
     ["Cascade Whole Leaf", "hop-cascade"],
     ["German Tettnang", "hop-tettnanger"],
   ]) {
@@ -502,8 +514,8 @@ void test("hop origin and form words fall away; concentrated forms stay unknown 
     );
   }
   // Distinct cultivars keep their own identity: NZ Saaz and NZ Hallertau are not the originals.
-  for (const name of ["Hallertau Blanc", "NZ Saaz", "NZ Hallertau"])
-    assert.equal(hop(name).level, "unresolved", name);
+  assert.equal(hop("Hallertau Blanc").id, "hop-hallertau-blanc");
+  for (const name of ["NZ Saaz", "NZ Hallertau"]) assert.equal(hop(name).level, "unresolved", name);
   for (const [name, form] of [
     ["Citra Cryo", "Pellet"],
     ["Citra", "Cryo"],

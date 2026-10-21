@@ -10,12 +10,7 @@ import type {
   SensoryAxisResult,
 } from "../types.ts";
 import { ACID_MALT, CATALOG_VERSION, lovibondOf, SOURING_CULTURE } from "./catalog.ts";
-import {
-  CRYSTAL_CHARACTER,
-  FAMILY_CHARACTER,
-  HONEY_MALT_CHARACTER,
-  SUGAR_CHARACTER,
-} from "./catalog-data.ts";
+import { FAMILY_CHARACTER, SUGAR_CHARACTER } from "./catalog-data.ts";
 import type { FermentableFamily } from "./catalog-types.ts";
 import {
   composition,
@@ -128,7 +123,7 @@ export function sensoryBand(key: SensoryAxis, value: number | null, manual = fal
           : "Very high";
 }
 
-export const MODEL_VERSION = "recipe-flavor-3";
+export const MODEL_VERSION = "recipe-flavor-4";
 /** Shared saturating dose→intensity map on the 0–5 scale. */
 function saturate(units: number): number {
   return -5 * Math.expm1(-units / 5);
@@ -158,7 +153,12 @@ const MALT_POTENCY: Readonly<Record<FermentableFamily, number>> = {
   smoked: 4,
   peated: 40,
 };
-const CRYSTAL_POTENCY = [2.5, 4.5, 6.5] as const;
+/** Crystal malt potency by colour band; `below` is an exclusive upper bound in °L. */
+const CRYSTAL_POTENCY = [
+  { below: 25, potency: 2.5 },
+  { below: 75, potency: 4.5 },
+  { below: Infinity, potency: 6.5 },
+] as const;
 const EXPRESSIVE_YEAST = new Set(["banana", "clove", "phenolic", "pepper", "spicy"]);
 const POSITION_WEIGHTS = [1, 0.85, 0.7, 0.55] as const;
 const PROVIDER_AROMA = [
@@ -571,9 +571,7 @@ function descriptorSelection(
   for (const { row, fraction } of grist.fractions) {
     if (row.resolution.family === "sugar" && !row.resolution.descriptors.length) {
       const name = row.ingredient.name?.toLowerCase() ?? "";
-      const sugar = SUGAR_CHARACTER.find(
-        (item) => item.pattern.test(name) && (row.ingredient.color ?? 0) >= item.minSrm,
-      );
+      const sugar = SUGAR_CHARACTER.find((item) => item.pattern.test(name));
       if (sugar && fraction >= sugar.minFraction)
         add(sugar.words, "fermentables", sugar.potency * fraction, row);
       continue;
@@ -647,6 +645,8 @@ function roastShare(grist: ReturnType<typeof composition>): number {
     )
   );
 }
+/** A malt's potency, and the words its family names itself (smoked, peated); every other word
+ * comes from the maltster. */
 function maltCharacter(row: ResolvedRow): { words: readonly string[]; potency: number } {
   const family = row.resolution.family;
   if (family === null) return { words: [], potency: 0 };
@@ -654,14 +654,10 @@ function maltCharacter(row: ResolvedRow): { words: readonly string[]; potency: n
     const lovibond = lovibondOf(row.ingredient);
     const band =
       lovibond === null
-        ? family === "crystal_dark"
-          ? CRYSTAL_CHARACTER.length - 1
-          : 0
-        : CRYSTAL_CHARACTER.findIndex((item) => lovibond < item.below);
-    return { words: CRYSTAL_CHARACTER[band]!.words, potency: CRYSTAL_POTENCY[band]! };
+        ? CRYSTAL_POTENCY[family === "crystal_dark" ? CRYSTAL_POTENCY.length - 1 : 0]
+        : CRYSTAL_POTENCY.find((item) => lovibond < item.below);
+    return { words: [], potency: band!.potency };
   }
-  if (family === "aromatic" && /honey|brumalt/i.test(row.ingredient.name ?? ""))
-    return { words: HONEY_MALT_CHARACTER, potency: MALT_POTENCY.aromatic };
   return { words: FAMILY_CHARACTER[family] ?? [], potency: MALT_POTENCY[family] };
 }
 function providerAroma(row: ResolvedRow): string[] {

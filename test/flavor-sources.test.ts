@@ -89,6 +89,10 @@ void test("negated, conditional and pairing mentions are reported, never kept", 
     "fruity:conditional",
   ]);
   assert.deepEqual(words("A strain ideal for fruity Belgian ales.", "yeasts"), []);
+  assert.deepEqual(
+    words("Body in the presence of piney, juicy hop profiles; bread and toast.", "fermentables"),
+    ["bready", "toasty"],
+  );
   assert.deepEqual(words("Use it in a sour fruited beer to maximize aromatics.", "yeasts"), []);
   // "When paired with" is pairing advice and "when all is said and done" an idiom: neither is a
   // condition on the product's own flavour.
@@ -176,6 +180,29 @@ void test("negated, conditional and pairing mentions are reported, never kept", 
     "quince",
     "currant",
   ]);
+  // Maltster text: the wood a malt is smoked over and "grains" as kernels are not flavours.
+  assert.deepEqual(words("Smoked over beech wood for a smoky aroma.", "fermentables"), ["smoky"]);
+  assert.deepEqual(
+    words(
+      "The sweet malty flavor of other malted grains; pastry and raisiny notes.",
+      "fermentables",
+    ),
+    ["malty", "pastry", "raisin"],
+  );
+  assert.deepEqual(
+    words(
+      "Crystallisation takes place within the grain; roasted for longer than our roasted malts. Golden to orange hues and a strong grain flavor with dry roasted notes.",
+      "fermentables",
+    ),
+    ["grainy", "roast"],
+  );
+  assert.deepEqual(
+    words(
+      "A golden-orange colour for malt-forward beers; smokey, like Grape Nuts.",
+      "fermentables",
+    ),
+    ["smoky"],
+  );
   // Dried and dark fruit are yeast esters too, unlike caramel or bread.
   assert.deepEqual(words("Caramel, plum and dark fruit esters.", "yeasts"), ["plum", "dark fruit"]);
 });
@@ -277,6 +304,8 @@ void test("committed sourced words come only from the lexicon with their maker p
   }
   for (const fact of REVIEWED_FACTS)
     for (const alias of fact.aliases) {
+      // A reviewed malt without words only classifies its family; the maltster's entry names it.
+      if (fact.role === "fermentables" && fact.descriptors.length === 0) continue;
       const key = `${fact.role}|${fact.manufacturer ?? ""}|${alias.trim().toLowerCase()}`;
       assert.equal(names.get(key), undefined, `${names.get(key)} must replace reviewed ${fact.id}`);
     }
@@ -303,6 +332,12 @@ void test("robots.txt rules for every agent decide what the fetcher may read", (
   assert.equal(robotsAllows(fermentis, "/sheet.pdf"), false);
   assert.equal(robotsAllows(fermentis, "/sheet.pdf.html"), true);
   assert.equal(parseRobots(fermentis).crawlDelaySeconds, 10);
+  // A delay above every group applies to all agents.
+  assert.equal(
+    parseRobots("Crawl-delay: 10\nUser-agent: Googlebot\nDisallow: /x").crawlDelaySeconds,
+    10,
+  );
+  assert.equal(robotsAllows("Crawl-delay: 10\nUser-agent: Googlebot\nDisallow: /x", "/x"), true);
 });
 
 void test("a built entry carries only extracted words and says when the maker names none", () => {
@@ -443,6 +478,39 @@ void test("hop sources merge into one entry per variety, preferring owners that 
     [
       ["hop-fuggle", ["earthy"]],
       ["hop-cascade", ["grapefruit"]],
+    ],
+  );
+  // A German growing region before the name and German adjective endings fold away.
+  const german = mergeHops([
+    {
+      maker: "hopsteiner",
+      entries: [hop("hop-hallertauer-tradition", ["Hallertauer Tradition"], ["floral"])],
+    },
+    {
+      maker: "charles-faram",
+      entries: [
+        hop("hop-tradition", ["Tradition"], ["herbal"]),
+        hop("hop-mittelfruh", ["Mittelfruh"], ["spicy"]),
+        hop("hop-tettnang", ["Tettnang"], ["earthy"]),
+        hop("hop-hallertau", ["Hallertau", "HALLERTAU"], ["floral"]),
+      ],
+    },
+    {
+      maker: "hpa",
+      entries: [hop("hop-hallertauer-mittelfrueher", ["Hallertauer Mittelfrueher"], ["herbal"])],
+    },
+    {
+      maker: "barthhaas",
+      entries: [hop("hop-tettnang-tettnanger", ["Tettnang Tettnanger"], ["woody"])],
+    },
+  ]).entries;
+  assert.deepEqual(
+    german.map((item) => [item.id, item.aliases]),
+    [
+      ["hop-hallertauer-tradition", ["Hallertauer Tradition", "Tradition"]],
+      ["hop-tettnang-tettnanger", ["Tettnang Tettnanger", "Tettnang"]],
+      ["hop-hallertauer-mittelfrueher", ["Hallertauer Mittelfrueher", "Mittelfruh"]],
+      ["hop-hallertau", ["Hallertau"]],
     ],
   );
   // A source without a place in the priority order cannot be merged silently.

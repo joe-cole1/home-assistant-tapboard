@@ -24,18 +24,20 @@ operator before editing. Check today's result:
 node scripts/flavor-resolve.ts yeasts "Hefeweizen IV" --maker "White Labs" --code WLP380 --type Wheat
 ```
 
-## 2. A yeast from a lab with a reader
+## 2. A yeast, hop or malt from a source with a reader
 
-The labs in `scripts/flavor-sources/makers/` are read in full. A missing or changed strain from one
-of them is a refresh, never a hand edit:
+The labs, hop sources and maltsters in `scripts/flavor-sources/makers/` are read in full. A missing
+or changed strain, variety or malt from one of them is a refresh, never a hand edit:
 
 ```sh
 NODE_USE_ENV_PROXY=1 node scripts/flavor-sources/run.ts <lab> --refresh
 ```
 
 Review `data/flavor-sources/out/<lab>.json`: the text read for the strain, the words kept, the
-mentions left out and any unreadable pages. Then `node scripts/flavor-sources/run.ts --write yeasts`.
-If Brewfather calls the product something the maker doesn't print, add the Brewfather name to
+mentions left out and any unreadable pages. Then `node scripts/flavor-sources/run.ts --write yeasts`
+(or `--write hops`, which merges every hop source into one entry per variety by the priority in
+`merge.ts`, or `--write fermentables`). A maltster's entry supplies words only; the malt's family
+still comes from the reviewed guards and the Brewfather category and colour. If Brewfather calls the product something no source prints, add the Brewfather name to
 `BREWFATHER_NAMES` in `catalog-data.ts` (identity only). A reader that misreads a page is fixed in
 its `makers/<lab>.ts` with the page structure described in its doc comment. Lallemand asks for 60
 seconds between requests and Wyeast 10, so a refresh of those labs is slow.
@@ -61,8 +63,7 @@ YYYY-MM-DD."
 Choose fact or class:
 
 - **Fact** (`REVIEWED_FACTS`, built with `fact(...)`): one named product from one maker, such as a
-  yeast strain, hop variety, branded malt or branded adjunct. Hop varieties go in `hopVarieties()`
-  with `variety(...)`.
+  branded malt or branded adjunct.
 - **Class** (`INGREDIENT_CLASSES`): a generic adjunct family that names itself, such as a spice or a
   fruit. There are no yeast classes. The first matching class wins, so keep the order: processing
   aids and Brewfather types, citrus peel/zest, fruit (before plants so acidity is never hidden),

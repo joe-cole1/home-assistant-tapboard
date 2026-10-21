@@ -51,10 +51,10 @@ void test("flavor summary is one sentence of character, band-worded axes and war
   const stout = flavorSummary(evaluateFixture(batchFixture("B011")).calculation)!;
   assert.equal(
     stout,
-    "Coffee, chocolate and roast character with a full body, very high bitterness and a moderately sweet finish. Noticeable alcohol warmth.",
+    "Coffee, malty and roast character with a full body, very high bitterness and a moderately sweet finish. Noticeable alcohol warmth.",
   );
   const kolsch = flavorSummary(evaluateFixture(batchFixture("B027")).calculation)!;
-  assert.match(kolsch, /^Grainy and cracker character with a very light body/u);
+  assert.match(kolsch, /^Grainy character with a very light body/u);
   assert.equal(kolsch.includes("warmth"), false);
   // Numbers, metric names and style words never appear, so Mystery's sensory reveal suffices.
   for (const sentence of [stout, kolsch]) {

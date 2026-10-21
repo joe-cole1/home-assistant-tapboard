@@ -584,9 +584,9 @@ void test("flavoured sugars name themselves from a meaningful grist share", () =
       ]),
       "fermentables",
     );
-  assert.ok(sugar("Candi Syrup, D-180", 500, 180).includes("dark fruit"));
-  assert.ok(sugar("Candi Syrup, D-90", 500, 90).includes("caramel"));
-  assert.equal(sugar("Candi Sugar, Clear", 500, 1).includes("caramel"), false);
+  // A candi syrup's colour does not name its flavour; only its maker could.
+  assert.deepEqual(sugar("Candi Syrup, D-180", 500, 180), []);
+  assert.deepEqual(sugar("Candi Syrup, D-90", 500, 90), []);
   assert.ok(sugar("Honey", 600).includes("honey"));
   assert.equal(sugar("Honey", 100).includes("honey"), false);
   assert.ok(sugar("Maple Syrup", 600).includes("maple"));

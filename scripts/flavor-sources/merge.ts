@@ -30,7 +30,9 @@ export const HOP_SOURCES: readonly {
 const ORIGIN_PREFIX =
   /^(?:nz|new zealand|us|usa|american|uk|english|british|czech|german|australian|slovenian|polish)\s/i;
 /** Hop names as one variety across sources: case, accents and German spellings fold away
- * ("Mittelfrüh", "Mittelfrueh" and "Mittelfruh" are one name). */
+ * ("Mittelfrüh", "Mittelfrueh" and "Mittelfruh" are one name), and so does a German growing
+ * region before the variety name ("Hallertauer Tradition" is Tradition, "Tettnang Tettnanger"
+ * is Tettnanger). */
 const hopKey = (name: string) =>
   name
     .replace(/[®™℠]/g, "")
@@ -39,7 +41,9 @@ const hopKey = (name: string) =>
     .toLowerCase()
     .replace(/(?<=[aou])e/g, "")
     .replace(/[^a-z0-9]+/g, " ")
-    .trim();
+    .trim()
+    .replace(/\b(hallertau|tettnang|spalt|mittelfruh)e?r\b/g, "$1")
+    .replace(/^(?:hallertau|tettnang|spalt) (?=\S)/, "");
 
 /** One entry per hop variety: sources sharing a name describe one variety, the best-ranked
  * source that names flavour words is kept, and every source's spelling stays an alias.
@@ -101,9 +105,13 @@ export function mergeHops(
       const wordless = [
         ...new Set(group.slice(0, group.indexOf(chosen)).map(({ maker }) => maker)),
       ];
+      // Spellings differing only in case ("BRU-1", "Bru-1") are one alias.
+      const aliases = new Map<string, string>();
+      for (const alias of group.flatMap(({ entry }) => entry.aliases))
+        if (!aliases.has(alias.toLowerCase())) aliases.set(alias.toLowerCase(), alias);
       return {
         ...chosen.entry,
-        aliases: [...new Set(group.flatMap(({ entry }) => entry.aliases))],
+        aliases: [...aliases.values()],
         limitations: [
           ...chosen.entry.limitations,
           ...(wordless.length

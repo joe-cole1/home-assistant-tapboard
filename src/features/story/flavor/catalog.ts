@@ -2,7 +2,7 @@ import type { BrewingIngredient, BrewingIngredientRole } from "../../beverages/b
 import type { FermentableFamily, IngredientFact, IngredientResolution } from "./catalog-types.ts";
 import { INGREDIENT_CLASSES, INGREDIENT_FACTS } from "./catalog-data.ts";
 
-export const CATALOG_VERSION = "tapboard-flavor-catalog-3";
+export const CATALOG_VERSION = "tapboard-flavor-catalog-4";
 
 /** Bounded exact identity normalization, never substring matching. Accents fold away so
  * "Mittelfruh" and "Mittelfrüh" are one name. */
@@ -240,14 +240,52 @@ function hopVariety(name: string): string {
   return variety;
 }
 
+// A fermentable fact without a family is a maltster's own product entry: it names the product and
+// its words, while family, body and roast come from the reviewed identity guards and from
+// Brewfather's category and colour, so a maltster page never decides how a malt is dosed.
+const MALTSTER_PRODUCTS = INGREDIENT_FACTS.filter(
+  (fact) => fact.role === "fermentables" && fact.family === null,
+);
+const CLASSIFYING_FACTS = INGREDIENT_FACTS.filter((fact) => !MALTSTER_PRODUCTS.includes(fact));
+
 export function resolveIngredient(
   role: BrewingIngredientRole,
   item: BrewingIngredient,
 ): IngredientResolution {
+  if (role !== "fermentables") return resolveFrom(role, item, CLASSIFYING_FACTS);
+  const name = identity(item.name);
+  const supplier = identity(item.supplier);
+  const named = MALTSTER_PRODUCTS.filter(
+    (fact) =>
+      manufacturerMatches(fact, supplier) && fact.aliases.some((alias) => identity(alias) === name),
+  );
+  const classification = resolveFrom(role, item, CLASSIFYING_FACTS);
+  if (named.length !== 1 || !name || !supplier) return classification;
+  const product = named[0]!;
+  return {
+    ...classification,
+    id: product.id,
+    level: "product",
+    descriptors: product.descriptors,
+    sourceUrls: product.sourceUrls,
+    diagnostics: [
+      ...product.limitations,
+      classification.level === "unresolved"
+        ? `Family unknown: ${classification.diagnostics[0] ?? "no classification rule applies."}`
+        : `Family ${classification.family} from ${classification.id}, not from the maltster.`,
+    ],
+  };
+}
+
+function resolveFrom(
+  role: BrewingIngredientRole,
+  item: BrewingIngredient,
+  catalog: readonly IngredientFact[],
+): IngredientResolution {
   const name = identity(item.name);
   const manufacturer = identity(role === "yeasts" ? item.laboratory : item.supplier);
   const code = identity(item.productId);
-  const facts = INGREDIENT_FACTS.filter((fact) => fact.role === role);
+  const facts = catalog.filter((fact) => fact.role === role);
   const fallback = (reason: string) =>
     classResolution(role, item, name, reason) ?? unresolved(reason);
   if (
