@@ -23,7 +23,7 @@ interface Page {
  * colour, comparisons with sister malts, usual use). Below the spec tabs, `.substyles-list`
  * blocks hold the beer-style links, then a plain list of flavour tags ("Grassy, Mild Toffee,
  * Sweet"), then the formats on offer ("Whole, Milled"), which unmalted adjuncts lack. Only the
- * paragraphs and the flavour tags are read. The EBC and ASBC spec tabs list `Colour ° EBC` and
+ * flavour tags and the paragraphs (without their comparisons) are read. The EBC and ASBC spec tabs list `Colour ° EBC` and
  * `Colour ° Lovibond` rows with Min and Max cells. */
 function readPage(): Page {
   const text = (element: Element | null | undefined) =>
@@ -49,6 +49,20 @@ function readPage(): Page {
       })),
   };
 }
+
+/** Sentences opening with a comparison ("Compared to Munich Malt, …", "Against Maris Otter, …",
+ * "Unlike our standard Malted Oats, …") describe the sister malts they name, so they are not
+ * read. */
+const COMPARISON_SENTENCE = /^(?:compared (?:to|with)|in comparison (?:to|with)|against|unlike)\b/i;
+const ownSentences = (paragraphs: readonly string[]): string[] =>
+  paragraphs
+    .map((paragraph) =>
+      paragraph
+        .split(/(?<=[.!?])\s+/)
+        .filter((sentence) => !COMPARISON_SENTENCE.test(sentence))
+        .join(" "),
+    )
+    .filter((paragraph) => paragraph !== "");
 
 export const maker: MakerSource = {
   id: "simpsons",
@@ -79,7 +93,7 @@ export const maker: MakerSource = {
           manufacturerAliases: ["Simpsons", "Simpsons Malt Limited"],
           codes: [],
           aliases: [...new Set([...titleAliases(page.name), ...titleAliases(page.title)])],
-          flavorText: [page.flavours, ...page.introduction]
+          flavorText: [page.flavours, ...ownSentences(page.introduction)]
             .filter((line) => line !== "")
             .join("\n"),
           source: makerSource(source),

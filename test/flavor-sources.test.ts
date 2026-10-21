@@ -185,6 +185,13 @@ void test("negated, conditional and pairing mentions are reported, never kept", 
     ),
     ["malty", "pastry", "raisin"],
   );
+  assert.deepEqual(
+    words(
+      "Crystallisation takes place within the grain; roasted for longer than our roasted malts. Golden to orange hues and a strong grain flavor with dry roasted notes.",
+      "fermentables",
+    ),
+    ["grainy", "roast"],
+  );
   // Dried and dark fruit are yeast esters too, unlike caramel or bread.
   assert.deepEqual(words("Caramel, plum and dark fruit esters.", "yeasts"), ["plum", "dark fruit"]);
 });
