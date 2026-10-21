@@ -572,7 +572,11 @@ export const REVIEWED_FACTS: readonly IngredientFact[] = Object.freeze([
 export const BREWFATHER_NAMES: Readonly<Record<string, readonly string[]>> = Object.freeze({
   "avangard-munich-malt": ["Munich Malt, Germany"],
   "avangard-pilsener-malt": ["Pilsner Malt"],
+  "bestmalz-munich-dark": ["Best Munich Malt Dark"],
+  "bestmalz-pale-ale": ["Best Pale Ale Malt"],
   "briess-aromatic-munich-malt-20l": ["Aromatic Malt"],
+  // The operator's 10 SRM Briess Munich; Briess states Bonlander at 10 SRM.
+  "briess-bonlander-munich-malt-10l": ["Munich"],
   "briess-brewers-barley-flakes": ["Barley, Flaked"],
   "briess-brewers-malt": ["Brewers Malt 2-Row"],
   "briess-brewers-oat-flakes": ["Oats, Flaked"],
@@ -585,6 +589,9 @@ export const BREWFATHER_NAMES: Readonly<Record<string, readonly string[]>> = Obj
   "briess-special-roast-malt": ["Special Roast"],
   "briess-wheat-malt-red": ["Wheat Red Malt"],
   "briess-wheat-malt-white": ["Wheat White Malt"],
+  "crisp-extra-pale-maris-otter-malt": ["Maris Otter (Extra Pale)"],
+  // Named by the operator: the 4 SRM row is above all three of Crisp's Maris Otter ranges.
+  "crisp-finest-maris-otter-ale-malt": ["Maris Otter"],
   "fawcett-golden-promise-pale-ale-malt": ["Pale Malt, Golden Promise"],
   "fermentis-be-134": ["Safale Belgian-Saison"],
   "fermentis-k-97": ["SafAle German Ale"],
@@ -593,6 +600,9 @@ export const BREWFATHER_NAMES: Readonly<Record<string, readonly string[]>> = Obj
   "fermentis-us-05": ["Safale American"],
   "fermentis-w-34-70": ["Saflager Lager"],
   "fermentis-wb-06": ["Safbrew Wheat"],
+  // The operator's plain "Cargill" rows are Gambrinus bags; Organic is Gambrinus's only wheat.
+  "gambrinus-organic-wheat-malt": ["Wheat White"],
+  "gambrinus-pale-malt": ["Pale Malt 2-Row"],
   "gambrinus-pilsner-malt": ["Pilsner 2-Row"],
   "great-western-crystal-15-malt": ["Crystal 2-Row"],
   "great-western-premium-two-row-malt": ["Brewer's Malt, 2-Row, Premium"],
@@ -609,12 +619,19 @@ export const BREWFATHER_NAMES: Readonly<Record<string, readonly string[]>> = Obj
   "omega-lutra-kveik-standard": ["Lutra Kveik"],
   "omega-voss-kveik-standard": ["Voss Kveik"],
   "proximity-crystal-15": ["Crystal 15L"],
+  "proximity-crystal-120": ["Crystal 120L"],
   "proximity-crystal-40": ["Crystal 40L"],
   "proximity-prox-crystal-munich-style-60": ["CaraMunich 60L"],
   "proximity-prox-crystal-vienna-style-20": ["Caravienne 20"],
+  // Rahr states 1.8–2.4 SRM for 2-Row and 2.7–4.8 for Pale Ale; the operator's rows are 1.8.
+  "rahr-the-brewer-s-standard-2-row": ["Pale Malt, 2-Row"],
+  // Golden Promise at 2.4 °L: Finest is 2.1–2.8 °L, Low Colour at most 1.9.
+  "simpsons-finest-pale-ale-golden-promise": ["Pale Ale Golden Promise"],
   "viking-pilsner-malt": ["Pilsner"],
   "weyermann-acidulated-malt": ["Acidulated"],
   "weyermann-carafa-special-type-1": ["Carafa Special I"],
+  // Carafa III without "Special" is the husked CARAFA Type 3.
+  "weyermann-carafa-type-3": ["Carafa III"],
   "weyermann-caramunich-type-1": ["Caramunich I"],
   "weyermann-caramunich-type-2": ["Caramunich II"],
   // One malt sold as CARAPILS® in Europe and CARAFOAM® in the US.
@@ -627,6 +644,45 @@ export const BREWFATHER_NAMES: Readonly<Record<string, readonly string[]>> = Obj
   "white-labs-wlp820": ["Octoberfest/Marzen Lager"],
   "wyeast-1028": ["London Ale Yeast"],
   "wyeast-3787": ["Trappist High Gravity"],
+});
+/** Brewfather names one maltster uses for a whole colour series, from the operator's own rows. The
+ * row's colour, rounded to whole numbers as the maltster states them, picks the one product whose
+ * stated range holds it; a colour in no range picks none. Bairds states SRM. Briess names its
+ * caramel malts in °L, and Brewfather stores those rows as SRM converted from °L. Identity only,
+ * like BREWFATHER_NAMES. */
+export const BREWFATHER_COLOUR_SERIES: Readonly<
+  Record<
+    string,
+    {
+      readonly unit: "srm" | "lovibond";
+      readonly ranges: Readonly<Record<string, readonly [number, number]>>;
+    }
+  >
+> = Object.freeze({
+  "Caramel/Crystal Malt": {
+    unit: "srm",
+    ranges: {
+      "bairds-light-caramalt": [13, 17],
+      "bairds-medium-caramalt": [30, 37],
+      "bairds-light-crystal": [50, 60],
+      "bairds-medium-crystal": [70, 80],
+      "bairds-dark-crystal-malt": [95, 115],
+      "bairds-extra-dark-crystal-malt": [135, 165],
+    },
+  },
+  "Caramel Malt": {
+    unit: "lovibond",
+    ranges: {
+      "briess-caramel-malt-10l": [10, 10],
+      "briess-caramel-malt-20l": [20, 20],
+      "briess-caramel-malt-30l": [30, 30],
+      "briess-caramel-malt-40l": [40, 40],
+      "briess-caramel-malt-60l": [60, 60],
+      "briess-caramel-malt-80l": [80, 80],
+      "briess-caramel-malt-90l": [90, 90],
+      "briess-caramel-malt-120l": [120, 120],
+    },
+  },
 });
 export const INGREDIENT_FACTS: readonly IngredientFact[] = Object.freeze([
   ...REVIEWED_FACTS,

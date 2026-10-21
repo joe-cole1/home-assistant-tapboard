@@ -38,7 +38,9 @@ mentions left out and any unreadable pages. Then `node scripts/flavor-sources/ru
 (or `--write hops`, which merges every hop source into one entry per variety by the priority in
 `merge.ts`, or `--write fermentables`). A maltster's entry supplies words only; the malt's family
 still comes from the reviewed guards and the Brewfather category and colour. If Brewfather calls the product something no source prints, add the Brewfather name to
-`BREWFATHER_NAMES` in `catalog-data.ts` (identity only). A reader that misreads a page is fixed in
+`BREWFATHER_NAMES` in `catalog-data.ts` (identity only). When one Brewfather name covers a
+maltster's whole colour series (Bairds "Caramel/Crystal Malt"), add it to
+`BREWFATHER_COLOUR_SERIES` with each product's stated colour range instead. A reader that misreads a page is fixed in
 its `makers/<lab>.ts` with the page structure described in its doc comment. Lallemand asks for 60
 seconds between requests and Wyeast 10, so a refresh of those labs is slow.
 

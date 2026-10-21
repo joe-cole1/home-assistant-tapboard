@@ -3,6 +3,7 @@ import test from "node:test";
 import { readFileSync } from "node:fs";
 import { resolveIngredient, CATALOG_VERSION } from "../src/features/story/flavor/catalog.ts";
 import {
+  BREWFATHER_COLOUR_SERIES,
   BREWFATHER_NAMES,
   INGREDIENT_CLASSES,
   INGREDIENT_FACTS,
@@ -423,9 +424,14 @@ void test("verified priority products retain manufacturer guards and family-only
     ).family,
     "aromatic",
   );
+  // The operator's plain "Cargill" rows are Gambrinus bags (Cargill owns Gambrinus).
+  assert.equal(
+    resolveIngredient("fermentables", ingredient({ name: "Honey Malt", supplier: "Cargill" })).id,
+    "gambrinus-honey-malt",
+  );
   const otherHoney = resolveIngredient(
     "fermentables",
-    ingredient({ name: "Honey Malt", supplier: "Cargill" }),
+    ingredient({ name: "Honey Malt", supplier: "Other" }),
   );
   assert.equal(otherHoney.id, "property-aromatic");
   assert.deepEqual(otherHoney.descriptors, []);
@@ -492,6 +498,140 @@ void test("Brewfather library names match their maker-sourced products without a
       assert.equal(resolved.id, id, name);
       assert.ok(!resolved.diagnostics.some((value) => value.includes("conflict")), name);
     }
+  }
+});
+void test("the operator's renamed and colour-series rows name their maltster products", () => {
+  // The operator's rows: supplier, name, colour in SRM and °L, and the product they name.
+  const rows: readonly [string, string, number, number | null, string][] = [
+    ["Briess", "Munich", 10, null, "briess-bonlander-munich-malt-10l"],
+    ["Crisp", "Maris Otter", 4, 3.5, "crisp-finest-maris-otter-ale-malt"],
+    ["Crisp", "Maris Otter (Extra Pale)", 1.573604, null, "crisp-extra-pale-maris-otter-malt"],
+    ["Rahr", "Pale Malt, 2-Row", 1.8, 1.9, "rahr-the-brewer-s-standard-2-row"],
+    ["Cargill", "Pale Malt 2-Row", 2, null, "gambrinus-pale-malt"],
+    ["Cargill", "Wheat White", 2.9, null, "gambrinus-organic-wheat-malt"],
+    [
+      "Simpsons",
+      "Pale Ale Golden Promise",
+      2.538071,
+      null,
+      "simpsons-finest-pale-ale-golden-promise",
+    ],
+    ["Weyermann", "Carafa III", 525, 388.1, "weyermann-carafa-type-3"],
+    ["Proximity Malt", "Crystal 120L", 120, null, "proximity-crystal-120"],
+    ["BestMälz", "Best Munich Malt Dark", 12.7, null, "bestmalz-munich-dark"],
+    ["BestMälz", "Best Pale Ale Malt", 2.5, null, "bestmalz-pale-ale"],
+    ["Bairds", "Caramel/Crystal Malt", 12.8, 10, "bairds-light-caramalt"],
+    ["Bairds", "Caramel/Crystal Malt", 53.4, 40, "bairds-light-crystal"],
+    ["Bairds", "Caramel/Crystal Malt", 75, null, "bairds-medium-crystal"],
+    ["Bairds", "Caramel/Crystal Malt", 150, null, "bairds-extra-dark-crystal-malt"],
+    ["Bairds", "Caramel/Crystal Malt", 161.8, 120, "bairds-extra-dark-crystal-malt"],
+    // Brewfather stored these as SRM from 30 °L and 40 °L.
+    ["Briess", "Caramel Malt", 40, null, "briess-caramel-malt-30l"],
+    ["Briess", "Caramel Malt", 53.4, 40, "briess-caramel-malt-40l"],
+  ];
+  const words: Readonly<Record<string, readonly string[]>> = {
+    "briess-bonlander-munich-malt-10l": ["malty"],
+    "crisp-finest-maris-otter-ale-malt": ["bready", "toffee"],
+    "crisp-extra-pale-maris-otter-malt": ["grainy", "bready", "biscuit"],
+    "rahr-the-brewer-s-standard-2-row": [],
+    "gambrinus-pale-malt": ["bready", "biscuit", "grainy", "honey", "nutty", "tea"],
+    "gambrinus-organic-wheat-malt": [],
+    "simpsons-finest-pale-ale-golden-promise": ["malty", "nutty", "honey"],
+    "weyermann-carafa-type-3": ["roast", "coffee", "cocoa", "chocolate"],
+    "proximity-crystal-120": ["dark caramel", "burnt sugar", "dried fruit", "raisin", "prune"],
+    "bestmalz-munich-dark": ["honey"],
+    "bestmalz-pale-ale": ["grainy"],
+    "bairds-light-caramalt": ["malty", "nutty", "toffee", "caramel", "burnt sugar", "raisin"],
+    "bairds-light-crystal": ["caramel", "toffee", "nutty", "molasses", "raisin"],
+    "bairds-medium-crystal": ["caramel", "raisin", "toffee", "nutty", "molasses"],
+    "bairds-extra-dark-crystal-malt": [
+      "burnt sugar",
+      "dried fruit",
+      "toffee",
+      "caramel",
+      "nutty",
+      "molasses",
+      "raisin",
+    ],
+    "briess-caramel-malt-30l": ["caramel", "toffee", "candy"],
+    "briess-caramel-malt-40l": ["caramel", "toffee", "candy"],
+  };
+  for (const [supplier, name, color, lovibond, id] of rows) {
+    const resolved = resolveIngredient(
+      "fermentables",
+      ingredient({ name, supplier, color, lovibond, type: "Grain" }),
+    );
+    assert.equal(resolved.id, id, `${supplier} ${name} ${color}`);
+    assert.equal(resolved.level, "product", `${supplier} ${name} ${color}`);
+    assert.deepEqual(resolved.descriptors, words[id], `${supplier} ${name} ${color}`);
+  }
+  // The 145.5 SRM Munich row is a data-entry error: Bonlander's words, and the conflict stays visible.
+  const munich = resolveIngredient(
+    "fermentables",
+    ingredient({ name: "Munich", supplier: "Briess", color: 145.5, lovibond: 108 }),
+  );
+  assert.equal(munich.id, "briess-bonlander-munich-malt-10l");
+  assert.ok(munich.diagnostics.some((value) => value.includes("identity/color conflict")));
+});
+void test("a colour series names no product outside its maltster's stated ranges", () => {
+  const caramel = (
+    supplier: string,
+    name: string,
+    color: number | null,
+    lovibond: number | null = null,
+  ) =>
+    resolveIngredient(
+      "fermentables",
+      ingredient({
+        name,
+        supplier,
+        color,
+        lovibond,
+        grainCategory: "Crystal/Caramel",
+        type: "Grain",
+      }),
+    );
+  for (const [supplier, name, color] of [
+    // Between Bairds' Light Crystal (50–60 SRM) and Medium Crystal (70–80 SRM): the operator's row.
+    ["Bairds", "Caramel/Crystal Malt", 65],
+    ["Bairds", "Caramel/Crystal Malt", 12.4],
+    ["Bairds", "Caramel/Crystal Malt", 400],
+    // 47 SRM is 35 °L, between Briess's 30L and 40L.
+    ["Briess", "Caramel Malt", 47],
+    ["Briess", "Caramel Malt", null],
+    // A series belongs to its maltster.
+    ["Simpsons", "Caramel/Crystal Malt", 75],
+    ["Bairds", "Caramel Malt", 53.4],
+  ] as const) {
+    const resolved = caramel(supplier, name, color);
+    assert.notEqual(resolved.level, "product", `${supplier} ${name} ${color}`);
+    assert.deepEqual(resolved.descriptors, [], `${supplier} ${name} ${color}`);
+  }
+  // Rounding is to the maltster's whole numbers, never wider.
+  assert.equal(caramel("Bairds", "Caramel/Crystal Malt", 12.5).id, "bairds-light-caramalt");
+  assert.equal(caramel("Bairds", "Caramel/Crystal Malt", 12.49).id, "property-crystal_light");
+});
+void test("colour series ranges are their maltsters' own stated colours and never overlap", () => {
+  for (const [name, { unit, ranges }] of Object.entries(BREWFATHER_COLOUR_SERIES)) {
+    const products = Object.entries(ranges).map(([id, range]) => {
+      const fact = INGREDIENT_FACTS.find((candidate) => candidate.id === id);
+      assert.ok(fact, `${id} is not a catalog product`);
+      const [min, max] = range;
+      // Bairds states "13 – 17 °SRM"; Briess names the colour, as in "Caramel Malt 30L".
+      assert.ok(
+        unit === "srm"
+          ? fact.limitations.some((value) => value.includes(`${min} – ${max} °SRM`))
+          : min === max && fact.aliases.some((alias) => alias.endsWith(` ${min}L`)),
+        `${id} ${min}–${max} ${unit}`,
+      );
+      // An exact name always wins, so a series name is never one of its products' names.
+      assert.ok(!fact.aliases.some((alias) => alias.toLowerCase() === name.toLowerCase()), id);
+      return { fact, min, max };
+    });
+    assert.equal(new Set(products.map(({ fact }) => fact.manufacturer)).size, 1, name);
+    const sorted = products.toSorted((a, b) => a.min - b.min);
+    for (let index = 1; index < sorted.length; index++)
+      assert.ok(sorted[index - 1]!.max < sorted[index]!.min, `${name} ranges overlap`);
   }
 });
 void test("hop origin and form words fall away; concentrated forms stay unknown with a reason", () => {
