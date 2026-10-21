@@ -277,6 +277,8 @@ void test("committed sourced words come only from the lexicon with their maker p
   }
   for (const fact of REVIEWED_FACTS)
     for (const alias of fact.aliases) {
+      // A reviewed malt without words only classifies its family; the maltster's entry names it.
+      if (fact.role === "fermentables" && fact.descriptors.length === 0) continue;
       const key = `${fact.role}|${fact.manufacturer ?? ""}|${alias.trim().toLowerCase()}`;
       assert.equal(names.get(key), undefined, `${names.get(key)} must replace reviewed ${fact.id}`);
     }

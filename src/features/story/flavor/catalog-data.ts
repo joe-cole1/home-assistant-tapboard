@@ -611,54 +611,21 @@ export const INGREDIENT_FACTS: readonly IngredientFact[] = Object.freeze([
   ),
 ]);
 
-/** Typical malt-class character, used only when a product has no producer descriptors.
- * Textbook class words, not producer claims; crystal malts use the colour bands below. */
+/** Words a malt family names itself: smoked and peated malts are smoke by name. Every other
+ * malt's words come only from its maltster. */
 export const FAMILY_CHARACTER: Readonly<Partial<Record<FermentableFamily, readonly string[]>>> =
-  Object.freeze({
-    pilsner: ["grainy", "cracker"],
-    pale: ["bready"],
-    wheat: ["bready", "doughy"],
-    vienna: ["toasty", "bready"],
-    munich: ["toasty", "bread crust"],
-    biscuit: ["biscuit", "toasty"],
-    aromatic: ["malty", "bread crust"],
-    rye: ["spicy rye"],
-    chocolate: ["chocolate", "coffee"],
-    roasted: ["roast", "coffee"],
-    dehusked_roast: ["smooth roast", "cocoa"],
-    smoked: ["smoky"],
-    peated: ["peaty", "smoky"],
-  });
-export const HONEY_MALT_CHARACTER: readonly string[] = Object.freeze(["honey", "bread crust"]);
-/** Crystal/caramel character by colour band; `below` is an exclusive upper bound in °L. */
-export const CRYSTAL_CHARACTER: readonly {
-  readonly below: number;
-  readonly words: readonly string[];
-}[] = Object.freeze([
-  { below: 25, words: ["light caramel", "honey"] },
-  { below: 75, words: ["caramel", "toffee"] },
-  { below: Infinity, words: ["dark caramel", "raisin"] },
-]);
-/** Flavoured sugars by name and colour (SRM). Units are `potency × grist fraction` from
- * `minFraction` up; plain sugars carry no words. Heuristic class character, not producer claims. */
+  Object.freeze({ smoked: ["smoky"], peated: ["peaty", "smoky"] });
+/** Sugars that name their flavour (honey, maple, molasses or treacle). Units are
+ * `potency × grist fraction` from `minFraction` up; other sugars carry no words. */
 export const SUGAR_CHARACTER: readonly {
   readonly pattern: RegExp;
-  readonly minSrm: number;
   readonly words: readonly string[];
   readonly potency: number;
   readonly minFraction: number;
 }[] = Object.freeze([
-  { pattern: /honey/, minSrm: 0, words: ["honey"], potency: 25, minFraction: 0.04 },
-  { pattern: /maple/, minSrm: 0, words: ["maple"], potency: 25, minFraction: 0.04 },
-  { pattern: /molasses|treacle/, minSrm: 0, words: ["molasses"], potency: 60, minFraction: 0.01 },
-  {
-    pattern: /candi/,
-    minSrm: 150,
-    words: ["dark fruit", "toffee"],
-    potency: 20,
-    minFraction: 0.02,
-  },
-  { pattern: /candi/, minSrm: 30, words: ["caramel", "toffee"], potency: 12, minFraction: 0.02 },
+  { pattern: /honey/, words: ["honey"], potency: 25, minFraction: 0.04 },
+  { pattern: /maple/, words: ["maple"], potency: 25, minFraction: 0.04 },
+  { pattern: /molasses|treacle/, words: ["molasses"], potency: 60, minFraction: 0.01 },
 ]);
 
 function ingredientClass(
